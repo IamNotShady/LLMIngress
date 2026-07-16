@@ -6,7 +6,6 @@ import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/
 import { readGatewayRequestId } from "../../packages/gateway-runtime/src/gateway-auth";
 import { normalizeOpenAIChatCompletionRequest } from "../../packages/gateway-runtime/src/gateway-chat-completions";
 import type { GatewayRouteCandidateSnapshot } from "../../packages/gateway-runtime/src/gateway-config-reload";
-import { normalizeOpenAIEmbeddingsRequest } from "../../packages/gateway-runtime/src/gateway-embeddings";
 import { readGatewayProviderRequestHeaders } from "../../packages/gateway-runtime/src/gateway-header-passthrough";
 import { normalizeAnthropicMessagesRequest } from "../../packages/gateway-runtime/src/gateway-messages";
 import {
@@ -121,11 +120,6 @@ describe("gateway request hygiene", () => {
       tool_choice: "provider-owned",
       tools: ["provider-owned"],
     };
-    const embeddingsBody = {
-      dimensions: "provider-owned",
-      encoding_format: "provider-owned",
-      input: { provider: "owned" },
-    };
     const messagesBody = {
       max_tokens: "provider-owned",
       messages: "provider-owned",
@@ -136,18 +130,13 @@ describe("gateway request hygiene", () => {
 
     const chat = normalizeOpenAIChatCompletionRequest(chatBody, "req-1");
     const responses = normalizeOpenAIResponsesRequest(responsesBody, "req-1");
-    const embeddings = normalizeOpenAIEmbeddingsRequest(embeddingsBody, "req-1");
     const messages = normalizeAnthropicMessagesRequest(messagesBody, "req-1");
 
     expect(chat.ok).toBe(true);
     expect(responses.ok).toBe(false);
-    expect(embeddings.ok).toBe(true);
     expect(messages.ok).toBe(true);
     if (chat.ok) {
       expect(chat.request.payload).toEqual(chatBody);
-    }
-    if (embeddings.ok) {
-      expect(embeddings.request.payload).toEqual(embeddingsBody);
     }
     if (messages.ok) {
       expect(messages.request.payload).toEqual(messagesBody);
@@ -377,32 +366,6 @@ describe("gateway request hygiene", () => {
     expect(normalized.ok).toBe(true);
     if (normalized.ok) {
       expect(normalized.request.payload).toEqual(requestBody);
-    }
-  });
-
-  it("normalizes Embeddings token inputs and passthrough fields", () => {
-    const normalized = normalizeOpenAIEmbeddingsRequest(
-      {
-        encoding_format: "base64",
-        input: [
-          [1, 2, 3],
-          [4, 5],
-        ],
-        user: "end-user-123",
-      },
-      "req-1",
-    );
-
-    expect(normalized.ok).toBe(true);
-    if (normalized.ok) {
-      expect(normalized.request.input).toEqual([
-        [1, 2, 3],
-        [4, 5],
-      ]);
-      expect(normalized.request.passthrough).toEqual({
-        encoding_format: "base64",
-        user: "end-user-123",
-      });
     }
   });
 

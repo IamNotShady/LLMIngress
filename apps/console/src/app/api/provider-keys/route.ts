@@ -4,7 +4,10 @@ import {
   saveProviderApiKey,
   setProviderApiKeyEnabled,
 } from "@llmingress/db/console-provider-keys";
-import { enqueueProviderConnectionProbeJob } from "@llmingress/db/provider-jobs";
+import {
+  enqueueProviderConnectionProbeJob,
+  enqueueProviderModelRefreshJob,
+} from "@llmingress/db/provider-jobs";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { consoleActionErrorResponse } from "../_errors";
@@ -18,10 +21,7 @@ export const POST = withConsoleAuth(async (request) => {
     if (action === "delete") {
       const providerApiKeyId = readRequiredText(form, "providerApiKeyId");
       const result = await deleteProviderApiKey({ providerApiKeyId });
-      return NextResponse.redirect(
-        new URL(`/providers?selected=${encodeURIComponent(result.providerId)}`, request.url),
-        303,
-      );
+      return providerApiKeyMutationResponse(request, result.providerId);
     }
 
     if (action === "enable" || action === "disable") {
@@ -36,11 +36,13 @@ export const POST = withConsoleAuth(async (request) => {
           resetHealth: true,
           source: "api_key_saved",
         });
+        await enqueueProviderModelRefreshJob({
+          providerId: result.providerId,
+          source: "api_key_saved",
+          trigger: "system",
+        });
       }
-      return NextResponse.redirect(
-        new URL(`/providers?selected=${encodeURIComponent(result.providerId)}`, request.url),
-        303,
-      );
+      return providerApiKeyMutationResponse(request, result.providerId);
     }
 
     const providerId = readRequiredText(form, "providerId");
@@ -58,6 +60,11 @@ export const POST = withConsoleAuth(async (request) => {
       providerId,
       resetHealth: true,
       source: "api_key_saved",
+    });
+    await enqueueProviderModelRefreshJob({
+      providerId,
+      source: "api_key_saved",
+      trigger: "system",
     });
 
     if (request.headers.get("accept")?.includes("application/json")) {
@@ -89,6 +96,17 @@ export const POST = withConsoleAuth(async (request) => {
     return consoleActionErrorResponse(error, "Provider API key operation failed.");
   }
 });
+
+function providerApiKeyMutationResponse(request: Request, providerId: string): NextResponse {
+  if (request.headers.get("accept")?.includes("application/json")) {
+    return new NextResponse(null, { status: 204 });
+  }
+
+  return NextResponse.redirect(
+    new URL(`/providers?selected=${encodeURIComponent(providerId)}`, request.url),
+    303,
+  );
+}
 
 function renderOneTimeProviderKeyPage(input: {
   action: "created" | "rotated";

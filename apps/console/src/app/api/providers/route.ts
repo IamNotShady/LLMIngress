@@ -43,6 +43,7 @@ export const POST = withConsoleAuth(async (request) => {
       const provider = await createProviderFromTemplate({
         template: normalizeProviderTemplateFormInput({
           baseUrl: readText(form, "baseUrl"),
+          displayName: readText(form, "displayName"),
           templateId: readText(form, "templateId"),
         }),
       });

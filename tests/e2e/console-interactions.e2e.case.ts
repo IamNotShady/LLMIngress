@@ -111,6 +111,33 @@ async function seedAuditData(databaseUrl: string) {
   return { agentId };
 }
 
+async function seedProviderApiKeyInteractionData(databaseUrl: string) {
+  const providerId = randomUUID();
+  const lifecycleKeyId = randomUUID();
+  const failureKeyId = randomUUID();
+
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
+    await client.query(
+      `insert into providers (
+         id, provider_type, provider_key, display_name, base_url, enabled
+       )
+       values ($1, 'api_key', 'openai', 'Console Key Actions', 'https://provider.test/v1', true)`,
+      [providerId],
+    );
+    await client.query(
+      `insert into provider_api_keys (
+         id, provider_id, key_prefix, encrypted_key, key_id, label, priority, enabled
+       )
+       values
+         ($1, $2, 'life-key', '{}'::jsonb, 'test-key', 'Lifecycle key', 100, true),
+         ($3, $2, 'fail-key', '{}'::jsonb, 'test-key', 'Failure key', 90, true)`,
+      [lifecycleKeyId, providerId, failureKeyId],
+    );
+  });
+
+  return { failureKeyId, lifecycleKeyId, providerId };
+}
+
 async function expectActivityTimeCellContained(page: Page) {
   const metrics = await page
     .locator(".activity-table tbody tr", { hasText: "gw_audit_old_request" })
@@ -203,6 +230,10 @@ test("console audit fixes keep time windows honest and prevent activity timestam
         await page.goto(`${baseUrl}/models`, { waitUntil: "networkidle" });
         await expect(page.locator(".vm-table thead")).toContainText("Failure rate total");
         expect(consoleErrors.filter((error) => error.includes("hydration"))).toEqual([]);
+        await page.getByLabel("Search Virtual Model Name").fill("no-such-virtual-model");
+        await page.getByRole("button", { name: "Filter" }).click();
+        await expect(page.getByText("No Virtual Models match the selected filters.")).toBeVisible();
+        await expect(page.getByText(/Add a Provider and refresh its models/)).toHaveCount(0);
 
         await page.goto(`${baseUrl}/agents?agentDialog=new`, { waitUntil: "networkidle" });
         await expect(page.locator("#agent-allowed-virtual-models")).toHaveCount(0);
@@ -248,12 +279,40 @@ test("console audit fixes keep time windows honest and prevent activity timestam
             page.locator(".activity-table tbody tr", { hasText: "gw_audit_old_request" }),
           ).toBeVisible();
           await expectActivityTimeCellContained(page);
+          if (viewport.width === 390) {
+            const mobilePagination = page.getByRole("navigation", { name: "Activity pages" });
+            const mobileMetrics = await mobilePagination.evaluate((element) => {
+              const rect = element.getBoundingClientRect();
+              return {
+                flexDirection: getComputedStyle(element).flexDirection,
+                left: rect.left,
+                right: rect.right,
+                viewportWidth: document.documentElement.clientWidth,
+              };
+            });
+            expect(mobileMetrics.flexDirection).toBe("column");
+            expect(mobileMetrics.left).toBeGreaterThanOrEqual(0);
+            expect(mobileMetrics.right).toBeLessThanOrEqual(mobileMetrics.viewportWidth);
+          }
         }
 
         await page.setViewportSize({ width: 1920, height: 1080 });
         await page.goto(`${baseUrl}/activity`, { waitUntil: "networkidle" });
         await expect(page.locator(".activity-table tbody tr")).toHaveCount(20);
-        await expect(page.locator(".pager-status")).toHaveText("1–20 of 21");
+        const activityPagination = page.getByRole("navigation", { name: "Activity pages" });
+        await expect(activityPagination).toHaveClass(/list-pagination/);
+        await expect(activityPagination.locator(".list-pagination-summary strong")).toHaveText(
+          "Page 1 of 2",
+        );
+        await expect(activityPagination.locator(".list-pagination-range")).toHaveText(
+          "1–20 of 21 activities",
+        );
+        await activityPagination.getByRole("link", { name: "Next page" }).click();
+        await expect(page).toHaveURL(`${baseUrl}/activity?page=2`);
+        await expect(page.locator(".activity-table tbody tr")).toHaveCount(1);
+        await activityPagination.getByRole("link", { name: "Previous page" }).click();
+        await expect(page).toHaveURL(`${baseUrl}/activity`);
+        await expect(page.locator(".activity-table tbody tr")).toHaveCount(20);
 
         await page.getByRole("link", { name: "gw_audit_old_request" }).click();
         const activityDetail = page.getByRole("dialog", { name: "Request detail" });
@@ -303,3 +362,146 @@ test("console audit fixes keep time windows honest and prevent activity timestam
     await fixture.dispose();
   }
 });
+
+test("Provider API key actions refresh immediately and render real failures in a toast", async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_console_key_actions_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const seeded = await seedProviderApiKeyInteractionData(fixture.databaseUrl);
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext({ viewport: { height: 800, width: 1280 } });
+      const page = await context.newPage();
+      const browserErrors: string[] = [];
+      page.on("console", (message) => {
+        if (message.type() === "warning" && isUnusedNextFontPreloadWarning(message.text())) {
+          return;
+        }
+        if (message.type() === "error" || message.type() === "warning") {
+          browserErrors.push(message.text());
+        }
+      });
+      page.on("pageerror", (error) => browserErrors.push(error.message));
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await signInFromFirstRun(page, baseUrl);
+        await page.goto(`${baseUrl}/providers?selected=${seeded.providerId}`, {
+          waitUntil: "networkidle",
+        });
+
+        const lifecycleRow = page.locator(".provider-key-table tbody tr", {
+          hasText: "Lifecycle key",
+        });
+        await lifecycleRow.getByRole("button", { name: "Disable API key" }).click();
+        await expect(lifecycleRow).toContainText("Disabled");
+        await expect(lifecycleRow.getByRole("button", { name: "Enable API key" })).toBeVisible();
+        await expect(page.getByText("Provider API key update failed.")).toHaveCount(0);
+        await expect
+          .poll(async () => {
+            const result = await fixture.query<{ enabled: boolean }>(
+              "select enabled from provider_api_keys where id = $1",
+              [seeded.lifecycleKeyId],
+            );
+            return result.rows[0]?.enabled;
+          })
+          .toBe(false);
+
+        await lifecycleRow.getByRole("button", { name: "Enable API key" }).click();
+        await expect(lifecycleRow.getByRole("button", { name: "Disable API key" })).toBeVisible();
+        await expect(lifecycleRow).not.toContainText("Disabled");
+        await expect
+          .poll(async () => {
+            const result = await fixture.query<{ enabled: boolean }>(
+              "select enabled from provider_api_keys where id = $1",
+              [seeded.lifecycleKeyId],
+            );
+            return result.rows[0]?.enabled;
+          })
+          .toBe(true);
+
+        await lifecycleRow.getByRole("link", { name: "Delete API key" }).click();
+        const deleteDialog = page.getByRole("dialog", { name: "Delete API key?" });
+        await deleteDialog.getByRole("button", { name: "Delete key" }).click();
+        await expect(deleteDialog).toBeHidden();
+        await expect(lifecycleRow).toHaveCount(0);
+        await expect(page).toHaveURL(`${baseUrl}/providers?selected=${seeded.providerId}`);
+        await expect
+          .poll(async () => {
+            const result = await fixture.query<{ deleted: boolean }>(
+              "select deleted_at is not null as deleted from provider_api_keys where id = $1",
+              [seeded.lifecycleKeyId],
+            );
+            return result.rows[0]?.deleted;
+          })
+          .toBe(true);
+
+        const failureRow = page.locator(".provider-key-table tbody tr", {
+          hasText: "Failure key",
+        });
+        await expect(failureRow).toBeVisible();
+        await fixture.query("delete from provider_api_keys where id = $1", [seeded.failureKeyId]);
+        await failureRow.getByRole("button", { name: "Disable API key" }).click();
+
+        const toast = page.locator(".console-mutation-toast");
+        await expect(toast).toBeVisible();
+        await expect(toast).toHaveAttribute("role", "alert");
+        await expect(failureRow.getByRole("alert")).toHaveCount(0);
+        const desktopToast = await toast.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return {
+            bottom: rect.bottom,
+            left: rect.left,
+            position: style.position,
+            right: rect.right,
+            top: rect.top,
+            zIndex: style.zIndex,
+          };
+        });
+        expect(desktopToast.position).toBe("fixed");
+        expect(desktopToast.zIndex).toBe("70");
+        expect(desktopToast.top).toBeGreaterThanOrEqual(0);
+        expect(desktopToast.right).toBeLessThanOrEqual(1280);
+
+        await page.setViewportSize({ height: 844, width: 390 });
+        const mobileToast = await toast.boundingBox();
+        expect(mobileToast).not.toBeNull();
+        expect(mobileToast?.x ?? -1).toBeGreaterThanOrEqual(0);
+        expect((mobileToast?.x ?? 0) + (mobileToast?.width ?? 0)).toBeLessThanOrEqual(390);
+        await toast.getByRole("button", { name: "Dismiss error" }).click();
+        await expect(toast).toBeHidden();
+        expect(
+          browserErrors.filter(
+            (message) => !message.startsWith("Failed to load resource: the server responded with"),
+          ),
+        ).toEqual([]);
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+function isUnusedNextFontPreloadWarning(message: string): boolean {
+  return (
+    message.includes("/_next/static/media/") &&
+    message.includes(".woff2") &&
+    message.includes("was preloaded using link preload but not used within a few seconds")
+  );
+}

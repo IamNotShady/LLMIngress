@@ -11,6 +11,7 @@ import {
   listAgents,
   listAgentVirtualModelAccess,
 } from "@llmingress/db/console-agents";
+import Link from "next/link";
 import { ConsoleDialog } from "../_components/console-dialog";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
@@ -450,9 +451,9 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                       <td colSpan={10}>
                         {agents.length === 0 ? (
                           <>
-                            <a className="empty-state-action" href="/agents?agentDialog=new">
+                            <Link className="empty-state-action" href="/agents?agentDialog=new">
                               Create an Agent and enable limits
-                            </a>{" "}
+                            </Link>{" "}
                             to add budget, token, RPM, TPM, and concurrency rules.
                           </>
                         ) : query ? (
@@ -460,9 +461,9 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                         ) : (
                           <>
                             No limit rules configured. Edit an Agent from the{" "}
-                            <a className="empty-state-action" href="/agents">
+                            <Link className="empty-state-action" href="/agents">
                               Agents page
-                            </a>{" "}
+                            </Link>{" "}
                             to enable them.
                           </>
                         )}

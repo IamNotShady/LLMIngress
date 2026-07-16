@@ -4,10 +4,10 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, type ReactNode, useRef, useState } from "react";
 import { ConsoleDialog } from "../_components/console-dialog";
 import {
-  ConsoleMutationError,
   type ConsoleMutationFailure,
   toConsoleMutationFailure,
-} from "../_components/console-mutation-form";
+} from "../_components/console-mutation-failure";
+import { ConsoleMutationError } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 
 type CreatedAgentDetails = {

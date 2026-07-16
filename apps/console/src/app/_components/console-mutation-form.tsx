@@ -11,68 +11,22 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-
-export type ConsoleMutationFailure = {
-  field?: string;
-  message: string;
-};
-
-type ConsoleErrorPayload = {
-  code?: string;
-  details?: Record<string, unknown>;
-  error?: string;
-};
-
-const errorFieldByCode: Record<string, string> = {
-  agent_allowed_virtual_model_required: "allowedVirtualModelIds",
-  agent_integration_platform_invalid: "integrationPlatform",
-  agent_name_required: "name",
-  invalid_admin_password: "password",
-  provider_api_key_label_too_long: "label",
-  provider_api_key_priority_invalid: "priority",
-  provider_api_key_required: "providerApiKey",
-  provider_api_key_too_short: "providerApiKey",
-  provider_base_url_invalid: "baseUrl",
-  provider_display_name_required: "displayName",
-  provider_key_invalid: "providerKey",
-  provider_key_required: "providerKey",
-  virtual_model_description_required: "description",
-  virtual_model_name_conflict: "name",
-  virtual_model_name_invalid: "name",
-  virtual_model_name_required: "name",
-};
-
-const normalizedFieldNames: Record<string, string> = {
-  "budget period": "budgetPeriod",
-  "budget usd": "budgetUsd",
-  concurrency: "concurrency",
-  rpm: "rpm",
-  "token limit": "tokenLimit",
-  tpm: "tpm",
-};
-
-export function toConsoleMutationFailure(
-  payload: ConsoleErrorPayload,
-  fallbackMessage: string,
-): ConsoleMutationFailure {
-  const rawField = typeof payload.details?.field === "string" ? payload.details.field : undefined;
-  const normalizedField = rawField
-    ? (normalizedFieldNames[rawField.trim().toLowerCase()] ?? rawField)
-    : undefined;
-  return {
-    ...(normalizedField || (payload.code ? errorFieldByCode[payload.code] : undefined)
-      ? { field: normalizedField ?? errorFieldByCode[payload.code ?? ""] }
-      : {}),
-    message: payload.error ?? fallbackMessage,
-  };
-}
+import {
+  type ConsoleErrorPayload,
+  type ConsoleMutationFailure,
+  toConsoleMutationFailure,
+} from "./console-mutation-failure";
 
 export function ConsoleMutationError({
+  errorPresentation = "inline",
   failure,
   formRef,
+  onDismiss = ignoreDismiss,
 }: {
+  errorPresentation?: "inline" | "toast";
   failure: ConsoleMutationFailure | null;
   formRef: RefObject<HTMLFormElement | null>;
+  onDismiss?: () => void;
 }) {
   const errorId = useId();
   const [fieldErrorTarget, setFieldErrorTarget] = useState<HTMLElement | null>(null);
@@ -130,6 +84,17 @@ export function ConsoleMutationError({
       fieldErrorTarget,
     );
   }
+  if (errorPresentation === "toast") {
+    // Toast failures only exist after client-side interaction, but guard the
+    // document read so server rendering can never touch a browser global.
+    if (typeof document === "undefined") {
+      return null;
+    }
+    return createPortal(
+      <ConsoleMutationToast message={failure.message} onDismiss={onDismiss} />,
+      document.body,
+    );
+  }
   return (
     <p className="form-error" role="alert">
       {failure.message}
@@ -137,23 +102,38 @@ export function ConsoleMutationError({
   );
 }
 
+function ignoreDismiss() {}
+
 export function ConsoleMutationForm({
   action,
   children,
   className,
+  errorPresentation = "inline",
   fallbackError = "Console operation failed.",
   id,
+  successHref,
 }: {
   action: string;
   children: ReactNode;
   className?: string;
+  errorPresentation?: "inline" | "toast";
   fallbackError?: string;
   id?: string;
+  successHref?: string;
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [failure, setFailure] = useState<ConsoleMutationFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!failure || failure.field || errorPresentation !== "toast") {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setFailure(null), 5_000);
+    return () => window.clearTimeout(timeout);
+  }, [errorPresentation, failure]);
 
   const submit: FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
@@ -169,6 +149,10 @@ export function ConsoleMutationForm({
       });
       if (!response.ok) {
         setFailure(toConsoleMutationFailure(await readErrorPayload(response), fallbackError));
+        return;
+      }
+      if (successHref) {
+        router.replace(successHref);
         return;
       }
       if (response.redirected) {
@@ -208,8 +192,40 @@ export function ConsoleMutationForm({
       ref={formRef}
     >
       {children}
-      <ConsoleMutationError failure={failure} formRef={formRef} />
+      <ConsoleMutationError
+        errorPresentation={errorPresentation}
+        failure={failure}
+        formRef={formRef}
+        onDismiss={() => setFailure(null)}
+      />
     </form>
+  );
+}
+
+function ConsoleMutationToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  const toastRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const toast = toastRef.current;
+    if (!toast || typeof toast.showPopover !== "function") {
+      return;
+    }
+
+    toast.showPopover();
+    return () => {
+      if (toast.matches(":popover-open")) {
+        toast.hidePopover();
+      }
+    };
+  }, []);
+
+  return (
+    <div className="console-mutation-toast" popover="manual" ref={toastRef} role="alert">
+      <span>{message}</span>
+      <button aria-label="Dismiss error" onClick={onDismiss} type="button">
+        &times;
+      </button>
+    </div>
   );
 }
 

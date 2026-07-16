@@ -10,16 +10,19 @@ const formerInlineDefaultFiles = [
 
 describe("config ownership", () => {
   it("resolves the gateway public base url through packages/config", () => {
-    expect(gatewayPublicBaseUrl({ GATEWAY_PUBLIC_BASE_URL: " http://gw.example:9000 " })).toBe(
+    expect(gatewayPublicBaseUrl({ GATEWAY_URL: " http://gw.example:9000 " })).toBe(
       "http://gw.example:9000",
     );
     expect(gatewayPublicBaseUrl({})).toBe("http://127.0.0.1:4000");
   });
 
-  it("inlines no GATEWAY_PUBLIC_BASE_URL default in console files", () => {
+  it("uses only the canonical GATEWAY_URL in Console files", () => {
     for (const file of formerInlineDefaultFiles) {
-      expect(readFileSync(file, "utf8")).not.toContain("process.env.GATEWAY_PUBLIC_BASE_URL");
+      expect(readFileSync(file, "utf8")).not.toContain("GATEWAY_PUBLIC_BASE_URL");
     }
+    expect(readFileSync("packages/config/src/index.ts", "utf8")).not.toContain(
+      "GATEWAY_PUBLIC_BASE_URL",
+    );
   });
 
   it("defines BootstrapConfigFile once, in packages/config", () => {

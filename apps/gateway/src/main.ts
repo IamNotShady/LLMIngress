@@ -13,7 +13,6 @@ import {
   type GatewayConfigRuntime,
   type GatewayConfigSnapshot,
 } from "@llmingress/gateway-runtime/gateway-config-reload";
-import { executeGatewayOpenAIEmbeddings } from "@llmingress/gateway-runtime/gateway-embeddings";
 import {
   gatewayBodyLimitBytes,
   gatewayConfigNotifications,
@@ -149,12 +148,6 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
   });
 
   registerGatewayJsonEndpoint(app, options, {
-    execute: (input) => executeGatewayOpenAIEmbeddings(input),
-    path: "/v1/embeddings",
-    protocol: "embeddings",
-  });
-
-  registerGatewayJsonEndpoint(app, options, {
     execute: (input) => executeGatewayOpenAIResponse(input),
     path: "/v1/responses",
     protocol: "responses",
@@ -178,7 +171,6 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 export async function startGateway() {
   const config = loadBootstrapRuntimeConfig();
   assertPostgresDatabaseConfigured();
-  logBootstrapSecurityWarnings(config.securityWarnings);
   const configRuntime = createGatewayConfigRuntime({
     enableNotifications: gatewayConfigNotifications(),
     reconcileIntervalMs: gatewayConfigReconcileIntervalMs(),
@@ -229,12 +221,6 @@ export async function startGateway() {
       process.exit(1);
     });
   });
-}
-
-function logBootstrapSecurityWarnings(warnings: string[]): void {
-  for (const warning of warnings) {
-    logger.warn({ securityWarning: true }, warning);
-  }
 }
 
 function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {

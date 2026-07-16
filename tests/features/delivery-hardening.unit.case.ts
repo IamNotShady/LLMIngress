@@ -21,14 +21,22 @@ describe("core delivery hardening", () => {
     expect(modules).toContain("<ConsoleDialog");
   });
 
-  it("builds separate non-root runtime images without repository source", () => {
+  it("builds one non-root multi-role runtime image without repository source", () => {
     const dockerfile = read("Dockerfile");
     const compose = read("docker-compose.yml");
-    for (const target of ["gateway", "worker", "migrate", "console"]) {
-      expect(dockerfile).toContain(`AS ${target}`);
-      expect(compose).toContain(`target: ${target}`);
-    }
-    expect(dockerfile.match(/^USER /gm)?.length ?? 0).toBeGreaterThanOrEqual(4);
+    const entrypoint = read("scripts/docker/docker-entrypoint.sh");
+    expect(dockerfile).toContain("AS runtime");
+    expect(dockerfile.match(/^USER /gm)).toHaveLength(1);
+    expect(dockerfile).toContain('ENTRYPOINT ["/app/docker-entrypoint.sh"]');
+    expect(dockerfile).toContain('CMD ["all"]');
+    expect(compose).toContain("command: all");
+    expect(entrypoint).toContain("all)");
+    expect(compose).not.toContain("command: gateway");
+    expect(compose).not.toContain("command: console");
+    expect(compose).not.toContain("command: worker");
+    expect(compose).not.toContain("command: migrate");
+    expect(compose.match(/image: llmingress-app:local/g)).toHaveLength(1);
+    expect(compose.match(/target: runtime/g)).toHaveLength(1);
     expect(dockerfile).not.toContain("COPY --from=build /app /app");
     expect(compose).toContain("/health/ready");
     expect(compose).not.toContain("exec tsx");

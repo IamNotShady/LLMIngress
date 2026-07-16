@@ -8,6 +8,7 @@ import type { ConsoleProviderModelPage } from "@llmingress/db/console-route-poli
 import { type FormEvent, Fragment, useMemo, useState } from "react";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
+import { Pagination } from "../_components/pagination";
 import { buildQueryHref, type ConsoleSearchParams } from "../_lib/pagination";
 import { aggregateProviderConnectionHealthStatus } from "../_lib/provider-health";
 import { formatRelativeDateTime } from "../_lib/provider-relative-time";
@@ -466,32 +467,15 @@ export function ProvidersClientSection({
                 ))}
               </tbody>
             </table>
-            {providerModelPage.pageCount > 1 ? (
-              <nav className="model-library-truncation-note" aria-label="Model pages">
-                {providerModelPage.page > 1 ? (
-                  <a
-                    href={buildQueryHref(searchParams, {
-                      modelPage: String(providerModelPage.page - 1),
-                    })}
-                  >
-                    Previous
-                  </a>
-                ) : null}
-                <span>
-                  Page {providerModelPage.page} of {providerModelPage.pageCount} ·{" "}
-                  {providerModelPage.total} models
-                </span>
-                {providerModelPage.page < providerModelPage.pageCount ? (
-                  <a
-                    href={buildQueryHref(searchParams, {
-                      modelPage: String(providerModelPage.page + 1),
-                    })}
-                  >
-                    Next
-                  </a>
-                ) : null}
-              </nav>
-            ) : null}
+            <Pagination
+              ariaLabel="Model pages"
+              itemLabel="models"
+              page={providerModelPage.page}
+              pageParam="modelPage"
+              searchParams={searchParams}
+              total={providerModelPage.total}
+              totalPages={providerModelPage.pageCount}
+            />
           </div>
         )}
       </div>
@@ -659,6 +643,7 @@ function ProviderConnectionTable({
                           </a>
                           <ConsoleMutationForm
                             action="/api/provider-keys"
+                            errorPresentation="toast"
                             fallbackError="Provider API key update failed."
                           >
                             <input

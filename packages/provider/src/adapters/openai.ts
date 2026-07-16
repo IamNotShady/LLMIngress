@@ -55,14 +55,6 @@ export type NormalizedOpenAIResponsesRequest = {
   tools?: Record<string, unknown>[];
 };
 
-export type NormalizedOpenAIEmbeddingsRequest = {
-  dimensions?: number;
-  encodingFormat?: "base64" | "float";
-  input: string | string[] | number[] | number[][];
-  payload: Record<string, unknown>;
-  passthrough?: Record<string, unknown>;
-};
-
 export type OpenAIProviderTarget = {
   apiKey?: string | null;
   baseUrl: string;
@@ -93,11 +85,6 @@ export type OpenAIProviderAdapter = {
   chatCompletion: (input: {
     headers?: Record<string, string>;
     request: NormalizedOpenAIChatRequest;
-    target: OpenAIProviderTarget;
-  }) => Promise<OpenAIAdapterResult>;
-  embeddings?: (input: {
-    headers?: Record<string, string>;
-    request: NormalizedOpenAIEmbeddingsRequest;
     target: OpenAIProviderTarget;
   }) => Promise<OpenAIAdapterResult>;
   response?: (input: {
@@ -141,13 +128,6 @@ type OpenAIResponsesPayload = Record<string, unknown> & {
   tools?: Record<string, unknown>[];
 };
 
-type OpenAIEmbeddingsPayload = Record<string, unknown> & {
-  dimensions?: number;
-  encoding_format?: NormalizedOpenAIEmbeddingsRequest["encodingFormat"];
-  input: NormalizedOpenAIEmbeddingsRequest["input"];
-  model: string;
-};
-
 export function createOpenAIProviderAdapter(
   options: CreateOpenAIProviderAdapterOptions = {},
 ): OpenAIProviderAdapter {
@@ -163,36 +143,6 @@ export function createOpenAIProviderAdapter(
           buildChatCompletionsUrl(target.baseUrl),
           {
             body: JSON.stringify(buildChatCompletionsPayload(request, target)),
-            headers: buildProviderHeaders(target.apiKey, options.headers, headers),
-            method: "POST",
-            signal: AbortSignal.timeout(timeoutMs),
-          },
-        );
-        const body = await readResponseBody(response);
-        const responseHeaders = readProviderResponseHeaders(response.headers);
-
-        if (!response.ok) {
-          return mapError(response.status, body, responseHeaders);
-        }
-
-        return {
-          body,
-          headers: responseHeaders,
-          ok: true,
-          providerRequestId: readProviderRequestId(body),
-          statusCode: response.status,
-        };
-      } catch (error) {
-        return mapRequestFailure(error, timeoutMs);
-      }
-    },
-    embeddings: async ({ headers, request, target }) => {
-      try {
-        const response = await fetchCredentialedProviderRequest(
-          fetchImpl,
-          buildEmbeddingsUrl(target.baseUrl),
-          {
-            body: JSON.stringify(buildEmbeddingsPayload(request, target)),
             headers: buildProviderHeaders(target.apiKey, options.headers, headers),
             method: "POST",
             signal: AbortSignal.timeout(timeoutMs),
@@ -285,17 +235,6 @@ function buildResponsesPayload(
 
 function buildResponsesUrl(baseUrl: string): string {
   return joinUrl(baseUrl, "responses");
-}
-
-function buildEmbeddingsPayload(
-  request: NormalizedOpenAIEmbeddingsRequest,
-  target: OpenAIProviderTarget,
-): OpenAIEmbeddingsPayload {
-  return omitUndefined({ ...request.payload, model: target.modelId }) as OpenAIEmbeddingsPayload;
-}
-
-function buildEmbeddingsUrl(baseUrl: string): string {
-  return joinUrl(baseUrl, "embeddings");
 }
 
 function mapProviderError(

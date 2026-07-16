@@ -27,20 +27,12 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
       virtualModelName: "vm-provider-4xx",
     });
     const responsesAgentApiKey = "llmi_resp_error_fidelity_key_094";
-    const embeddingsAgentApiKey = "llmi_embed_error_fidelity_key_094";
     await seedOpenAIGatewayRoute({
       agentApiKey: responsesAgentApiKey,
       endpointProtocol: "responses",
       fixture,
       providerBaseUrl: `${fakeProvider.url}?mode=bad-request`,
       virtualModelName: "vm-provider-responses-4xx",
-    });
-    await seedOpenAIGatewayRoute({
-      agentApiKey: embeddingsAgentApiKey,
-      endpointProtocol: "embeddings",
-      fixture,
-      providerBaseUrl: `${fakeProvider.url}?mode=bad-request`,
-      virtualModelName: "vm-provider-embeddings-4xx",
     });
     await fixture.query(
       "update provider_models set output_modalities = array['text', 'embedding']::text[]",
@@ -114,24 +106,6 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
       expect(responsesResponse.headers.get("x-request-id")).toBe("fake-provider-request");
       expect(responsesResponse.headers.get("x-ratelimit-remaining-requests")).toBe("99");
       expect(responsesBody).toEqual(body);
-
-      const embeddingsResponse = await fetch(`${baseUrl}/v1/embeddings`, {
-        body: JSON.stringify({
-          input: "ping",
-          model: "vm-provider-embeddings-4xx",
-        }),
-        headers: {
-          authorization: `Bearer ${embeddingsAgentApiKey}`,
-          "content-type": "application/json",
-        },
-        method: "POST",
-      });
-      const embeddingsBody = await embeddingsResponse.json();
-
-      expect(embeddingsResponse.status).toBe(400);
-      expect(embeddingsResponse.headers.get("x-request-id")).toBe("fake-provider-request");
-      expect(embeddingsResponse.headers.get("x-ratelimit-remaining-requests")).toBe("99");
-      expect(embeddingsBody).toEqual(body);
     } finally {
       await stopGatewayProcess(gateway);
     }

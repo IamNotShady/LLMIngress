@@ -171,6 +171,13 @@ export async function runMigrations(options: RunMigrationsOptions): Promise<Migr
       const appliedChecksums = new Map(
         appliedRows.rows.map((row): [string, string] => [row.id, row.checksum]),
       );
+      const shippedIds = new Set(migrations.map((migration) => migration.id));
+      const unknownAppliedId = appliedRows.rows.find((row) => !shippedIds.has(row.id))?.id;
+      if (unknownAppliedId) {
+        throw new Error(
+          `Database contains unknown migration ${unknownAppliedId}; refusing to run an older image.`,
+        );
+      }
       const applied: SqlMigration[] = [];
       const skipped: SqlMigration[] = [];
 

@@ -10,7 +10,6 @@ release unless it is added here with code and verification.
 - `POST /v1/chat/completions`
 - `POST /v1/responses`
 - `POST /v1/messages`
-- `POST /v1/embeddings`
 - `GET /v1/models`
 
 Agents authenticate with a dedicated `llmi_` key and may access only their granted Virtual
@@ -28,6 +27,8 @@ Supported Provider types are API Key, Subscription OAuth, and Local. Current tem
 Console supports Provider lifecycle, multiple API keys, OAuth, model refresh, dependency-protected
 deletion, and connection checks. Model metadata may be merged from Provider APIs, models.dev,
 OpenRouter, LiteLLM, and Vercel; missing values remain unknown and manual values take precedence.
+Known embedding-only models remain stored as Provider metadata but are hidden from Console model
+catalogs and cannot be selected for Gateway routes.
 
 Health belongs to a Provider connection: each API key or OAuth token is independent, while a Local
 Provider has one logical connection. Worker probes up to three chat models. The sparse
@@ -66,6 +67,9 @@ create jobs.
 
 Gateway exposes `/health/live`, `/health/ready`, and the readiness-compatible `/health` alias.
 
+Self-hosted beta deployments use repository Docker Compose: one app container (multi-role image)
+plus one PostgreSQL 18.4 container.
+
 ## Unsupported
 
 V1 does not include:
@@ -73,6 +77,7 @@ V1 does not include:
 - Runtime, Settings, or standalone Routing pages
 - notifications, alerts, Webhook delivery, or external exports
 - database backup or restore workflows
+- one-command remote installer or managed upgrade snapshots
 - billing reconciliation or savings/baseline-cost reporting
 - Prometheus metrics or OpenTelemetry tracing
 - persisted runtime heartbeat, status, or error products

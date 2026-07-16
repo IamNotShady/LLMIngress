@@ -7,6 +7,10 @@
 <p align="center">Route your AI agents across the model providers you already use.</p>
 
 <p align="center">
+  <img src="docs/assets/console-demo.gif" alt="LLMIngress Console demo" />
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/status-pre--release-yellow" alt="Pre-release status" />
   <a href="https://github.com/IamNotShady/LLMIngress/stargazers"><img src="https://img.shields.io/github/stars/IamNotShady/LLMIngress?style=flat&label=stars" alt="GitHub stars" /></a>
   <a href="https://github.com/IamNotShady/LLMIngress/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/IamNotShady/LLMIngress/ci.yml?branch=main&label=CI" alt="CI status" /></a>
@@ -30,27 +34,26 @@ and control routing, access, limits, fallback, and usage from one Console.
 
 ### Self-hosted with Docker Compose
 
-Clone the repository and generate independent secrets for credential encryption and PostgreSQL:
-
 ```bash
 git clone https://github.com/IamNotShady/LLMIngress.git
 cd LLMIngress
-
-export MASTER_KEY="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))")"
-export POSTGRES_PASSWORD="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))")"
-
-docker compose up --build
+./scripts/deploy.sh
 ```
 
-Compose starts PostgreSQL 18.4, applies the baseline migration, then starts Console, Gateway, and
-Worker. Published ports bind to `127.0.0.1` by default.
+`./scripts/deploy.sh` writes a random `MASTER_KEY` into a gitignored `.env` when missing,
+then runs `docker compose up --build`. Compose still uses a local-only default PostgreSQL
+password (`llmi-local-db`). Published ports bind to `127.0.0.1` by default. Keep a backup of
+`.env` — the same `MASTER_KEY` is required to decrypt stored provider credentials.
 
-| Service | Address | Purpose |
+Compose runs two containers: the app (Console, Gateway, and Worker in one process group) and
+PostgreSQL.
+
+| Endpoint | Address | Purpose |
 | --- | --- | --- |
 | Console | [http://localhost:3000](http://localhost:3000) | Configure and observe LLMIngress |
 | Gateway | [http://localhost:4000](http://localhost:4000) | Serve Agent API traffic |
 | PostgreSQL | `localhost:55432` | Store configuration and operational metadata |
-| Worker | Internal only | Refresh models, probe connections, and synchronize prices |
+| Worker | Inside the app container | Refresh models, probe connections, and synchronize prices |
 
 Runtime and port overrides are documented in [`.env.example`](.env.example).
 
@@ -101,7 +104,6 @@ Agents use the same API key and Virtual Model grants across all supported protoc
 | OpenAI Chat Completions | `POST /v1/chat/completions` |
 | OpenAI Responses | `POST /v1/responses` |
 | Anthropic Messages | `POST /v1/messages` |
-| OpenAI Embeddings | `POST /v1/embeddings` |
 | Virtual Model discovery | `GET /v1/models` |
 
 Provider payloads remain protocol-native. LLMIngress replaces the Virtual Model name with the
@@ -117,16 +119,6 @@ Gateway health endpoints do not require an Agent API key:
 
 ## How it works
 
-```mermaid
-flowchart LR
-  agents[AI Agents] --> gateway[Gateway] --> providers[Model Providers]
-  browser[Browser] --> console[Console]
-  gateway --> db[(PostgreSQL)]
-  console --> db
-  worker[Worker] --> db
-  worker --> providers
-```
-
 - **Gateway** authenticates Agents, enforces enabled limits, resolves Virtual Models, executes
   fallback, and records request metadata.
 - **Console** owns configuration and operational views. It does not proxy Agent traffic or call
@@ -141,10 +133,14 @@ LLMIngress uses Node.js 24, pnpm 11.5.1, and PostgreSQL 18.4.
 ```bash
 pnpm install
 cp .env.example .env.local
-# Set MASTER_KEY and confirm DATABASE_URL / TEST_DATABASE_URL in .env.local.
+# Set MASTER_KEY (e.g. openssl rand -base64 32) and confirm DATABASE_URL / TEST_DATABASE_URL.
 pnpm run db:migrate
 ./init.sh
 ```
+
+To exercise the production-shaped stack from a checkout, run `./scripts/deploy.sh`.
+Compose builds one multi-role application image, runs it as a single app container alongside
+PostgreSQL (published on `127.0.0.1:55432` for development).
 
 `./init.sh` runs lint, type-checking, unit tests, and the build before starting Console, Gateway,
 and Worker. The standalone verification commands are:

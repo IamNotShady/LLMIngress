@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { PostgresClient } from "@llmingress/db/client";
+import { createLogger, type Logger } from "@llmingress/logging";
 
 export const JOB_CREATED_CHANNEL = "job_created";
+
+const logger = createLogger("worker-job-runner");
 
 export type ClaimedJob = {
   attemptNumber: number;
@@ -79,6 +82,7 @@ export type JobRunner = {
 type CreateJobRunnerOptions = {
   handlers: Record<string, JobHandler | undefined>;
   leaseMs?: number;
+  maxJobDurationMs?: number;
   now?: () => Date;
   pollIntervalMs?: number;
   retryBackoffMs?: (job: ClaimedJob, error: JobFailure) => number;
@@ -114,6 +118,7 @@ type JobRow = {
 const defaultLeaseMs = 60_000;
 const defaultPollIntervalMs = 5_000;
 const defaultShutdownGraceMs = 25_000;
+const defaultMaxJobDurationMs = 300_000;
 
 export class JobHandlerError extends Error {
   readonly code: string;
@@ -127,6 +132,7 @@ export class JobHandlerError extends Error {
 
 export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
   const leaseMs = options.leaseMs ?? defaultLeaseMs;
+  const maxJobDurationMs = options.maxJobDurationMs ?? defaultMaxJobDurationMs;
   const pollIntervalMs = options.pollIntervalMs ?? defaultPollIntervalMs;
   const retryBackoffMs = options.retryBackoffMs ?? defaultRetryBackoffMs;
   const shutdownGraceMs = options.shutdownGraceMs ?? defaultShutdownGraceMs;
@@ -202,6 +208,7 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
       abortController,
       job,
       leaseMs,
+      maxJobDurationMs,
       now,
       store: options.store,
       workerId: options.workerId,
@@ -300,6 +307,11 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
       }
 
       schedule(result.nextDelayMs ?? (result.processed ? 0 : pollIntervalMs));
+    } catch (error) {
+      logger.error({ err: error }, "worker poll loop iteration failed; re-arming");
+      if (!stopped) {
+        schedule(pollIntervalMs);
+      }
     } finally {
       processing = false;
     }
@@ -348,10 +360,122 @@ export function createPostgresJobRunner(options: CreatePostgresJobRunnerOptions)
   return createJobRunner({ ...options, store });
 }
 
+export type JobCreatedListenerClient = {
+  end: () => Promise<unknown>;
+  on: (event: string, listener: (arg: unknown) => void) => void;
+  query: (sql: string) => Promise<unknown>;
+  removeAllListeners?: () => void;
+};
+
+type ResilientSubscriptionLogger = Pick<Logger, "error" | "warn">;
+
+const defaultSubscriptionInitialBackoffMs = 1_000;
+const defaultSubscriptionMaxBackoffMs = 30_000;
+
+export function createResilientJobCreatedSubscription(input: {
+  backoffMs?: { initial?: number; max?: number };
+  connect: () => JobCreatedListenerClient | Promise<JobCreatedListenerClient>;
+  logger?: ResilientSubscriptionLogger;
+  onJobCreated: () => void;
+}): { start: () => Promise<void>; stop: () => Promise<void> } {
+  const initialBackoffMs = input.backoffMs?.initial ?? defaultSubscriptionInitialBackoffMs;
+  const maxBackoffMs = input.backoffMs?.max ?? defaultSubscriptionMaxBackoffMs;
+  const log = input.logger ?? logger;
+  let client: JobCreatedListenerClient | undefined;
+  let stopped = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let currentBackoffMs = initialBackoffMs;
+
+  const scheduleReconnect = () => {
+    if (stopped || reconnectTimer) {
+      return;
+    }
+    const delayMs = currentBackoffMs;
+    currentBackoffMs = Math.min(maxBackoffMs, currentBackoffMs * 2);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = undefined;
+      void connectOnce();
+    }, delayMs);
+    reconnectTimer.unref?.();
+  };
+
+  const handleDisconnect = (error?: unknown) => {
+    if (stopped) {
+      return;
+    }
+    log.warn({ err: error }, "job_created subscription lost; reconnecting");
+    client = undefined;
+    scheduleReconnect();
+  };
+
+  const connectOnce = async () => {
+    if (stopped) {
+      return;
+    }
+    try {
+      const next = await input.connect();
+      if (stopped) {
+        await next.end().catch(() => undefined);
+        return;
+      }
+      client = next;
+      next.on("notification", (message) => {
+        if (isJobCreatedNotification(message)) {
+          input.onJobCreated();
+        }
+      });
+      next.on("error", (error) => {
+        handleDisconnect(error);
+      });
+      next.on("end", () => {
+        handleDisconnect();
+      });
+      await next.query(`listen ${JOB_CREATED_CHANNEL}`);
+      currentBackoffMs = initialBackoffMs;
+      // Cover NOTIFYs that may have fired during the outage/initial gap.
+      input.onJobCreated();
+    } catch (error) {
+      handleDisconnect(error);
+    }
+  };
+
+  return {
+    start: async () => {
+      await connectOnce();
+    },
+    stop: async () => {
+      if (stopped) {
+        return;
+      }
+      stopped = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+      }
+      const current = client;
+      client = undefined;
+      if (current) {
+        current.removeAllListeners?.();
+        await current.query(`unlisten ${JOB_CREATED_CHANNEL}`).catch(() => undefined);
+        await current.end().catch(() => undefined);
+      }
+    },
+  };
+}
+
+function isJobCreatedNotification(message: unknown): boolean {
+  return (
+    typeof message === "object" &&
+    message !== null &&
+    (message as { channel?: unknown }).channel === JOB_CREATED_CHANNEL
+  );
+}
+
 function startLeaseRenewal(input: {
   abortController: AbortController;
   job: ClaimedJob;
   leaseMs: number;
+  maxJobDurationMs: number;
   now: () => Date;
   store: JobStore;
   workerId: string;
@@ -360,6 +484,7 @@ function startLeaseRenewal(input: {
   stop: () => Promise<void>;
 } {
   const renewEveryMs = Math.max(1, Math.floor(input.leaseMs / 3));
+  const startedAtMs = input.now().getTime();
   let inFlight: Promise<void> | undefined;
   let leaseLostCallback: (() => void) | undefined;
   let stopped = false;
@@ -374,6 +499,13 @@ function startLeaseRenewal(input: {
 
   const renew = async () => {
     if (stopped || renewing || input.abortController.signal.aborted) {
+      return;
+    }
+
+    if (input.now().getTime() - startedAtMs > input.maxJobDurationMs) {
+      stopped = true;
+      clearInterval(timer);
+      markLeaseLost();
       return;
     }
 
@@ -726,23 +858,31 @@ class PostgresJobStore implements JobStore {
   }
 
   async subscribeJobCreated(onJobCreated: () => void): Promise<{ stop: () => Promise<void> }> {
-    const client = new PostgresClient({ connectionString: this.databaseUrl });
-    await client.connect();
-    client.on("notification", (message) => {
-      if (message.channel === JOB_CREATED_CHANNEL) {
-        onJobCreated();
-      }
+    const subscription = createResilientJobCreatedSubscription({
+      connect: async () => {
+        const client = new PostgresClient({ connectionString: this.databaseUrl });
+        await client.connect();
+        this.listenerClient = client;
+        return {
+          end: () => client.end(),
+          on: (event, listener) => {
+            client.on(event as "notification", listener);
+          },
+          query: (sql) => client.query(sql),
+          removeAllListeners: () => {
+            client.removeAllListeners();
+          },
+        };
+      },
+      logger,
+      onJobCreated,
     });
-    await client.query(`listen ${JOB_CREATED_CHANNEL}`);
-    this.listenerClient = client;
+    await subscription.start();
 
     return {
       stop: async () => {
-        if (this.listenerClient === client) {
-          this.listenerClient = undefined;
-        }
-        await client.query(`unlisten ${JOB_CREATED_CHANNEL}`).catch(() => undefined);
-        await client.end();
+        await subscription.stop();
+        this.listenerClient = undefined;
       },
     };
   }

@@ -14,7 +14,7 @@ import {
   isUnfinishedChainedPriceSyncStatus,
   planProviderModelRefresh,
 } from "@llmingress/worker-runtime/worker-model-refresh";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildPlaygroundChatRequest,
   buildPlaygroundMessagesRequest,
@@ -25,6 +25,7 @@ import {
   readOptionalPlaygroundNumber,
   readPlaygroundResponseText,
   readPlaygroundStreamResponseText,
+  retryPlaygroundRequestDetail,
 } from "../../apps/console/src/app/playground-helpers.ts";
 
 const listed = (modelId: string, overrides: Partial<ListedProviderModel> = {}) => ({
@@ -186,6 +187,26 @@ describe("core delivery behavior coverage", () => {
     ).toBe("hello");
     expect(readPlaygroundStreamResponseText("data: invalid")).toBe("No response text");
     expect(formatPlaygroundFetchError("sending", new Error("secret"))).not.toContain("secret");
+  });
+
+  it("retries delayed Playground request details without polling forever", async () => {
+    const delayedDetail = { requestId: "playground-delayed" };
+    const loadDelayedDetail = vi
+      .fn<() => Promise<typeof delayedDetail | null>>()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(delayedDetail);
+
+    await expect(
+      retryPlaygroundRequestDetail(loadDelayedDetail, { delayMs: 0, maxAttempts: 4 }),
+    ).resolves.toEqual(delayedDetail);
+    expect(loadDelayedDetail).toHaveBeenCalledTimes(3);
+
+    const neverAvailable = vi.fn<() => Promise<null>>().mockResolvedValue(null);
+    await expect(
+      retryPlaygroundRequestDetail(neverAvailable, { delayMs: 0, maxAttempts: 2 }),
+    ).resolves.toBeNull();
+    expect(neverAvailable).toHaveBeenCalledTimes(2);
   });
 
   it("plans model refresh state transitions without duplicate models", () => {

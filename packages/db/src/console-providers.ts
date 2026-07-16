@@ -8,6 +8,7 @@ import {
   consoleValidationError,
 } from "./console-operation-error.ts";
 import { normalizeProviderBaseUrl } from "./console-provider-base-url.ts";
+import { consoleVisibleProviderModelFilterSql } from "./console-provider-model-visibility.ts";
 import {
   isKnownProviderTemplateKey,
   type ProviderTemplateCreateInput,
@@ -156,6 +157,7 @@ export async function listProviders(databaseUrl?: string): Promise<ConsoleProvid
                  from provider_models
                  where provider_models.provider_id = providers.id
                    and provider_models.deleted_at is null
+                   and ${consoleVisibleProviderModelFilterSql}
                ) as provider_model_count
         from providers
         where deleted_at is null

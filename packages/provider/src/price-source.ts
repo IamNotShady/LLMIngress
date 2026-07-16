@@ -66,9 +66,12 @@ type NormalizePriceOptions = {
 type FetchProviderModelPricesOptions = {
   fetch?: typeof globalThis.fetch;
   now?: () => Date;
+  timeoutMs?: number;
 };
 
 type FetchProviderModelRegistryOptions = FetchProviderModelPricesOptions;
+
+const defaultPriceSourceTimeoutMs = 20_000;
 
 const supportedProviderKeys = new Set(listPriceSyncSupportedProviderKeys());
 
@@ -87,10 +90,11 @@ export async function fetchProviderModelPrices(
   options: FetchProviderModelPricesOptions = {},
 ): Promise<ProviderModelSyncedPrice[]> {
   const fetchImpl = options.fetch ?? globalThis.fetch;
+  const timeoutMs = options.timeoutMs ?? defaultPriceSourceTimeoutMs;
   const syncedAt = options.now?.() ?? new Date();
   const [primary, auxiliary] = await Promise.allSettled([
-    fetchJson(fetchImpl, MODELS_DEV_PRICE_SOURCE_URL),
-    fetchJson(fetchImpl, LITELLM_PRICE_SOURCE_URL),
+    fetchJson(fetchImpl, MODELS_DEV_PRICE_SOURCE_URL, timeoutMs),
+    fetchJson(fetchImpl, LITELLM_PRICE_SOURCE_URL, timeoutMs),
   ]);
   const primaryPrices =
     primary.status === "fulfilled"
@@ -119,12 +123,13 @@ export async function fetchProviderModelRegistryEntries(
   options: FetchProviderModelRegistryOptions = {},
 ): Promise<ProviderModelRegistryEntry[]> {
   const fetchImpl = options.fetch ?? globalThis.fetch;
+  const timeoutMs = options.timeoutMs ?? defaultPriceSourceTimeoutMs;
   const syncedAt = options.now?.() ?? new Date();
   const [modelsDev, openRouter, liteLlm, vercel] = await Promise.allSettled([
-    fetchJson(fetchImpl, MODELS_DEV_PRICE_SOURCE_URL),
-    fetchJson(fetchImpl, OPENROUTER_MODEL_SOURCE_URL),
-    fetchJson(fetchImpl, LITELLM_PRICE_SOURCE_URL),
-    fetchJson(fetchImpl, VERCEL_AI_GATEWAY_MODEL_SOURCE_URL),
+    fetchJson(fetchImpl, MODELS_DEV_PRICE_SOURCE_URL, timeoutMs),
+    fetchJson(fetchImpl, OPENROUTER_MODEL_SOURCE_URL, timeoutMs),
+    fetchJson(fetchImpl, LITELLM_PRICE_SOURCE_URL, timeoutMs),
+    fetchJson(fetchImpl, VERCEL_AI_GATEWAY_MODEL_SOURCE_URL, timeoutMs),
   ]);
 
   return mergeProviderModelRegistryEntries(
@@ -765,8 +770,30 @@ function dedupeProviderModelRegistryEntries(
   return [...deduped.values()];
 }
 
-async function fetchJson(fetchImpl: typeof globalThis.fetch, url: string): Promise<unknown> {
-  const response = await fetchImpl(url);
+async function fetchJson(
+  fetchImpl: typeof globalThis.fetch,
+  url: string,
+  timeoutMs = defaultPriceSourceTimeoutMs,
+): Promise<unknown> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  let response: Response;
+  try {
+    // Price sources are hardcoded trusted hosts (GitHub raw / models.dev) that may
+    // legitimately 301/302, so follow redirects and only bound the request with a timeout.
+    response = await fetchImpl(url, { signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`Price source ${url} timed out after ${timeoutMs}ms.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+
   if (!response.ok) {
     throw new Error(`Price source ${url} returned HTTP ${response.status}.`);
   }

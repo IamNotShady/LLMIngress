@@ -7,18 +7,23 @@ import { getFreePort } from "../support/console-app";
 
 const execFileAsync = promisify(execFile);
 
+async function ensureComposeMasterKeyEnv(): Promise<void> {
+  await execFileAsync("./scripts/deploy.sh", ["--ensure-env"], {
+    cwd: process.cwd(),
+  });
+}
+
 test("Docker Compose starts PostgreSQL 18.4", async () => {
   test.setTimeout(180_000);
   const projectName = `llmingress_pg18_${randomUUID().replaceAll("-", "_")}`;
   const composeArgs = ["compose", "-p", projectName, "-f", "docker-compose.yml"];
   const env = {
     ...process.env,
-    MASTER_KEY: "m".repeat(32),
-    POSTGRES_PASSWORD: "p".repeat(32),
     POSTGRES_PORT: String(await getFreePort()),
   };
 
   try {
+    await ensureComposeMasterKeyEnv();
     await execFileAsync("docker", [...composeArgs, "up", "-d", "postgres"], {
       cwd: process.cwd(),
       env,
@@ -84,10 +89,9 @@ test("release verification runner and docker compose contracts stay runnable", a
   expect(dryRun.stdout).toContain("Legacy feature(s): 0");
   expect(dryRun.stdout).toContain("Standard verification coverage passed.");
 
+  await ensureComposeMasterKeyEnv();
   const composeEnv = {
     ...process.env,
-    MASTER_KEY: "m".repeat(32),
-    POSTGRES_PASSWORD: "p".repeat(32),
   };
   const services = await execFileAsync(
     "docker",
@@ -97,9 +101,7 @@ test("release verification runner and docker compose contracts stay runnable", a
       env: composeEnv,
     },
   );
-  expect(services.stdout.trim().split(/\r?\n/)).toEqual(
-    expect.arrayContaining(["postgres", "migrate", "gateway", "console", "worker"]),
-  );
+  expect(services.stdout.trim().split(/\r?\n/).sort()).toEqual(["app", "postgres"].sort());
 
   await execFileAsync("docker", ["compose", "-f", "docker-compose.yml", "config", "--quiet"], {
     cwd: process.cwd(),

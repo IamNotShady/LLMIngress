@@ -16,7 +16,7 @@
       "verification": "pnpm exec vitest run tests/features/provider-management.unit.test.ts tests/features/provider-model-sync.unit.test.ts tests/features/provider-connection-health.unit.test.ts && pnpm test:e2e tests/e2e/provider-management.e2e.spec.ts tests/e2e/provider-model-sync.e2e.spec.ts tests/e2e/provider-connection-health.e2e.spec.ts --workers=1",
       "dependencies": ["core-platform-security"],
       "status": "passing",
-      "evidence": "2026-07-14: provider management, model sync, and connection health focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
+      "evidence": "2026-07-15: API key save/enable and OAuth complete/enable now enqueue model_refresh (source api_key_saved/oauth_ready, trigger system) alongside connection probes; enqueueProviderModelRefreshJob accepts source/trigger. Focused unit + provider-connection-health E2E (incl. credential auto-refresh cases), pnpm run verify, and verify:features (9/9) passed."
     },
     {
       "id": "virtual-model-routing",
@@ -25,16 +25,16 @@
       "verification": "pnpm exec vitest run tests/features/virtual-model-routing.unit.test.ts tests/features/route-strategies.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-routing.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management"],
       "status": "passing",
-      "evidence": "2026-07-14: virtual-model-routing and route-strategies focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
+      "evidence": "2026-07-15: Virtual Model endpoint choices exclude Embeddings, and direct saves reject known embedding-only candidates with route_policy_endpoint_unsupported. Focused unit/E2E, verify, and feature regression passed."
     },
     {
       "id": "gateway-protocol-execution",
       "name": "Gateway Protocol Execution",
-      "description": "Chat Completions, Responses, Messages, and Embeddings with safe fallback, streaming, and logs.",
+      "description": "Chat Completions, Responses, and Messages with safe fallback, streaming, and logs.",
       "verification": "pnpm exec vitest run tests/features/gateway-protocols.unit.test.ts tests/features/gateway-fallback-streaming.unit.test.ts tests/features/gateway-security-logging.unit.test.ts && pnpm test:e2e tests/e2e/gateway-protocols.e2e.spec.ts tests/e2e/gateway-fallback-streaming.e2e.spec.ts tests/e2e/gateway-security-logging.e2e.spec.ts --workers=1",
       "dependencies": ["virtual-model-routing"],
       "status": "passing",
-      "evidence": "2026-07-14: protocol, fallback/streaming, and security/logging focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
+      "evidence": "2026-07-15: POST /v1/embeddings is unregistered, returns 404, and never forwards to Providers; the dedicated executor, adapter contract, errors, protocol vocabulary, and docs were removed while embedding model metadata remains. Focused unit/E2E, verify, and feature regression passed."
     },
     {
       "id": "agent-access-and-limits",
@@ -61,7 +61,7 @@
       "verification": "pnpm exec vitest run tests/features/worker-model-operations.unit.test.ts tests/features/worker-leases-maintenance.unit.test.ts && pnpm test:e2e tests/e2e/worker-model-operations.e2e.spec.ts tests/e2e/worker-leases-maintenance.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-14: Worker operations and leases/maintenance focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
+      "evidence": "2026-07-15: Worker resiliency fixes — H1 self-healing poll loop + process rejection/exception guards; H2 timeout-bounded provider network calls + maxJobDurationMs per-job cap; H2/M1 no-apiKey model-list redirect refusal + auto-reconnecting job_created LISTEN. New unit cases (loop re-arm after claim/terminal-write throw, model-list/price-source timeouts, redirect refusal, max-duration abort, subscription reconnect/stop) pass; pnpm run verify + verify:features re-verified all 9 features with zero regression. 2026-07-14 baseline: focused suites, 85 E2E, and Compose passed."
     },
     {
       "id": "console-core",
@@ -70,16 +70,16 @@
       "verification": "pnpm exec vitest run tests/features/console-core.unit.test.ts tests/features/console-layout-interactions.unit.test.ts && pnpm test:e2e tests/e2e/console-core.e2e.spec.ts tests/e2e/console-layout-interactions.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-14: console-core and console-layout-interactions focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
+      "evidence": "2026-07-15: Console E2E ignores only Next-generated unused .woff2 preload warnings while retaining all real console errors and other warnings; the focused Provider API key interaction E2E, full serial Console Core regression, and optimized feature batch passed."
     },
     {
       "id": "release-guards",
       "name": "Release Guards",
-      "description": "PostgreSQL 18.4 runtime, single 24-table baseline, retired-surface guards, standard verification, and repository hygiene.",
+      "description": "PostgreSQL 18.4 runtime, Compose-based multi-role Docker delivery, single 24-table baseline, retired-surface guards, standard verification, and repository hygiene.",
       "verification": "pnpm exec vitest run tests/features/release-guards.unit.test.ts && pnpm test:e2e tests/e2e/release-guards.e2e.spec.ts --workers=1",
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
-      "evidence": "2026-07-14: PostgreSQL 18.4 Compose and CI contracts, real-container version check, 50 focused unit tests, 13 focused E2E tests, verify, 86 total E2E tests, full feature regression, and rebuilt Compose runtime passed."
+      "evidence": "2026-07-16: Compose delivery is two containers (app command:all + postgres); entrypoint all migrates then supervises Gateway/Console/Worker; Dockerfile CMD all. Focused release/delivery unit+e2e, pnpm run verify, and verify:features (9/9) passed."
     }
   ]
 }

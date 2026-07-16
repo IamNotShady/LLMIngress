@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { type DragEvent, useMemo, useState } from "react";
 import { ConsoleDialog } from "../_components/console-dialog";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 
 type Strategy = "fixed" | "cost_first" | "random";
-type EndpointProtocol = "chat_completions" | "responses" | "messages" | "embeddings";
+type EndpointProtocol = "chat_completions" | "responses" | "messages";
 
 type ProviderModelOption = {
   availability: string;
@@ -42,12 +43,7 @@ type VirtualModel = {
 };
 
 const strategies: Strategy[] = ["fixed", "cost_first", "random"];
-const endpointProtocols: EndpointProtocol[] = [
-  "chat_completions",
-  "responses",
-  "messages",
-  "embeddings",
-];
+const endpointProtocols: EndpointProtocol[] = ["chat_completions", "responses", "messages"];
 
 export function VirtualModelRouteDialogClient({
   closeHref,
@@ -63,7 +59,7 @@ export function VirtualModelRouteDialogClient({
   virtualModel: VirtualModel | null;
 }) {
   const [strategy, setStrategy] = useState<Strategy>(routePolicy?.strategy ?? "random");
-  const [endpointProtocol, setEndpointProtocol] = useState<EndpointProtocol>(
+  const [endpointProtocol, setEndpointProtocol] = useState<EndpointProtocol>(() =>
     readInitialEndpointProtocol(routePolicy),
   );
   const [selectedCandidates, setSelectedCandidates] = useState<Candidate[]>(
@@ -400,9 +396,9 @@ export function VirtualModelRouteDialogClient({
                   <tr>
                     <td colSpan={7}>
                       <p>No compatible models available for this endpoint.</p>
-                      <a className="empty-state-action" href="/providers">
+                      <Link className="empty-state-action" href="/providers">
                         Open Providers
-                      </a>{" "}
+                      </Link>{" "}
                       to add or refresh Provider Models.
                     </td>
                   </tr>
@@ -464,10 +460,7 @@ function formatEndpointProtocolLabel(protocol: EndpointProtocol): string {
   if (protocol === "responses") {
     return "Responses";
   }
-  if (protocol === "messages") {
-    return "Messages";
-  }
-  return "Embeddings";
+  return "Messages";
 }
 
 function formatRouteStrategyDescription(strategy: Strategy): string {

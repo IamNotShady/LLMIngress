@@ -63,6 +63,96 @@ test("fresh Console guides users through only the retained core workflow", async
       ).toBeVisible();
       await expect(page.getByRole("link", { name: "Open Providers" })).toBeVisible();
 
+      let detailAttempts = 0;
+      const corsHeaders = {
+        "access-control-allow-headers": "authorization, content-type, x-request-id",
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-origin": "*",
+      };
+      await page.route("**/v1/models", async (route) => {
+        if (route.request().method() === "OPTIONS") {
+          await route.fulfill({ headers: corsHeaders, status: 204 });
+          return;
+        }
+        await route.fulfill({
+          body: JSON.stringify({ data: [{ id: "audit-playground-vm" }] }),
+          contentType: "application/json",
+          headers: corsHeaders,
+          status: 200,
+        });
+      });
+      await page.route("**/v1/chat/completions", async (route) => {
+        if (route.request().method() === "OPTIONS") {
+          await route.fulfill({ headers: corsHeaders, status: 204 });
+          return;
+        }
+        await route.fulfill({
+          body: JSON.stringify({
+            choices: [{ message: { content: "Playground retry verified" } }],
+            usage: { total_tokens: 42 },
+          }),
+          contentType: "application/json",
+          headers: {
+            ...corsHeaders,
+            "access-control-expose-headers": "x-llmingress-request-id, x-request-id",
+            "x-llmingress-request-id": "playground-delayed-detail",
+            "x-request-id": "provider-request-id",
+          },
+          status: 200,
+        });
+      });
+      await page.route("**/api/playground/result?*", async (route) => {
+        detailAttempts += 1;
+        const requestId = new URL(route.request().url()).searchParams.get("requestId");
+        if (requestId !== "playground-delayed-detail") {
+          await route.fulfill({
+            body: JSON.stringify({ detail: null }),
+            contentType: "application/json",
+            status: 404,
+          });
+          return;
+        }
+        if (detailAttempts === 1) {
+          await route.fulfill({
+            body: JSON.stringify({ detail: null }),
+            contentType: "application/json",
+            status: 404,
+          });
+          return;
+        }
+        await route.fulfill({
+          body: JSON.stringify({
+            detail: {
+              latencyMs: 125,
+              providerDisplayName: "Delayed Provider",
+              providerKey: "openai",
+              providerModelDisplayName: "Delayed Model",
+              providerModelName: "delayed-model",
+              requestId: "playground-delayed-detail",
+              routePolicyStrategy: "cost_first",
+              status: "succeeded",
+              totalCostUsd: "0.00042",
+              totalTokens: 42,
+              virtualModelName: "audit-playground-vm",
+            },
+          }),
+          contentType: "application/json",
+          status: 200,
+        });
+      });
+      await page.goto(`${baseUrl}/playground`, { waitUntil: "networkidle" });
+      await page.getByLabel("1. Agent API Key").fill("llmi_test_key");
+      await expect(page.getByLabel("3. Virtual Model").locator("option")).toHaveCount(2);
+      await page.getByLabel("3. Virtual Model").selectOption("audit-playground-vm");
+      await page.getByRole("button", { name: "Send" }).click();
+      await expect(page.getByText("Playground retry verified")).toBeVisible();
+      const requestDetails = page.getByRole("region", { name: "Request and routing details" });
+      await expect(requestDetails).toContainText("playground-delayed-detail");
+      await expect(requestDetails).not.toContainText("provider-request-id");
+      await expect(requestDetails).toContainText("Delayed Provider / Delayed Model");
+      await expect(requestDetails).toContainText("cost first");
+      expect(detailAttempts).toBeGreaterThanOrEqual(2);
+
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto(baseUrl, { waitUntil: "networkidle" });
       await page.getByRole("button", { name: "Menu" }).click();

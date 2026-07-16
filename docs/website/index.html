@@ -1,0 +1,1569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLMIngress — One gateway for every AI agent</title>
+<meta name="description" content="LLMIngress is a self-hosted AI gateway. Point Codex, Claude Code, Cursor — any OpenAI-compatible agent — at one endpoint: automatic model routing, fallback, budgets, and cost tracking. Your machine, your keys.">
+<meta name="theme-color" content="#0e0c14">
+<meta property="og:title" content="LLMIngress — One gateway for every AI agent">
+<meta property="og:description" content="Self-hosted AI gateway: automatic model routing, fallback, budgets, and cost tracking for all your AI agents.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230e0c14'/%3E%3Crect x='10' y='10' width='44' height='44' rx='11' fill='%2318161f' stroke='%23755bd6' stroke-width='1.5'/%3E%3Crect x='16' y='27' width='13' height='11' rx='3.5' fill='%238b6cff'/%3E%3Crect x='31' y='16' width='11' height='12' rx='3.5' fill='%23393747'/%3E%3Crect x='31' y='36' width='11' height='12' rx='3.5' fill='%23393747'/%3E%3Crect x='42' y='27' width='12' height='11' rx='3.5' fill='%23393747'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Onest:wght@300..800&family=Spline+Sans+Mono:ital,wght@0,300..700;1,300..700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   LLMIngress marketing site — high-fidelity prototype
+   Spec: docs/website/DESIGN.md
+   ============================================================ */
+
+/* ----- tokens ----- */
+:root {
+  /* color — brand hue 292, all neutrals tinted toward it */
+  --bg:            oklch(0.15 0.012 292);
+  --bg-raised:     oklch(0.18 0.015 292);
+  --surface:       oklch(0.21 0.017 292);
+  --surface-2:     oklch(0.25 0.019 292);
+  --line:          oklch(0.32 0.02 292);
+  --line-soft:     oklch(0.25 0.018 292);
+  --text:          oklch(0.93 0.008 292);
+  --text-2:        oklch(0.74 0.018 292);
+  --text-3:        oklch(0.58 0.024 292);
+  --accent:        oklch(0.66 0.175 292);
+  --accent-bright: oklch(0.78 0.11 292);
+  --accent-deep:   oklch(0.5 0.19 292);
+  --ok:            oklch(0.74 0.11 158);
+  --warn:          oklch(0.79 0.115 75);
+  --ink:           oklch(0.13 0.02 292);
+  --glow: 0 0 48px oklch(0.63 0.19 292 / 0.25);
+
+  /* type */
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Onest", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "Spline Sans Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --t-hero: clamp(2.5rem, 1rem + 4vw, 3.75rem);
+  --t-h2: clamp(1.8rem, 1.1rem + 2.4vw, 2.75rem);
+  --t-h3: 1.25rem;
+  --t-body: 1.0625rem;
+  --t-small: 0.9375rem;
+  --t-mono: 0.8125rem;
+
+  /* space (4pt scale) */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px; --s-6: 24px;
+  --s-8: 32px; --s-12: 48px; --s-16: 64px; --s-24: 96px; --s-32: 128px;
+  --section-pad: clamp(96px, 12vw, 160px);
+  --gutter: clamp(20px, 4vw, 48px);
+
+  --r-sm: 8px; --r-md: 14px; --r-lg: 24px;
+}
+
+/* ----- base ----- */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-2);
+  font-family: var(--f-body);
+  font-size: var(--t-body);
+  font-weight: 400;
+  line-height: 1.65;
+  letter-spacing: 0.004em;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 {
+  font-family: var(--f-display);
+  font-stretch: 118%;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+  color: var(--text);
+  margin: 0;
+}
+h2, h3 { text-wrap: balance; }
+p { margin: 0; max-width: 62ch; text-wrap: pretty; }
+section[id] { scroll-margin-top: 88px; }
+a { color: var(--text); text-decoration: none; }
+code, pre, .mono { font-family: var(--f-mono); font-variant-ligatures: none; }
+pre { margin: 0; }
+:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+::selection { background: oklch(0.5 0.19 292 / 0.45); color: var(--text); }
+
+.wrap { max-width: 1120px; margin-inline: auto; padding-inline: var(--gutter); }
+
+/* pixel star field — fixed backdrop behind the content layer */
+.stars {
+  position: fixed; inset: 0; z-index: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+main, .footer { position: relative; z-index: 1; }
+
+.skip {
+  position: absolute; left: -9999px; top: 12px; z-index: 100;
+  background: var(--accent); color: var(--ink);
+  padding: 10px 18px; border-radius: var(--r-sm);
+  font-family: var(--f-mono); font-size: var(--t-mono);
+}
+.skip:focus-visible { left: 12px; }
+
+/* eyebrow: mono index + label */
+.eyebrow {
+  display: flex; align-items: baseline; gap: var(--s-3);
+  font-family: var(--f-mono); font-size: var(--t-mono);
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: var(--s-6);
+}
+.eyebrow b { font-weight: 500; color: var(--accent-bright); }
+
+.section-head h2 { max-width: 22ch; }
+.section-head .lede { margin-top: var(--s-4); font-size: var(--t-body); color: var(--text-2); }
+
+/* ----- buttons ----- */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--f-body); font-weight: 560; font-size: 0.9375rem;
+  padding: 13px 22px; border-radius: var(--r-md);
+  border: 1px solid transparent;
+  cursor: pointer; transition: transform 150ms ease, box-shadow 150ms ease,
+    background-color 150ms ease, border-color 150ms ease;
+}
+.btn-primary { background: var(--accent); color: var(--ink); }
+.btn-primary:hover { background: var(--accent-bright); box-shadow: 0 0 32px oklch(0.63 0.19 292 / 0.28); }
+.btn-primary:active { background: var(--accent-deep); transform: translateY(1px); }
+.btn-ghost { border-color: var(--line); color: var(--text); background: transparent; }
+.btn-ghost:hover { border-color: var(--text-3); background: var(--surface); }
+.btn .ext { color: var(--text-3); font-size: 0.85em; }
+.btn-primary .ext { color: var(--ink); opacity: 0.7; }
+
+/* arrow-circle CTA — pill with a trailing circular arrow (premium accent
+   reserved for the primary conversion buttons) */
+.cta-row .btn { border-radius: 999px; }
+.btn-arrow { padding: 6px 6px 6px 24px; gap: 12px; }
+.btn-arrow .arrow {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 999px;
+  background: oklch(0.96 0.008 292); color: var(--ink);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.btn-arrow .arrow svg { display: block; }
+.btn-arrow:hover .arrow { transform: translateX(3px); }
+.btn-ghost.cta-ghost { padding: 13px 24px; }
+
+/* ============ navbar (floating pill) ============ */
+.nav {
+  position: sticky; top: 0; z-index: 50;
+  padding: clamp(10px, 1.4vw, 18px) var(--gutter) 0;
+}
+.nav-in {
+  max-width: 1120px; margin-inline: auto;
+  height: 58px; display: flex; align-items: center; gap: var(--s-8);
+  padding-inline: 18px 12px;
+  background: oklch(0.17 0.014 292 / 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: 0 10px 34px oklch(0.08 0.02 292 / 0.45);
+}
+.brand { display: inline-flex; align-items: center; gap: 10px; }
+.brand svg { display: block; }
+.brand .wordmark {
+  font-family: var(--f-display); font-stretch: 112%; font-weight: 620;
+  font-size: 1.0625rem; letter-spacing: -0.01em; color: var(--text);
+}
+.nav-links { display: flex; gap: var(--s-6); margin-left: auto; }
+.nav-links a { font-size: 0.9375rem; color: var(--text-2); transition: color 150ms ease; }
+.nav-links a:hover { color: var(--text); }
+.nav-gh { margin-left: var(--s-2); }
+
+/* github star badge — two segments like the official github-buttons widget */
+.gh-badge { display: inline-flex; align-items: stretch; }
+.gh-badge-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 13px;
+  background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  font-size: 0.875rem; font-weight: 560; color: var(--text);
+  transition: background-color 150ms ease;
+}
+.gh-badge-btn:hover { background: var(--surface-2); }
+.gh-badge-btn svg { display: block; fill: currentColor; }
+.gh-badge:has(.gh-badge-count:not([hidden])) .gh-badge-btn {
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
+}
+.gh-badge-count {
+  display: inline-flex; align-items: center;
+  padding: 7px 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line); border-left: none;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  font-family: var(--f-mono); font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums; color: var(--text);
+  transition: color 150ms ease;
+}
+.gh-badge-count:hover { color: var(--accent-bright); }
+.nav-menu { display: none; margin-left: auto; position: relative; }
+.nav-menu summary {
+  list-style: none; cursor: pointer;
+  font-family: var(--f-mono); font-size: var(--t-mono);
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-2);
+  padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
+}
+.nav-menu summary::-webkit-details-marker { display: none; }
+.nav-menu[open] summary { background: var(--surface); color: var(--text); }
+.nav-menu .sheet {
+  position: absolute; right: 0; top: calc(100% + 10px);
+  min-width: 200px; padding: var(--s-2);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  display: flex; flex-direction: column;
+}
+.nav-menu .sheet a { padding: 10px 14px; border-radius: var(--r-sm); font-size: 0.9375rem; color: var(--text-2); }
+.nav-menu .sheet a:hover { background: var(--surface-2); color: var(--text); }
+
+/* ============ hero ============ */
+.hero {
+  padding-block: clamp(72px, 9vw, 128px) var(--section-pad);
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 46% 42% at 74% 34%, oklch(0.24 0.055 292 / 0.4), transparent 70%);
+}
+.hero-grid {
+  display: grid; grid-template-columns: 1fr 1.08fr;
+  gap: clamp(32px, 3.5vw, 48px); align-items: center;
+}
+.hero .eyebrow { margin-bottom: var(--s-6); }
+.hero h1 { font-size: var(--t-hero); max-width: 13ch; }
+.hero .lede {
+  margin-top: var(--s-6); font-size: 1.125rem; line-height: 1.7;
+  max-width: 58ch; color: var(--text-2);
+}
+.hero .lede strong { color: var(--text); font-weight: 560; }
+.cta-row { display: flex; flex-wrap: wrap; gap: var(--s-3); margin-top: var(--s-8); }
+.trust {
+  margin-top: var(--s-6); font-family: var(--f-mono); font-size: var(--t-mono);
+  color: var(--text-3); letter-spacing: 0.02em; max-width: none;
+}
+
+/* ambient "works with" ticker at the hero's lower edge */
+.hero-marquee {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: var(--s-6);
+  margin-top: clamp(40px, 5vw, 72px);
+  padding-top: var(--s-6); border-top: 1px solid var(--line-soft);
+}
+.hero-marquee-label {
+  font-family: var(--f-mono); font-size: 0.7rem; letter-spacing: 0.16em;
+  color: var(--text-3); white-space: nowrap; flex-shrink: 0;
+}
+.marquee {
+  position: relative; overflow: hidden; flex: 1; min-width: 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.marquee-track { display: flex; width: max-content; animation: marquee 46s linear infinite; }
+.marquee-item {
+  margin-inline: var(--s-6); flex-shrink: 0; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 9px;
+  font-family: var(--f-mono); font-size: 0.8125rem; letter-spacing: 0.02em;
+  color: var(--text-3);
+}
+.marquee-item .mi { width: 20px; height: 20px; fill: var(--text-3); flex-shrink: 0; }
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* hero entrance stagger */
+.rise { animation: rise 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.rise-1 { animation-delay: 40ms; } .rise-2 { animation-delay: 100ms; }
+.rise-3 { animation-delay: 160ms; } .rise-4 { animation-delay: 220ms; }
+.rise-5 { animation-delay: 280ms; } .rise-6 { animation-delay: 360ms; }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* orbital ecosystem — agents and providers circle the gateway core */
+.orbital svg { display: block; width: 100%; height: auto; }
+.oring { fill: none; stroke: var(--line-soft); stroke-width: 1; }
+.oring.faint { stroke-dasharray: 2 7; opacity: 0.55; }
+.otile { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+.otile.hot { fill: oklch(0.23 0.03 292); stroke: oklch(0.5 0.16 292 / 0.85); }
+.obadge { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+.obadge.hot { fill: oklch(0.23 0.03 292); stroke: oklch(0.5 0.16 292 / 0.85); }
+.omark { fill: var(--text-2); }
+.omark.hot { fill: var(--text); }
+.odot { fill: var(--accent-bright); opacity: 0.55; }
+.orbital .core-panel { fill: oklch(0.19 0.018 292); stroke: oklch(0.5 0.16 292 / 0.85); stroke-width: 1.5; }
+.orbital .core-inner { fill: none; stroke: var(--line); stroke-width: 1; opacity: 0.5; }
+.orbital .core-slot { fill: var(--accent); }
+.orbital .core-socket { fill: oklch(0.32 0.06 292); }
+.orbital .core-quiet { fill: var(--surface-2); }
+.orbital .core-label { fill: var(--text); font-family: var(--f-mono); font-size: 13px; font-weight: 500; }
+.orbital .core-glow { filter: drop-shadow(0 0 26px oklch(0.63 0.19 292 / 0.5)); }
+
+/* typewriter headline */
+.type-h1 { position: relative; }
+.type-h1 .type-ghost { visibility: hidden; }
+.type-h1 .type-live { position: absolute; inset: 0; }
+.type-h1 .hl { color: var(--accent-bright); }
+.type-caret {
+  display: inline-block; width: 0.06em; height: 0.74em; margin-left: 0.05em;
+  background: var(--accent-bright);
+  animation: caretblink 1.1s steps(1) infinite;
+}
+@keyframes caretblink { 50% { opacity: 0; } }
+
+.sr-only, .sr-live {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ============ pain strip ============ */
+.pain {
+  background: var(--bg-raised);
+  border-block: 1px solid var(--line-soft);
+  padding-block: var(--s-16);
+}
+.pain h2 {
+  font-size: clamp(1.25rem, 1rem + 1.2vw, 1.625rem);
+  max-width: 30ch; margin-bottom: var(--s-12);
+}
+.pain-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-12); }
+.pain-item { border-top: 1px solid var(--line); padding-top: var(--s-4); }
+.pain-code {
+  font-family: var(--f-mono); font-size: var(--t-mono); font-weight: 500;
+  letter-spacing: 0.08em; color: var(--warn);
+}
+.pain-item p { margin-top: var(--s-3); font-size: var(--t-small); color: var(--text-2); }
+
+/* ============ features — spec sheet ============ */
+.features { padding-block: var(--section-pad); }
+.spec-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  column-gap: var(--s-16); row-gap: var(--s-12);
+  margin-top: var(--s-16);
+}
+.spec {
+  border-top: 1px solid var(--line);
+  padding-top: var(--s-6);
+}
+.spec-id {
+  display: flex; gap: var(--s-3); align-items: baseline;
+  font-family: var(--f-mono); font-size: var(--t-mono);
+}
+.spec-id .n { color: var(--accent-bright); font-weight: 500; }
+.spec-id .code { color: var(--text-3); letter-spacing: 0.08em; }
+.spec h3 { font-size: var(--t-h3); margin-top: var(--s-3); }
+.spec p { margin-top: var(--s-3); font-size: var(--t-small); }
+.spec p code {
+  font-size: 0.85em; color: var(--accent-bright);
+  background: var(--surface); padding: 1px 6px; border-radius: 5px;
+}
+.spec-line {
+  margin-top: var(--s-4);
+  font-family: var(--f-mono); font-size: 0.75rem; color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+.spec-line b { font-weight: 500; color: var(--accent-bright); }
+
+/* ============ how it works ============ */
+.how { padding-block: var(--section-pad); background: var(--bg-raised); border-block: 1px solid var(--line-soft); }
+.how-grid {
+  display: grid; grid-template-columns: 5fr 6fr;
+  gap: clamp(32px, 6vw, 88px); margin-top: var(--s-16);
+  align-items: start;
+}
+.steps { display: flex; flex-direction: column; gap: var(--s-12); }
+.step { display: grid; grid-template-columns: 44px 1fr; gap: var(--s-4); position: relative; }
+.step:not(:last-child)::after {
+  content: ""; position: absolute; left: 22px; top: 52px; bottom: -40px;
+  width: 1px; background: var(--line-soft);
+}
+.step-n {
+  width: 44px; height: 44px; border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  display: grid; place-items: center;
+  font-family: var(--f-mono); font-size: 1rem; color: var(--accent-bright);
+}
+.step h3 { font-size: var(--t-h3); }
+.step p { margin-top: var(--s-2); font-size: var(--t-small); }
+.step p code { font-size: 0.85em; color: var(--accent-bright); background: var(--surface); padding: 1px 6px; border-radius: 5px; }
+
+.code-panel {
+  position: sticky; top: 88px;
+  background: oklch(0.13 0.012 292);
+  border: 1px solid var(--line-soft); border-radius: var(--r-md);
+  overflow: hidden;
+}
+.tabbar { display: flex; border-bottom: 1px solid var(--line-soft); }
+.tab {
+  appearance: none; background: none; border: none;
+  font-family: var(--f-mono); font-size: var(--t-mono); color: var(--text-3);
+  padding: 12px 18px; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color 150ms ease;
+}
+.tab:hover { color: var(--text-2); }
+.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.code-body { position: relative; }
+.code-body pre {
+  padding: var(--s-6); overflow-x: auto;
+  font-size: var(--t-mono); line-height: 1.75; color: var(--text-2);
+}
+.code-body pre .c { color: var(--text-3); }
+.code-body pre .k { color: var(--accent-bright); }
+.code-body pre .s { color: oklch(0.78 0.09 158); }
+.copy-btn {
+  position: absolute; top: 10px; right: 10px;
+  font-family: var(--f-mono); font-size: 0.75rem; color: var(--text-3);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: 6px 12px; cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.copy-btn:hover { color: var(--text); border-color: var(--text-3); }
+
+/* ============ ecosystem ============ */
+.eco { padding-block: var(--section-pad); }
+.eco-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: var(--s-16); margin-top: var(--s-16);
+}
+.eco-col { border-top: 1px solid var(--line); padding-top: var(--s-6); }
+.eco-col h3 { font-size: var(--t-h3); }
+.eco-col h3 .dir { color: var(--text-3); font-weight: 400; font-stretch: 100%; }
+.eco-col > p { margin-top: var(--s-2); font-size: var(--t-small); color: var(--text-2); max-width: 46ch; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-6); }
+.chip-group { margin-top: var(--s-6); }
+.chip-group-label {
+  font-family: var(--f-mono); font-size: 0.7rem; font-weight: 500;
+  letter-spacing: 0.14em; color: var(--text-3);
+}
+.chip-group .chips { margin-top: var(--s-3); }
+.chip-t {
+  font-family: var(--f-mono); font-size: var(--t-mono); color: var(--text-2);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 14px; background: var(--surface);
+  white-space: nowrap;
+}
+.chip-t.more { color: var(--text-3); border-style: dashed; background: none; }
+
+/* ============ console showcase ============ */
+.console { padding-block: var(--section-pad); background: var(--bg-raised); border-block: 1px solid var(--line-soft); }
+.console-frame {
+  margin-top: var(--s-16);
+  background: var(--bg);
+  border: 1px solid var(--line-soft); border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.console-titlebar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 20px; border-bottom: 1px solid var(--line-soft);
+  font-family: var(--f-mono); font-size: 0.75rem; letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+.console-titlebar .live { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.console-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--line-soft);
+}
+.cstat { padding: var(--s-6); }
+.cstat + .cstat { border-left: 1px solid var(--line-soft); }
+.cstat-k {
+  display: block; font-family: var(--f-mono); font-size: 0.7rem;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3);
+}
+.cstat-row { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+.cstat-v {
+  font-family: var(--f-mono); font-size: clamp(1.25rem, 1rem + 1vw, 1.75rem);
+  color: var(--text); font-variant-numeric: tabular-nums;
+}
+.cstat-v.ok { color: var(--ok); }
+/* trend pill — colored delta chip with an arrow glyph (borrowed from the
+   Convix dashboard cards, in the mono/dark idiom) */
+.trend {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-family: var(--f-mono); font-size: 0.65rem; font-variant-numeric: tabular-nums;
+  padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+  align-self: center;
+}
+.trend.good { color: var(--ok); background: oklch(0.74 0.11 158 / 0.13); }
+.trend.bad { color: var(--warn); background: oklch(0.79 0.115 75 / 0.13); }
+.console-grid {
+  display: grid; grid-template-columns: 5fr 4fr 3fr;
+  gap: var(--s-4); padding: var(--s-4); align-items: stretch;
+}
+.panel {
+  background: var(--surface); border: 1px solid var(--line-soft);
+  border-radius: var(--r-md); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.panel-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px; border-bottom: 1px solid var(--line-soft);
+  font-family: var(--f-mono); font-size: 0.75rem; letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+.panel-bar .live { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.panel-body { padding: var(--s-4); flex: 1; }
+
+/* activity rows */
+.act { display: flex; flex-direction: column; }
+.act-row { padding: 10px 4px; }
+.act-row + .act-row { border-top: 1px solid var(--line-soft); }
+.act-l1 {
+  display: flex; justify-content: space-between; gap: var(--s-3);
+  font-family: var(--f-mono); font-size: 0.75rem; color: var(--text);
+}
+.act-l1 .agent { color: var(--text-3); }
+.act-l1 .warn { color: var(--warn); }
+.act-l2 {
+  margin-top: 3px; display: flex; gap: 10px;
+  font-family: var(--f-mono); font-size: 0.7rem; color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.st { display: inline-flex; align-items: center; gap: 5px; }
+.st::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--ok); }
+.st.rr::before { background: var(--warn); }
+.st.rr { color: var(--warn); }
+
+/* usage chart */
+.chart { display: flex; align-items: flex-end; gap: 6px; height: 132px; padding-top: var(--s-2); }
+.chart .bar {
+  flex: 1; border-radius: 4px 4px 2px 2px;
+  background: oklch(0.35 0.055 292);
+  min-width: 10px;
+}
+.chart .bar.today { background: var(--accent); }
+.chart-days {
+  display: flex; gap: 6px; margin-top: 8px;
+  font-family: var(--f-mono); font-size: 0.65rem; color: var(--text-3);
+}
+.chart-days span { flex: 1; text-align: center; min-width: 10px; }
+.savings { margin-top: var(--s-4); padding-top: var(--s-4); border-top: 1px solid var(--line-soft); }
+.savings .big {
+  font-family: var(--f-mono); font-size: 1.125rem; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.savings .big b { color: var(--ok); font-weight: 500; }
+.savings .note { margin-top: 4px; font-family: var(--f-mono); font-size: 0.7rem; color: var(--text-3); }
+
+/* route reason */
+.route-kv { font-family: var(--f-mono); font-size: 0.75rem; }
+.route-kv .kv { display: flex; justify-content: space-between; padding: 6px 4px; color: var(--text-2); }
+.route-kv .kv .k { color: var(--text-3); }
+.route-kv .div { border-top: 1px solid var(--line-soft); margin: 8px 0; }
+.route-kv .pick { color: var(--text); }
+.route-kv .pick .tick { color: var(--ok); }
+.route-kv .fb { color: var(--text-3); line-height: 1.7; padding: 6px 4px; }
+
+/* ============ deploy ============ */
+.deploy { padding-block: var(--section-pad); }
+.deploy-cmd {
+  max-width: 680px; margin-top: var(--s-16);
+  background: oklch(0.13 0.012 292);
+  border: 1px solid var(--line-soft); border-radius: var(--r-md);
+  position: relative;
+}
+.deploy-cmd pre { padding: var(--s-6); overflow-x: auto; font-size: var(--t-mono); line-height: 1.8; color: var(--text-2); }
+.deploy-cmd .c { color: var(--text-3); }
+.deploy-cmd .k { color: var(--accent-bright); }
+.deploy-cap {
+  margin-top: var(--s-3); font-family: var(--f-mono); font-size: 0.75rem;
+  color: var(--text-3); letter-spacing: 0.02em; max-width: none;
+}
+.shapes { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-4); margin-top: var(--s-16); }
+.shape {
+  border: 1px solid var(--line-soft); border-radius: var(--r-md);
+  padding: var(--s-6); background: var(--surface);
+}
+.shape .tag { font-family: var(--f-mono); font-size: 0.7rem; letter-spacing: 0.1em; color: var(--accent-bright); }
+.shape h3 { font-size: 1.125rem; margin-top: var(--s-2); }
+.shape p { margin-top: var(--s-2); font-size: var(--t-small); color: var(--text-2); }
+.shape p code { font-size: 0.85em; color: var(--accent-bright); }
+
+/* ============ faq ============ */
+.faq { padding-block: var(--section-pad); background: var(--bg-raised); border-block: 1px solid var(--line-soft); }
+.faq-grid {
+  display: grid; grid-template-columns: 4fr 7fr;
+  gap: clamp(32px, 6vw, 96px); align-items: start;
+}
+.faq-head { position: sticky; top: 96px; }
+.faq-head .lede { margin-top: var(--s-4); font-size: var(--t-small); color: var(--text-2); max-width: 34ch; }
+.faq-list { min-width: 0; }
+.faq-item { border-top: 1px solid var(--line); }
+.faq-item:last-child { border-bottom: 1px solid var(--line); }
+.faq-item summary {
+  list-style: none; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-6);
+  padding: var(--s-6) var(--s-1);
+  font-family: var(--f-display); font-stretch: 112%; font-weight: 560;
+  font-size: 1.125rem; color: var(--text);
+  transition: color 150ms ease;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary:hover { color: var(--accent-bright); }
+.faq-item summary .m {
+  font-family: var(--f-mono); font-weight: 400; color: var(--text-3);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.faq-item[open] summary .m { transform: rotate(45deg); }
+.faq-item .a { padding: 0 var(--s-1) var(--s-6); font-size: var(--t-small); max-width: 66ch; }
+.faq-item .a code { font-size: 0.85em; color: var(--accent-bright); }
+
+/* ============ final cta + footer ============ */
+.cta-final { padding-block: var(--section-pad); }
+.cta-band {
+  border: 1px solid var(--line-soft); border-radius: var(--r-lg);
+  padding: clamp(48px, 7vw, 88px) var(--gutter);
+  text-align: center;
+  background:
+    radial-gradient(ellipse 70% 90% at 50% 0%, oklch(0.22 0.05 292 / 0.55), transparent 72%),
+    var(--bg-raised);
+}
+.cta-band h2 { font-size: var(--t-h2); max-width: 16ch; margin-inline: auto; }
+.cta-band .cta-row { margin-top: var(--s-8); justify-content: center; }
+.cta-band .one-liner {
+  margin-top: var(--s-8); font-family: var(--f-mono); font-size: var(--t-mono);
+  color: var(--text-3); overflow-x: auto; white-space: nowrap; padding-bottom: 4px;
+  max-width: none; text-align: center;
+}
+.cta-band .one-liner b { color: var(--text-2); font-weight: 400; }
+
+.footer { border-top: 1px solid var(--line-soft); padding-block: var(--s-16) var(--s-12); }
+.footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: var(--s-12); }
+.footer .brand-col p { margin-top: var(--s-4); font-size: var(--t-small); color: var(--text-3); max-width: 32ch; }
+.footer h4 {
+  margin: 0 0 var(--s-4); font-family: var(--f-mono); font-size: 0.7rem;
+  font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-3);
+}
+.footer ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+.footer ul a { font-size: var(--t-small); color: var(--text-2); }
+.footer ul a:hover { color: var(--text); }
+.footer .legal {
+  margin-top: var(--s-16); padding-top: var(--s-6); border-top: 1px solid var(--line-soft);
+  font-family: var(--f-mono); font-size: 0.75rem; color: var(--text-3);
+}
+
+/* ============ responsive ============ */
+@media (max-width: 1024px) {
+  .hero-grid { grid-template-columns: 1fr; }
+  .orbital { max-width: 560px; margin-inline: auto; }
+  .how-grid { grid-template-columns: 1fr; }
+  .code-panel { position: static; }
+  .console-grid { grid-template-columns: 1fr; }
+  .faq-grid { grid-template-columns: 1fr; gap: var(--s-12); }
+  .faq-head { position: static; }
+}
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .nav-menu { display: block; }
+  .nav-in { gap: var(--s-4); }
+  .nav-gh { margin-left: 0; }
+  .gh-badge-btn { padding: 7px 10px; gap: 6px; }
+  .gh-badge-count { padding: 7px 10px; }
+  .pain-row { grid-template-columns: 1fr; gap: var(--s-6); }
+  .spec-grid { grid-template-columns: 1fr; row-gap: var(--s-8); }
+  .shapes { grid-template-columns: 1fr; }
+  .eco-grid { grid-template-columns: 1fr; gap: var(--s-8); }
+  .footer-grid { grid-template-columns: 1fr; gap: var(--s-8); }
+  .console-stats { grid-template-columns: 1fr 1fr; }
+  .cstat + .cstat { border-left: 0; }
+  .cstat:nth-child(even) { border-left: 1px solid var(--line-soft); }
+  .cstat:nth-child(n+3) { border-top: 1px solid var(--line-soft); }
+}
+
+@media (max-width: 374px) {
+  .gh-badge-count { display: none; }
+}
+@media (max-width: 340px) {
+  .brand .wordmark { display: none; }
+}
+
+/* ============ motion safety ============ */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .rise { animation: none; }
+  .marquee-track { animation: none; }
+  .type-caret { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<canvas class="stars" id="stars" aria-hidden="true"></canvas>
+<svg aria-hidden="true" width="0" height="0" style="position:absolute">
+  <symbol id="si-openai" viewBox="0 0 24 24"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></symbol>
+  <symbol id="si-anthropic" viewBox="0 0 24 24"><path d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z"/></symbol>
+  <symbol id="si-google" viewBox="0 0 24 24"><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"/></symbol>
+  <symbol id="si-openrouter" viewBox="0 0 24 24"><path d="M16.778 1.844v1.919q-.569-.026-1.138-.032-.708-.008-1.415.037c-1.93.126-4.023.728-6.149 2.237-2.911 2.066-2.731 1.95-4.14 2.75-.396.223-1.342.574-2.185.798-.841.225-1.753.333-1.751.333v4.229s.768.108 1.61.333c.842.224 1.789.575 2.185.799 1.41.798 1.228.683 4.14 2.75 2.126 1.509 4.22 2.11 6.148 2.236.88.058 1.716.041 2.555.005v1.918l7.222-4.168-7.222-4.17v2.176c-.86.038-1.611.065-2.278.021-1.364-.09-2.417-.357-3.979-1.465-2.244-1.593-2.866-2.027-3.68-2.508.889-.518 1.449-.906 3.822-2.59 1.56-1.109 2.614-1.377 3.978-1.466.667-.044 1.418-.017 2.278.02v2.176L24 6.014Z"/></symbol>
+  <symbol id="si-ollama" viewBox="0 0 24 24"><path d="M16.361 10.26a.894.894 0 0 0-.558.47l-.072.148.001.207c0 .193.004.217.059.353.076.193.152.312.291.448.24.238.51.3.872.205a.86.86 0 0 0 .517-.436.752.752 0 0 0 .08-.498c-.064-.453-.33-.782-.724-.897a1.06 1.06 0 0 0-.466 0zm-9.203.005c-.305.096-.533.32-.65.639a1.187 1.187 0 0 0-.06.52c.057.309.31.59.598.667.362.095.632.033.872-.205.14-.136.215-.255.291-.448.055-.136.059-.16.059-.353l.001-.207-.072-.148a.894.894 0 0 0-.565-.472 1.02 1.02 0 0 0-.474.007Zm4.184 2c-.131.071-.223.25-.195.383.031.143.157.288.353.407.105.063.112.072.117.136.004.038-.01.146-.029.243-.02.094-.036.194-.036.222.002.074.07.195.143.253.064.052.076.054.255.059.164.005.198.001.264-.03.169-.082.212-.234.15-.525-.052-.243-.042-.28.087-.355.137-.08.281-.219.324-.314a.365.365 0 0 0-.175-.48.394.394 0 0 0-.181-.033c-.126 0-.207.03-.355.124l-.085.053-.053-.032c-.219-.13-.259-.145-.391-.143a.396.396 0 0 0-.193.032zm.39-2.195c-.373.036-.475.05-.654.086-.291.06-.68.195-.951.328-.94.46-1.589 1.226-1.787 2.114-.04.176-.045.234-.045.53 0 .294.005.357.043.524.264 1.16 1.332 2.017 2.714 2.173.3.033 1.596.033 1.896 0 1.11-.125 2.064-.727 2.493-1.571.114-.226.169-.372.22-.602.039-.167.044-.23.044-.523 0-.297-.005-.355-.045-.531-.288-1.29-1.539-2.304-3.072-2.497a6.873 6.873 0 0 0-.855-.031zm.645.937a3.283 3.283 0 0 1 1.44.514c.223.148.537.458.671.662.166.251.26.508.303.82.02.143.01.251-.043.482-.08.345-.332.705-.672.957a3.115 3.115 0 0 1-.689.348c-.382.122-.632.144-1.525.138-.582-.006-.686-.01-.853-.042-.57-.107-1.022-.334-1.35-.68-.264-.28-.385-.535-.45-.946-.03-.192.025-.509.137-.776.136-.326.488-.73.836-.963.403-.269.934-.46 1.422-.512.187-.02.586-.02.773-.002zm-5.503-11a1.653 1.653 0 0 0-.683.298C5.617.74 5.173 1.666 4.985 2.819c-.07.436-.119 1.04-.119 1.503 0 .544.064 1.24.155 1.721.02.107.031.202.023.208a8.12 8.12 0 0 1-.187.152 5.324 5.324 0 0 0-.949 1.02 5.49 5.49 0 0 0-.94 2.339 6.625 6.625 0 0 0-.023 1.357c.091.78.325 1.438.727 2.04l.13.195-.037.064c-.269.452-.498 1.105-.605 1.732-.084.496-.095.629-.095 1.294 0 .67.009.803.088 1.266.095.555.288 1.143.503 1.534.071.128.243.393.264.407.007.003-.014.067-.046.141a7.405 7.405 0 0 0-.548 1.873c-.062.417-.071.552-.071.991 0 .56.031.832.148 1.279L3.42 24h1.478l-.05-.091c-.297-.552-.325-1.575-.068-2.597.117-.472.25-.819.498-1.296l.148-.29v-.177c0-.165-.003-.184-.057-.293a.915.915 0 0 0-.194-.25 1.74 1.74 0 0 1-.385-.543c-.424-.92-.506-2.286-.208-3.451.124-.486.329-.918.544-1.154a.787.787 0 0 0 .223-.531c0-.195-.07-.355-.224-.522a3.136 3.136 0 0 1-.817-1.729c-.14-.96.114-2.005.69-2.834.563-.814 1.353-1.336 2.237-1.475.199-.033.57-.028.776.01.226.04.367.028.512-.041.179-.085.268-.19.374-.431.093-.215.165-.333.36-.576.234-.29.46-.489.822-.729.413-.27.884-.467 1.352-.561.17-.035.25-.04.569-.04.319 0 .398.005.569.04a4.07 4.07 0 0 1 1.914.997c.117.109.398.457.488.602.034.057.095.177.132.267.105.241.195.346.374.43.14.068.286.082.503.045.343-.058.607-.053.943.016 1.144.23 2.14 1.173 2.581 2.437.385 1.108.276 2.267-.296 3.153-.097.15-.193.27-.333.419-.301.322-.301.722-.001 1.053.493.539.801 1.866.708 3.036-.062.772-.26 1.463-.533 1.854a2.096 2.096 0 0 1-.224.258.916.916 0 0 0-.194.25c-.054.109-.057.128-.057.293v.178l.148.29c.248.476.38.823.498 1.295.253 1.008.231 2.01-.059 2.581a.845.845 0 0 0-.044.098c0 .006.329.009.732.009h.73l.02-.074.036-.134c.019-.076.057-.3.088-.516.029-.217.029-1.016 0-1.258-.11-.875-.295-1.57-.597-2.226-.032-.074-.053-.138-.046-.141.008-.005.057-.074.108-.152.376-.569.607-1.284.724-2.228.031-.26.031-1.378 0-1.628-.083-.645-.182-1.082-.348-1.525a6.083 6.083 0 0 0-.329-.7l-.038-.064.131-.194c.402-.604.636-1.262.727-2.04a6.625 6.625 0 0 0-.024-1.358 5.512 5.512 0 0 0-.939-2.339 5.325 5.325 0 0 0-.95-1.02 8.097 8.097 0 0 1-.186-.152.692.692 0 0 1 .023-.208c.208-1.087.201-2.443-.017-3.503-.19-.924-.535-1.658-.98-2.082-.354-.338-.716-.482-1.15-.455-.996.059-1.8 1.205-2.116 3.01a6.805 6.805 0 0 0-.097.726c0 .036-.007.066-.015.066a.96.96 0 0 1-.149-.078A4.857 4.857 0 0 0 12 3.03c-.832 0-1.687.243-2.456.698a.958.958 0 0 1-.148.078c-.008 0-.015-.03-.015-.066a6.71 6.71 0 0 0-.097-.725C8.997 1.392 8.337.319 7.46.048a2.096 2.096 0 0 0-.585-.041Zm.293 1.402c.248.197.523.759.682 1.388.03.113.06.244.069.292.007.047.026.152.041.233.067.365.098.76.102 1.24l.002.475-.12.175-.118.178h-.278c-.324 0-.646.041-.954.124l-.238.06c-.033.007-.038-.003-.057-.144a8.438 8.438 0 0 1 .016-2.323c.124-.788.413-1.501.696-1.711.067-.05.079-.049.157.013zm9.825-.012c.17.126.358.46.498.888.28.854.36 2.028.212 3.145-.019.14-.024.151-.057.144l-.238-.06a3.693 3.693 0 0 0-.954-.124h-.278l-.119-.178-.119-.175.002-.474c.004-.669.066-1.19.214-1.772.157-.623.434-1.185.68-1.382.078-.062.09-.063.159-.012z"/></symbol>
+  <symbol id="si-claude" viewBox="0 0 24 24"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></symbol>
+  <symbol id="si-githubcopilot" viewBox="0 0 24 24"><path d="M23.922 16.997C23.061 18.492 18.063 22.02 12 22.02 5.937 22.02.939 18.492.078 16.997A.641.641 0 0 1 0 16.741v-2.869a.883.883 0 0 1 .053-.22c.372-.935 1.347-2.292 2.605-2.656.167-.429.414-1.055.644-1.517a10.098 10.098 0 0 1-.052-1.086c0-1.331.282-2.499 1.132-3.368.397-.406.89-.717 1.474-.952C7.255 2.937 9.248 1.98 11.978 1.98c2.731 0 4.767.957 6.166 2.093.584.235 1.077.546 1.474.952.85.869 1.132 2.037 1.132 3.368 0 .368-.014.733-.052 1.086.23.462.477 1.088.644 1.517 1.258.364 2.233 1.721 2.605 2.656a.841.841 0 0 1 .053.22v2.869a.641.641 0 0 1-.078.256Zm-11.75-5.992h-.344a4.359 4.359 0 0 1-.355.508c-.77.947-1.918 1.492-3.508 1.492-1.725 0-2.989-.359-3.782-1.259a2.137 2.137 0 0 1-.085-.104L4 11.746v6.585c1.435.779 4.514 2.179 8 2.179 3.486 0 6.565-1.4 8-2.179v-6.585l-.098-.104s-.033.045-.085.104c-.793.9-2.057 1.259-3.782 1.259-1.59 0-2.738-.545-3.508-1.492a4.359 4.359 0 0 1-.355-.508Zm2.328 3.25c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm-5 0c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm3.313-6.185c.136 1.057.403 1.913.878 2.497.442.544 1.134.938 2.344.938 1.573 0 2.292-.337 2.657-.751.384-.435.558-1.15.558-2.361 0-1.14-.243-1.847-.705-2.319-.477-.488-1.319-.862-2.824-1.025-1.487-.161-2.192.138-2.533.529-.269.307-.437.808-.438 1.578v.021c0 .265.021.562.063.893Zm-1.626 0c.042-.331.063-.628.063-.894v-.02c-.001-.77-.169-1.271-.438-1.578-.341-.391-1.046-.69-2.533-.529-1.505.163-2.347.537-2.824 1.025-.462.472-.705 1.179-.705 2.319 0 1.211.175 1.926.558 2.361.365.414 1.084.751 2.657.751 1.21 0 1.902-.394 2.344-.938.475-.584.742-1.44.878-2.497Z"/></symbol>
+  <symbol id="si-cursor" viewBox="0 0 24 24"><path d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"/></symbol>
+  <symbol id="si-opencode" viewBox="0 0 24 24"><path d="M22 24H2V0h20zM17 4.8H7v14.4h10z"/></symbol>
+  <symbol id="si-googlegemini" viewBox="0 0 24 24"><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></symbol>
+  <symbol id="si-deepseek" viewBox="0 0 24 24"><path d="M23.748 4.651c-.254-.124-.364.113-.512.233-.051.04-.094.09-.137.137-.372.397-.806.657-1.373.626-.829-.046-1.537.214-2.163.848-.133-.782-.575-1.248-1.247-1.548-.352-.155-.708-.311-.955-.65-.172-.24-.219-.509-.305-.774-.055-.16-.11-.323-.293-.35-.2-.031-.278.136-.356.276-.313.572-.434 1.202-.422 1.84.027 1.436.633 2.58 1.838 3.393.137.094.172.187.129.323-.082.28-.18.553-.266.833-.055.179-.137.218-.328.14a5.5 5.5 0 0 1-1.737-1.179c-.857-.828-1.631-1.743-2.597-2.46a12 12 0 0 0-.689-.47c-.985-.957.13-1.743.387-1.836.27-.098.094-.433-.778-.428-.872.003-1.67.295-2.687.685a3 3 0 0 1-.465.136 9.6 9.6 0 0 0-2.883-.101c-1.885.21-3.39 1.1-4.497 2.622C.082 8.776-.231 10.854.152 13.02c.403 2.284 1.568 4.175 3.36 5.653 1.857 1.533 3.997 2.284 6.438 2.14 1.482-.085 3.132-.284 4.994-1.86.47.234.962.328 1.78.398.629.058 1.235-.031 1.705-.129.735-.155.684-.836.418-.961-2.155-1.004-1.682-.595-2.112-.926 1.095-1.295 2.768-3.598 3.284-6.733.05-.346.115-.834.108-1.114-.004-.171.035-.238.23-.257a4.2 4.2 0 0 0 1.545-.475c1.397-.763 1.96-2.016 2.093-3.517.02-.23-.004-.467-.247-.588M11.58 18.168c-2.088-1.642-3.101-2.183-3.52-2.16-.39.024-.32.472-.234.763.09.288.207.487.371.74.114.167.192.416-.113.603-.673.416-1.842-.14-1.897-.168-1.361-.801-2.5-1.86-3.301-3.306-.775-1.393-1.225-2.888-1.299-4.482-.02-.385.094-.522.477-.592a4.7 4.7 0 0 1 1.53-.038c2.131.311 3.946 1.264 5.467 2.774.868.86 1.525 1.887 2.202 2.89.72 1.066 1.494 2.082 2.48 2.915.348.291.626.513.892.677-.802.09-2.14.109-3.055-.615zm1.001-6.44a.306.306 0 0 1 .415-.287.3.3 0 0 1 .113.074.3.3 0 0 1 .086.214c0 .17-.136.307-.308.307a.303.303 0 0 1-.306-.307m3.11 1.596c-.2.081-.4.151-.591.16a1.25 1.25 0 0 1-.798-.254c-.274-.23-.47-.358-.551-.758a1.7 1.7 0 0 1 .015-.588c.07-.327-.007-.537-.238-.727-.188-.156-.426-.199-.689-.199a.6.6 0 0 1-.254-.078.253.253 0 0 1-.114-.358 1 1 0 0 1 .192-.21c.356-.202.767-.136 1.146.016.352.144.618.408 1.001.782.392.451.462.576.685.915.176.264.336.536.446.848.066.194-.02.353-.25.45"/></symbol>
+  <symbol id="si-lmstudio" viewBox="0 0 24 24"><path d="M5.6 0A5.6 5.6 0 0 0 0 5.6v12.8A5.6 5.6 0 0 0 5.6 24h12.8a5.6 5.6 0 0 0 5.6-5.6V5.6A5.6 5.6 0 0 0 18.4 0zm0 2h12.8A3.6 3.6 0 0 1 22 5.6v12.8a3.6 3.6 0 0 1-3.6 3.6H5.6A3.6 3.6 0 0 1 2 18.4V5.6A3.6 3.6 0 0 1 5.6 2m-.4 2.8a1.2 1.2 0 0 0 0 2.4h10.4a1.2 1.2 0 0 0 0-2.4zm3.2 4a1.2 1.2 0 0 0 0 2.4h10.4a1.2 1.2 0 0 0 0-2.4zm-3.2 4a1.2 1.2 0 0 0 0 2.4h10.4a1.2 1.2 0 0 0 0-2.4zm3.2 4a1.2 1.2 0 0 0 0 2.4h10.4a1.2 1.2 0 0 0 0-2.4z"/></symbol>
+</svg>
+
+<!-- ================= navbar ================= -->
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="#" aria-label="LLMIngress home">
+      <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="4" y="4" width="56" height="56" rx="14" fill="oklch(0.19 0.018 292)" stroke="oklch(0.5 0.16 292 / 0.85)" stroke-width="2"/>
+        <rect x="14" y="27" width="15" height="12" rx="4" fill="oklch(0.66 0.175 292)"/>
+        <rect x="33" y="14" width="12" height="13" rx="4" fill="oklch(0.32 0.03 292)"/>
+        <rect x="33" y="37" width="12" height="13" rx="4" fill="oklch(0.32 0.03 292)"/>
+        <rect x="45" y="27" width="12" height="12" rx="4" fill="oklch(0.32 0.03 292)"/>
+      </svg>
+      <span class="wordmark">LLMIngress</span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#deploy">Deploy</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <details class="nav-menu">
+      <summary>Menu</summary>
+      <div class="sheet">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#deploy">Deploy</a>
+        <a href="#faq">FAQ</a>
+      </div>
+    </details>
+    <span class="nav-gh gh-badge">
+      <a class="gh-badge-btn" href="https://github.com/IamNotShady/LLMIngress" target="_blank" rel="noopener" aria-label="Star LLMIngress on GitHub">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        Star
+      </a>
+      <a class="gh-badge-count" id="gh-stars" href="https://github.com/IamNotShady/LLMIngress/stargazers" target="_blank" rel="noopener" aria-label="Stargazers on GitHub" hidden>0</a>
+    </span>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ================= hero ================= -->
+<section class="hero" aria-labelledby="hero-h">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow rise rise-1"><b>//</b> SELF-HOSTED AI GATEWAY</p>
+      <h1 id="hero-h" class="rise rise-2 type-h1"><span class="type-ghost" aria-hidden="true">One gateway for every AI&nbsp;agent.</span><span class="type-live" aria-hidden="true">One gateway for every <span class="hl">AI&nbsp;agent.</span></span><span class="sr-only">One gateway for every AI agent.</span></h1>
+      <p class="lede rise rise-3">LLMIngress sits between your AI agents and your model
+        providers. Point Codex, Claude Code, Cursor — or any agent that
+        speaks an OpenAI- or Anthropic-compatible API — at a single
+        endpoint. It picks the right model for each request, falls back
+        when a provider fails, and meters every token.
+        <strong>On your machine, with your keys.</strong></p>
+      <div class="cta-row rise rise-4">
+        <a class="btn btn-primary btn-arrow" href="#deploy">Deploy locally <span class="arrow" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+        <a class="btn btn-ghost cta-ghost" href="https://github.com/IamNotShady/LLMIngress" target="_blank" rel="noopener">View on GitHub <span class="ext">↗</span></a>
+      </div>
+      <p class="trust rise rise-5">Apache-2.0 · Single-user · Keys never leave your box</p>
+    </div>
+
+    <div class="orbital rise rise-6">
+      <svg viewBox="0 0 560 560" role="img" aria-labelledby="orb-t orb-d">
+        <title id="orb-t">The LLMIngress ecosystem</title>
+        <desc id="orb-d">The ecosystem orbits one LLMIngress gateway core —
+          Claude Code, Cursor, OpenCode, and GitHub Copilot app tiles on the
+          outer ring; OpenAI, Anthropic, Google, OpenRouter, and Ollama
+          provider marks on the inner ring.</desc>
+
+        <!-- rings -->
+        <circle class="oring faint" cx="280" cy="280" r="274"/>
+        <circle class="oring" cx="280" cy="280" r="252"/>
+        <circle class="oring" cx="280" cy="280" r="170"/>
+
+        <!-- outer orbit: agents, clockwise -->
+        <g>
+          <animateTransform attributeName="transform" type="rotate"
+            from="0 280 280" to="360 280 280" dur="110s" repeatCount="indefinite"/>
+          <g transform="rotate(45 280 280)"><g transform="translate(280 28)"><g transform="rotate(-45)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="110s" repeatCount="indefinite"/>
+            <rect class="otile hot" x="-26" y="-26" width="52" height="52" rx="16"/>
+            <use class="omark hot" href="#si-claude" x="-14" y="-14" width="28" height="28"/>
+          </g></g></g></g>
+          <g transform="rotate(135 280 280)"><g transform="translate(280 28)"><g transform="rotate(-135)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="110s" repeatCount="indefinite"/>
+            <rect class="otile" x="-26" y="-26" width="52" height="52" rx="16"/>
+            <use class="omark" href="#si-cursor" x="-14" y="-14" width="28" height="28"/>
+          </g></g></g></g>
+          <g transform="rotate(225 280 280)"><g transform="translate(280 28)"><g transform="rotate(-225)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="110s" repeatCount="indefinite"/>
+            <rect class="otile" x="-26" y="-26" width="52" height="52" rx="16"/>
+            <use class="omark" href="#si-opencode" x="-14" y="-14" width="28" height="28"/>
+          </g></g></g></g>
+          <g transform="rotate(315 280 280)"><g transform="translate(280 28)"><g transform="rotate(-315)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="110s" repeatCount="indefinite"/>
+            <rect class="otile" x="-26" y="-26" width="52" height="52" rx="16"/>
+            <use class="omark" href="#si-githubcopilot" x="-14" y="-14" width="28" height="28"/>
+          </g></g></g></g>
+          <g transform="rotate(100 280 280)" aria-hidden="true"><circle class="odot" cx="280" cy="28" r="2.5"/></g>
+          <g transform="rotate(280 280 280)" aria-hidden="true"><circle class="odot" cx="280" cy="28" r="2"/></g>
+        </g>
+
+        <!-- inner orbit: providers, counter-clockwise -->
+        <g>
+          <animateTransform attributeName="transform" type="rotate"
+            from="360 280 280" to="0 280 280" dur="80s" repeatCount="indefinite"/>
+          <g transform="rotate(126 280 280)"><g transform="translate(280 110)"><g transform="rotate(-126)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
+            <circle class="obadge" r="27"/>
+            <use class="omark" href="#si-openai" x="-15" y="-15" width="30" height="30"/>
+          </g></g></g></g>
+          <g transform="rotate(198 280 280)"><g transform="translate(280 110)"><g transform="rotate(-198)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
+            <circle class="obadge hot" r="27"/>
+            <use class="omark hot" href="#si-anthropic" x="-15" y="-15" width="30" height="30"/>
+          </g></g></g></g>
+          <g transform="rotate(270 280 280)"><g transform="translate(280 110)"><g transform="rotate(-270)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
+            <circle class="obadge" r="27"/>
+            <use class="omark" href="#si-google" x="-15" y="-15" width="30" height="30"/>
+          </g></g></g></g>
+          <g transform="rotate(342 280 280)"><g transform="translate(280 110)"><g transform="rotate(-342)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
+            <circle class="obadge" r="27"/>
+            <use class="omark" href="#si-openrouter" x="-15" y="-15" width="30" height="30"/>
+          </g></g></g></g>
+          <g transform="rotate(30 280 280)"><g transform="translate(280 110)"><g transform="rotate(-30)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
+            <circle class="obadge" r="27"/>
+            <use class="omark" href="#si-ollama" x="-15" y="-15" width="30" height="30"/>
+          </g></g></g></g>
+          <g transform="rotate(90 280 280)" aria-hidden="true"><circle class="odot" cx="280" cy="110" r="2"/></g>
+        </g>
+
+        <!-- gateway core (echoes brand icon) -->
+        <g class="core-glow">
+          <rect class="core-panel" x="240" y="240" width="80" height="80" rx="19"/>
+          <rect class="core-inner" x="246" y="246" width="68" height="68" rx="14"/>
+          <rect class="core-slot" x="254.5" y="273" width="21" height="16" rx="5.5"/>
+          <rect class="core-socket" x="278.5" y="277.5" width="8.5" height="8" rx="4"/>
+          <rect class="core-quiet" x="291" y="255.5" width="14.5" height="16" rx="5.4"/>
+          <rect class="core-quiet" x="291" y="288.5" width="14.5" height="16" rx="5.4"/>
+        </g>
+        <text class="core-label" x="280" y="342" text-anchor="middle">LLMIngress</text>
+      </svg>
+    </div>
+
+    <div class="hero-marquee rise rise-6" aria-label="Works with your existing agents and providers">
+      <span class="hero-marquee-label">WORKS WITH</span>
+      <div class="marquee">
+        <div class="marquee-track" aria-hidden="true">
+          <span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-openai"/></svg>Codex</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-claude"/></svg>Claude Code</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-cursor"/></svg>Cursor</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-opencode"/></svg>OpenCode</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-githubcopilot"/></svg>GitHub Copilot</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-openai"/></svg>OpenAI</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-anthropic"/></svg>Anthropic</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-googlegemini"/></svg>Google Gemini</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-openrouter"/></svg>OpenRouter</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-deepseek"/></svg>DeepSeek</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-ollama"/></svg>Ollama</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-lmstudio"/></svg>LM Studio</span>
+          <span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-openai"/></svg>Codex</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-claude"/></svg>Claude Code</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-cursor"/></svg>Cursor</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-opencode"/></svg>OpenCode</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-githubcopilot"/></svg>GitHub Copilot</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-openai"/></svg>OpenAI</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-anthropic"/></svg>Anthropic</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-googlegemini"/></svg>Google Gemini</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-openrouter"/></svg>OpenRouter</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-deepseek"/></svg>DeepSeek</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-ollama"/></svg>Ollama</span><span class="marquee-item"><svg class="mi" aria-hidden="true"><use href="#si-lmstudio"/></svg>LM Studio</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= pain strip ================= -->
+<section class="pain" aria-labelledby="pain-h">
+  <div class="wrap">
+    <h2 id="pain-h">Running three agents shouldn’t feel like running three billing departments.</h2>
+    <div class="pain-row">
+      <div class="pain-item">
+        <span class="pain-code">KEY_SPRAWL</span>
+        <p>Every agent wants its own provider keys, base URLs, and model
+          lists. You maintain N copies of the same config.</p>
+      </div>
+      <div class="pain-item">
+        <span class="pain-code">COST_BLINDSPOT</span>
+        <p>Which agent burned $14 yesterday? Without a shared ledger, nobody
+          knows until the invoice arrives.</p>
+      </div>
+      <div class="pain-item">
+        <span class="pain-code">PROVIDER_DOWN</span>
+        <p>One 429 and your whole session stalls. Retrying by hand is not a
+          fallback strategy.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= features ================= -->
+<section class="features" id="features" aria-labelledby="feat-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow"><b>01</b> CAPABILITIES</p>
+      <h2 id="feat-h">Everything between the agent and the model.</h2>
+    </div>
+    <div class="spec-grid">
+      <article class="spec">
+        <p class="spec-id"><span class="n">01</span> <span class="code">ONE_ENDPOINT</span></p>
+        <h3>Unified ingress</h3>
+        <p>OpenAI- and Anthropic-compatible APIs from one port. Chat,
+          responses, messages, and model discovery — every agent speaks to
+          the same door, each with its own scoped key.</p>
+        <p class="spec-line"><b>spec:</b> /v1/chat/completions · /v1/messages · /v1/responses · /v1/models</p>
+      </article>
+      <article class="spec">
+        <p class="spec-id"><span class="n">02</span> <span class="code">VIRTUAL_MODELS</span></p>
+        <h3>Routing that reads the request</h3>
+        <p>Agents ask for <code>code-fast</code>. A deterministic rule engine
+          resolves the real model from task type, context length, and tool
+          use. Same request, same route — no LLM judge in the loop.</p>
+        <p class="spec-line"><b>spec:</b> p95 routing target &lt; 100 ms</p>
+      </article>
+      <article class="spec">
+        <p class="spec-id"><span class="n">03</span> <span class="code">FALLBACK_CHAIN</span></p>
+        <h3>Failure is a routing event</h3>
+        <p>429s, 5xx, timeouts — the request moves to the next model in the
+          chain, up to five deep, across providers and local models. Your
+          agent never sees the outage.</p>
+        <p class="spec-line"><b>spec:</b> triggers before first streamed chunk</p>
+      </article>
+      <article class="spec">
+        <p class="spec-id"><span class="n">04</span> <span class="code">COST_LEDGER</span></p>
+        <h3>Every token accounted</h3>
+        <p>Tokens, cost, and latency per agent, per virtual model, per
+          provider — plus savings measured against a fixed baseline model.</p>
+        <p class="spec-line"><b>spec:</b> cache + reasoning tokens tracked separately</p>
+      </article>
+      <article class="spec">
+        <p class="spec-id"><span class="n">05</span> <span class="code">HARD_LIMITS</span></p>
+        <h3>Budgets and rate limits</h3>
+        <p>Per-agent budgets from hourly to monthly, plus RPM / TPM /
+          concurrency caps. Block or notify at the threshold, so a runaway
+          loop stops at the gateway instead of running up cost.</p>
+        <p class="spec-line"><b>spec:</b> block · notify · webhook</p>
+      </article>
+      <article class="spec">
+        <p class="spec-id"><span class="n">06</span> <span class="code">SELF_HOSTED</span></p>
+        <h3>Self-hosted, single-user</h3>
+        <p>Runs on your laptop or server, binds to localhost by default.
+          Provider keys encrypted at rest; prompts recorded only if you opt
+          in.</p>
+        <p class="spec-line"><b>spec:</b> Node + Postgres · one compose file</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= how it works ================= -->
+<section class="how" id="how" aria-labelledby="how-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow"><b>02</b> SETUP</p>
+      <h2 id="how-h">Three steps, one endpoint.</h2>
+    </div>
+    <div class="how-grid">
+      <div class="steps">
+        <div class="step">
+          <div class="step-n">1</div>
+          <div>
+            <h3>Connect your providers</h3>
+            <p>Paste API keys for OpenAI, Anthropic, Google, OpenRouter —
+              connect a personal subscription, or point at local Ollama.
+              Keys are encrypted at rest and never shown again.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-n">2</div>
+          <div>
+            <h3>Define virtual models</h3>
+            <p>Name a policy like <code>code-fast</code> or
+              <code>deep-reasoning</code>; set its model scope, cost
+              preference, and a fallback chain.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-n">3</div>
+          <div>
+            <h3>Point your agents at the gateway</h3>
+            <p>Each agent gets the base URL, its own <code>llmi_</code> key,
+              and a budget. Done — every request now routes, falls back, and
+              gets metered.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-panel">
+        <div class="tabbar" role="tablist" aria-label="Agent configuration examples">
+          <button class="tab" role="tab" aria-selected="true" aria-controls="tp-cc" id="tab-cc">Claude</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="tp-cx" id="tab-cx">Codex</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="tp-curl" id="tab-curl">Curl</button>
+        </div>
+        <div class="code-body">
+          <button class="copy-btn" data-copy-target="tp-cc">copy</button>
+          <pre id="tp-cc" role="tabpanel" aria-labelledby="tab-cc" tabindex="0"><span class="c"># Claude Code → LLMIngress</span>
+export ANTHROPIC_BASE_URL=<span class="s">"http://localhost:4000"</span>
+export ANTHROPIC_AUTH_TOKEN=<span class="s">"llmi_cc_4f8a…"</span>
+
+claude   <span class="c"># model: code-fast (virtual)</span></pre>
+          <pre id="tp-cx" role="tabpanel" aria-labelledby="tab-cx" tabindex="0" hidden><span class="c"># Codex — ~/.codex/config.toml</span>
+<span class="k">model</span> = <span class="s">"code-fast"</span>
+<span class="k">model_provider</span> = <span class="s">"llmingress"</span>
+
+[model_providers.llmingress]
+<span class="k">name</span>     = <span class="s">"LLMIngress"</span>
+<span class="k">base_url</span> = <span class="s">"http://localhost:4000/v1"</span>
+<span class="k">env_key</span>  = <span class="s">"LLMINGRESS_API_KEY"</span>  <span class="c"># llmi_cx_9b2e…</span></pre>
+          <pre id="tp-curl" role="tabpanel" aria-labelledby="tab-curl" tabindex="0" hidden>curl http://localhost:4000/v1/chat/completions \
+  -H <span class="s">"Authorization: Bearer llmi_dev_a1c3…"</span> \
+  -d <span class="s">'{ "model": "code-fast",
+        "messages": [{ "role": "user",
+                       "content": "…" }] }'</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ecosystem ================= -->
+<section class="eco" aria-labelledby="eco-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow"><b>//</b> COMPATIBILITY</p>
+      <h2 id="eco-h">Works with what you already run.</h2>
+    </div>
+    <div class="eco-grid">
+      <div class="eco-col">
+        <h3>Agents that connect <span class="dir">→ in</span></h3>
+        <p>Any agent that lets you set an OpenAI- or Anthropic-compatible
+          endpoint plugs in with a base URL and a key.</p>
+        <div class="chips">
+          <span class="chip-t">Codex</span><span class="chip-t">Claude Code</span><span class="chip-t">Cursor</span><span class="chip-t">OpenCode</span><span class="chip-t">Hermes</span><span class="chip-t">OpenClaw</span><span class="chip-t">GitHub Copilot</span><span class="chip-t more">any OpenAI-compatible agent</span>
+        </div>
+      </div>
+      <div class="eco-col">
+        <h3>Providers it routes to <span class="dir">out →</span></h3>
+        <p>API keys, personal subscriptions, and local runtimes — configured
+          once, shared by every agent.</p>
+        <div class="chip-group">
+          <span class="chip-group-label">API KEYS</span>
+          <div class="chips">
+            <span class="chip-t">OpenAI</span><span class="chip-t">Anthropic</span><span class="chip-t">Google Gemini</span><span class="chip-t">OpenRouter</span><span class="chip-t">DeepSeek</span><span class="chip-t">xAI</span><span class="chip-t">Qwen</span><span class="chip-t">Moonshot</span><span class="chip-t">MiniMax</span><span class="chip-t">Z.ai</span>
+          </div>
+        </div>
+        <div class="chip-group">
+          <span class="chip-group-label">SUBSCRIPTIONS</span>
+          <div class="chips">
+            <span class="chip-t">Kimi Coding Plan</span><span class="chip-t">GLM Coding Plan</span><span class="chip-t">OpenCode Go</span>
+          </div>
+        </div>
+        <div class="chip-group">
+          <span class="chip-group-label">LOCAL</span>
+          <div class="chips">
+            <span class="chip-t">Ollama</span><span class="chip-t">LM Studio</span><span class="chip-t more">llama.cpp + more</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= console showcase ================= -->
+<section class="console" aria-labelledby="con-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow"><b>03</b> OBSERVABILITY</p>
+      <h2 id="con-h">The Console shows its work.</h2>
+      <p class="lede">Every request explains itself: which model, why, and
+        what it cost. No black-box routing.</p>
+    </div>
+    <div class="console-frame">
+      <div class="console-titlebar"><span class="live"></span> llmingress console — localhost:3000</div>
+      <div class="console-stats">
+        <div class="cstat"><span class="cstat-k">requests · today</span><span class="cstat-row"><span class="cstat-v">1,284</span><span class="trend good">↑ 8%</span></span></div>
+        <div class="cstat"><span class="cstat-k">cost · today</span><span class="cstat-row"><span class="cstat-v">$3.42</span><span class="trend good">↓ 12%</span></span></div>
+        <div class="cstat"><span class="cstat-k">failure rate</span><span class="cstat-row"><span class="cstat-v">0.4%</span><span class="trend good">↓ 0.2pp</span></span></div>
+        <div class="cstat"><span class="cstat-k">saved vs baseline</span><span class="cstat-row"><span class="cstat-v ok">−62%</span></span></div>
+      </div>
+      <div class="console-grid">
+
+      <div class="panel">
+        <div class="panel-bar"><span class="live"></span> activity — live</div>
+        <div class="panel-body act">
+          <div class="act-row">
+            <div class="act-l1"><span><span class="agent">codex&nbsp;&nbsp;</span>code-fast → gpt-5-mini</span></div>
+            <div class="act-l2"><span>412 ms</span><span>$0.0021</span><span class="st">ok</span></div>
+          </div>
+          <div class="act-row">
+            <div class="act-l1"><span><span class="agent">claude-code&nbsp;&nbsp;</span>deep-reasoning → claude-opus-4-8</span></div>
+            <div class="act-l2"><span>2.1 s</span><span>$0.0834</span><span class="st">ok</span></div>
+          </div>
+          <div class="act-row">
+            <div class="act-l1"><span><span class="agent">cursor&nbsp;&nbsp;</span>code-fast → deepseek-v3</span></div>
+            <div class="act-l2"><span>388 ms</span><span>$0.0007</span><span class="st">ok</span></div>
+          </div>
+          <div class="act-row">
+            <div class="act-l1"><span><span class="agent">opencode&nbsp;&nbsp;</span>code-fast <span class="warn">⚠ 429</span> → qwen3-coder</span></div>
+            <div class="act-l2"><span>903 ms</span><span>$0.0004</span><span class="st rr">rerouted</span></div>
+          </div>
+          <div class="act-row">
+            <div class="act-l1"><span><span class="agent">claude-code&nbsp;&nbsp;</span>long-context → gemini-2.5-pro</span></div>
+            <div class="act-l2"><span>1.4 s</span><span>$0.0179</span><span class="st">ok</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-bar">usage — 7 days</div>
+        <div class="panel-body">
+          <div class="chart" role="img" aria-label="Daily cost, last 7 days, between 1 and 5 dollars per day">
+            <div class="bar" style="height:46%"></div>
+            <div class="bar" style="height:72%"></div>
+            <div class="bar" style="height:38%"></div>
+            <div class="bar" style="height:88%"></div>
+            <div class="bar" style="height:57%"></div>
+            <div class="bar" style="height:24%"></div>
+            <div class="bar today" style="height:64%"></div>
+          </div>
+          <div class="chart-days" aria-hidden="true">
+            <span>Th</span><span>Fr</span><span>Sa</span><span>Su</span><span>Mo</span><span>Tu</span><span>We</span>
+          </div>
+          <div class="savings">
+            <p class="big">saved <b>$31.40</b> (−62%)</p>
+            <p class="note">auto-routing vs claude-opus-4-8 baseline</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-bar">route — reason</div>
+        <div class="panel-body route-kv">
+          <div class="kv"><span class="k">ctx_est</span><span>9.4k</span></div>
+          <div class="kv"><span class="k">tools</span><span>yes</span></div>
+          <div class="kv"><span class="k">task</span><span>coding</span></div>
+          <div class="div" role="presentation"></div>
+          <div class="kv pick"><span class="k">tier 1</span><span>deepseek-v3 <span class="tick">✓</span></span></div>
+          <p class="fb">fallbacks:<br>qwen3-coder,<br>gpt-5-mini</p>
+          <div class="div" role="presentation"></div>
+          <div class="kv"><span class="k">latency</span><span>388 ms</span></div>
+          <div class="kv"><span class="k">cost</span><span>$0.0007</span></div>
+        </div>
+      </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= deploy ================= -->
+<section class="deploy" id="deploy" aria-labelledby="dep-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow"><b>04</b> DEPLOY</p>
+      <h2 id="dep-h">Runs where you work.</h2>
+    </div>
+
+    <div class="deploy-cmd">
+      <button class="copy-btn" data-copy-target="deploy-pre">copy</button>
+      <pre id="deploy-pre"><span class="c"># clone, generate MASTER_KEY into .env, then run</span>
+git clone https://github.com/IamNotShady/LLMIngress.git
+cd LLMIngress
+./scripts/deploy.sh</pre>
+    </div>
+    <p class="deploy-cap">Gateway :4000 · Console :3000 · Postgres :55432 · bound to 127.0.0.1 by default</p>
+
+    <div class="shapes">
+      <div class="shape">
+        <span class="tag">RECOMMENDED</span>
+        <h3>Docker Compose</h3>
+        <p>Postgres bundled, migrations run on first boot, random
+          <code>MASTER_KEY</code> via <code>./scripts/deploy.sh</code>.
+          Nothing listens publicly until you change a host.</p>
+      </div>
+      <div class="shape">
+        <span class="tag">FOR HACKING</span>
+        <h3>Local Node</h3>
+        <p><code>pnpm install && ./init.sh</code> against your own Postgres.
+          The full dev loop for contributing.</p>
+      </div>
+      <div class="shape">
+        <span class="tag">ALWAYS ON</span>
+        <h3>Server / VPS</h3>
+        <p>Same compose file. Override <code>.env</code>
+          <code>MASTER_KEY</code> if you want, point
+          <code>CONSOLE_PUBLISH_HOST</code> at your network, keep the Gateway
+          and Postgres private.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= faq ================= -->
+<section class="faq" id="faq" aria-labelledby="faq-h">
+  <div class="wrap faq-grid">
+    <div class="faq-head">
+      <p class="eyebrow"><b>05</b> FAQ</p>
+      <h2 id="faq-h">Fair questions.</h2>
+      <p class="lede">The things developers actually check before running
+        someone else’s gateway.</p>
+    </div>
+    <div class="faq-list">
+      <details class="faq-item" open>
+        <summary>Is it open source? <span class="m">+</span></summary>
+        <p class="a">Yes — Apache-2.0, self-hosted, built for a single user.
+          No SaaS, no telemetry, no account.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Which agents can connect? <span class="m">+</span></summary>
+        <p class="a">Anything that lets you set an OpenAI-compatible base URL
+          — Codex, Cursor, OpenCode, and GitHub Copilot among them. Claude
+          Code connects natively through the Anthropic-compatible
+          <code>/v1/messages</code> endpoint.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Are my prompts stored? <span class="m">+</span></summary>
+        <p class="a">By default, no — the gateway records metadata only
+          (model, tokens, cost, latency). Content recording is per-agent
+          opt-in, and you can delete any record.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Do my provider keys ever leave my machine? <span class="m">+</span></summary>
+        <p class="a">No. Agents only ever hold their own <code>llmi_</code>
+          gateway keys. Provider keys stay on your deployment, encrypted at
+          rest.</p>
+      </details>
+      <details class="faq-item">
+        <summary>What does it cost to run? <span class="m">+</span></summary>
+        <p class="a">The software is free. You pay providers directly, at
+          their prices — and the Usage page shows what auto-routing saved you
+          against a fixed baseline model.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= final cta ================= -->
+<section class="cta-final" aria-labelledby="cta-h">
+  <div class="wrap">
+    <div class="cta-band">
+      <h2 id="cta-h">Give your agents one door.</h2>
+      <div class="cta-row">
+        <a class="btn btn-primary btn-arrow" href="#deploy">Deploy locally <span class="arrow" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+        <a class="btn btn-ghost cta-ghost" href="https://github.com/IamNotShady/LLMIngress/tree/main/docs" target="_blank" rel="noopener">Read the docs <span class="ext">↗</span></a>
+      </div>
+      <p class="one-liner">$ <b>./scripts/deploy.sh</b>&nbsp;&nbsp;# Gateway :4000 · Console :3000</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= footer ================= -->
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="brand-col">
+        <a class="brand" href="#" aria-label="LLMIngress home">
+          <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true">
+            <rect x="4" y="4" width="56" height="56" rx="14" fill="oklch(0.19 0.018 292)" stroke="oklch(0.5 0.16 292 / 0.85)" stroke-width="2"/>
+            <rect x="14" y="27" width="15" height="12" rx="4" fill="oklch(0.66 0.175 292)"/>
+            <rect x="33" y="14" width="12" height="13" rx="4" fill="oklch(0.32 0.03 292)"/>
+            <rect x="33" y="37" width="12" height="13" rx="4" fill="oklch(0.32 0.03 292)"/>
+            <rect x="45" y="27" width="12" height="12" rx="4" fill="oklch(0.32 0.03 292)"/>
+          </svg>
+          <span class="wordmark">LLMIngress</span>
+        </a>
+        <p>A self-hosted AI gateway for AI agents. One endpoint for every
+          agent; your providers, models, and keys stay yours.</p>
+      </div>
+      <nav aria-label="Product">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#deploy">Deploy</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/IamNotShady/LLMIngress" target="_blank" rel="noopener">GitHub ↗</a></li>
+          <li><a href="https://github.com/IamNotShady/LLMIngress/tree/main/docs" target="_blank" rel="noopener">Docs ↗</a></li>
+          <li><a href="https://github.com/IamNotShady/LLMIngress/blob/main/LICENSE" target="_blank" rel="noopener">License · Apache-2.0</a></li>
+          <li><a href="https://github.com/IamNotShady/LLMIngress/releases" target="_blank" rel="noopener">Changelog ↗</a></li>
+        </ul>
+      </nav>
+    </div>
+    <p class="legal">© 2026 LLMIngress · not affiliated with any model provider</p>
+  </div>
+</footer>
+
+</main>
+
+<script>
+/* tabs (click + arrow keys per ARIA tabs pattern) */
+document.querySelectorAll('[role="tablist"]').forEach(function (list) {
+  var tabs = Array.prototype.slice.call(list.querySelectorAll('[role="tab"]'));
+  function select(tab) {
+    tabs.forEach(function (t) {
+      t.setAttribute('aria-selected', String(t === tab));
+      t.tabIndex = t === tab ? 0 : -1;
+      var panel = document.getElementById(t.getAttribute('aria-controls'));
+      if (panel) panel.hidden = t !== tab;
+    });
+    var copyBtn = list.parentElement.querySelector('.copy-btn');
+    if (copyBtn) copyBtn.dataset.copyTarget = tab.getAttribute('aria-controls');
+  }
+  tabs.forEach(function (tab, i) {
+    tab.tabIndex = tab.getAttribute('aria-selected') === 'true' ? 0 : -1;
+    tab.addEventListener('click', function () { select(tab); });
+    tab.addEventListener('keydown', function (e) {
+      var next = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : null;
+      if (next === null) return;
+      e.preventDefault();
+      var target = tabs[(next + tabs.length) % tabs.length];
+      target.focus();
+      select(target);
+    });
+  });
+});
+
+/* copy buttons (clipboard API with execCommand fallback) */
+document.querySelectorAll('.copy-btn').forEach(function (btn) {
+  var live = document.createElement('span');
+  live.setAttribute('aria-live', 'polite');
+  live.className = 'sr-live';
+  btn.after(live);
+  function done() {
+    btn.textContent = 'copied';
+    live.textContent = 'Copied to clipboard';
+    setTimeout(function () { btn.textContent = 'copy'; live.textContent = ''; }, 1600);
+  }
+  function fallback(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) { /* best effort */ }
+    ta.remove();
+    done();
+  }
+  btn.addEventListener('click', function () {
+    var pre = document.getElementById(btn.dataset.copyTarget);
+    if (!pre) return;
+    var text = pre.textContent.trim();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(text); });
+    } else {
+      fallback(text);
+    }
+  });
+});
+
+/* close mobile menu on link click or outside click */
+document.querySelectorAll('.nav-menu .sheet a').forEach(function (a) {
+  a.addEventListener('click', function () {
+    a.closest('details').removeAttribute('open');
+  });
+});
+document.addEventListener('click', function (e) {
+  document.querySelectorAll('.nav-menu[open]').forEach(function (menu) {
+    if (!menu.contains(e.target)) menu.removeAttribute('open');
+  });
+});
+
+/* typewriter headline — types the H1 with a violet tail, honors reduced
+   motion (full text stays as-is); a ghost span holds the layout steady */
+(function () {
+  var live = document.querySelector('.type-live');
+  if (!live) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var head = 'One gateway for every ';
+  var tail = 'AI agent.';
+  var hl = document.createElement('span'); hl.className = 'hl';
+  var caret = document.createElement('span'); caret.className = 'type-caret';
+  var i = 0, total = head.length + tail.length;
+  live.textContent = '';
+  live.append(caret);
+  function step() {
+    i++;
+    if (i <= head.length) {
+      live.textContent = head.slice(0, i);
+    } else {
+      live.textContent = head;
+      hl.textContent = tail.slice(0, i - head.length);
+      live.append(hl);
+    }
+    live.append(caret);
+    if (i < total) {
+      setTimeout(step, 42 + Math.random() * 36);
+    } else {
+      setTimeout(function () { caret.remove(); }, 1800);
+    }
+  }
+  setTimeout(step, 550);
+})();
+
+/* pause the orbital SVG under reduced motion (SMIL has no CSS hook) */
+if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  var orbSvg = document.querySelector('.orbital svg');
+  if (orbSvg && orbSvg.pauseAnimations) orbSvg.pauseAnimations();
+}
+
+/* live GitHub star count in the nav (1h localStorage cache; chip stays
+   hidden if the API is unreachable or rate-limited) */
+(function () {
+  var el = document.getElementById('gh-stars');
+  if (!el || typeof fetch !== 'function') return;
+  var repo = 'IamNotShady/LLMIngress';
+  var cacheKey = 'gh-stars:' + repo;
+  function render(n) {
+    el.textContent = n.toLocaleString('en-US');
+    el.hidden = false;
+  }
+  try {
+    var cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+    if (cached && typeof cached.n === 'number' && Date.now() - cached.t < 3600000) {
+      render(cached.n);
+      return;
+    }
+  } catch (e) { /* ignore cache errors */ }
+  fetch('https://api.github.com/repos/' + repo)
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error(String(r.status))); })
+    .then(function (data) {
+      if (typeof data.stargazers_count !== 'number') return;
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({ n: data.stargazers_count, t: Date.now() }));
+      } catch (e) { /* storage may be unavailable */ }
+      render(data.stargazers_count);
+    })
+    .catch(function () { /* leave the chip hidden */ });
+})();
+
+/* pixel star field backdrop (adapted from uicapsule/background-pixel-stars,
+   recolored to the brand palette; static under prefers-reduced-motion) */
+(function () {
+  var canvas = document.getElementById('stars');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  var COLORS = ['#efeef5', '#d7c8ff', '#b494ff', '#8b6cff', '#93899f'];
+  var DENSITY = 3e-5;        /* stars per px² */
+  var PX = 4;                /* star pixel size */
+  var FPS = 16;
+  var TWINKLE_CHANCE = 0.7;  /* fraction of stars that twinkle */
+  var TW_MIN = 2, TW_MAX = 4;      /* twinkle period, seconds */
+  var RESPAWN_MS = 5000, RESPAWN_FRAC = 0.15;
+  var TRAIL_PX = 2;
+
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var stars = [], shooting = [], last = 0;
+
+  function makeStar() {
+    return {
+      x: Math.floor(Math.random() * (canvas.width / PX)) * PX,
+      y: Math.floor(Math.random() * (canvas.height / PX)) * PX,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      base: Math.random() * 0.45 + 0.25,
+      twinkle: Math.random() < TWINKLE_CHANCE,
+      period: TW_MIN + Math.random() * (TW_MAX - TW_MIN),
+      timer: Math.random() * TW_MAX
+    };
+  }
+
+  function init() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    stars = [];
+    var n = Math.floor(canvas.width * canvas.height * DENSITY);
+    for (var i = 0; i < n; i++) stars.push(makeStar());
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(function (s) {
+      var op = s.base;
+      if (s.twinkle && !reduced) {
+        op = (s.timer / s.period) % 1 < 0.5 ? s.base : s.base * 0.3;
+      }
+      ctx.globalAlpha = op;
+      ctx.fillStyle = s.color;
+      ctx.fillRect(s.x, s.y, PX, PX);
+    });
+    ctx.globalAlpha = 1;
+    shooting.forEach(function (m) {
+      m.trail.forEach(function (t) {
+        ctx.globalAlpha = t.op;
+        ctx.fillStyle = '#b494ff';
+        ctx.fillRect(t.x, t.y, TRAIL_PX, TRAIL_PX);
+      });
+      ctx.globalAlpha = 1;
+      ctx.save();
+      ctx.translate(m.x, m.y);
+      ctx.rotate(m.angle);
+      ctx.fillStyle = '#efeef5';
+      /* 4×2 pixel head, corners clipped */
+      for (var r = 0; r < 2; r++) for (var c = 0; c < 4; c++) {
+        if ((c === 0 && r === 1) || (c === 3 && r === 0)) continue;
+        ctx.fillRect(c * TRAIL_PX, r * TRAIL_PX, TRAIL_PX, TRAIL_PX);
+      }
+      ctx.restore();
+    });
+  }
+
+  function spawnShooting() {
+    if (document.visibilityState === 'visible') {
+      shooting.push({
+        x: Math.random() * canvas.width, y: 0,
+        angle: (45 + Math.random() * 90) * Math.PI / 180,
+        speed: 8 + Math.random() * 5, dist: 0, trail: []
+      });
+    }
+    setTimeout(spawnShooting, 6000 + Math.random() * 8000);
+  }
+
+  function step(dt) {
+    stars.forEach(function (s) { s.timer += dt; });
+    shooting = shooting.map(function (m) {
+      m.trail.push({ x: m.x, y: m.y, op: 0.8 });
+      m.trail = m.trail.map(function (t) { t.op -= 0.08; return t; })
+        .filter(function (t) { return t.op > 0; });
+      m.x += m.speed * Math.cos(m.angle);
+      m.y += m.speed * Math.sin(m.angle);
+      return m;
+    }).filter(function (m) {
+      return m.x > -30 && m.x < canvas.width + 30 && m.y < canvas.height + 30;
+    });
+  }
+
+  function tick(t) {
+    requestAnimationFrame(tick);
+    if (t - last < 1000 / FPS) return;
+    last = t;
+    step(1 / FPS);
+    draw();
+  }
+
+  var respawn = setInterval(function () {
+    var n = Math.max(1, Math.floor(stars.length * RESPAWN_FRAC));
+    for (var i = 0; i < n; i++) {
+      stars[Math.floor(Math.random() * stars.length)] = makeStar();
+    }
+  }, RESPAWN_MS);
+
+  var resizeTimer;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { init(); if (reduced) draw(); }, 150);
+  });
+
+  init();
+  if (reduced) {
+    clearInterval(respawn);
+    draw();               /* static field, no motion */
+  } else {
+    spawnShooting();
+    requestAnimationFrame(tick);
+  }
+})();
+</script>
+</body>
+</html>

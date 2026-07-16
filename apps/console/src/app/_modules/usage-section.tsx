@@ -70,11 +70,13 @@ function formatTokenTrendPoint(point: ConsoleUsageTrendPoint) {
   };
 }
 
+const usageTrendLabelFormat = new Intl.DateTimeFormat("en-US", {
+  day: "2-digit",
+  month: "short",
+});
+
 function formatUsageTrendLabel(value: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    day: "2-digit",
-    month: "short",
-  }).format(value);
+  return usageTrendLabelFormat.format(value);
 }
 
 function formatLatencyMs(value: number | null): string {

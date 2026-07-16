@@ -35,7 +35,6 @@ const defaultConsoleRuntime: ConsoleRuntime = {
 export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
   const config = loadBootstrapRuntimeConfig();
   assertPostgresDatabaseConfigured();
-  logBootstrapSecurityWarnings(config.securityWarnings);
   const consoleHost = readConsoleListenHost();
   const masterKeyEnv =
     config.masterKeySource.kind === "inline"
@@ -50,12 +49,6 @@ export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
       ...masterKeyEnv,
     },
   };
-}
-
-function logBootstrapSecurityWarnings(warnings: string[]): void {
-  for (const warning of warnings) {
-    logger.warn({ securityWarning: true }, warning);
-  }
 }
 
 export function startConsole(mode: ConsoleMode): void {

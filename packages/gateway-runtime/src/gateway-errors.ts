@@ -5,7 +5,6 @@ export type GatewayErrorCode =
   | "disabled_agent_api_key"
   | "invalid_agent_api_key"
   | "invalid_chat_request"
-  | "invalid_embeddings_request"
   | "invalid_messages_request"
   | "invalid_responses_request"
   | "missing_agent_api_key"
@@ -38,7 +37,6 @@ const defaultGatewayErrorMessage: Record<GatewayErrorCode, string> = {
   disabled_agent_api_key: "Agent API key is disabled.",
   invalid_agent_api_key: "Agent API key is invalid.",
   invalid_chat_request: "Chat completion request must include at least one string-content message.",
-  invalid_embeddings_request: "Embeddings request must include non-empty input text.",
   invalid_messages_request:
     "Anthropic messages request must include max_tokens and at least one message.",
   invalid_responses_request:

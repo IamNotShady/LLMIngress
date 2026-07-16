@@ -38,7 +38,7 @@ Each Gateway request uses one immutable configuration snapshot. Reload validates
 before atomically swapping it; failure retains the last-known-good snapshot. PostgreSQL
 `LISTEN/NOTIFY` wakes reloads, while periodic reconcile covers missed notifications.
 
-Chat Completions, Responses, Messages, and Embeddings keep their native Provider contracts.
+Chat Completions, Responses, and Messages keep their native Provider contracts.
 Gateway strips browser transport headers before Provider dispatch and never repairs rejected
 payload fields. A streaming attempt succeeds only after first-byte read-ahead; failures after a
 client byte are not replayed.
@@ -96,5 +96,7 @@ advisory locks. They create no `jobs` or `job_attempts`. Retention deletes in ba
   closes pools, and exits. Drain-timeout diagnostics contain safe metadata only.
 - Runtime images use compiled output and non-root users. Console uses Next standalone output;
   Gateway and Worker start with `node`.
+- Docker Compose uses two containers: one non-root multi-role application container (migrate on
+  boot, then Gateway, Console, and Worker processes) and one official PostgreSQL 18.4 container.
 - The pre-release schema is the single `0001_core_baseline.sql`: 23 product tables plus migration
   history, 24 total. Old development databases are recreated rather than mixed with this schema.

@@ -1,21 +1,26 @@
 x-llmingress-env: &llmingress-env
   NODE_ENV: production
-  DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/postgres
+  DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:llmi-local-db@postgres:5432/postgres}
   MASTER_KEY: ${MASTER_KEY:?MASTER_KEY is required}
   GATEWAY_PORT: 4000
   GATEWAY_HOST: 0.0.0.0
   CONSOLE_PORT: 3000
   CONSOLE_HOST: 0.0.0.0
+  HOSTNAME: 0.0.0.0
+  PORT: 3000
   WORKER_HEARTBEAT_MS: 30000
-  GATEWAY_PUBLIC_BASE_URL: ${GATEWAY_PUBLIC_BASE_URL:-http://localhost:4000}
-  GATEWAY_CORS_ALLOWED_ORIGINS: ${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+
+x-llmingress-build: &llmingress-build
+  context: .
+  dockerfile: Dockerfile
+  target: runtime
 
 services:
   postgres:
     image: postgres:18.4-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_PASSWORD: llmi-local-db
       POSTGRES_DB: postgres
     ports:
       - "${POSTGRES_PUBLISH_HOST:-127.0.0.1}:${POSTGRES_PORT:-55432}:5432"
@@ -27,31 +32,18 @@ services:
       timeout: 5s
       retries: 20
 
-  migrate:
-    image: llmingress-migrate:local
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: migrate
-    environment: *llmingress-env
+  app:
+    image: llmingress-app:local
+    build: *llmingress-build
+    command: all
+    environment:
+      <<: *llmingress-env
+      GATEWAY_URL: ${GATEWAY_URL:-http://127.0.0.1:4000}
     depends_on:
       postgres:
         condition: service_healthy
-    restart: "no"
-
-  gateway:
-    image: llmingress-gateway:local
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: gateway
-    environment: *llmingress-env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     ports:
+      - "${CONSOLE_PUBLISH_HOST:-127.0.0.1}:${CONSOLE_PORT:-3000}:3000"
       - "${GATEWAY_PUBLISH_HOST:-127.0.0.1}:${GATEWAY_PORT:-4000}:4000"
     healthcheck:
       test:
@@ -62,34 +54,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-
-  console:
-    image: llmingress-console:local
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: console
-    environment: *llmingress-env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    ports:
-      - "${CONSOLE_PUBLISH_HOST:-127.0.0.1}:${CONSOLE_PORT:-3000}:3000"
-
-  worker:
-    image: llmingress-worker:local
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: worker
-    environment: *llmingress-env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
 
 volumes:
   postgres-data:

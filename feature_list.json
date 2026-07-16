@@ -16,7 +16,7 @@
       "verification": "pnpm exec vitest run tests/features/provider-management.unit.test.ts tests/features/provider-model-sync.unit.test.ts tests/features/provider-connection-health.unit.test.ts && pnpm test:e2e tests/e2e/provider-management.e2e.spec.ts tests/e2e/provider-model-sync.e2e.spec.ts tests/e2e/provider-connection-health.e2e.spec.ts --workers=1",
       "dependencies": ["core-platform-security"],
       "status": "passing",
-      "evidence": "2026-07-16: listProviderModelPage is provider-scoped again (required providerId; the cross-provider variant was retired with the collapsed model library card). Focused suites, pnpm run verify, and verify:features passed."
+      "evidence": "2026-07-16: Removed the app-level provider_key uniqueness check so any number of providers can share a provider type/key with any display name and base URL; provider type only selects the wire protocol (runtime paths are provider-id keyed). console-provider-duplicates unit cases + duplicate-provider Console E2E, pnpm run verify, and verify:features (9/9) passed."
     },
     {
       "id": "virtual-model-routing",

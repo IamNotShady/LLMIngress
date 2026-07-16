@@ -7,6 +7,10 @@
 <p align="center">Route your AI agents across the model providers you already use.</p>
 
 <p align="center">
+  [<a href="README.md">English</a>] [<a href="docs/README.zh-CN.md">简体中文</a>]
+</p>
+
+<p align="center">
   <img src="docs/assets/console-demo.gif" alt="LLMIngress Console demo" />
 </p>
 

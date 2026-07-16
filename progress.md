@@ -22,6 +22,7 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 
 ## Latest changes
 
+- README bilingual layout (AIRI-style): English `README.md` and Chinese `docs/README.zh-CN.md` with mutual language links.
 - Compose runs exactly two long-lived services: `app` (`command: all`) and `postgres`. Entrypoint `all` migrates then supervises Gateway, Console, and Worker in one container. Single-role commands remain for advanced `docker run`.
 - After API key save/enable and OAuth complete/enable, Console enqueues `model_refresh` alongside connection probes.
 - Compose no longer ships a public default `MASTER_KEY`. `./scripts/deploy.sh` writes a random key into `.env` when missing.

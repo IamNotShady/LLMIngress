@@ -385,7 +385,7 @@ export async function listProviderModelOptions(
 export async function listProviderModelPage(input: {
   databaseUrl?: string;
   page?: number;
-  providerId: string;
+  providerId?: string | null;
   query?: string | null;
 }): Promise<ConsoleProviderModelPage> {
   const requestedPage =
@@ -393,9 +393,9 @@ export async function listProviderModelPage(input: {
   const query = input.query?.trim() || null;
 
   return withPooledPostgresClient(input.databaseUrl, async (client) => {
-    const values = [input.providerId, query] as const;
+    const values = [input.providerId ?? null, query] as const;
     const filters = `
-      provider_models.provider_id = $1::uuid
+      ($1::uuid is null or provider_models.provider_id = $1::uuid)
       and provider_models.deleted_at is null
       and providers.deleted_at is null
       and ${consoleVisibleProviderModelFilterSql}
@@ -421,7 +421,7 @@ export async function listProviderModelPage(input: {
       `
         ${providerModelOptionsSelectSql()}
         where ${filters}
-        order by lower(provider_models.display_name), provider_models.model_id, provider_models.id
+        order by lower(providers.display_name), lower(provider_models.display_name), provider_models.model_id, provider_models.id
         limit 50
         offset $3
       `,

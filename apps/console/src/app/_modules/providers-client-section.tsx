@@ -57,10 +57,7 @@ export function ProvidersClientSection({
     [providerOAuthConnections],
   );
   const initialProvider =
-    providers.find((provider) => provider.id === initialSelectedProviderId) ??
-    providers.find((provider) => provider.providerKey === "openai") ??
-    providers[0] ??
-    null;
+    providers.find((provider) => provider.id === initialSelectedProviderId) ?? null;
   const [refreshingProviderId, setRefreshingProviderId] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const refreshProviderModels = async (event: FormEvent<HTMLFormElement>, providerId: string) => {
@@ -133,6 +130,11 @@ export function ProvidersClientSection({
                       const isRefreshing = provider.id === refreshingProviderId;
                       const isRefreshDisabled =
                         !provider.enabled || providerKeyCount === 0 || isRefreshing;
+                      const rowHref = buildQueryHref(searchParams, {
+                        modelPage: undefined,
+                        modelQuery: undefined,
+                        selected: isSelected ? undefined : provider.id,
+                      });
 
                       return (
                         <Fragment key={provider.id}>
@@ -141,11 +143,7 @@ export function ProvidersClientSection({
                               <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                href={buildQueryHref(searchParams, {
-                                  modelPage: undefined,
-                                  modelQuery: undefined,
-                                  selected: provider.id,
-                                })}
+                                href={rowHref}
                               >
                                 <strong>{provider.displayName}</strong>
                               </a>
@@ -154,11 +152,7 @@ export function ProvidersClientSection({
                               <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                href={buildQueryHref(searchParams, {
-                                  modelPage: undefined,
-                                  modelQuery: undefined,
-                                  selected: provider.id,
-                                })}
+                                href={rowHref}
                               >
                                 <ProviderHealthDetailPill
                                   status={formatProviderAggregateHealthStatus(
@@ -172,11 +166,7 @@ export function ProvidersClientSection({
                               <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                href={buildQueryHref(searchParams, {
-                                  modelPage: undefined,
-                                  modelQuery: undefined,
-                                  selected: provider.id,
-                                })}
+                                href={rowHref}
                               >
                                 {formatProviderType(provider)}
                               </a>
@@ -185,11 +175,7 @@ export function ProvidersClientSection({
                               <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                href={buildQueryHref(searchParams, {
-                                  modelPage: undefined,
-                                  modelQuery: undefined,
-                                  selected: provider.id,
-                                })}
+                                href={rowHref}
                               >
                                 {providerKeyCount}
                               </a>
@@ -198,11 +184,7 @@ export function ProvidersClientSection({
                               <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                href={buildQueryHref(searchParams, {
-                                  modelPage: undefined,
-                                  modelQuery: undefined,
-                                  selected: provider.id,
-                                })}
+                                href={rowHref}
                               >
                                 {provider.providerModelCount}
                               </a>
@@ -211,11 +193,7 @@ export function ProvidersClientSection({
                               <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                href={buildQueryHref(searchParams, {
-                                  modelPage: undefined,
-                                  modelQuery: undefined,
-                                  selected: provider.id,
-                                })}
+                                href={rowHref}
                               >
                                 {formatProviderLastConnection(providerHealth, renderedAtMs)}
                               </a>
@@ -402,21 +380,21 @@ export function ProvidersClientSection({
           <h2 className="chart-card-title">
             Model library{selectedProvider ? ` - ${selectedProvider.displayName}` : ""}
           </h2>
-          {selectedProvider ? (
-            <form className="model-library-search" action="/providers" method="get">
+          <form className="model-library-search" action="/providers" method="get">
+            {selectedProvider ? (
               <input type="hidden" name="selected" value={selectedProvider.id} />
-              <label className="sr-only" htmlFor="provider-model-query">
-                Search models
-              </label>
-              <input
-                defaultValue={modelQuery}
-                id="provider-model-query"
-                name="modelQuery"
-                type="search"
-                placeholder="Search models"
-              />
-            </form>
-          ) : null}
+            ) : null}
+            <label className="sr-only" htmlFor="provider-model-query">
+              Search models
+            </label>
+            <input
+              defaultValue={modelQuery}
+              id="provider-model-query"
+              name="modelQuery"
+              type="search"
+              placeholder="Search models"
+            />
+          </form>
         </div>
         {providerModelPage.total === 0 && modelQuery ? (
           <p>No models match “{modelQuery}”.</p>

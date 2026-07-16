@@ -17,6 +17,7 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 
 ## Latest verification
 
+- 2026-07-16: Multiple providers per provider type — provider_key uniqueness removed; provider unit+E2E suites, `pnpm run verify`, and `verify:features` (9/9) passed.
 - 2026-07-16: Provider list collapse — default fully collapsed, row click toggles, Model library hidden until a provider is selected; `pnpm run verify` and `verify:features` (9/9) passed.
 - 2026-07-16: Route-policy capability mismatch clarity — informative error values + precise context display; `pnpm run verify` and `verify:features` (9/9) passed.
 - 2026-07-16: Renamed `MASTER_KEY` → `ENCRYPTION_KEY` (AES-256-GCM unchanged) — lint, typecheck, unit tests (334), and build passed via `pnpm run verify`.
@@ -24,12 +25,11 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 
 ## Latest changes
 
+- Providers are no longer unique per provider type/key: users can create any number of same-type providers with any display name and base URL; provider type only determines the wire protocol.
 - Provider list expansion is driven only by the `selected` URL param: `/providers` defaults to fully collapsed, clicking the expanded row collapses it, and the Model library card renders only while a provider is selected.
 - Route-policy capability mismatch errors name the exact conflicting values (e.g. `maxContextTokens` 1000000 vs 1048576); the Virtual Model route dialog shows precise grouped token counts (e.g. `1,048,576`) so near-identical context windows are distinguishable.
-- Renamed secret env/config from `MASTER_KEY` / `MASTER_KEY_FILE` to `ENCRYPTION_KEY` / `ENCRYPTION_KEY_FILE` (and matching code symbols). Provider secret crypto remains AES-256-GCM.
 - Compose runs exactly two long-lived services: `app` (`command: all`) and `postgres`. Entrypoint `all` migrates then supervises Gateway, Console, and Worker in one container. Single-role commands remain for advanced `docker run`.
 - Compose no longer ships a public default `ENCRYPTION_KEY`. `./scripts/deploy.sh` writes a random key into `.env` when missing.
-- Removed one-command `install.sh` delivery; Compose remains the supported self-hosted path.
 - `/v1/embeddings` remains retired; embedding model metadata remains supported and embedding-only catalog entries stay hidden.
 - Beta promo pass: README link line to llmingress.ai, landing copy aligned to PRODUCT.md scope; `docs/marketing/` is gitignored local-only.
 

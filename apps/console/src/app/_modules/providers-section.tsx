@@ -532,11 +532,13 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
   const parsedModelPage = Number.parseInt(readSingleSearchParam(searchParams.modelPage) ?? "1", 10);
   const modelPage = Number.isInteger(parsedModelPage) && parsedModelPage > 0 ? parsedModelPage : 1;
   const [providerModelPage, deleteProviderImpact] = await Promise.all([
-    listProviderModelPage({
-      page: modelPage,
-      providerId: selectedProvider?.id ?? null,
-      query: modelQuery,
-    }),
+    selectedProvider
+      ? listProviderModelPage({
+          page: modelPage,
+          providerId: selectedProvider.id,
+          query: modelQuery,
+        })
+      : Promise.resolve({ items: [], page: 1, pageCount: 1, total: 0 }),
     deleteDialogProvider
       ? getProviderDependencyImpact({ providerId: deleteDialogProvider.id })
       : Promise.resolve(null),

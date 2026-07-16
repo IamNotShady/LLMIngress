@@ -21,9 +21,4 @@ describe("provider list collapse static contract", () => {
     const src = source("apps/console/src/app/_modules/providers-client-section.tsx");
     expect(src).toContain("selected: isSelected ? undefined : provider.id");
   });
-
-  test("provider model page query treats providerId as optional", () => {
-    const src = source("packages/db/src/console-route-policies.ts");
-    expect(src).toContain("$1::uuid is null or provider_models.provider_id = $1::uuid");
-  });
 });

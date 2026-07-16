@@ -375,88 +375,86 @@ export function ProvidersClientSection({
         </div>
       </div>
 
-      <div className="chart-card model-library-card">
-        <div className="model-library-head">
-          <h2 className="chart-card-title">
-            Model library{selectedProvider ? ` - ${selectedProvider.displayName}` : ""}
-          </h2>
-          <form className="model-library-search" action="/providers" method="get">
-            {selectedProvider ? (
+      {selectedProvider ? (
+        <div className="chart-card model-library-card">
+          <div className="model-library-head">
+            <h2 className="chart-card-title">Model library - {selectedProvider.displayName}</h2>
+            <form className="model-library-search" action="/providers" method="get">
               <input type="hidden" name="selected" value={selectedProvider.id} />
-            ) : null}
-            <label className="sr-only" htmlFor="provider-model-query">
-              Search models
-            </label>
-            <input
-              defaultValue={modelQuery}
-              id="provider-model-query"
-              name="modelQuery"
-              type="search"
-              placeholder="Search models"
-            />
-          </form>
-        </div>
-        {providerModelPage.total === 0 && modelQuery ? (
-          <p>No models match “{modelQuery}”.</p>
-        ) : providerModelPage.total === 0 ? (
-          <p>No provider models discovered yet.</p>
-        ) : (
-          <div className="data-table-wrap">
-            <table className="data-table bounded-table model-library-table">
-              <thead>
-                <tr>
-                  <th>Provider</th>
-                  <th>Model ID</th>
-                  <th>Context</th>
-                  <th>Output cap</th>
-                  <th>Input</th>
-                  <th>Output</th>
-                  <th>Input price</th>
-                  <th>Output price</th>
-                  <th>Function</th>
-                  <th>Reasoning</th>
-                  <th>Streaming</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedProviderModels.map((model) => (
-                  <tr key={model.id}>
-                    <td>{model.providerDisplayName}</td>
-                    <td>
-                      <span className="model-id-cell">
-                        <strong>{model.modelDisplayName}</strong>
-                        <small className="mono">{model.modelId}</small>
-                      </span>
-                    </td>
-                    <td>{formatModelContext(model.contextWindow)}</td>
-                    <td>{formatModelContext(model.maxOutputTokens)}</td>
-                    <td>{formatModalities(model.inputModalities)}</td>
-                    <td>{formatModalities(model.outputModalities)}</td>
-                    <td>{formatModelPrice(model.inputUsdPerMillionTokens)}</td>
-                    <td>{formatModelPrice(model.outputUsdPerMillionTokens)}</td>
-                    <td>{formatNullableBooleanFeature(model.supportsFunctionCalling)}</td>
-                    <td>{formatNullableBooleanFeature(model.supportsReasoning)}</td>
-                    <td>{formatBooleanFeature(model.supportsStreaming)}</td>
-                    <td>
-                      <ModelAvailabilityPill value={model.availability} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <Pagination
-              ariaLabel="Model pages"
-              itemLabel="models"
-              page={providerModelPage.page}
-              pageParam="modelPage"
-              searchParams={searchParams}
-              total={providerModelPage.total}
-              totalPages={providerModelPage.pageCount}
-            />
+              <label className="sr-only" htmlFor="provider-model-query">
+                Search models
+              </label>
+              <input
+                defaultValue={modelQuery}
+                id="provider-model-query"
+                name="modelQuery"
+                type="search"
+                placeholder="Search models"
+              />
+            </form>
           </div>
-        )}
-      </div>
+          {providerModelPage.total === 0 && modelQuery ? (
+            <p>No models match “{modelQuery}”.</p>
+          ) : providerModelPage.total === 0 ? (
+            <p>No provider models discovered yet.</p>
+          ) : (
+            <div className="data-table-wrap">
+              <table className="data-table bounded-table model-library-table">
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>Model ID</th>
+                    <th>Context</th>
+                    <th>Output cap</th>
+                    <th>Input</th>
+                    <th>Output</th>
+                    <th>Input price</th>
+                    <th>Output price</th>
+                    <th>Function</th>
+                    <th>Reasoning</th>
+                    <th>Streaming</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedProviderModels.map((model) => (
+                    <tr key={model.id}>
+                      <td>{model.providerDisplayName}</td>
+                      <td>
+                        <span className="model-id-cell">
+                          <strong>{model.modelDisplayName}</strong>
+                          <small className="mono">{model.modelId}</small>
+                        </span>
+                      </td>
+                      <td>{formatModelContext(model.contextWindow)}</td>
+                      <td>{formatModelContext(model.maxOutputTokens)}</td>
+                      <td>{formatModalities(model.inputModalities)}</td>
+                      <td>{formatModalities(model.outputModalities)}</td>
+                      <td>{formatModelPrice(model.inputUsdPerMillionTokens)}</td>
+                      <td>{formatModelPrice(model.outputUsdPerMillionTokens)}</td>
+                      <td>{formatNullableBooleanFeature(model.supportsFunctionCalling)}</td>
+                      <td>{formatNullableBooleanFeature(model.supportsReasoning)}</td>
+                      <td>{formatBooleanFeature(model.supportsStreaming)}</td>
+                      <td>
+                        <ModelAvailabilityPill value={model.availability} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <Pagination
+                ariaLabel="Model pages"
+                itemLabel="models"
+                page={providerModelPage.page}
+                pageParam="modelPage"
+                searchParams={searchParams}
+                total={providerModelPage.total}
+                totalPages={providerModelPage.pageCount}
+              />
+            </div>
+          )}
+        </div>
+      ) : null}
     </>
   );
 }

@@ -60,37 +60,36 @@ test("provider list defaults to fully collapsed and rows toggle open and closed"
         await waitForConsole(baseUrl, consoleApp);
         await signInFromFirstRun(page, baseUrl);
 
-        // Default state: fully collapsed, model library spans every provider.
+        // Default state: fully collapsed, and the model library card is not
+        // rendered at all until a provider is selected.
         await page.goto(`${baseUrl}/providers`, { waitUntil: "networkidle" });
         await expect(page.locator(".provider-inline-detail-row")).toHaveCount(0);
         await expect(
           page.locator('.providers-table a.table-row-link[aria-expanded="true"]'),
         ).toHaveCount(0);
-        const libraryRows = page.locator(".model-library-table tbody tr");
-        await expect(libraryRows.filter({ hasText: "Collapse Alpha" })).toHaveCount(1);
-        await expect(libraryRows.filter({ hasText: "Collapse Beta" })).toHaveCount(1);
+        await expect(page.locator(".model-library-card")).toHaveCount(0);
+        await expect(page.locator("#provider-model-query")).toHaveCount(0);
 
-        // Clicking a collapsed row expands it and scopes the model library.
+        // Clicking a collapsed row expands it and reveals its model library.
         await page
           .locator(".providers-table a.table-row-link", { hasText: "Collapse Alpha" })
           .first()
           .click();
         await expect(page).toHaveURL(`${baseUrl}/providers?selected=${seeded.alphaId}`);
         await expect(page.locator(".provider-inline-detail-row")).toHaveCount(1);
+        const libraryCard = page.locator(".model-library-card");
+        await expect(libraryCard).toHaveCount(1);
+        await expect(libraryCard.locator(".chart-card-title")).toContainText("Collapse Alpha");
+        const libraryRows = page.locator(".model-library-table tbody tr");
+        await expect(libraryRows.filter({ hasText: "Collapse Alpha Model" })).toHaveCount(1);
         await expect(libraryRows.filter({ hasText: "Collapse Beta" })).toHaveCount(0);
 
-        // Clicking the expanded row again collapses everything.
+        // Clicking the expanded row again collapses everything, including the
+        // model library card.
         await page.locator(".providers-table tr.is-selected a.table-row-link").first().click();
         await expect(page.locator(".provider-inline-detail-row")).toHaveCount(0);
         expect(new URL(page.url()).searchParams.get("selected")).toBeNull();
-        await expect(libraryRows.filter({ hasText: "Collapse Beta" })).toHaveCount(1);
-
-        // Collapsed search spans providers and stays collapsed.
-        await page.locator("#provider-model-query").fill("collapse-beta");
-        await page.locator("#provider-model-query").press("Enter");
-        await expect(libraryRows).toHaveCount(1);
-        await expect(libraryRows.first()).toContainText("Collapse Beta Model");
-        expect(new URL(page.url()).searchParams.get("selected")).toBeNull();
+        await expect(page.locator(".model-library-card")).toHaveCount(0);
 
         // No horizontal overflow at 1280 and 390 in the collapsed state.
         await page.goto(`${baseUrl}/providers`, { waitUntil: "networkidle" });

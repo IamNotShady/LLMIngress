@@ -16,7 +16,7 @@
       "verification": "pnpm exec vitest run tests/features/provider-management.unit.test.ts tests/features/provider-model-sync.unit.test.ts tests/features/provider-connection-health.unit.test.ts && pnpm test:e2e tests/e2e/provider-management.e2e.spec.ts tests/e2e/provider-model-sync.e2e.spec.ts tests/e2e/provider-connection-health.e2e.spec.ts --workers=1",
       "dependencies": ["core-platform-security"],
       "status": "passing",
-      "evidence": "2026-07-16: listProviderModelPage accepts a null providerId and returns provider-grouped, searchable, paginated models across all providers; cross-provider pagination E2E added to the provider-model-pagination case. Focused suites, pnpm run verify, and verify:features passed."
+      "evidence": "2026-07-16: listProviderModelPage is provider-scoped again (required providerId; the cross-provider variant was retired with the collapsed model library card). Focused suites, pnpm run verify, and verify:features passed."
     },
     {
       "id": "virtual-model-routing",
@@ -70,7 +70,7 @@
       "verification": "pnpm exec vitest run tests/features/console-core.unit.test.ts tests/features/console-layout-interactions.unit.test.ts && pnpm test:e2e tests/e2e/console-core.e2e.spec.ts tests/e2e/console-layout-interactions.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-16: Provider list defaults to fully collapsed, clicking the expanded row collapses it (selected URL param is the only expansion state), and the collapsed model library spans all providers with search. provider-list-collapse unit+E2E cases added to the layout-interactions suites; pnpm run verify and verify:features passed."
+      "evidence": "2026-07-16: Provider list defaults to fully collapsed and clicking the expanded row collapses it (selected URL param is the only expansion state); the Model library card renders only while a provider is selected. provider-list-collapse unit+E2E cases updated; pnpm run verify and verify:features passed."
     },
     {
       "id": "release-guards",

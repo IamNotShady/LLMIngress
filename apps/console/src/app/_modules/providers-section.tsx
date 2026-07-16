@@ -527,22 +527,16 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
       : null;
   const deleteDialogProvider = providers.find((provider) => provider.id === providerDelete) ?? null;
   const selectedProviderId = readSingleSearchParam(searchParams.selected);
-  const selectedProvider =
-    providers.find((provider) => provider.id === selectedProviderId) ??
-    providers.find((provider) => provider.providerKey === "openai") ??
-    providers[0] ??
-    null;
+  const selectedProvider = providers.find((provider) => provider.id === selectedProviderId) ?? null;
   const modelQuery = readSingleSearchParam(searchParams.modelQuery)?.trim() ?? "";
   const parsedModelPage = Number.parseInt(readSingleSearchParam(searchParams.modelPage) ?? "1", 10);
   const modelPage = Number.isInteger(parsedModelPage) && parsedModelPage > 0 ? parsedModelPage : 1;
   const [providerModelPage, deleteProviderImpact] = await Promise.all([
-    selectedProvider
-      ? listProviderModelPage({
-          page: modelPage,
-          providerId: selectedProvider.id,
-          query: modelQuery,
-        })
-      : Promise.resolve({ items: [], page: 1, pageCount: 1, total: 0 }),
+    listProviderModelPage({
+      page: modelPage,
+      providerId: selectedProvider?.id ?? null,
+      query: modelQuery,
+    }),
     deleteDialogProvider
       ? getProviderDependencyImpact({ providerId: deleteDialogProvider.id })
       : Promise.resolve(null),

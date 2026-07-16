@@ -134,3 +134,80 @@ test("Console model catalogs hide only known embedding-only models", async () =>
     await fixture.dispose();
   }
 });
+
+test("Provider model catalog spans every provider when no provider is selected", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_console_models_all_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const alphaId = randomUUID();
+  const betaId = randomUUID();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await fixture.query(
+      `
+        insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+        values ($1, 'local', 'catalog-alpha', 'Alpha Catalog', 'http://alpha.test/v1', true),
+               ($2, 'local', 'catalog-beta', 'Beta Catalog', 'http://beta.test/v1', true)
+      `,
+      [alphaId, betaId],
+    );
+    for (const [providerId, prefix] of [
+      [alphaId, "alpha"],
+      [betaId, "beta"],
+    ] as const) {
+      const ids = Array.from({ length: 60 }, () => randomUUID());
+      const modelIds = ids.map((_, index) =>
+        index === 0 ? `${prefix}-needle` : `${prefix}-model-${String(index + 1).padStart(3, "0")}`,
+      );
+      await fixture.query(
+        `
+          insert into provider_models (id, provider_id, model_id, display_name, availability)
+          select ids.id::uuid, $1::uuid, ids.model_id, ids.model_id, 'available'
+          from unnest($2::text[], $3::text[]) as ids(id, model_id)
+        `,
+        [providerId, ids, modelIds],
+      );
+    }
+
+    const first = await listProviderModelPage({
+      databaseUrl: fixture.databaseUrl,
+      page: 1,
+      providerId: null,
+    });
+    expect(first.total).toBe(120);
+    expect(first.pageCount).toBe(3);
+    expect(first.items).toHaveLength(50);
+    // Provider-grouped ordering: the first 50 rows are all Alpha Catalog.
+    expect(new Set(first.items.map((item) => item.providerDisplayName))).toEqual(
+      new Set(["Alpha Catalog"]),
+    );
+
+    const second = await listProviderModelPage({
+      databaseUrl: fixture.databaseUrl,
+      page: 2,
+      providerId: null,
+    });
+    expect(second.items[0]?.providerDisplayName).toBe("Alpha Catalog");
+    expect(second.items.at(-1)?.providerDisplayName).toBe("Beta Catalog");
+
+    const search = await listProviderModelPage({
+      databaseUrl: fixture.databaseUrl,
+      providerId: null,
+      query: "needle",
+    });
+    expect(search.total).toBe(2);
+    expect(search.items.map((item) => item.providerDisplayName)).toEqual([
+      "Alpha Catalog",
+      "Beta Catalog",
+    ]);
+
+    const scoped = await listProviderModelPage({
+      databaseUrl: fixture.databaseUrl,
+      providerId: alphaId,
+    });
+    expect(scoped.total).toBe(60);
+  } finally {
+    await fixture.dispose();
+  }
+});

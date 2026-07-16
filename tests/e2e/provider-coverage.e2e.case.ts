@@ -15,7 +15,7 @@ import {
   type ProviderCoverageScenario,
 } from "../support/provider-coverage-smoke";
 
-const masterKey = "test-master-key";
+const encryptionKey = "test-master-key";
 const agentApiKey = "llmi_v1_provider_coverage_smoke_key_094";
 
 test("provider coverage routes core providers local providers and validates long tail templates available", async () => {
@@ -71,7 +71,9 @@ async function seedProviderCoverageRoutes(
   const agentId = randomUUID();
   const seedAgentId = randomUUID();
   const encryptedKeys = scenarios.map((scenario) =>
-    createSecretEncryption({ kind: "inline", value: masterKey }).encrypt(scenario.providerApiKey),
+    createSecretEncryption({ kind: "inline", value: encryptionKey }).encrypt(
+      scenario.providerApiKey,
+    ),
   );
   const seededVirtualModelIds: string[] = [];
 

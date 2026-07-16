@@ -541,7 +541,7 @@ describe("gateway request hygiene", () => {
       const attached = await attachGatewayProviderCredentials({
         candidates: [candidateSnapshot({ providerId, providerKey: "openai_codex" })],
         databaseUrl: fixture.databaseUrl,
-        masterKeySource: { kind: "inline", value: "test-master-key" },
+        encryptionKeySource: { kind: "inline", value: "test-master-key" },
         refreshProviderOAuthToken: async () => {
           refreshCalls += 1;
           return refreshed;

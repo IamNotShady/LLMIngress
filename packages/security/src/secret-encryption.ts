@@ -1,5 +1,9 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { loadMasterKey, type MasterKey, type MasterKeySource } from "./master-key.ts";
+import {
+  type EncryptionKey,
+  type EncryptionKeySource,
+  loadEncryptionKey,
+} from "./encryption-key.ts";
 
 export type EncryptedSecret = {
   version: 1;
@@ -16,24 +20,24 @@ export type SecretEncryptionService = {
   decrypt: (encrypted: EncryptedSecret) => string;
 };
 
-export function createSecretEncryption(source: MasterKeySource): SecretEncryptionService {
-  const masterKey = loadMasterKey(source);
+export function createSecretEncryption(source: EncryptionKeySource): SecretEncryptionService {
+  const key = loadEncryptionKey(source);
 
   return {
-    keyId: masterKey.keyId,
-    encrypt: (plaintext: string) => encryptSecret(plaintext, masterKey),
-    decrypt: (encrypted: EncryptedSecret) => decryptSecret(encrypted, masterKey),
+    keyId: key.keyId,
+    encrypt: (plaintext: string) => encryptSecret(plaintext, key),
+    decrypt: (encrypted: EncryptedSecret) => decryptSecret(encrypted, key),
   };
 }
 
-export function encryptSecret(plaintext: string, masterKey: MasterKey): EncryptedSecret {
+export function encryptSecret(plaintext: string, key: EncryptionKey): EncryptedSecret {
   if (!plaintext) {
     throw new Error("Secret plaintext is required.");
   }
 
   const iv = randomBytes(12);
-  const aad = buildAdditionalAuthenticatedData(masterKey.keyId);
-  const cipher = createCipheriv("aes-256-gcm", masterKey.encryptionKey, iv);
+  const aad = buildAdditionalAuthenticatedData(key.keyId);
+  const cipher = createCipheriv("aes-256-gcm", key.encryptionKey, iv);
   cipher.setAAD(aad);
 
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
@@ -41,26 +45,26 @@ export function encryptSecret(plaintext: string, masterKey: MasterKey): Encrypte
   return {
     version: 1,
     algorithm: "aes-256-gcm",
-    keyId: masterKey.keyId,
+    keyId: key.keyId,
     iv: iv.toString("base64url"),
     ciphertext: ciphertext.toString("base64url"),
     authTag: cipher.getAuthTag().toString("base64url"),
   };
 }
 
-export function decryptSecret(encrypted: EncryptedSecret, masterKey: MasterKey): string {
+export function decryptSecret(encrypted: EncryptedSecret, key: EncryptionKey): string {
   try {
     if (
       encrypted.version !== 1 ||
       encrypted.algorithm !== "aes-256-gcm" ||
-      encrypted.keyId !== masterKey.keyId
+      encrypted.keyId !== key.keyId
     ) {
       throw new Error("Unsupported encrypted secret.");
     }
 
     const decipher = createDecipheriv(
       "aes-256-gcm",
-      masterKey.encryptionKey,
+      key.encryptionKey,
       Buffer.from(encrypted.iv, "base64url"),
     );
     decipher.setAAD(buildAdditionalAuthenticatedData(encrypted.keyId));

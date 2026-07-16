@@ -36,17 +36,17 @@ export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
   const config = loadBootstrapRuntimeConfig();
   assertPostgresDatabaseConfigured();
   const consoleHost = readConsoleListenHost();
-  const masterKeyEnv =
-    config.masterKeySource.kind === "inline"
-      ? { MASTER_KEY: config.masterKeySource.value }
-      : { MASTER_KEY_FILE: config.masterKeySource.path };
+  const encryptionKeyEnv =
+    config.encryptionKeySource.kind === "inline"
+      ? { ENCRYPTION_KEY: config.encryptionKeySource.value }
+      : { ENCRYPTION_KEY_FILE: config.encryptionKeySource.path };
 
   return {
     command: "next",
     args: [mode, "--hostname", consoleHost, "--port", String(config.consolePort)],
     env: {
       ...process.env,
-      ...masterKeyEnv,
+      ...encryptionKeyEnv,
     },
   };
 }

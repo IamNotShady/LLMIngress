@@ -7,7 +7,7 @@ import { getFreePort } from "../support/console-app";
 
 const execFileAsync = promisify(execFile);
 
-async function ensureComposeMasterKeyEnv(): Promise<void> {
+async function ensureComposeEncryptionKeyEnv(): Promise<void> {
   await execFileAsync("./scripts/deploy.sh", ["--ensure-env"], {
     cwd: process.cwd(),
   });
@@ -23,7 +23,7 @@ test("Docker Compose starts PostgreSQL 18.4", async () => {
   };
 
   try {
-    await ensureComposeMasterKeyEnv();
+    await ensureComposeEncryptionKeyEnv();
     await execFileAsync("docker", [...composeArgs, "up", "-d", "postgres"], {
       cwd: process.cwd(),
       env,
@@ -89,7 +89,7 @@ test("release verification runner and docker compose contracts stay runnable", a
   expect(dryRun.stdout).toContain("Legacy feature(s): 0");
   expect(dryRun.stdout).toContain("Standard verification coverage passed.");
 
-  await ensureComposeMasterKeyEnv();
+  await ensureComposeEncryptionKeyEnv();
   const composeEnv = {
     ...process.env,
   };

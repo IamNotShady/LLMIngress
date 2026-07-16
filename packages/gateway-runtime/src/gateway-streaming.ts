@@ -48,7 +48,7 @@ import { mergeGatewayHttpHeaders, readGatewayHeaderValue } from "./gateway-heade
 import { normalizeAnthropicMessagesRequest } from "./gateway-messages.ts";
 import {
   attachGatewayProviderCredentials,
-  readGatewayMasterKeySource,
+  readGatewayEncryptionKeySource,
   recordGatewayProviderApiKeyLastUsed,
 } from "./gateway-provider-credentials.ts";
 import {
@@ -330,7 +330,7 @@ async function buildStreamingFallbackCandidates(input: {
       credentialedCandidates = await attachGatewayProviderCredentials({
         candidates: [rawCandidate],
         databaseUrl: input.databaseUrl,
-        masterKeySource: readGatewayMasterKeySource(),
+        encryptionKeySource: readGatewayEncryptionKeySource(),
       });
     } catch {
       continue;

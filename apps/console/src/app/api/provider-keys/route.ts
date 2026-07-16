@@ -1,6 +1,6 @@
 import {
   deleteProviderApiKey,
-  readConsoleMasterKeySource,
+  readConsoleEncryptionKeySource,
   saveProviderApiKey,
   setProviderApiKeyEnabled,
 } from "@llmingress/db/console-provider-keys";
@@ -49,7 +49,7 @@ export const POST = withConsoleAuth(async (request) => {
     const plaintext = readRequiredText(form, "providerApiKey");
     const result = await saveProviderApiKey({
       label: readText(form, "label"),
-      masterKeySource: readConsoleMasterKeySource(),
+      encryptionKeySource: readConsoleEncryptionKeySource(),
       plaintext,
       priority: readNumber(form, "priority"),
       providerApiKeyId: readText(form, "providerApiKeyId"),

@@ -17,7 +17,10 @@ import {
   waitForConsole,
 } from "../support/console-app";
 
-const masterKeySource = { kind: "inline", value: "provider-connection-health-test-key" } as const;
+const encryptionKeySource = {
+  kind: "inline",
+  value: "provider-connection-health-test-key",
+} as const;
 
 test("OAuth soft deletes clear encrypted credentials and pending authorization state", async () => {
   const fixture = await createTestPostgresFixture({
@@ -105,7 +108,7 @@ test("connection probe succeeds when the third distinct model succeeds", async (
         }
         return Response.json({ choices: [{ message: { content: "pong" } }] });
       },
-      masterKeySource,
+      encryptionKeySource,
     });
 
     await handler(probeJob({ providerConnectionId: providerId, providerId }));
@@ -151,7 +154,7 @@ test("connection probe stores one unhealthy summary and schedules a five minute 
       databaseUrl: fixture.databaseUrl,
       fetch: async () =>
         Response.json({ error: { message: "provider unavailable" } }, { status: 503 }),
-      masterKeySource,
+      encryptionKeySource,
     });
 
     await handler(probeJob({ providerConnectionId: providerId, providerId }));
@@ -208,7 +211,7 @@ test("a second consecutive failure advances the retry schedule to ten minutes", 
       databaseUrl: fixture.databaseUrl,
       fetch: async () =>
         Response.json({ error: { message: "still unavailable" } }, { status: 503 }),
-      masterKeySource,
+      encryptionKeySource,
     });
 
     await handler(probeJob({ providerConnectionId: providerId, providerId }));
@@ -272,7 +275,7 @@ test("a successful probe deletes the sparse summary and cancels its pending retr
         healthy
           ? Response.json({ choices: [{ message: { content: "pong" } }] })
           : Response.json({ error: { message: "temporarily unavailable" } }, { status: 503 }),
-      masterKeySource,
+      encryptionKeySource,
     });
 
     await handler(probeJob({ providerConnectionId: providerId, providerId }));
@@ -339,7 +342,7 @@ test("a probe whose Provider snapshot changes does not commit health or retry st
         }
         return Response.json({ error: { message: "old endpoint failed" } }, { status: 503 });
       },
-      masterKeySource,
+      encryptionKeySource,
     });
 
     const result = await handler(probeJob({ providerConnectionId: providerId, providerId }));
@@ -409,7 +412,7 @@ test("Worker persists a canceled job when its Provider is disabled", async () =>
           fetch: async () => {
             throw new Error("A canceled probe must not call the Provider.");
           },
-          masterKeySource,
+          encryptionKeySource,
         }),
       },
       workerId: "provider-connection-canceled-test",
@@ -543,7 +546,7 @@ test("an OAuth probe cannot overwrite a token rotated while refresh is in flight
   });
   const providerId = randomUUID();
   const providerConnectionId = randomUUID();
-  const encryption = createSecretEncryption(masterKeySource);
+  const encryption = createSecretEncryption(encryptionKeySource);
   const expired = encryption.encrypt(
     JSON.stringify({
       accessToken: "expired-token",
@@ -599,7 +602,7 @@ test("an OAuth probe cannot overwrite a token rotated while refresh is in flight
         }
         return Response.json({ choices: [{ message: { content: "pong" } }] });
       },
-      masterKeySource,
+      encryptionKeySource,
     });
 
     const result = await handler(probeJob({ providerConnectionId, providerId }));
@@ -644,7 +647,7 @@ test("Gateway excludes only unhealthy provider connections", async () => {
   const healthyConnectionId = randomUUID();
   const subscriptionProviderId = randomUUID();
   const healthyOAuthConnectionId = randomUUID();
-  const encryption = createSecretEncryption(masterKeySource);
+  const encryption = createSecretEncryption(encryptionKeySource);
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
@@ -755,7 +758,7 @@ test("Gateway excludes only unhealthy provider connections", async () => {
         },
       ],
       databaseUrl: fixture.databaseUrl,
-      masterKeySource,
+      encryptionKeySource,
     });
 
     expect(candidate?.providerApiKeys).toHaveLength(1);
@@ -817,7 +820,7 @@ test("Gateway credential-load failures enqueue the exact connection probe", asyn
           },
         ],
         databaseUrl: fixture.databaseUrl,
-        masterKeySource,
+        encryptionKeySource,
       }),
     ).rejects.toMatchObject({ code: "provider_connection_unavailable" });
     await gatewayBackgroundTasks.drain({ timeoutMs: 1_000 });
@@ -852,7 +855,7 @@ test("Gateway credential-load failures enqueue the exact connection probe", asyn
       fetch: async () => {
         throw new Error("credential preflight must fail before Provider egress");
       },
-      masterKeySource,
+      encryptionKeySource,
     });
     await handler(
       probeJob({

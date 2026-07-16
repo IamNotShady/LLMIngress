@@ -1161,7 +1161,7 @@ claude   <span class="c"># model: code-fast (virtual)</span></pre>
 
     <div class="deploy-cmd">
       <button class="copy-btn" data-copy-target="deploy-pre">copy</button>
-      <pre id="deploy-pre"><span class="c"># clone, generate MASTER_KEY into .env, then run</span>
+      <pre id="deploy-pre"><span class="c"># clone, generate ENCRYPTION_KEY into .env, then run</span>
 git clone https://github.com/IamNotShady/LLMIngress.git
 cd LLMIngress
 ./scripts/deploy.sh</pre>
@@ -1173,7 +1173,7 @@ cd LLMIngress
         <span class="tag">RECOMMENDED</span>
         <h3>Docker Compose</h3>
         <p>Postgres bundled, migrations run on first boot, random
-          <code>MASTER_KEY</code> via <code>./scripts/deploy.sh</code>.
+          <code>ENCRYPTION_KEY</code> via <code>./scripts/deploy.sh</code>.
           Nothing listens publicly until you change a host.</p>
       </div>
       <div class="shape">
@@ -1186,7 +1186,7 @@ cd LLMIngress
         <span class="tag">ALWAYS ON</span>
         <h3>Server / VPS</h3>
         <p>Same compose file. Override <code>.env</code>
-          <code>MASTER_KEY</code> if you want, point
+          <code>ENCRYPTION_KEY</code> if you want, point
           <code>CONSOLE_PUBLISH_HOST</code> at your network, keep the Gateway
           and Postgres private.</p>
       </div>

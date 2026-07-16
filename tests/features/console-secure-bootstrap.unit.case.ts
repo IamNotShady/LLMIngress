@@ -9,19 +9,19 @@ import { ConsoleOperationError } from "@llmingress/db/console-operation-error";
 import { describe, expect, it } from "vitest";
 
 describe("console secure bootstrap", () => {
-  it("requires MASTER_KEY from env and keeps host publishes loopback-bound by default", () => {
+  it("requires ENCRYPTION_KEY from env and keeps host publishes loopback-bound by default", () => {
     const compose = readFileSync("docker-compose.yml", "utf8");
     const deploy = readFileSync("scripts/deploy.sh", "utf8");
     const shell = "$";
 
-    expect(compose).toContain(`${shell}{MASTER_KEY:?MASTER_KEY is required}`);
+    expect(compose).toContain(`${shell}{ENCRYPTION_KEY:?ENCRYPTION_KEY is required}`);
     expect(compose).not.toContain("llmi-local-master");
     expect(compose).toContain(
       `${shell}{DATABASE_URL:-postgresql://postgres:llmi-local-db@postgres:5432/postgres}`,
     );
     expect(compose).toContain("POSTGRES_PASSWORD: llmi-local-db");
     expect(compose).not.toContain("CONSOLE_SETUP_TOKEN");
-    expect(compose).not.toContain(`${shell}{MASTER_KEY:-`);
+    expect(compose).not.toContain(`${shell}{ENCRYPTION_KEY:-`);
     expect(compose).not.toContain(`${shell}{POSTGRES_PASSWORD`);
     expect(compose).not.toContain("POSTGRES_PASSWORD: postgres");
 
@@ -42,31 +42,31 @@ describe("console secure bootstrap", () => {
 
     accessSync("scripts/deploy.sh", constants.X_OK);
     expect(deploy).toContain("openssl rand -base64 32");
-    expect(deploy).toContain("^MASTER_KEY=");
+    expect(deploy).toContain("^ENCRYPTION_KEY=");
     expect(deploy).toContain("--ensure-env");
     expect(deploy).toContain('exec docker compose up --build "$@"');
   });
 
-  it("writes MASTER_KEY into .env only when missing", () => {
+  it("writes ENCRYPTION_KEY into .env only when missing", () => {
     const directory = mkdtempSync(join(tmpdir(), "llmingress-deploy-"));
-    const ensureMasterKey = `
+    const ensureEncryptionKey = `
       set -euo pipefail
       cd "$1"
-      if ! grep -q '^MASTER_KEY=' .env 2>/dev/null; then
-        echo "MASTER_KEY=$(openssl rand -base64 32)" >> .env
+      if ! grep -q '^ENCRYPTION_KEY=' .env 2>/dev/null; then
+        echo "ENCRYPTION_KEY=$(openssl rand -base64 32)" >> .env
       fi
     `;
 
-    execFileSync("bash", ["-c", ensureMasterKey, "bash", directory]);
+    execFileSync("bash", ["-c", ensureEncryptionKey, "bash", directory]);
     const first = readFileSync(join(directory, ".env"), "utf8");
-    expect(first).toMatch(/^MASTER_KEY=.+/m);
+    expect(first).toMatch(/^ENCRYPTION_KEY=.+/m);
 
-    execFileSync("bash", ["-c", ensureMasterKey, "bash", directory]);
+    execFileSync("bash", ["-c", ensureEncryptionKey, "bash", directory]);
     expect(readFileSync(join(directory, ".env"), "utf8")).toBe(first);
 
-    writeFileSync(join(directory, ".env"), "MASTER_KEY=keep-me\n");
-    execFileSync("bash", ["-c", ensureMasterKey, "bash", directory]);
-    expect(readFileSync(join(directory, ".env"), "utf8")).toBe("MASTER_KEY=keep-me\n");
+    writeFileSync(join(directory, ".env"), "ENCRYPTION_KEY=keep-me\n");
+    execFileSync("bash", ["-c", ensureEncryptionKey, "bash", directory]);
+    expect(readFileSync(join(directory, ".env"), "utf8")).toBe("ENCRYPTION_KEY=keep-me\n");
   });
 
   it("has no setup token runtime or documented configuration surface", () => {

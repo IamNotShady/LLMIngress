@@ -9,7 +9,7 @@ import {
 } from "@llmingress/provider/openai";
 import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
-import type { MasterKeySource } from "@llmingress/security/master-key";
+import type { EncryptionKeySource } from "@llmingress/security/encryption-key";
 import { isRecord, omitUndefined } from "@llmingress/util";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import {
@@ -82,7 +82,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
   adapter?: OpenAIProviderAdapter;
   databaseUrl?: string;
   limitsEnabled?: boolean;
-  masterKeySource?: MasterKeySource;
+  encryptionKeySource?: EncryptionKeySource;
   providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
   requestId: string;

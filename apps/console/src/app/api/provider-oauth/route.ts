@@ -1,4 +1,4 @@
-import { readConsoleMasterKeySource } from "@llmingress/db/console-provider-keys";
+import { readConsoleEncryptionKeySource } from "@llmingress/db/console-provider-keys";
 import {
   completeProviderOAuthAuthorization,
   revokeProviderOAuthConnection,
@@ -25,7 +25,7 @@ export const POST = withConsoleAuth(async (request) => {
       const result = await completeProviderOAuthAuthorization({
         callbackInput: readRequiredText(form, "callbackInput"),
         label: readNullableText(form, "label"),
-        masterKeySource: readConsoleMasterKeySource(),
+        encryptionKeySource: readConsoleEncryptionKeySource(),
         priority: readNumber(form, "priority"),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
@@ -45,7 +45,7 @@ export const POST = withConsoleAuth(async (request) => {
 
     if (action === "delete") {
       const result = await revokeProviderOAuthConnection({
-        masterKeySource: readConsoleMasterKeySource(),
+        encryptionKeySource: readConsoleEncryptionKeySource(),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
       return redirectToProvider(result.providerId);

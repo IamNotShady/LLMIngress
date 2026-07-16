@@ -44,10 +44,10 @@ cd LLMIngress
 ./scripts/deploy.sh
 ```
 
-`./scripts/deploy.sh` 会在缺少配置时把随机 `MASTER_KEY` 写入已被 gitignore 的 `.env`，
+`./scripts/deploy.sh` 会在缺少配置时把随机 `ENCRYPTION_KEY` 写入已被 gitignore 的 `.env`，
 然后执行 `docker compose up --build`。Compose 仍使用仅限本地的默认 PostgreSQL
 密码（`llmi-local-db`）。对外端口默认绑定到 `127.0.0.1`。请妥善备份
-`.env` —— 解密已存储的 Provider 凭证需要同一个 `MASTER_KEY`。
+`.env` —— 解密已存储的 Provider 凭证需要同一个 `ENCRYPTION_KEY`。
 
 Compose 会运行两个容器：应用容器（同一进程组内包含 Console、Gateway 与 Worker）和
 PostgreSQL。
@@ -133,7 +133,7 @@ LLMIngress 需要 Node.js 24、pnpm 11.5.1 与 PostgreSQL 18.4。
 ```bash
 pnpm install
 cp .env.example .env.local
-# 设置 MASTER_KEY（例如 openssl rand -base64 32），并确认 DATABASE_URL / TEST_DATABASE_URL。
+# 设置 ENCRYPTION_KEY（例如 openssl rand -base64 32），并确认 DATABASE_URL / TEST_DATABASE_URL。
 pnpm run db:migrate
 ./init.sh
 ```

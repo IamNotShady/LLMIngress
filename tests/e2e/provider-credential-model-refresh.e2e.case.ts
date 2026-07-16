@@ -7,7 +7,7 @@ import {
 import { expect, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
-const masterKey = "a".repeat(64);
+const encryptionKey = "a".repeat(64);
 
 test("saving an API key enqueues model_refresh alongside the connection probe", async () => {
   const fixture = await createTestPostgresFixture({
@@ -26,7 +26,7 @@ test("saving an API key enqueues model_refresh alongside the connection probe", 
 
     const result = await saveProviderApiKey({
       databaseUrl: fixture.databaseUrl,
-      masterKeySource: { kind: "inline", value: masterKey },
+      encryptionKeySource: { kind: "inline", value: encryptionKey },
       plaintext: "sk-auto-refresh-test-key-value",
       providerId,
     });

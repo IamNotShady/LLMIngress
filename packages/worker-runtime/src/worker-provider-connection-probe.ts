@@ -11,21 +11,21 @@ import {
 import { fetchListedProviderModels } from "@llmingress/provider/model-list";
 import { refreshProviderOAuthToken } from "@llmingress/provider/oauth";
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
-import type { MasterKeySource } from "@llmingress/security/master-key";
+import type { EncryptionKeySource } from "@llmingress/security/encryption-key";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { isRecord } from "@llmingress/util";
 import {
   isProviderOAuthTokenExpired,
   readEncryptedSecret,
   readProviderOAuthTokenBlob,
-  readWorkerMasterKeySource,
+  readWorkerEncryptionKeySource,
 } from "./worker-credential-utils.ts";
 import type { JobHandler } from "./worker-job-runner.ts";
 
 type CreateProviderConnectionProbeJobHandlerOptions = {
   databaseUrl?: string;
   fetch?: typeof globalThis.fetch;
-  masterKeySource?: MasterKeySource;
+  encryptionKeySource?: EncryptionKeySource;
   timeoutMs?: number;
 };
 
@@ -106,7 +106,7 @@ export function createProviderConnectionProbeJobHandler(
       credential = await readProbeCredential({
         databaseUrl: options.databaseUrl,
         fetch: fetchImpl,
-        masterKeySource: options.masterKeySource,
+        encryptionKeySource: options.encryptionKeySource,
         provider,
         providerConnectionId: payload.providerConnectionId,
       });
@@ -266,7 +266,7 @@ async function readProviderSnapshot(
 async function readProbeCredential(input: {
   databaseUrl?: string;
   fetch: typeof globalThis.fetch;
-  masterKeySource?: MasterKeySource;
+  encryptionKeySource?: EncryptionKeySource;
   provider: ProviderSnapshot;
   providerConnectionId: string;
 }): Promise<ProbeCredential> {
@@ -277,8 +277,9 @@ async function readProbeCredential(input: {
     return { plaintext: null, snapshot: null };
   }
 
-  const masterKeySource =
-    input.masterKeySource ?? readWorkerMasterKeySource(process.env, "provider connection probes");
+  const encryptionKeySource =
+    input.encryptionKeySource ??
+    readWorkerEncryptionKeySource(process.env, "provider connection probes");
 
   const stored = await withPostgresTransaction(input.databaseUrl, async (client) => {
     if (input.provider.providerType === "api_key") {
@@ -323,7 +324,7 @@ async function readProbeCredential(input: {
     return { encryptedSecret: row.encrypted_token, kind: "oauth" as const };
   });
 
-  const encryption = createSecretEncryption(masterKeySource);
+  const encryption = createSecretEncryption(encryptionKeySource);
   const snapshot: CredentialSnapshot = {
     encryptedSecret: stored.encryptedSecret,
     id: input.providerConnectionId,

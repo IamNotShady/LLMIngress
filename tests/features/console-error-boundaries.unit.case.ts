@@ -17,7 +17,7 @@ describe("console error boundaries", () => {
   });
 
   it("rejects a bootstrap config file with wrongly typed fields", () => {
-    const path = writeTempConfig('{ "masterKey": 123 }');
+    const path = writeTempConfig('{ "encryptionKey": 123 }');
     expect(() => readBootstrapConfigFile(path)).toThrow(
       /LLMINGRESS_BOOTSTRAP_CONFIG could not be read/,
     );
@@ -29,7 +29,7 @@ describe("console error boundaries", () => {
       JSON.stringify({
         databaseUrl,
         gatewayPort: null,
-        masterKey: 12345,
+        encryptionKey: 12345,
       }),
     );
 
@@ -40,7 +40,7 @@ describe("console error boundaries", () => {
   });
 
   it("accepts a valid bootstrap config file", () => {
-    const path = writeTempConfig('{ "gatewayPort": 4100, "masterKey": "k" }');
-    expect(readBootstrapConfigFile(path)).toMatchObject({ gatewayPort: 4100, masterKey: "k" });
+    const path = writeTempConfig('{ "gatewayPort": 4100, "encryptionKey": "k" }');
+    expect(readBootstrapConfigFile(path)).toMatchObject({ gatewayPort: 4100, encryptionKey: "k" });
   });
 });

@@ -107,7 +107,7 @@ export function startConsoleProcess(options: {
         DATABASE_URL: options.databaseUrl,
         LLMINGRESS_DB_POOL_MAX: "2",
         LLMINGRESS_TEST_CONSOLE_DIST_DIR: `.next/e2e-${options.port}`,
-        MASTER_KEY: "test-master-key",
+        ENCRYPTION_KEY: "test-master-key",
         ...options.env,
       },
       detached: process.platform !== "win32",

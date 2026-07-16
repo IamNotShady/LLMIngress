@@ -7,8 +7,8 @@ const bootstrapConfigFileSchema = z.object({
   consolePort: portLikeValue("consolePort"),
   databaseUrl: optionalStringField("databaseUrl"),
   gatewayPort: portLikeValue("gatewayPort"),
-  masterKey: optionalStringField("masterKey"),
-  masterKeyFile: optionalStringField("masterKeyFile"),
+  encryptionKey: optionalStringField("encryptionKey"),
+  encryptionKeyFile: optionalStringField("encryptionKeyFile"),
   workerHeartbeatMs: portLikeValue("workerHeartbeatMs"),
 });
 
@@ -39,7 +39,7 @@ type LoadBootstrapRuntimeConfigOptions = {
   configFilePath?: string;
 };
 
-export type MasterKeySource =
+export type EncryptionKeySource =
   | {
       kind: "inline";
       value: string;
@@ -53,7 +53,7 @@ export type BootstrapRuntimeConfig = {
   gatewayPort: number;
   consolePort: number;
   workerHeartbeatMs: number;
-  masterKeySource: MasterKeySource;
+  encryptionKeySource: EncryptionKeySource;
 };
 
 export function loadBootstrapRuntimeConfig(
@@ -63,7 +63,7 @@ export function loadBootstrapRuntimeConfig(
   const configFilePath = options.configFilePath ?? env.LLMINGRESS_BOOTSTRAP_CONFIG;
   const fileConfig = configFilePath ? readBootstrapConfigFile(configFilePath) : {};
 
-  const masterKeySource = readMasterKeySource(env, fileConfig);
+  const encryptionKeySource = readEncryptionKeySource(env, fileConfig);
   return {
     gatewayPort: readPort("GATEWAY_PORT", env.GATEWAY_PORT, fileConfig.gatewayPort, 4000),
     consolePort: readPort("CONSOLE_PORT", env.CONSOLE_PORT, fileConfig.consolePort, 3000),
@@ -73,7 +73,7 @@ export function loadBootstrapRuntimeConfig(
       fileConfig.workerHeartbeatMs,
       30_000,
     ),
-    masterKeySource,
+    encryptionKeySource,
   };
 }
 
@@ -139,21 +139,21 @@ function readPositiveInteger(
   return value;
 }
 
-function readMasterKeySource(
+function readEncryptionKeySource(
   env: BootstrapEnvironment,
   fileConfig: BootstrapConfigFile,
-): MasterKeySource {
-  const inlineKey = env.MASTER_KEY ?? fileConfig.masterKey;
+): EncryptionKeySource {
+  const inlineKey = env.ENCRYPTION_KEY ?? fileConfig.encryptionKey;
   if (inlineKey?.trim()) {
     return { kind: "inline", value: inlineKey };
   }
 
-  const keyFile = env.MASTER_KEY_FILE ?? fileConfig.masterKeyFile;
+  const keyFile = env.ENCRYPTION_KEY_FILE ?? fileConfig.encryptionKeyFile;
   if (keyFile?.trim()) {
     return { kind: "file", path: keyFile };
   }
 
-  throw new Error("MASTER_KEY or MASTER_KEY_FILE is required.");
+  throw new Error("ENCRYPTION_KEY or ENCRYPTION_KEY_FILE is required.");
 }
 
 export function gatewayPublicBaseUrl(

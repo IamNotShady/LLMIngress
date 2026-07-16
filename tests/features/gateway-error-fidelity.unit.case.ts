@@ -10,7 +10,7 @@ import {
 import { buildFallbackExhaustionError } from "../../packages/gateway-runtime/src/gateway-fallback-chain";
 import {
   attachGatewayProviderCredentialsLeniently,
-  readGatewayMasterKeySource,
+  readGatewayEncryptionKeySource,
 } from "../../packages/gateway-runtime/src/gateway-provider-credentials";
 import { executeGatewayStreamingRequest } from "../../packages/gateway-runtime/src/gateway-streaming";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
@@ -93,7 +93,7 @@ describe("gateway error fidelity", () => {
           candidateSnapshot({ providerId: keyedProviderId }),
         ],
         databaseUrl: fixture.databaseUrl,
-        masterKeySource: readGatewayMasterKeySource({ MASTER_KEY: "test-master-key" }),
+        encryptionKeySource: readGatewayEncryptionKeySource({ ENCRYPTION_KEY: "test-master-key" }),
       });
 
       expect(attached).toHaveLength(1);
@@ -117,7 +117,9 @@ describe("gateway error fidelity", () => {
         attachGatewayProviderCredentialsLeniently({
           candidates: [candidateSnapshot({ providerId })],
           databaseUrl: fixture.databaseUrl,
-          masterKeySource: readGatewayMasterKeySource({ MASTER_KEY: "test-master-key" }),
+          encryptionKeySource: readGatewayEncryptionKeySource({
+            ENCRYPTION_KEY: "test-master-key",
+          }),
         }),
       ).rejects.toMatchObject({
         code: "provider_connection_unavailable",
@@ -131,8 +133,8 @@ describe("gateway error fidelity", () => {
     const fixture = await createTestPostgresFixture({
       databaseNamePrefix: `llmingress_stream_keys_${randomUUID().replaceAll("-", "_")}`,
     });
-    const originalMasterKey = process.env.MASTER_KEY;
-    process.env.MASTER_KEY = "test-master-key";
+    const originalEncryptionKey = process.env.ENCRYPTION_KEY;
+    process.env.ENCRYPTION_KEY = "test-master-key";
     try {
       await runMigrations({ databaseUrl: fixture.databaseUrl });
       const providerId = randomUUID();
@@ -207,10 +209,10 @@ describe("gateway error fidelity", () => {
         }
       }
     } finally {
-      if (originalMasterKey === undefined) {
-        delete process.env.MASTER_KEY;
+      if (originalEncryptionKey === undefined) {
+        delete process.env.ENCRYPTION_KEY;
       } else {
-        process.env.MASTER_KEY = originalMasterKey;
+        process.env.ENCRYPTION_KEY = originalEncryptionKey;
       }
       await fixture.dispose();
     }

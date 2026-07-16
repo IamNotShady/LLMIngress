@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import { clearProviderConnectionHealthWithClient } from "@llmingress/db/provider-health";
-import type { MasterKeySource } from "@llmingress/security/master-key";
+import type { EncryptionKeySource } from "@llmingress/security/encryption-key";
 import {
   createSecretEncryption,
   type EncryptedSecret,
@@ -53,11 +53,11 @@ const providerApiKeyLabelMaxLength = 100;
 const providerApiKeyPriorityMax = 100;
 
 export function prepareProviderApiKeyForStorage(input: {
-  masterKeySource: MasterKeySource;
+  encryptionKeySource: EncryptionKeySource;
   plaintext: string;
 }): StoredProviderApiKey {
   const plaintext = normalizeProviderApiKeyPlaintext(input.plaintext);
-  const encryption = createSecretEncryption(input.masterKeySource);
+  const encryption = createSecretEncryption(input.encryptionKeySource);
 
   return {
     encryptedKey: encryption.encrypt(plaintext),
@@ -82,20 +82,20 @@ export function toProviderApiKeyMetadata(row: ProviderApiKeyStorageRow): Provide
   };
 }
 
-export function readConsoleMasterKeySource(
+export function readConsoleEncryptionKeySource(
   env: Record<string, string | undefined> = process.env,
-): MasterKeySource {
-  const inlineKey = env.MASTER_KEY;
+): EncryptionKeySource {
+  const inlineKey = env.ENCRYPTION_KEY;
   if (inlineKey?.trim()) {
     return { kind: "inline", value: inlineKey };
   }
 
-  const keyFile = env.MASTER_KEY_FILE;
+  const keyFile = env.ENCRYPTION_KEY_FILE;
   if (keyFile?.trim()) {
     return { kind: "file", path: keyFile };
   }
 
-  throw new Error("MASTER_KEY or MASTER_KEY_FILE is required for provider key storage.");
+  throw new Error("ENCRYPTION_KEY or ENCRYPTION_KEY_FILE is required for provider key storage.");
 }
 
 export async function listProviderApiKeyMetadata(
@@ -131,14 +131,14 @@ export async function saveProviderApiKey(input: {
   databaseUrl?: string;
   enabled?: boolean;
   label?: string | null;
-  masterKeySource: MasterKeySource;
+  encryptionKeySource: EncryptionKeySource;
   plaintext: string;
   priority?: number;
   providerApiKeyId?: string;
   providerId: string;
 }): Promise<ProviderApiKeySaveResult> {
   const stored = prepareProviderApiKeyForStorage({
-    masterKeySource: input.masterKeySource,
+    encryptionKeySource: input.encryptionKeySource,
     plaintext: input.plaintext,
   });
   const rowId = input.providerApiKeyId?.trim() || randomUUID();

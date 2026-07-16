@@ -11,7 +11,7 @@ import {
   waitForGateway,
 } from "../support/gateway-process";
 
-const masterKey = "test-master-key";
+const encryptionKey = "test-master-key";
 const agentApiKey = "llmi_gateway_pool_test_key_094";
 
 test("gateway serves a 30-request burst with bounded postgres connections", async () => {
@@ -72,7 +72,7 @@ async function seedPoolRoute(fixture: Fixture, providerBaseUrl: string): Promise
   const providerModelId = randomUUID();
   const virtualModelId = randomUUID();
   const routePolicyId = randomUUID();
-  const encrypted = createSecretEncryption({ kind: "inline", value: masterKey }).encrypt(
+  const encrypted = createSecretEncryption({ kind: "inline", value: encryptionKey }).encrypt(
     "fake-provider-key",
   );
 

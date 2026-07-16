@@ -49,14 +49,14 @@ describe("platform foundation", () => {
         [
           "# comment",
           "export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/app'",
-          'MASTER_KEY="test-master-key"',
+          'ENCRYPTION_KEY="test-master-key"',
           "EMPTY_VALUE=",
         ].join("\n"),
       ),
     ).toEqual({
       DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:55432/app",
       EMPTY_VALUE: "",
-      MASTER_KEY: "test-master-key",
+      ENCRYPTION_KEY: "test-master-key",
     });
 
     expect(formatShellExports({ OPENAI_API_KEY: "sk-test'quote" })).toBe(
@@ -71,14 +71,14 @@ describe("platform foundation", () => {
           CONSOLE_PORT: "3100",
           DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:55432/app",
           GATEWAY_PORT: "4100",
-          MASTER_KEY: "test-master-key",
+          ENCRYPTION_KEY: "test-master-key",
           WORKER_HEARTBEAT_MS: "1000",
         },
       }),
     ).toMatchObject({
       consolePort: 3100,
       gatewayPort: 4100,
-      masterKeySource: { kind: "inline", value: "test-master-key" },
+      encryptionKeySource: { kind: "inline", value: "test-master-key" },
       workerHeartbeatMs: 1000,
     });
 

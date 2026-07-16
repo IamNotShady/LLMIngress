@@ -12,7 +12,7 @@ export type SeedOpenAIGatewayRouteInput = {
   endpointProtocol?: RouteEndpointProtocol;
   fixture: QueryableFixture;
   limitsEnabled?: boolean;
-  masterKey?: string;
+  encryptionKey?: string;
   modelId?: string;
   providerApiKey?: string;
   providerBaseUrl: string;
@@ -38,7 +38,7 @@ export async function seedOpenAIGatewayRoute(
   const providerApiKey = input.providerApiKey ?? "fake-provider-key";
   const encrypted = createSecretEncryption({
     kind: "inline",
-    value: input.masterKey ?? "test-master-key",
+    value: input.encryptionKey ?? "test-master-key",
   }).encrypt(providerApiKey);
 
   await input.fixture.query(

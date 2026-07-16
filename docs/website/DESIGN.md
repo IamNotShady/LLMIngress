@@ -426,7 +426,7 @@ Data is fabricated but internally consistent (prices ≈ real per-1M rates).
 
 Eyebrow `04 — DEPLOY`. H2: **Runs where you work.** Copy-able command block
 (mono, copy button) centered. `./scripts/deploy.sh` writes a random
-`MASTER_KEY` into gitignored `.env` when missing, then runs Compose:
+`ENCRYPTION_KEY` into gitignored `.env` when missing, then runs Compose:
 
 ```bash
 git clone https://github.com/IamNotShady/LLMIngress.git
@@ -440,11 +440,11 @@ Caption: `Gateway :4000 · Console :3000 · Postgres :55432 · bound to
 Below, three shape cards (equal row, stacks ≤768px) — title + 2 lines:
 
 - **Docker Compose** — recommended. Postgres bundled, migrations run on
-  first boot, random `MASTER_KEY` via `deploy.sh`. Nothing listens publicly
+  first boot, random `ENCRYPTION_KEY` via `deploy.sh`. Nothing listens publicly
   until you change a host.
 - **Local Node** — `pnpm install && ./init.sh` against your own Postgres.
   For hacking on it.
-- **Server / VPS** — same compose file; override `.env` `MASTER_KEY` if you
+- **Server / VPS** — same compose file; override `.env` `ENCRYPTION_KEY` if you
   want, point `CONSOLE_PUBLISH_HOST` at your network, keep the Gateway and
   Postgres private.
 

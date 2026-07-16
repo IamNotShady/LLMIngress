@@ -17,14 +17,16 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 
 ## Latest verification
 
-- 2026-07-16: Compose two-container delivery (app + Postgres) — focused release/delivery suites, `pnpm run verify`, and `pnpm run verify:features` (9/9) passed.
-- Compose path: `./scripts/deploy.sh` (generates `.env` `MASTER_KEY` when missing, then `docker compose up --build`).
+- 2026-07-16: Renamed `MASTER_KEY` → `ENCRYPTION_KEY` (AES-256-GCM unchanged) — lint, typecheck, unit tests (334), and build passed via `pnpm run verify`.
+- Compose path: `./scripts/deploy.sh` (generates `.env` `ENCRYPTION_KEY` when missing, then `docker compose up --build`).
 
 ## Latest changes
 
+- Renamed secret env/config from `MASTER_KEY` / `MASTER_KEY_FILE` to `ENCRYPTION_KEY` / `ENCRYPTION_KEY_FILE` (and matching code symbols). Provider secret crypto remains AES-256-GCM.
+- README bilingual layout (AIRI-style): English `README.md` and Chinese `docs/README.zh-CN.md` with mutual language links.
 - Compose runs exactly two long-lived services: `app` (`command: all`) and `postgres`. Entrypoint `all` migrates then supervises Gateway, Console, and Worker in one container. Single-role commands remain for advanced `docker run`.
 - After API key save/enable and OAuth complete/enable, Console enqueues `model_refresh` alongside connection probes.
-- Compose no longer ships a public default `MASTER_KEY`. `./scripts/deploy.sh` writes a random key into `.env` when missing.
+- Compose no longer ships a public default `ENCRYPTION_KEY`. `./scripts/deploy.sh` writes a random key into `.env` when missing.
 - Removed one-command `install.sh` delivery; Compose remains the supported self-hosted path.
 - `/v1/embeddings` remains retired; embedding model metadata remains supported and embedding-only catalog entries stay hidden.
 

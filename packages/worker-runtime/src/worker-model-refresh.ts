@@ -26,14 +26,14 @@ import {
   type ProviderModelRegistryEntry,
 } from "@llmingress/provider/price-source";
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
-import type { MasterKeySource } from "@llmingress/security/master-key";
+import type { EncryptionKeySource } from "@llmingress/security/encryption-key";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { isRecord } from "@llmingress/util";
 import {
   isProviderOAuthTokenExpired,
   readEncryptedSecret,
   readProviderOAuthTokenBlob,
-  readWorkerMasterKeySource,
+  readWorkerEncryptionKeySource,
 } from "./worker-credential-utils.ts";
 import { JOB_CREATED_CHANNEL, type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 
@@ -89,7 +89,7 @@ export type ChainedPriceSyncJobPayload = {
 type CreateModelRefreshJobHandlerOptions = {
   databaseUrl?: string;
   fetch?: typeof globalThis.fetch;
-  masterKeySource?: MasterKeySource;
+  encryptionKeySource?: EncryptionKeySource;
   modelRegistrySource?: () => Promise<ProviderModelRegistryEntry[]>;
 };
 
@@ -538,18 +538,18 @@ export async function refreshProviderModels(
     provider.provider_type === "api_key"
       ? await readProviderApiKey({
           databaseUrl: options.databaseUrl,
-          masterKeySource:
-            options.masterKeySource ??
-            readWorkerMasterKeySource(process.env, "provider model refresh"),
+          encryptionKeySource:
+            options.encryptionKeySource ??
+            readWorkerEncryptionKeySource(process.env, "provider model refresh"),
           providerId: provider.id,
         })
       : provider.provider_type === "subscription"
         ? await readProviderOAuthAccessToken({
             databaseUrl: options.databaseUrl,
             fetch: fetchImpl,
-            masterKeySource:
-              options.masterKeySource ??
-              readWorkerMasterKeySource(process.env, "provider model refresh"),
+            encryptionKeySource:
+              options.encryptionKeySource ??
+              readWorkerEncryptionKeySource(process.env, "provider model refresh"),
             providerId: provider.id,
             providerKey: provider.provider_key,
           })
@@ -979,7 +979,7 @@ function readModelRefreshPayload(payload: unknown): { providerId: string } {
 
 async function readProviderApiKey(input: {
   databaseUrl?: string;
-  masterKeySource: MasterKeySource;
+  encryptionKeySource: EncryptionKeySource;
   providerId: string;
 }): Promise<{ plaintext: string; snapshot: ProviderCredentialSnapshot }> {
   const stored = await withPooledPostgresClient(input.databaseUrl, async (client) => {
@@ -1002,7 +1002,7 @@ async function readProviderApiKey(input: {
     return { encryptedKey: readEncryptedSecret(row.encrypted_key), id: row.id };
   });
   return {
-    plaintext: createSecretEncryption(input.masterKeySource).decrypt(stored.encryptedKey),
+    plaintext: createSecretEncryption(input.encryptionKeySource).decrypt(stored.encryptedKey),
     snapshot: { encryptedSecret: stored.encryptedKey, id: stored.id, kind: "api_key" },
   };
 }
@@ -1010,7 +1010,7 @@ async function readProviderApiKey(input: {
 async function readProviderOAuthAccessToken(input: {
   databaseUrl?: string;
   fetch: typeof globalThis.fetch;
-  masterKeySource: MasterKeySource;
+  encryptionKeySource: EncryptionKeySource;
   providerId: string;
   providerKey: string;
 }): Promise<{ plaintext: string; snapshot: ProviderCredentialSnapshot }> {
@@ -1026,7 +1026,7 @@ async function readProviderOAuthAccessToken(input: {
     throw new Error("Provider OAuth connection was not found.");
   }
 
-  const encryption = createSecretEncryption(input.masterKeySource);
+  const encryption = createSecretEncryption(input.encryptionKeySource);
   const token = readProviderOAuthTokenBlob(
     encryption.decrypt(readEncryptedSecret(connection.encryptedToken)),
   );

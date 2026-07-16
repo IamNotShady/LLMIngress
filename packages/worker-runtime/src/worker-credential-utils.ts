@@ -1,23 +1,23 @@
 import type { ProviderOAuthTokenBlob } from "@llmingress/provider/oauth";
-import type { MasterKeySource } from "@llmingress/security/master-key";
+import type { EncryptionKeySource } from "@llmingress/security/encryption-key";
 import type { EncryptedSecret } from "@llmingress/security/secret-encryption";
 import { isRecord } from "@llmingress/util";
 
-export function readWorkerMasterKeySource(
+export function readWorkerEncryptionKeySource(
   env: Record<string, string | undefined> = process.env,
   purpose: string,
-): MasterKeySource {
-  const inlineKey = env.MASTER_KEY;
+): EncryptionKeySource {
+  const inlineKey = env.ENCRYPTION_KEY;
   if (inlineKey?.trim()) {
     return { kind: "inline", value: inlineKey };
   }
 
-  const keyFile = env.MASTER_KEY_FILE;
+  const keyFile = env.ENCRYPTION_KEY_FILE;
   if (keyFile?.trim()) {
     return { kind: "file", path: keyFile };
   }
 
-  throw new Error(`MASTER_KEY or MASTER_KEY_FILE is required for ${purpose}.`);
+  throw new Error(`ENCRYPTION_KEY or ENCRYPTION_KEY_FILE is required for ${purpose}.`);
 }
 
 export function readEncryptedSecret(value: unknown): EncryptedSecret {

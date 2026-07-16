@@ -85,7 +85,7 @@ advisory locks. They create no `jobs` or `job_attempts`. Retention deletes in ba
   `fallback_events`.
 - Provider health uses `provider_health_events` plus the sparse `provider_health_summary`.
 - Console analytics read durable metadata and never query prompt content.
-- Provider credentials are encrypted with `MASTER_KEY`; authenticated Provider requests do not
+- Provider credentials are encrypted with `ENCRYPTION_KEY`; authenticated Provider requests do not
   follow redirects.
 
 ## Lifecycle and deployment invariants

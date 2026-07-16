@@ -1,6 +1,6 @@
 import { type RouteEndpointProtocol, selectRouteAttempts } from "@llmingress/domain";
 import { createLogger } from "@llmingress/logging";
-import type { MasterKeySource } from "@llmingress/security/master-key";
+import type { EncryptionKeySource } from "@llmingress/security/encryption-key";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
   enforceGatewayAgentLimitsIfEnabled,
@@ -31,7 +31,7 @@ import {
 } from "./gateway-fallback-chain.ts";
 import {
   attachGatewayProviderCredentialsLeniently,
-  readGatewayMasterKeySource,
+  readGatewayEncryptionKeySource,
   recordGatewayProviderApiKeyLastUsed,
 } from "./gateway-provider-credentials.ts";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
@@ -97,7 +97,7 @@ export async function executeGatewayProtocolRequest<
 >(input: {
   agentId: string;
   databaseUrl?: string;
-  masterKeySource?: MasterKeySource;
+  encryptionKeySource?: EncryptionKeySource;
   limitsEnabled?: boolean;
   requestBody: unknown;
   requestId: string;
@@ -172,7 +172,7 @@ export async function executeGatewayProtocolRequest<
     const candidates = await attachGatewayProviderCredentialsLeniently({
       candidates: plannedCandidates.supported,
       databaseUrl: input.databaseUrl,
-      masterKeySource: input.masterKeySource ?? readGatewayMasterKeySource(),
+      encryptionKeySource: input.encryptionKeySource ?? readGatewayEncryptionKeySource(),
     });
 
     const limits = await enforceGatewayAgentLimitsIfEnabled({

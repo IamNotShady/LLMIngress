@@ -13,7 +13,7 @@ import {
   isSubscriptionProviderKey,
   type SubscriptionProviderKey,
 } from "@llmingress/provider/subscription";
-import type { MasterKeySource } from "@llmingress/security/master-key";
+import type { EncryptionKeySource } from "@llmingress/security/encryption-key";
 import {
   createSecretEncryption,
   type EncryptedSecret,
@@ -61,13 +61,13 @@ type UnhealthyProviderConnectionRow = {
 export async function attachGatewayProviderCredentials(input: {
   candidates: readonly GatewayRouteCandidateSnapshot[];
   databaseUrl?: string;
-  masterKeySource: MasterKeySource;
+  encryptionKeySource: EncryptionKeySource;
   refreshProviderOAuthToken?: ProviderOAuthTokenRefresh;
 }): Promise<FallbackChainCandidate[]> {
   const providerIds = [...new Set(input.candidates.map((candidate) => candidate.providerId))];
   const credentials = await readProviderCredentials({
     databaseUrl: input.databaseUrl,
-    masterKeySource: input.masterKeySource,
+    encryptionKeySource: input.encryptionKeySource,
     providerIds,
     refreshProviderOAuthToken: input.refreshProviderOAuthToken,
   });
@@ -103,7 +103,7 @@ export async function attachGatewayProviderCredentials(input: {
 export async function attachGatewayProviderCredentialsLeniently(input: {
   candidates: readonly GatewayRouteCandidateSnapshot[];
   databaseUrl?: string;
-  masterKeySource: MasterKeySource;
+  encryptionKeySource: EncryptionKeySource;
   refreshProviderOAuthToken?: ProviderOAuthTokenRefresh;
 }): Promise<FallbackChainCandidate[]> {
   const attached: FallbackChainCandidate[] = [];
@@ -128,25 +128,25 @@ export async function attachGatewayProviderCredentialsLeniently(input: {
   return attached;
 }
 
-export function readGatewayMasterKeySource(
+export function readGatewayEncryptionKeySource(
   env: Record<string, string | undefined> = process.env,
-): MasterKeySource {
-  const inlineKey = env.MASTER_KEY;
+): EncryptionKeySource {
+  const inlineKey = env.ENCRYPTION_KEY;
   if (inlineKey?.trim()) {
     return { kind: "inline", value: inlineKey };
   }
 
-  const keyFile = env.MASTER_KEY_FILE;
+  const keyFile = env.ENCRYPTION_KEY_FILE;
   if (keyFile?.trim()) {
     return { kind: "file", path: keyFile };
   }
 
-  throw new Error("MASTER_KEY or MASTER_KEY_FILE is required for Gateway provider calls.");
+  throw new Error("ENCRYPTION_KEY or ENCRYPTION_KEY_FILE is required for Gateway provider calls.");
 }
 
 async function readProviderCredentials(input: {
   databaseUrl?: string;
-  masterKeySource: MasterKeySource;
+  encryptionKeySource: EncryptionKeySource;
   providerIds: string[];
   refreshProviderOAuthToken?: ProviderOAuthTokenRefresh;
 }): Promise<Map<string, ProviderCredentials>> {
@@ -154,7 +154,7 @@ async function readProviderCredentials(input: {
     return new Map();
   }
 
-  const encryption = createSecretEncryption(input.masterKeySource);
+  const encryption = createSecretEncryption(input.encryptionKeySource);
   const { apiKeyRows, providerRows, unhealthyConnectionIds } = await withPooledPostgresClient(
     input.databaseUrl,
     async (client) => {

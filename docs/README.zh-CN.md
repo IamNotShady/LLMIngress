@@ -1,0 +1,172 @@
+<p align="center">
+  <img src="../apps/console/public/llmingress-icon.svg" alt="LLMIngress" width="96" />
+</p>
+
+<h1 align="center">LLMIngress</h1>
+
+<p align="center">把你的 AI Agent 路由到你已经在用的模型提供商。</p>
+
+<p align="center">
+  [<a href="../README.md">English</a>] [<a href="README.zh-CN.md">简体中文</a>]
+</p>
+
+<p align="center">
+  <img src="assets/console-demo.gif" alt="LLMIngress Console 演示" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/status-pre--release-yellow" alt="预发布状态" />
+  <a href="https://github.com/IamNotShady/LLMIngress/stargazers"><img src="https://img.shields.io/github/stars/IamNotShady/LLMIngress?style=flat&label=stars" alt="GitHub stars" /></a>
+  <a href="https://github.com/IamNotShady/LLMIngress/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/IamNotShady/LLMIngress/ci.yml?branch=main&label=CI" alt="CI 状态" /></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/github/license/IamNotShady/LLMIngress?color=blue" alt="Apache 2.0 许可证" /></a>
+</p>
+
+## LLMIngress 是什么？
+
+LLMIngress 是一个开源、可自托管的 Agent AI 网关。接入 Provider API Key、订阅账号和本地模型服务，
+通过稳定的虚拟模型（Virtual Model）名称对外暴露，并在同一个 Console 中统一管理路由、访问控制、
+限流、回退与用量。
+
+- 🔀 按 `fixed`、`cost_first` 或 `random` 策略路由虚拟模型
+- 🚑 跟踪每个 Provider 连接的健康状态，并在流式输出开始前完成回退
+- 🔐 为每个 Agent 分配独立 API Key，并显式授予可用的虚拟模型
+- 🛡️ 可选执行预算、RPM、TPM、Token 与并发限制
+- 📊 跟踪活动、Token、延迟、失败、回退、连接健康与请求成本
+- 🕶️ 不把提示词、成功响应、工具参数和凭证写入运维日志
+
+## 快速开始
+
+### 使用 Docker Compose 自托管
+
+```bash
+git clone https://github.com/IamNotShady/LLMIngress.git
+cd LLMIngress
+./scripts/deploy.sh
+```
+
+`./scripts/deploy.sh` 会在缺少配置时把随机 `ENCRYPTION_KEY` 写入已被 gitignore 的 `.env`，
+然后执行 `docker compose up --build`。Compose 仍使用仅限本地的默认 PostgreSQL
+密码（`llmi-local-db`）。对外端口默认绑定到 `127.0.0.1`。请妥善备份
+`.env` —— 解密已存储的 Provider 凭证需要同一个 `ENCRYPTION_KEY`。
+
+Compose 会运行两个容器：应用容器（同一进程组内包含 Console、Gateway 与 Worker）和
+PostgreSQL。
+
+| 端点 | 地址 | 用途 |
+| --- | --- | --- |
+| Console | [http://localhost:3000](http://localhost:3000) | 配置与观测 LLMIngress |
+| Gateway | [http://localhost:4000](http://localhost:4000) | 承载 Agent API 流量 |
+| PostgreSQL | `localhost:55432` | 存储配置与运维元数据 |
+| Worker | 应用容器内部 | 刷新模型、探测连接并同步价格 |
+
+运行时与端口覆盖说明见 [`.env.example`](../.env.example)。
+
+### 发送第一个请求
+
+打开 [http://localhost:3000](http://localhost:3000)，创建管理员密码，然后：
+
+1. 添加一个 Provider 连接。
+2. 创建一个至少包含一个候选的虚拟模型。
+3. 创建一个被允许使用该虚拟模型的 Agent。
+4. 复制 Agent 的一次性 `llmi_` API Key。
+
+```bash
+curl http://localhost:4000/v1/chat/completions \
+  --header "Authorization: Bearer llmi_your_agent_key" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "model": "your-virtual-model",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+```
+
+## Providers
+
+LLMIngress 支持远程 API Key、订阅 OAuth 与本地模型服务。当前内置模板包括：
+
+| 连接类型 | 内置模板 |
+| --- | --- |
+| 订阅 | OpenAI Codex、Claude Code |
+| API Key | Google Gemini、OpenRouter、DeepSeek、xAI、Qwen、Moonshot/Kimi、MiniMax、Z.ai |
+| 本地 | Ollama、LM Studio、llama.cpp |
+
+模型刷新可从 models.dev、OpenRouter、LiteLLM 与 Vercel 补充 Provider 目录中的能力与价格数据。
+缺失的元数据保持未知，手动填写的值优先。
+
+健康状态归属 Provider 连接：每个 API Key 或 OAuth Token 都会独立检查，
+而本地 Provider 只有一个逻辑连接。已确认不健康的连接会从路由中过滤，
+直到探测成功后恢复。
+
+## Gateway API
+
+Agent 在所有支持的协议中使用同一把 API Key 与虚拟模型授权：
+
+| 协议 | 端点 |
+| --- | --- |
+| OpenAI Chat Completions | `POST /v1/chat/completions` |
+| OpenAI Responses | `POST /v1/responses` |
+| Anthropic Messages | `POST /v1/messages` |
+| 虚拟模型发现 | `GET /v1/models` |
+
+Provider 载荷保持协议原生形态。LLMIngress 会把虚拟模型名称替换为选中的
+Provider 模型，同时保留 Provider 的请求与响应约定。
+
+Gateway 健康检查端点不需要 Agent API Key：
+
+| 端点 | 用途 |
+| --- | --- |
+| `GET /health/live` | 进程存活 |
+| `GET /health/ready` | 数据库与配置就绪 |
+| `GET /health` | 与就绪检查兼容的别名 |
+
+## 工作原理
+
+- **Gateway** 认证 Agent、执行已启用的限制、解析虚拟模型、执行回退，并记录请求元数据。
+- **Console** 负责配置与运维视图。它不代理 Agent 流量，也不直接调用 Provider。
+- **Worker** 负责模型发现、精确的 Provider 连接探测，以及价格同步。
+- **PostgreSQL** 存储持久化配置、任务、用量、成本、回退与连接健康数据。
+
+## 本地开发
+
+LLMIngress 需要 Node.js 24、pnpm 11.5.1 与 PostgreSQL 18.4。
+
+```bash
+pnpm install
+cp .env.example .env.local
+# 设置 ENCRYPTION_KEY（例如 openssl rand -base64 32），并确认 DATABASE_URL / TEST_DATABASE_URL。
+pnpm run db:migrate
+./init.sh
+```
+
+若要从源码检出按接近生产形态运行，执行 `./scripts/deploy.sh`。
+Compose 会构建一个多角色应用镜像，并以单个应用容器与 PostgreSQL 一起运行
+（开发时发布在 `127.0.0.1:55432`）。
+
+`./init.sh` 会先运行 lint、类型检查、单元测试与构建，再启动 Console、Gateway
+与 Worker。独立的验证命令为：
+
+```bash
+pnpm run verify
+pnpm run verify:features
+```
+
+项目仍处于预发布阶段。当前以 `0001_core_baseline.sql` schema 为准；
+基于更早开发期迁移历史创建的数据库应重建，而不是原地升级。
+
+## 相关链接
+
+- [产品范围](PRODUCT.md)
+- [架构](ARCHITECTURE.md)
+- [编码指南](CODING_GUIDE.md)
+- [功能状态](../feature_list.json)
+- [CI](https://github.com/IamNotShady/LLMIngress/actions/workflows/ci.yml)
+
+## 贡献
+
+在修改行为前，请先阅读 [AGENTS.md](../AGENTS.md) 与 [编码指南](CODING_GUIDE.md)。
+一次只做一项功能，先写单元测试与 E2E 覆盖，再实现；在把功能标记为完成前，
+请运行两条验证命令。
+
+## 许可证
+
+[Apache License 2.0](../LICENSE)

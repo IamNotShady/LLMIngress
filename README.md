@@ -7,6 +7,10 @@
 <p align="center">Route your AI agents across the model providers you already use.</p>
 
 <p align="center">
+  [<a href="README.md">English</a>] [<a href="docs/README.zh-CN.md">简体中文</a>]
+</p>
+
+<p align="center">
   <img src="docs/assets/console-demo.gif" alt="LLMIngress Console demo" />
 </p>
 
@@ -40,10 +44,10 @@ cd LLMIngress
 ./scripts/deploy.sh
 ```
 
-`./scripts/deploy.sh` writes a random `MASTER_KEY` into a gitignored `.env` when missing,
+`./scripts/deploy.sh` writes a random `ENCRYPTION_KEY` into a gitignored `.env` when missing,
 then runs `docker compose up --build`. Compose still uses a local-only default PostgreSQL
 password (`llmi-local-db`). Published ports bind to `127.0.0.1` by default. Keep a backup of
-`.env` — the same `MASTER_KEY` is required to decrypt stored provider credentials.
+`.env` — the same `ENCRYPTION_KEY` is required to decrypt stored provider credentials.
 
 Compose runs two containers: the app (Console, Gateway, and Worker in one process group) and
 PostgreSQL.
@@ -133,7 +137,7 @@ LLMIngress uses Node.js 24, pnpm 11.5.1, and PostgreSQL 18.4.
 ```bash
 pnpm install
 cp .env.example .env.local
-# Set MASTER_KEY (e.g. openssl rand -base64 32) and confirm DATABASE_URL / TEST_DATABASE_URL.
+# Set ENCRYPTION_KEY (e.g. openssl rand -base64 32) and confirm DATABASE_URL / TEST_DATABASE_URL.
 pnpm run db:migrate
 ./init.sh
 ```

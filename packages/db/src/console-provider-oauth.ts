@@ -17,7 +17,7 @@ import {
   revokeProviderOAuthToken,
 } from "@llmingress/provider/oauth";
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
-import type { MasterKeySource } from "@llmingress/security/master-key";
+import type { EncryptionKeySource } from "@llmingress/security/encryption-key";
 import type { EncryptedSecret } from "@llmingress/security/secret-encryption";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { isRecord } from "@llmingress/util";
@@ -42,14 +42,14 @@ type CompleteProviderOAuthConnectionInput = {
   callbackInput: string;
   databaseUrl?: string;
   label?: string | null;
-  masterKeySource: MasterKeySource;
+  encryptionKeySource: EncryptionKeySource;
   priority?: number;
   providerOAuthId: string;
 };
 
 type RevokeProviderOAuthConnectionInput = {
   databaseUrl?: string;
-  masterKeySource: MasterKeySource;
+  encryptionKeySource: EncryptionKeySource;
   providerOAuthId: string;
 };
 
@@ -147,7 +147,7 @@ export async function completeProviderOAuthAuthorization(
     providerKey: pending.providerKey,
   });
   const encryptedToken = encryptProviderOAuthToken({
-    masterKeySource: input.masterKeySource,
+    encryptionKeySource: input.encryptionKeySource,
     token,
   });
 
@@ -182,7 +182,7 @@ export async function revokeProviderOAuthConnection(
     );
   }
   const token = readProviderOAuthTokenBlob(
-    createSecretEncryption(input.masterKeySource).decrypt(
+    createSecretEncryption(input.encryptionKeySource).decrypt(
       readEncryptedSecret(connection.encryptedToken),
     ),
   );
@@ -196,10 +196,10 @@ export async function revokeProviderOAuthConnection(
 export { deleteProviderOAuthConnection, setProviderOAuthConnectionEnabled };
 
 function encryptProviderOAuthToken(input: {
-  masterKeySource: MasterKeySource;
+  encryptionKeySource: EncryptionKeySource;
   token: ProviderOAuthTokenBlob;
 }): EncryptedSecret {
-  return createSecretEncryption(input.masterKeySource).encrypt(JSON.stringify(input.token));
+  return createSecretEncryption(input.encryptionKeySource).encrypt(JSON.stringify(input.token));
 }
 
 function readEncryptedSecret(value: unknown): EncryptedSecret {

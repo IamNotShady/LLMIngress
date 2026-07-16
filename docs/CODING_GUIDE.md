@@ -53,3 +53,15 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+## 5. Neutral Naming
+
+**Prefer precise, professional verbs. Avoid violent or anthropomorphic metaphors.**
+
+When naming process lifecycle, shutdown, or cleanup helpers:
+- Prefer `terminate`, `stop`, `signal`, `shutdown`, `close` over `kill` in our own identifiers.
+- Never pair violent verbs with humanizing nouns (`killChild`, `killSelf`, etc.).
+- Prefer `terminateChildProcess`, `signalSelf`, `forceTerminateTimer`.
+
+Platform APIs that already use `kill` (e.g. `child.kill()`, `process.kill()`) are fine to call; do not invent wrappers just to avoid the word. The rule applies to **names we choose**.
+

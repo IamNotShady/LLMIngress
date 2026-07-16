@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./master-key": {
-      "types": "./src/master-key.ts",
-      "default": "./src/master-key.ts"
+    "./encryption-key": {
+      "types": "./src/encryption-key.ts",
+      "default": "./src/encryption-key.ts"
     },
     "./secret-encryption": {
       "types": "./src/secret-encryption.ts",

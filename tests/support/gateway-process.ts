@@ -51,7 +51,7 @@ export async function waitForGateway(baseUrl: string, gateway: GatewayProcess): 
 export function startGatewayProcess(options: {
   databaseUrl: string;
   env?: Record<string, string>;
-  masterKey?: string;
+  encryptionKey?: string;
   port: number;
 }): GatewayProcess {
   const child = spawn("pnpm", ["--filter", "@llmingress/gateway", "exec", "tsx", "src/main.ts"], {
@@ -63,7 +63,7 @@ export function startGatewayProcess(options: {
       GATEWAY_CONFIG_RECONCILE_INTERVAL_MS: "0",
       GATEWAY_HOST: "127.0.0.1",
       GATEWAY_PORT: String(options.port),
-      MASTER_KEY: options.masterKey ?? "test-master-key",
+      ENCRYPTION_KEY: options.encryptionKey ?? "test-master-key",
       NODE_ENV: "test",
       ...options.env,
     },

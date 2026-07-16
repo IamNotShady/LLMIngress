@@ -5,6 +5,7 @@ import { type DragEvent, useMemo, useState } from "react";
 import { ConsoleDialog } from "../_components/console-dialog";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
+import { formatModelContextTokens } from "./model-capability-format";
 
 type Strategy = "fixed" | "cost_first" | "random";
 type EndpointProtocol = "chat_completions" | "responses" | "messages";
@@ -286,7 +287,7 @@ export function VirtualModelRouteDialogClient({
                           </td>
                           <td>{candidate.providerDisplayName}</td>
                           <td>{candidate.modelDisplayName}</td>
-                          <td>{formatModelContext(candidate.contextWindow)}</td>
+                          <td>{formatModelContextTokens(candidate.contextWindow)}</td>
                           <td>{formatModelPrice(candidate.inputUsdPerMillionTokens)}</td>
                           <td>{formatModelPrice(candidate.outputUsdPerMillionTokens)}</td>
                           <td>{formatBooleanFeature(candidate.supportsFunctionCalling)}</td>
@@ -418,7 +419,7 @@ export function VirtualModelRouteDialogClient({
                           ) : null}
                         </button>
                       </td>
-                      <td>{formatModelContext(option.contextWindow)}</td>
+                      <td>{formatModelContextTokens(option.contextWindow)}</td>
                       <td>{formatModelPrice(option.inputUsdPerMillionTokens)}</td>
                       <td>{formatModelPrice(option.outputUsdPerMillionTokens)}</td>
                       <td>{formatBooleanFeature(option.supportsFunctionCalling)}</td>
@@ -473,28 +474,11 @@ function formatRouteStrategyDescription(strategy: Strategy): string {
   return "Pick a random eligible candidate each request";
 }
 
-function formatModelContext(contextWindow: number | null): string {
-  if (contextWindow === null) {
-    return "Unknown";
-  }
-  if (contextWindow >= 1_000_000) {
-    return `${formatDecimal(contextWindow / 1_000_000)}M`;
-  }
-  if (contextWindow >= 1_000) {
-    return `${formatDecimal(contextWindow / 1_000)}K`;
-  }
-  return String(contextWindow);
-}
-
 function formatModelPrice(price: number | null): string {
   if (price === null) {
     return "Unknown";
   }
   return `$${price.toFixed(price >= 1 ? 2 : 4)}`;
-}
-
-function formatDecimal(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function formatBooleanFeature(value: boolean | null): string {

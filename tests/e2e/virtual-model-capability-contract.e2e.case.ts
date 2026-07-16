@@ -61,6 +61,66 @@ test("route policy save allows unknown and rejects mismatched provider model cap
   }
 });
 
+test("route policy save reports the exact conflicting context windows that both round to ~1M", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_vm_ctx_conflict_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = randomUUID();
+    const roundModelId = randomUUID();
+    const oddModelId = randomUUID();
+    const virtualModelId = randomUUID();
+
+    await fixture.query(
+      `insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+       values ($1, 'api_key', 'openai', 'Context Provider', 'http://provider.test/v1', true)`,
+      [providerId],
+    );
+    await fixture.query(
+      "insert into virtual_models (id, name, description, enabled) values ($1, 'vm-ctx-conflict', 'VM ctx conflict', true)",
+      [virtualModelId],
+    );
+    for (const [id, contextWindow, modelId] of [
+      [roundModelId, 1_000_000, "round-context"],
+      [oddModelId, 1_048_576, "odd-context"],
+    ] as const) {
+      await fixture.query(
+        `insert into provider_models (
+           id, provider_id, model_id, display_name,
+           input_modalities, output_modalities, context_window, max_output_tokens,
+           supports_streaming, supports_function_calling, supports_reasoning, availability
+         )
+         values ($1, $2, $3, 'Context Model', array['text']::text[], array['text']::text[], $4, 8192, true, true, false, 'available')`,
+        [id, providerId, modelId, contextWindow],
+      );
+    }
+
+    const error = await createRoutePolicy({
+      databaseUrl: fixture.databaseUrl,
+      routePolicy: normalizeRoutePolicyFormInput({
+        endpointProtocol: "chat_completions",
+        providerModelIds: [roundModelId, oddModelId],
+        strategy: "fixed",
+        virtualModelId,
+      }),
+    }).then(
+      () => {
+        throw new Error("expected the mismatched context windows to be rejected");
+      },
+      (rejection: unknown) => rejection,
+    );
+
+    expect(error).toMatchObject({ code: "route_policy_candidate_capability_mismatch" });
+    expect((error as { message: string }).message).toContain("maxContextTokens");
+    expect((error as { message: string }).message).toContain("1000000");
+    expect((error as { message: string }).message).toContain("1048576");
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 test("virtual model creation atomically requires and writes its route", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_vm_atomic_create_${randomUUID().replaceAll("-", "_")}`,

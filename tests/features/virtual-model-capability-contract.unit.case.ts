@@ -54,6 +54,28 @@ describe("virtual model capability contract", () => {
       },
       ok: false,
     });
+    if (!result.ok) {
+      expect(result.message).toContain("maxContextTokens");
+      expect(result.message).toContain("128000");
+      expect(result.message).toContain("64000");
+    }
+  });
+
+  it("names the exact conflicting values when two context windows round to the same display", () => {
+    const result = resolveVirtualModelCapabilityContract([
+      { ...completeCandidate, id: "candidate-round", maxContextTokens: 1_000_000 },
+      { ...completeCandidate, id: "candidate-nonround", maxContextTokens: 1_048_576 },
+    ]);
+
+    expect(result).toMatchObject({
+      code: "route_policy_candidate_capability_mismatch",
+      details: { field: "maxContextTokens" },
+      ok: false,
+    });
+    if (!result.ok) {
+      expect(result.message).toContain("1000000");
+      expect(result.message).toContain("1048576");
+    }
   });
 
   it("rejects candidates whose capability contract differs from the first candidate", () => {
@@ -76,6 +98,11 @@ describe("virtual model capability contract", () => {
       },
       ok: false,
     });
+    if (!result.ok) {
+      expect(result.message).toContain("maxOutputTokens");
+      expect(result.message).toContain("8192");
+      expect(result.message).toContain("4096");
+    }
   });
 
   it("validates request capabilities against the resolved Virtual Model contract", () => {

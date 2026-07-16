@@ -143,6 +143,132 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
   }
 });
 
+test("route dialog shows exact context tokens and names the conflicting values when saving a mismatched pair", async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_vm_context_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await seedNearMillionContextModels(fixture.databaseUrl);
+
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await signInFromFirstRun(page, baseUrl);
+
+        await page.goto(`${baseUrl}/models?virtualModelDialog=new`, {
+          waitUntil: "networkidle",
+        });
+        await page.locator("#virtual-model-dialog-endpoint").selectOption("chat_completions");
+
+        await page.getByRole("button", { name: "Add Model" }).click();
+        await page
+          .locator(".vm-model-picker")
+          .getByRole("button", { name: "Round Context Model" })
+          .click();
+        await page.getByRole("button", { name: "Add Model" }).click();
+        await page
+          .locator(".vm-model-picker")
+          .getByRole("button", { name: "Odd Context Model" })
+          .click();
+
+        // Two near-identical context windows must render as exact, distinct token
+        // counts in the candidates table — not both rounded to the same "~1M".
+        const candidates = page.locator(".vm-candidate-table");
+        await expect(
+          candidates.getByRole("cell", { name: "1,000,000", exact: true }),
+        ).toBeVisible();
+        await expect(
+          candidates.getByRole("cell", { name: "1,048,576", exact: true }),
+        ).toBeVisible();
+
+        // The wide candidates table scrolls inside its own container; the page must
+        // not gain horizontal overflow at desktop or mobile checkpoints.
+        for (const viewport of [
+          { width: 1280, height: 800 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          await expect
+            .poll(() =>
+              page.evaluate(
+                () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+              ),
+            )
+            .toBeLessThanOrEqual(0);
+        }
+        await page.setViewportSize({ width: 1280, height: 800 });
+
+        // Saving the mismatched pair surfaces the exact conflicting values rather
+        // than a bare "must match for maxContextTokens". The comma-free "1000000"
+        // is unique to the error message (the table cell renders "1,000,000").
+        await page.getByLabel("Virtual Model name", { exact: true }).fill("vm-context-clarity");
+        await page.getByLabel("Description").fill("Two near-identical context windows");
+        await page.getByRole("button", { name: "Create", exact: true }).click();
+
+        await expect(page.getByText("must agree on maxContextTokens")).toBeVisible();
+        await expect(page.getByText("1000000", { exact: false })).toBeVisible();
+        await expect(page.getByText("1048576", { exact: false })).toBeVisible();
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+async function seedNearMillionContextModels(databaseUrl: string): Promise<void> {
+  const providerId = randomUUID();
+
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
+    await client.query(
+      `
+        insert into providers (id, provider_type, provider_key, display_name, enabled)
+        values ($1, 'api_key', 'openai', 'Context Provider', true)
+      `,
+      [providerId],
+    );
+    await client.query(
+      `
+        insert into provider_models (
+          id,
+          provider_id,
+          model_id,
+          display_name,
+          input_modalities,
+          output_modalities,
+          context_window,
+          max_output_tokens,
+          supports_streaming,
+          supports_function_calling,
+          supports_reasoning,
+          availability
+        )
+        values
+          ($1, $3, 'round-context', 'Round Context Model', array['text']::text[], array['text']::text[], 1000000, 8192, true, true, false, 'available'),
+          ($2, $3, 'odd-context', 'Odd Context Model', array['text']::text[], array['text']::text[], 1048576, 8192, true, true, false, 'available')
+      `,
+      [randomUUID(), randomUUID(), providerId],
+    );
+  });
+}
+
 async function seedVirtualModelEndpointData(databaseUrl: string): Promise<{
   embeddingOnlyModelId: string;
   openAiModelId: string;

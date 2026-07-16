@@ -17,11 +17,13 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 
 ## Latest verification
 
+- 2026-07-16: Route-policy capability mismatch clarity — informative error values + precise context display; `pnpm run verify` and `verify:features` (9/9) passed.
 - 2026-07-16: Renamed `MASTER_KEY` → `ENCRYPTION_KEY` (AES-256-GCM unchanged) — lint, typecheck, unit tests (334), and build passed via `pnpm run verify`.
 - Compose path: `./scripts/deploy.sh` (generates `.env` `ENCRYPTION_KEY` when missing, then `docker compose up --build`).
 
 ## Latest changes
 
+- Route-policy capability mismatch errors name the exact conflicting values (e.g. `maxContextTokens` 1000000 vs 1048576); the Virtual Model route dialog shows precise grouped token counts (e.g. `1,048,576`) so near-identical context windows are distinguishable.
 - Renamed secret env/config from `MASTER_KEY` / `MASTER_KEY_FILE` to `ENCRYPTION_KEY` / `ENCRYPTION_KEY_FILE` (and matching code symbols). Provider secret crypto remains AES-256-GCM.
 - README bilingual layout (AIRI-style): English `README.md` and Chinese `docs/README.zh-CN.md` with mutual language links.
 - Compose runs exactly two long-lived services: `app` (`command: all`) and `postgres`. Entrypoint `all` migrates then supervises Gateway, Console, and Worker in one container. Single-role commands remain for advanced `docker run`.

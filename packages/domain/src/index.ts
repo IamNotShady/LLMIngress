@@ -193,7 +193,9 @@ export function resolveVirtualModelCapabilityContract(
             providerModelId: candidate.providerModelId,
             value,
           },
-          message: `Route policy candidate capabilities must match for ${field}.`,
+          message: `Route policy candidates must agree on ${field}, but they differ: ${formatCapabilityContractValue(
+            reference.contract[field],
+          )} vs ${formatCapabilityContractValue(value)}.`,
           ok: false,
         };
       }
@@ -727,6 +729,16 @@ function readVirtualModelCapabilityCandidateContract(
 
 function virtualModelCapabilityFieldEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function formatCapabilityContractValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "unknown";
+  }
+  if (Array.isArray(value)) {
+    return value.length === 0 ? "none" : value.join(", ");
+  }
+  return String(value);
 }
 
 function virtualModelCapabilityMismatch(

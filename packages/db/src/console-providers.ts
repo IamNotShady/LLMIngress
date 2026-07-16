@@ -190,7 +190,6 @@ export async function createProvider(input: {
     description: `Create provider ${input.provider.providerKey}`,
     changes: [{ table: "providers", recordId: providerId }],
     write: async (client) => {
-      await assertProviderKeyAvailable(client, input.provider.providerKey);
       const result = await client.query<ProviderRow>(
         `
           insert into providers (
@@ -238,7 +237,6 @@ export async function createProviderFromTemplate(input: {
     description: `Create provider template ${input.template.id}`,
     changes: [{ table: "providers", recordId: providerId }],
     write: async (client) => {
-      await assertProviderKeyAvailable(client, input.template.providerKey);
       const result = await client.query<ProviderRow>(
         `
           insert into providers (
@@ -586,30 +584,6 @@ function requireSavedProvider(provider: ConsoleProvider | undefined): ConsolePro
 
 function isProviderType(value: string | undefined): value is ProviderType {
   return value === "api_key" || value === "local" || value === "subscription";
-}
-
-async function assertProviderKeyAvailable(
-  client: ConfigPublishClient,
-  providerKey: string,
-): Promise<void> {
-  await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [
-    `provider-key:${providerKey}`,
-  ]);
-  const existing = await client.query<{ id: string }>(
-    `
-      select id::text
-      from providers
-      where provider_key = $1
-        and deleted_at is null
-      limit 1
-    `,
-    [providerKey],
-  );
-  if (existing.rows[0]) {
-    throw consoleConflictError("Provider type already exists.", "provider_key_conflict", {
-      providerKey,
-    });
-  }
 }
 
 async function lockProvidersById(

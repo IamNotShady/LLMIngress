@@ -75,6 +75,7 @@ export function buildAgentConfigurationGuide(input: {
     return {
       title: "Configure Codex",
       steps: [
+        "Codex calls the Responses endpoint; use a Virtual Model routed to /v1/responses.",
         "Export the Agent API key in your shell.",
         "Add the LLMIngress provider to the user-level ~/.codex/config.toml file.",
         "Start Codex; the configured Virtual Model will be sent through LLMIngress.",
@@ -93,13 +94,14 @@ export function buildAgentConfigurationGuide(input: {
     return {
       title: "Configure Claude Code",
       steps: [
+        "Claude Code calls the Messages endpoint; use a Virtual Model routed to /v1/messages.",
         "Export the LLMIngress Agent key and Gateway URL.",
         "Start Claude Code with the selected Virtual Model.",
       ],
       codeBlocks: [
         {
           label: "Shell",
-          code: `export ANTHROPIC_AUTH_TOKEN=${shellQuote(apiKey)}\nexport ANTHROPIC_BASE_URL=${shellQuote(gatewayBaseUrl)}\nclaude --model ${shellQuote(model)}`,
+          code: `export ANTHROPIC_AUTH_TOKEN=${shellQuote(apiKey)}\nexport ANTHROPIC_BASE_URL=${shellQuote(gatewayBaseUrl)}\nexport ANTHROPIC_DEFAULT_HAIKU_MODEL=${shellQuote(model)}\nclaude --model ${shellQuote(model)}`,
         },
       ],
     };
@@ -107,10 +109,13 @@ export function buildAgentConfigurationGuide(input: {
 
   if (input.integrationPlatform === "cursor") {
     return uiGuide("Configure Cursor", [
+      "Cursor calls the Chat Completions endpoint; use a Virtual Model routed to /v1/chat/completions.",
       "Open Cursor Settings, then open Models.",
       `Enter the Agent API key ${apiKey} in the OpenAI API key field.`,
       `Set Override OpenAI Base URL to ${openAiBaseUrl}.`,
       `Add or select the model ${model}, then verify the connection.`,
+      "The Gateway URL must be reachable from Cursor's servers; a localhost or private address will not work.",
+      "Custom keys apply to chat only; Tab completion and Agent features keep using Cursor's built-in models.",
     ]);
   }
 
@@ -118,7 +123,8 @@ export function buildAgentConfigurationGuide(input: {
     return {
       title: "Configure OpenCode",
       steps: [
-        "Run /connect in OpenCode and store the Agent API key for the llmingress provider.",
+        "OpenCode calls the Chat Completions endpoint; use a Virtual Model routed to /v1/chat/completions.",
+        "Run /connect in OpenCode, pick Other, enter llmingress as the provider id, then paste the Agent API key.",
         "Add the provider and Virtual Model to your OpenCode configuration.",
       ],
       codeBlocks: [
@@ -126,6 +132,7 @@ export function buildAgentConfigurationGuide(input: {
           label: "opencode.json",
           code: JSON.stringify(
             {
+              $schema: "https://opencode.ai/config.json",
               provider: {
                 llmingress: {
                   models: { [model]: { name: model } },
@@ -145,6 +152,7 @@ export function buildAgentConfigurationGuide(input: {
 
   if (input.integrationPlatform === "hermes") {
     return uiGuide("Configure Hermes", [
+      "Hermes calls the Chat Completions endpoint; use a Virtual Model routed to /v1/chat/completions.",
       "Run hermes model and choose Custom endpoint.",
       `Enter ${openAiBaseUrl} as the API base URL.`,
       `Enter ${apiKey} as the API key and ${model} as the model name.`,
@@ -181,18 +189,28 @@ export function buildAgentConfigurationGuide(input: {
   }
 
   if (input.integrationPlatform === "github-copilot") {
-    return uiGuide("Configure GitHub Copilot", [
-      "Open GitHub Copilot app settings, then Model providers.",
-      "Choose Add provider and select an OpenAI-compatible HTTP endpoint.",
-      `Enter ${openAiBaseUrl} as the base URL and ${apiKey} as the API key.`,
-      `Add ${model} as an available model and save the provider.`,
-    ]);
+    return {
+      title: "Configure GitHub Copilot",
+      steps: [
+        "GitHub Copilot is configured here for the Chat Completions endpoint; use a Virtual Model routed to /v1/chat/completions.",
+        "In VS Code, run Chat: Manage Language Models from the Command Palette, choose Add Models, then Custom Endpoint.",
+        `Enter ${gatewayBaseUrl}/v1/chat/completions as the model url, ${apiKey} as the API key, and add ${model} as the model id.`,
+        "Or use Copilot CLI with the environment variables below.",
+      ],
+      codeBlocks: [
+        {
+          label: "Copilot CLI shell",
+          code: `export COPILOT_PROVIDER_BASE_URL=${shellQuote(openAiBaseUrl)}\nexport COPILOT_PROVIDER_API_KEY=${shellQuote(apiKey)}\nexport COPILOT_MODEL=${shellQuote(model)}\ncopilot`,
+        },
+      ],
+    };
   }
 
   return uiGuide("Configure your integration", [
     `Use ${gatewayBaseUrl} as the Gateway URL.`,
     `Send ${apiKey} as a Bearer API key.`,
     `Use ${model} as the Virtual Model name.`,
+    "Call the endpoint path that matches the Virtual Model's route policy: /v1/chat/completions, /v1/responses, or /v1/messages.",
   ]);
 }
 

@@ -25,7 +25,6 @@ export const POST = withConsoleAuth(async (request) => {
     if (action === "create") {
       const limitsEnabled = readText(form, "enableLimits") === "true";
       const agent = normalizeAgentFormInput({
-        integrationPlatform: readText(form, "integrationPlatform"),
         name: readText(form, "name"),
       });
       const result = await createAgentWithSettings({
@@ -40,7 +39,6 @@ export const POST = withConsoleAuth(async (request) => {
       return renderOneTimeAgentResponse(
         {
           ...result,
-          integrationPlatform: agent.integrationPlatform,
           virtualModelName: readAgentConnectionVirtualModelName(result.virtualModelAccess),
         },
         request.headers.get("accept")?.includes("application/json") ? "json" : "html",
@@ -48,7 +46,6 @@ export const POST = withConsoleAuth(async (request) => {
     } else if (action === "update") {
       await updateAgent({
         agent: normalizeAgentFormInput({
-          integrationPlatform: readText(form, "integrationPlatform"),
           name: readText(form, "name"),
         }),
         id: readRequiredText(form, "id"),
@@ -58,7 +55,6 @@ export const POST = withConsoleAuth(async (request) => {
       const limitsEnabled = readText(form, "enableLimits") === "true";
       await updateAgentWithSettings({
         agent: normalizeAgentFormInput({
-          integrationPlatform: readText(form, "integrationPlatform"),
           name: readText(form, "name"),
         }),
         id,

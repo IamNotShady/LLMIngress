@@ -16,7 +16,7 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 
 ## Latest verification
 
-- 2026-07-17: Agent integration guidance — focused unit (5) + E2E (1, incl. 1280/390 no-overflow with the detail dialog open), `pnpm run verify` (13/13 tasks), and `verify:features` (9/9 legacy, zero regression) passed.
+- 2026-07-17: Agent integration guidance — focused unit (5) + E2E (1, incl. 1280 two-column side-by-side, 390 stacked, no-overflow with the detail dialog open), `pnpm run verify`, and `verify:features` (10/10, zero regression) passed.
 - 2026-07-17: Release-freeze guard removal — focused delivery-quality unit (26) + E2E (6) suites, `pnpm run verify` (317 unit tests, coverage above thresholds), and `verify:features` (9/9) passed on the rebased dev baseline.
 - 2026-07-16: Multiple providers per provider type — provider_key uniqueness removed; provider unit+E2E suites, `pnpm run verify`, and `verify:features` (9/9) passed.
 - 2026-07-16: Provider list collapse — default fully collapsed, row click toggles, Model library hidden until a provider is selected; `pnpm run verify` and `verify:features` (9/9) passed.
@@ -26,6 +26,7 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 
 - Integration Platform selection removed from Agent create/edit/filter/detail UI; the `agents.integration_platform` column stays as inert metadata (defaults `'other'`, no migration; saveAll resets it to `'other'`).
 - Agent detail dialog now shows an Endpoints section (allowed Virtual Models grouped by their route policy endpoint URL from `GATEWAY_URL`; unrouted VMs flagged) and an Integration guide section with tabs for all 8 platforms (placeholder key + stored key prefix). The create-success dialog and one-time HTML page reuse the same guides with the plaintext key.
+- Agent detail dialog is widened (72rem) with a two-column layout — left: fields, allowed VMs, Budget/Limit; right: Endpoints, Integration guide — collapsing to one column below 56rem.
 - Removed V1 release-freeze guards: feature-list/suite-mapping pins, progress.md line cap, single-migration/24-table freeze, retired-surface absence checks, PostgreSQL image pin, Compose boot check. Real behavior tests remain under the renamed `delivery-quality` suites (9th feature renamed from `release-guards`).
 - Providers are no longer unique per provider type/key: users can create any number of same-type providers with any display name and base URL; provider type only determines the wire protocol.
 - Provider list expansion is driven only by the `selected` URL param: `/providers` defaults to fully collapsed, clicking the expanded row collapses it, and the Model library card renders only while a provider is selected.

@@ -66,92 +66,98 @@ function AgentViewDialog({
           <span>Close</span>
         </a>
       </div>
-      <dl className="agent-detail-fields">
-        <div>
-          <dt>Created</dt>
-          <dd>{formatAgentDetailDate(agent.createdAt)}</dd>
-        </div>
-        <div>
-          <dt>Enabled</dt>
-          <dd>{agent.enabled ? "True" : "False"}</dd>
-        </div>
-        <div>
-          <dt>Default model</dt>
-          <dd>{access?.defaultVirtualModel?.name ?? "None"}</dd>
-        </div>
-      </dl>
-      <section className="agent-detail-section">
-        <h3>Allowed Virtual Models</h3>
-        <div className="agent-chip-list">
-          {allowedVirtualModels.map((virtualModel) => (
-            <span className="agent-chip" key={virtualModel.id}>
-              {virtualModel.name}
-            </span>
-          ))}
-        </div>
-      </section>
-      <section className="agent-detail-section">
-        <h3>Endpoints</h3>
-        {allowedVirtualModels.length === 0 ? (
-          <p>No Virtual Models are allowed for this Agent.</p>
-        ) : null}
-        {endpointGroups.configured.map((group) => (
-          <div className="agent-endpoint-group" key={group.protocol}>
-            <p className="agent-endpoint-url mono">{group.url}</p>
-            <p className="agent-endpoint-protocol">
-              {formatRouteEndpointProtocolLabel(group.protocol)}
-            </p>
+      <div className="agent-view-columns">
+        <div className="agent-view-column">
+          <dl className="agent-detail-fields">
+            <div>
+              <dt>Created</dt>
+              <dd>{formatAgentDetailDate(agent.createdAt)}</dd>
+            </div>
+            <div>
+              <dt>Enabled</dt>
+              <dd>{agent.enabled ? "True" : "False"}</dd>
+            </div>
+            <div>
+              <dt>Default model</dt>
+              <dd>{access?.defaultVirtualModel?.name ?? "None"}</dd>
+            </div>
+          </dl>
+          <section className="agent-detail-section">
+            <h3>Allowed Virtual Models</h3>
             <div className="agent-chip-list">
-              {group.virtualModels.map((virtualModel) => (
+              {allowedVirtualModels.map((virtualModel) => (
                 <span className="agent-chip" key={virtualModel.id}>
                   {virtualModel.name}
                 </span>
               ))}
             </div>
-          </div>
-        ))}
-        {endpointGroups.unrouted.length > 0 ? (
-          <div className="agent-endpoint-group agent-endpoint-group-unrouted">
-            <p className="agent-endpoint-url">No route policy configured</p>
-            <div className="agent-chip-list">
-              {endpointGroups.unrouted.map((virtualModel) => (
-                <span className="agent-chip" key={virtualModel.id}>
-                  {virtualModel.name}
-                </span>
-              ))}
+          </section>
+          <section className="agent-detail-section">
+            <h3>Budget / Limit</h3>
+            <div className="agent-limit-row">
+              <span>Budget</span>
+              <strong>{formatAgentBudgetLimit(budgetLimit)}</strong>
             </div>
-          </div>
-        ) : null}
-      </section>
-      <section className="agent-detail-section">
-        <h3>Integration guide</h3>
-        <AgentIntegrationGuideTabs
-          apiKey={AGENT_API_KEY_PLACEHOLDER}
-          gatewayBaseUrl={gatewayBaseUrl}
-          idPrefix={`agent-view-${agent.id}`}
-          keyPrefix={agent.keyPrefix}
-          model={guideModel}
-        />
-      </section>
-      <section className="agent-detail-section">
-        <h3>Budget / Limit</h3>
-        <div className="agent-limit-row">
-          <span>Budget</span>
-          <strong>{formatAgentBudgetLimit(budgetLimit)}</strong>
+            <div className="agent-limit-row">
+              <span>RPM</span>
+              <strong>{formatAgentNumericLimit(rpmLimit)}</strong>
+            </div>
+            <div className="agent-limit-row">
+              <span>TPM</span>
+              <strong>{formatAgentNumericLimit(tpmLimit)}</strong>
+            </div>
+            <div className="agent-limit-row">
+              <span>Token limit</span>
+              <strong>{formatAgentTokenLimit(tokenLimit)}</strong>
+            </div>
+          </section>
         </div>
-        <div className="agent-limit-row">
-          <span>RPM</span>
-          <strong>{formatAgentNumericLimit(rpmLimit)}</strong>
+        <div className="agent-view-column">
+          <section className="agent-detail-section">
+            <h3>Endpoints</h3>
+            {allowedVirtualModels.length === 0 ? (
+              <p>No Virtual Models are allowed for this Agent.</p>
+            ) : null}
+            {endpointGroups.configured.map((group) => (
+              <div className="agent-endpoint-group" key={group.protocol}>
+                <p className="agent-endpoint-url mono">{group.url}</p>
+                <p className="agent-endpoint-protocol">
+                  {formatRouteEndpointProtocolLabel(group.protocol)}
+                </p>
+                <div className="agent-chip-list">
+                  {group.virtualModels.map((virtualModel) => (
+                    <span className="agent-chip" key={virtualModel.id}>
+                      {virtualModel.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {endpointGroups.unrouted.length > 0 ? (
+              <div className="agent-endpoint-group agent-endpoint-group-unrouted">
+                <p className="agent-endpoint-url">No route policy configured</p>
+                <div className="agent-chip-list">
+                  {endpointGroups.unrouted.map((virtualModel) => (
+                    <span className="agent-chip" key={virtualModel.id}>
+                      {virtualModel.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </section>
+          <section className="agent-detail-section">
+            <h3>Integration guide</h3>
+            <AgentIntegrationGuideTabs
+              apiKey={AGENT_API_KEY_PLACEHOLDER}
+              gatewayBaseUrl={gatewayBaseUrl}
+              idPrefix={`agent-view-${agent.id}`}
+              keyPrefix={agent.keyPrefix}
+              model={guideModel}
+            />
+          </section>
         </div>
-        <div className="agent-limit-row">
-          <span>TPM</span>
-          <strong>{formatAgentNumericLimit(tpmLimit)}</strong>
-        </div>
-        <div className="agent-limit-row">
-          <span>Token limit</span>
-          <strong>{formatAgentTokenLimit(tokenLimit)}</strong>
-        </div>
-      </section>
+      </div>
     </ConsoleDialog>
   );
 }

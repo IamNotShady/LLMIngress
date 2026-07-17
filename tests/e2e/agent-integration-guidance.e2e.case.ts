@@ -105,13 +105,30 @@ test("Agent dialogs show endpoint groups and integration tabs without the platfo
         await expect(dialog).toContainText("<YOUR_AGENT_API_KEY>");
         await expect(dialog).toContainText("llmi_guide_k");
 
-        // No horizontal overflow with the dialog open at both checkpoints.
+        // Two columns side by side on desktop, stacked on mobile, and no
+        // horizontal overflow with the dialog open at both checkpoints.
+        const dialogColumns = dialog.locator(".agent-view-column");
+        await expect(dialogColumns).toHaveCount(2);
         for (const viewport of [
           { width: 1280, height: 800 },
           { width: 390, height: 844 },
         ]) {
           await page.setViewportSize(viewport);
           expect(await pageOverflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
+          const leftBox = await dialogColumns.nth(0).boundingBox();
+          const rightBox = await dialogColumns.nth(1).boundingBox();
+          if (!leftBox || !rightBox) {
+            throw new Error(`Agent view columns are not visible at ${viewport.width}px.`);
+          }
+          if (viewport.width === 1280) {
+            expect(rightBox.x, "columns sit side by side at 1280px").toBeGreaterThanOrEqual(
+              leftBox.x + leftBox.width - 1,
+            );
+          } else {
+            expect(rightBox.y, "columns stack at 390px").toBeGreaterThanOrEqual(
+              leftBox.y + leftBox.height - 1,
+            );
+          }
         }
 
         // Create flow: no platform field; created dialog reuses the tabs with

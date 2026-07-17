@@ -80,6 +80,15 @@
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
       "evidence": "2026-07-17: V1 shipped; release-freeze guards removed (feature-list/suite-mapping pins, progress.md line cap, single-migration/24-table freeze, retired-surface absence checks, PostgreSQL image pin, Compose boot check). Behavior tests kept under renamed delivery-quality suites. Focused unit (26) + E2E (6, incl. non-root image build), pnpm run verify (317 unit tests, coverage above thresholds), and verify:features (9/9 via per-feature fallback after a parallel e2e batch flake) passed on the rebased dev baseline."
+    },
+    {
+      "id": "agent-integration-guidance",
+      "name": "Agent Integration Guidance",
+      "description": "Agent detail dialog shows per-platform integration guide tabs for all 8 Integration Platforms (placeholder key plus stored key prefix) and an Endpoints section grouping allowed Virtual Models by their route policy endpoint URL; the create-success dialog and one-time HTML page reuse the same guides with the plaintext key; the Integration Platform selector is removed from Agent create, edit, list filter, and detail UI while the database column stays with default 'other'.",
+      "verification": "pnpm exec vitest run tests/features/agent-integration-guidance.unit.test.ts && pnpm test:e2e tests/e2e/agent-integration-guidance.e2e.spec.ts --workers=1",
+      "dependencies": ["agent-access-and-limits", "virtual-model-routing", "console-core"],
+      "status": "passing",
+      "evidence": "2026-07-17: TDD red-to-green; focused unit (5) + e2e (1, incl. 1280 two-column side-by-side, 390 stacked, no-overflow with the detail dialog open) passed; pnpm run verify and verify:features (10/10, zero regression) passed. Integration Platform UI removed from create/edit/filter/detail (column retained, defaults 'other'); detail dialog widened to a balanced two-column layout (left: fields and limits; right: endpoint groups, which subsume the allowed-VM list; bottoms aligned) with the 8-platform guide tabs full-width below, reused by the create-success dialog and one-time HTML page."
     }
   ]
 }

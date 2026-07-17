@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
+import type { RouteEndpointProtocol } from "@llmingress/domain";
 import {
   type AgentLimitRuleInput,
   replaceAgentLimitRulesWithClient,
@@ -60,9 +61,13 @@ export type AgentVirtualModel = {
   name: string;
 };
 
+export type AgentAllowedVirtualModel = AgentVirtualModel & {
+  endpointProtocol: RouteEndpointProtocol | null;
+};
+
 export type AgentVirtualModelAccess = {
   agentId: string;
-  allowedVirtualModels: AgentVirtualModel[];
+  allowedVirtualModels: AgentAllowedVirtualModel[];
   defaultVirtualModel: AgentVirtualModel | null;
 };
 
@@ -113,6 +118,7 @@ type AgentVirtualModelAccessBaseRow = {
 type AgentAllowedVirtualModelRow = {
   agent_id: string;
   display_name: string;
+  endpoint_protocol: RouteEndpointProtocol | null;
   id: string;
   name: string;
 };
@@ -580,10 +586,14 @@ async function readAgentVirtualModelAccess(
       select agent_virtual_models.agent_id::text as agent_id,
              virtual_models.id::text,
              virtual_models.name,
-             virtual_models.description as display_name
+             virtual_models.description as display_name,
+             route_policies.endpoint_protocol
       from agent_virtual_models
       join virtual_models on virtual_models.id = agent_virtual_models.virtual_model_id
       join agents on agents.id = agent_virtual_models.agent_id
+      left join route_policies
+        on route_policies.virtual_model_id = virtual_models.id
+       and route_policies.deleted_at is null
       where agents.deleted_at is null
         and virtual_models.deleted_at is null
         and ($1::uuid is null or agent_virtual_models.agent_id = $1::uuid)
@@ -591,11 +601,12 @@ async function readAgentVirtualModelAccess(
     `,
     [agentId ?? null],
   );
-  const allowedByAgentId = new Map<string, AgentVirtualModel[]>();
+  const allowedByAgentId = new Map<string, AgentAllowedVirtualModel[]>();
   for (const row of allowedResult.rows) {
     const values = allowedByAgentId.get(row.agent_id) ?? [];
     values.push({
       displayName: row.display_name,
+      endpointProtocol: row.endpoint_protocol,
       id: row.id,
       name: row.name,
     });

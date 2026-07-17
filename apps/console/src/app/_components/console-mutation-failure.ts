@@ -11,7 +11,6 @@ export type ConsoleErrorPayload = {
 
 const errorFieldByCode: Record<string, string> = {
   agent_allowed_virtual_model_required: "allowedVirtualModelIds",
-  agent_integration_platform_invalid: "integrationPlatform",
   agent_name_required: "name",
   invalid_admin_password: "password",
   provider_api_key_label_too_long: "label",

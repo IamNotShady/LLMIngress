@@ -9,14 +9,10 @@ import {
 } from "../_components/console-mutation-failure";
 import { ConsoleMutationError } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
+import { AgentIntegrationGuideTabs } from "./agent-integration-guide-tabs";
 
 type CreatedAgentDetails = {
   apiKey: string;
-  configurationGuide: {
-    codeBlocks: Array<{ code: string; label: string }>;
-    steps: string[];
-    title: string;
-  };
   gatewayBaseUrl: string;
   keyPrefix: string;
   virtualModelName: string;
@@ -63,7 +59,6 @@ export function AgentCreateDialogClient({
       }
       if (
         !payload.apiKey ||
-        !payload.configurationGuide ||
         !payload.gatewayBaseUrl ||
         !payload.keyPrefix ||
         !payload.virtualModelName
@@ -73,7 +68,6 @@ export function AgentCreateDialogClient({
       }
       setCreatedAgent({
         apiKey: payload.apiKey,
-        configurationGuide: payload.configurationGuide,
         gatewayBaseUrl: payload.gatewayBaseUrl,
         keyPrefix: payload.keyPrefix,
         virtualModelName: payload.virtualModelName,
@@ -121,21 +115,14 @@ export function AgentCreateDialogClient({
             <dd>{createdAgent.gatewayBaseUrl}</dd>
           </div>
         </dl>
-        <section className="agent-configuration-guide">
-          <h3>{createdAgent.configurationGuide.title}</h3>
-          <ol>
-            {createdAgent.configurationGuide.steps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
-          {createdAgent.configurationGuide.codeBlocks.map((block) => (
-            <div key={block.label}>
-              <h4>{block.label}</h4>
-              <pre>
-                <code>{block.code}</code>
-              </pre>
-            </div>
-          ))}
+        <section className="agent-created-guide">
+          <h3>Integration guide</h3>
+          <AgentIntegrationGuideTabs
+            apiKey={createdAgent.apiKey}
+            gatewayBaseUrl={createdAgent.gatewayBaseUrl}
+            idPrefix="agent-created"
+            model={createdAgent.virtualModelName}
+          />
         </section>
       </ConsoleDialog>
     );

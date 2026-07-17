@@ -1,13 +1,9 @@
+import { gatewayPublicBaseUrl } from "@llmingress/config";
 import {
   type ConsoleAgentLimit,
   defaultAgentLimitFormValues,
 } from "@llmingress/db/console-agent-limits";
-import {
-  type AgentIntegrationPlatform,
-  type AgentVirtualModelAccess,
-  agentIntegrationPlatforms,
-  type ConsoleAgent,
-} from "@llmingress/db/console-agents";
+import type { AgentVirtualModelAccess, ConsoleAgent } from "@llmingress/db/console-agents";
 import { formatConsoleCompactCount, formatConsoleUsd } from "@llmingress/db/console-format";
 import type { ConsoleVirtualModel } from "@llmingress/db/console-virtual-models";
 import { ConsoleDialog } from "../_components/console-dialog";
@@ -16,11 +12,17 @@ import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
 import { AgentCreateDialogClient } from "./agent-create-dialog-client";
+import {
+  AGENT_API_KEY_PLACEHOLDER,
+  groupAgentVirtualModelEndpoints,
+} from "./agent-integration-guide";
+import { AgentIntegrationGuideTabs } from "./agent-integration-guide-tabs";
 import { AgentVirtualModelFields } from "./agent-virtual-model-fields";
 import { loadAgentsSectionData } from "./agents-section-data";
 import {
   type ConsoleSearchParams,
   findAgentLimit,
+  formatRouteEndpointProtocolLabel,
   groupByAgentId,
   readSingleSearchParam,
 } from "./sections";
@@ -40,6 +42,14 @@ function AgentViewDialog({
   const rpmLimit = findAgentLimit(limits, "rpm");
   const tokenLimit = findAgentLimit(limits, "token");
   const tpmLimit = findAgentLimit(limits, "tpm");
+  const gatewayBaseUrl = gatewayPublicBaseUrl();
+  const allowedVirtualModels = access?.allowedVirtualModels ?? [];
+  const endpointGroups = groupAgentVirtualModelEndpoints({
+    gatewayBaseUrl,
+    virtualModels: allowedVirtualModels,
+  });
+  const guideModel =
+    access?.defaultVirtualModel?.name ?? allowedVirtualModels[0]?.name ?? "<Virtual Model Name>";
 
   return (
     <ConsoleDialog
@@ -58,10 +68,6 @@ function AgentViewDialog({
       </div>
       <dl className="agent-detail-fields">
         <div>
-          <dt>Platform</dt>
-          <dd>{formatAgentIntegrationPlatformLabel(agent.integrationPlatform)}</dd>
-        </div>
-        <div>
           <dt>Created</dt>
           <dd>{formatAgentDetailDate(agent.createdAt)}</dd>
         </div>
@@ -77,12 +83,55 @@ function AgentViewDialog({
       <section className="agent-detail-section">
         <h3>Allowed Virtual Models</h3>
         <div className="agent-chip-list">
-          {(access?.allowedVirtualModels ?? []).map((virtualModel) => (
+          {allowedVirtualModels.map((virtualModel) => (
             <span className="agent-chip" key={virtualModel.id}>
               {virtualModel.name}
             </span>
           ))}
         </div>
+      </section>
+      <section className="agent-detail-section">
+        <h3>Endpoints</h3>
+        {allowedVirtualModels.length === 0 ? (
+          <p>No Virtual Models are allowed for this Agent.</p>
+        ) : null}
+        {endpointGroups.configured.map((group) => (
+          <div className="agent-endpoint-group" key={group.protocol}>
+            <p className="agent-endpoint-url mono">{group.url}</p>
+            <p className="agent-endpoint-protocol">
+              {formatRouteEndpointProtocolLabel(group.protocol)}
+            </p>
+            <div className="agent-chip-list">
+              {group.virtualModels.map((virtualModel) => (
+                <span className="agent-chip" key={virtualModel.id}>
+                  {virtualModel.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+        {endpointGroups.unrouted.length > 0 ? (
+          <div className="agent-endpoint-group agent-endpoint-group-unrouted">
+            <p className="agent-endpoint-url">No route policy configured</p>
+            <div className="agent-chip-list">
+              {endpointGroups.unrouted.map((virtualModel) => (
+                <span className="agent-chip" key={virtualModel.id}>
+                  {virtualModel.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
+      <section className="agent-detail-section">
+        <h3>Integration guide</h3>
+        <AgentIntegrationGuideTabs
+          apiKey={AGENT_API_KEY_PLACEHOLDER}
+          gatewayBaseUrl={gatewayBaseUrl}
+          idPrefix={`agent-view-${agent.id}`}
+          keyPrefix={agent.keyPrefix}
+          model={guideModel}
+        />
       </section>
       <section className="agent-detail-section">
         <h3>Budget / Limit</h3>
@@ -119,19 +168,6 @@ function AgentCreateDialog({
       <input type="hidden" name="action" value="create" />
       <label htmlFor="agent-name">Agent name</label>
       <input id="agent-name" name="name" required />
-      <label htmlFor="agent-integration-platform">Integration platform</label>
-      <select
-        id="agent-integration-platform"
-        name="integrationPlatform"
-        required
-        defaultValue="other"
-      >
-        {agentIntegrationPlatforms.map((platform) => (
-          <option key={platform} value={platform}>
-            {formatAgentIntegrationPlatformLabel(platform)}
-          </option>
-        ))}
-      </select>
       <AgentVirtualModelFields
         idPrefix="agent"
         initialSelectedVirtualModelIds={[]}
@@ -245,19 +281,6 @@ function AgentEditDialog({
         <input type="hidden" name="id" value={agent.id} />
         <label htmlFor={`agent-name-${agent.id}`}>Agent name</label>
         <input id={`agent-name-${agent.id}`} name="name" defaultValue={agent.name} required />
-        <label htmlFor={`agent-integration-platform-${agent.id}`}>Integration platform</label>
-        <select
-          id={`agent-integration-platform-${agent.id}`}
-          name="integrationPlatform"
-          defaultValue={agent.integrationPlatform}
-          required
-        >
-          {agentIntegrationPlatforms.map((platform) => (
-            <option key={platform} value={platform}>
-              {formatAgentIntegrationPlatformLabel(platform)}
-            </option>
-          ))}
-        </select>
         <AgentVirtualModelFields
           idPrefix={`agent-${agent.id}`}
           initialDefaultVirtualModelId={access.defaultVirtualModel?.id ?? ""}
@@ -415,52 +438,16 @@ function AgentEnabledToggleForm({ agent }: { agent: ConsoleAgent }) {
   );
 }
 
-type AgentPlatformFilter = "all" | AgentIntegrationPlatform;
-
-function readAgentPlatformFilter(value: string | undefined): AgentPlatformFilter {
-  return agentIntegrationPlatforms.includes(value as AgentIntegrationPlatform)
-    ? (value as AgentIntegrationPlatform)
-    : "all";
-}
-
-function filterAgents(
-  agents: ConsoleAgent[],
-  filters: {
-    agentPlatformFilter: AgentPlatformFilter;
-    agentSearch: string;
-  },
-): ConsoleAgent[] {
+function filterAgents(agents: ConsoleAgent[], filters: { agentSearch: string }): ConsoleAgent[] {
   const normalizedSearch = filters.agentSearch.toLowerCase();
-  return agents.filter((agent) => {
-    if (
-      filters.agentPlatformFilter !== "all" &&
-      agent.integrationPlatform !== filters.agentPlatformFilter
-    ) {
-      return false;
-    }
-    if (!normalizedSearch) {
-      return true;
-    }
-    return [
-      agent.name,
-      agent.keyPrefix ?? "",
-      formatAgentIntegrationPlatformLabel(agent.integrationPlatform),
-    ].some((value) => value.toLowerCase().includes(normalizedSearch));
-  });
-}
-
-function formatAgentIntegrationPlatformLabel(platform: AgentIntegrationPlatform): string {
-  const labels: Record<AgentIntegrationPlatform, string> = {
-    "claude-code": "Claude Code",
-    codex: "Codex",
-    cursor: "Cursor",
-    "github-copilot": "GitHub Copilot",
-    hermes: "Hermes",
-    openclaw: "OpenClaw",
-    opencode: "OpenCode",
-    other: "Other",
-  };
-  return labels[platform];
+  if (!normalizedSearch) {
+    return agents;
+  }
+  return agents.filter((agent) =>
+    [agent.name, agent.keyPrefix ?? ""].some((value) =>
+      value.toLowerCase().includes(normalizedSearch),
+    ),
+  );
 }
 
 function formatAgentKeyPrefixDisplay(keyPrefix: string): string {
@@ -508,14 +495,8 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
   const agentLimitsByAgentId = groupByAgentId(agentLimits);
   const enabledAgentCount = agents.filter((agent) => agent.enabled).length;
   const usageTodayByAgentId = new Map(usageToday.agentBreakdowns.map((agent) => [agent.id, agent]));
-  const agentPlatformFilter = readAgentPlatformFilter(
-    readSingleSearchParam(searchParams.agentPlatform),
-  );
   const agentSearch = readSingleSearchParam(searchParams.agentSearch)?.trim() ?? "";
-  const visibleAgents = filterAgents(agents, {
-    agentSearch,
-    agentPlatformFilter,
-  });
+  const visibleAgents = filterAgents(agents, { agentSearch });
   const selectedAgentId = readSingleSearchParam(searchParams.selected);
   const agentView = readSingleSearchParam(searchParams.agentView);
   const viewDialogAgent = agents.find((agent) => agent.id === agentView) ?? null;
@@ -556,21 +537,6 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
           <form action="/agents" method="get">
             <fieldset className="agents-filter-bar">
               <legend className="sr-only">Agent filters</legend>
-              <div className="console-field">
-                <label htmlFor="agent-filter-platform">Platform</label>
-                <select
-                  id="agent-filter-platform"
-                  name="agentPlatform"
-                  defaultValue={agentPlatformFilter}
-                >
-                  <option value="all">All</option>
-                  {agentIntegrationPlatforms.map((platform) => (
-                    <option key={platform} value={platform}>
-                      {formatAgentIntegrationPlatformLabel(platform)}
-                    </option>
-                  ))}
-                </select>
-              </div>
               <div className="console-field agents-search-field">
                 <label htmlFor="agent-filter-search" className="sr-only">
                   Search

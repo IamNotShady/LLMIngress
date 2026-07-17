@@ -161,3 +161,6 @@ next-env.d.ts
 
 # Superpowers brainstorm sessions
 .superpowers/
+
+# Local marketing/launch drafts (never committed)
+docs/marketing/

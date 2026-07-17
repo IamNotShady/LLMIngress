@@ -16,7 +16,7 @@
       "verification": "pnpm exec vitest run tests/features/provider-management.unit.test.ts tests/features/provider-model-sync.unit.test.ts tests/features/provider-connection-health.unit.test.ts && pnpm test:e2e tests/e2e/provider-management.e2e.spec.ts tests/e2e/provider-model-sync.e2e.spec.ts tests/e2e/provider-connection-health.e2e.spec.ts --workers=1",
       "dependencies": ["core-platform-security"],
       "status": "passing",
-      "evidence": "2026-07-15: API key save/enable and OAuth complete/enable now enqueue model_refresh (source api_key_saved/oauth_ready, trigger system) alongside connection probes; enqueueProviderModelRefreshJob accepts source/trigger. Focused unit + provider-connection-health E2E (incl. credential auto-refresh cases), pnpm run verify, and verify:features (9/9) passed."
+      "evidence": "2026-07-16: Removed the app-level provider_key uniqueness check so any number of providers can share a provider type/key with any display name and base URL; provider type only selects the wire protocol (runtime paths are provider-id keyed). console-provider-duplicates unit cases + duplicate-provider Console E2E, pnpm run verify, and verify:features (9/9) passed."
     },
     {
       "id": "virtual-model-routing",
@@ -25,7 +25,7 @@
       "verification": "pnpm exec vitest run tests/features/virtual-model-routing.unit.test.ts tests/features/route-strategies.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-routing.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management"],
       "status": "passing",
-      "evidence": "2026-07-15: Virtual Model endpoint choices exclude Embeddings, and direct saves reject known embedding-only candidates with route_policy_endpoint_unsupported. Focused unit/E2E, verify, and feature regression passed."
+      "evidence": "2026-07-16: Route-policy capability mismatch errors now name the exact conflicting values (e.g. maxContextTokens 1000000 vs 1048576) via resolveVirtualModelCapabilityContract, and the route dialog renders precise grouped token counts (formatModelContextTokens) so near-identical context windows are distinguishable instead of both rounding to ~1M. Focused unit (message + formatter), DB + DOM E2E (precise display, 1280/390 no-overflow, enriched error end-to-end), pnpm run verify, and verify:features (9/9) passed."
     },
     {
       "id": "gateway-protocol-execution",
@@ -70,16 +70,16 @@
       "verification": "pnpm exec vitest run tests/features/console-core.unit.test.ts tests/features/console-layout-interactions.unit.test.ts && pnpm test:e2e tests/e2e/console-core.e2e.spec.ts tests/e2e/console-layout-interactions.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-15: Console E2E ignores only Next-generated unused .woff2 preload warnings while retaining all real console errors and other warnings; the focused Provider API key interaction E2E, full serial Console Core regression, and optimized feature batch passed."
+      "evidence": "2026-07-16: Provider list defaults to fully collapsed and clicking the expanded row collapses it (selected URL param is the only expansion state); the Model library card renders only while a provider is selected. provider-list-collapse unit+E2E cases updated; pnpm run verify and verify:features passed."
     },
     {
-      "id": "release-guards",
-      "name": "Release Guards",
-      "description": "PostgreSQL 18.4 runtime, Compose-based multi-role Docker delivery, single 24-table baseline, retired-surface guards, standard verification, and repository hygiene.",
-      "verification": "pnpm exec vitest run tests/features/release-guards.unit.test.ts && pnpm test:e2e tests/e2e/release-guards.e2e.spec.ts --workers=1",
+      "id": "delivery-quality",
+      "name": "Delivery Quality",
+      "description": "Compose/Docker delivery hardening, migration idempotency and status CLI, schema vocabulary defenses, workspace scaffold, and cross-domain behavior smoke.",
+      "verification": "pnpm exec vitest run tests/features/delivery-quality.unit.test.ts && pnpm test:e2e tests/e2e/delivery-quality.e2e.spec.ts --workers=1",
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
-      "evidence": "2026-07-16: Compose delivery is two containers (app command:all + postgres); entrypoint all migrates then supervises Gateway/Console/Worker; Dockerfile CMD all. Focused release/delivery unit+e2e, pnpm run verify, and verify:features (9/9) passed."
+      "evidence": "2026-07-17: V1 shipped; release-freeze guards removed (feature-list/suite-mapping pins, progress.md line cap, single-migration/24-table freeze, retired-surface absence checks, PostgreSQL image pin, Compose boot check). Behavior tests kept under renamed delivery-quality suites. Focused unit (26) + E2E (6, incl. non-root image build), pnpm run verify (317 unit tests, coverage above thresholds), and verify:features (9/9 via per-feature fallback after a parallel e2e batch flake) passed on the rebased dev baseline."
     }
   ]
 }

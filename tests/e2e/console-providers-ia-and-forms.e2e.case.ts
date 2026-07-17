@@ -90,6 +90,11 @@ test("providers page shows one provider representation with a searchable capped 
           page.locator(".providers-list-card tr", { hasText: "IA Probe Provider" }).first(),
         ).toBeVisible();
 
+        // Collapsed list renders no model library; selecting the provider does.
+        await expect(page.locator(".model-library-card")).toHaveCount(0);
+        await page.goto(`${baseUrl}/providers?selected=${providerId}`, {
+          waitUntil: "networkidle",
+        });
         const libraryRows = page.locator(".model-library-table tbody tr");
         await expect(libraryRows).toHaveCount(50);
         const modelPagination = page.getByRole("navigation", { name: "Model pages" });
@@ -102,13 +107,13 @@ test("providers page shows one provider representation with a searchable capped 
         );
         await expect(modelPagination.getByRole("button", { name: "Previous page" })).toBeDisabled();
         await modelPagination.getByRole("link", { name: "Next page" }).click();
-        await expect(page).toHaveURL(`${baseUrl}/providers?modelPage=2`);
+        await expect(page).toHaveURL(`${baseUrl}/providers?selected=${providerId}&modelPage=2`);
         await expect(libraryRows).toHaveCount(10);
         await expect(modelPagination.locator(".list-pagination-summary strong")).toHaveText(
           "Page 2 of 2",
         );
         await modelPagination.getByRole("link", { name: "Previous page" }).click();
-        await expect(page).toHaveURL(`${baseUrl}/providers`);
+        await expect(page).toHaveURL(`${baseUrl}/providers?selected=${providerId}`);
         await expect(libraryRows).toHaveCount(50);
 
         await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-needle`, {

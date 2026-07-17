@@ -57,10 +57,7 @@ export function ProvidersClientSection({
     [providerOAuthConnections],
   );
   const initialProvider =
-    providers.find((provider) => provider.id === initialSelectedProviderId) ??
-    providers.find((provider) => provider.providerKey === "openai") ??
-    providers[0] ??
-    null;
+    providers.find((provider) => provider.id === initialSelectedProviderId) ?? null;
   const [refreshingProviderId, setRefreshingProviderId] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const refreshProviderModels = async (event: FormEvent<HTMLFormElement>, providerId: string) => {
@@ -133,6 +130,11 @@ export function ProvidersClientSection({
                       const isRefreshing = provider.id === refreshingProviderId;
                       const isRefreshDisabled =
                         !provider.enabled || providerKeyCount === 0 || isRefreshing;
+                      const rowHref = buildQueryHref(searchParams, {
+                        modelPage: undefined,
+                        modelQuery: undefined,
+                        selected: isSelected ? undefined : provider.id,
+                      });
 
                       return (
                         <Fragment key={provider.id}>
@@ -141,11 +143,7 @@ export function ProvidersClientSection({
                               <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                href={buildQueryHref(searchParams, {
-                                  modelPage: undefined,
-                                  modelQuery: undefined,
-                                  selected: provider.id,
-                                })}
+                                href={rowHref}
                               >
                                 <strong>{provider.displayName}</strong>
                               </a>
@@ -154,11 +152,7 @@ export function ProvidersClientSection({
                               <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                href={buildQueryHref(searchParams, {
-                                  modelPage: undefined,
-                                  modelQuery: undefined,
-                                  selected: provider.id,
-                                })}
+                                href={rowHref}
                               >
                                 <ProviderHealthDetailPill
                                   status={formatProviderAggregateHealthStatus(
@@ -172,11 +166,7 @@ export function ProvidersClientSection({
                               <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                href={buildQueryHref(searchParams, {
-                                  modelPage: undefined,
-                                  modelQuery: undefined,
-                                  selected: provider.id,
-                                })}
+                                href={rowHref}
                               >
                                 {formatProviderType(provider)}
                               </a>
@@ -185,11 +175,7 @@ export function ProvidersClientSection({
                               <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                href={buildQueryHref(searchParams, {
-                                  modelPage: undefined,
-                                  modelQuery: undefined,
-                                  selected: provider.id,
-                                })}
+                                href={rowHref}
                               >
                                 {providerKeyCount}
                               </a>
@@ -198,11 +184,7 @@ export function ProvidersClientSection({
                               <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                href={buildQueryHref(searchParams, {
-                                  modelPage: undefined,
-                                  modelQuery: undefined,
-                                  selected: provider.id,
-                                })}
+                                href={rowHref}
                               >
                                 {provider.providerModelCount}
                               </a>
@@ -211,11 +193,7 @@ export function ProvidersClientSection({
                               <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                href={buildQueryHref(searchParams, {
-                                  modelPage: undefined,
-                                  modelQuery: undefined,
-                                  selected: provider.id,
-                                })}
+                                href={rowHref}
                               >
                                 {formatProviderLastConnection(providerHealth, renderedAtMs)}
                               </a>
@@ -397,12 +375,10 @@ export function ProvidersClientSection({
         </div>
       </div>
 
-      <div className="chart-card model-library-card">
-        <div className="model-library-head">
-          <h2 className="chart-card-title">
-            Model library{selectedProvider ? ` - ${selectedProvider.displayName}` : ""}
-          </h2>
-          {selectedProvider ? (
+      {selectedProvider ? (
+        <div className="chart-card model-library-card">
+          <div className="model-library-head">
+            <h2 className="chart-card-title">Model library - {selectedProvider.displayName}</h2>
             <form className="model-library-search" action="/providers" method="get">
               <input type="hidden" name="selected" value={selectedProvider.id} />
               <label className="sr-only" htmlFor="provider-model-query">
@@ -416,69 +392,69 @@ export function ProvidersClientSection({
                 placeholder="Search models"
               />
             </form>
-          ) : null}
-        </div>
-        {providerModelPage.total === 0 && modelQuery ? (
-          <p>No models match “{modelQuery}”.</p>
-        ) : providerModelPage.total === 0 ? (
-          <p>No provider models discovered yet.</p>
-        ) : (
-          <div className="data-table-wrap">
-            <table className="data-table bounded-table model-library-table">
-              <thead>
-                <tr>
-                  <th>Provider</th>
-                  <th>Model ID</th>
-                  <th>Context</th>
-                  <th>Output cap</th>
-                  <th>Input</th>
-                  <th>Output</th>
-                  <th>Input price</th>
-                  <th>Output price</th>
-                  <th>Function</th>
-                  <th>Reasoning</th>
-                  <th>Streaming</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedProviderModels.map((model) => (
-                  <tr key={model.id}>
-                    <td>{model.providerDisplayName}</td>
-                    <td>
-                      <span className="model-id-cell">
-                        <strong>{model.modelDisplayName}</strong>
-                        <small className="mono">{model.modelId}</small>
-                      </span>
-                    </td>
-                    <td>{formatModelContext(model.contextWindow)}</td>
-                    <td>{formatModelContext(model.maxOutputTokens)}</td>
-                    <td>{formatModalities(model.inputModalities)}</td>
-                    <td>{formatModalities(model.outputModalities)}</td>
-                    <td>{formatModelPrice(model.inputUsdPerMillionTokens)}</td>
-                    <td>{formatModelPrice(model.outputUsdPerMillionTokens)}</td>
-                    <td>{formatNullableBooleanFeature(model.supportsFunctionCalling)}</td>
-                    <td>{formatNullableBooleanFeature(model.supportsReasoning)}</td>
-                    <td>{formatBooleanFeature(model.supportsStreaming)}</td>
-                    <td>
-                      <ModelAvailabilityPill value={model.availability} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <Pagination
-              ariaLabel="Model pages"
-              itemLabel="models"
-              page={providerModelPage.page}
-              pageParam="modelPage"
-              searchParams={searchParams}
-              total={providerModelPage.total}
-              totalPages={providerModelPage.pageCount}
-            />
           </div>
-        )}
-      </div>
+          {providerModelPage.total === 0 && modelQuery ? (
+            <p>No models match “{modelQuery}”.</p>
+          ) : providerModelPage.total === 0 ? (
+            <p>No provider models discovered yet.</p>
+          ) : (
+            <div className="data-table-wrap">
+              <table className="data-table bounded-table model-library-table">
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>Model ID</th>
+                    <th>Context</th>
+                    <th>Output cap</th>
+                    <th>Input</th>
+                    <th>Output</th>
+                    <th>Input price</th>
+                    <th>Output price</th>
+                    <th>Function</th>
+                    <th>Reasoning</th>
+                    <th>Streaming</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedProviderModels.map((model) => (
+                    <tr key={model.id}>
+                      <td>{model.providerDisplayName}</td>
+                      <td>
+                        <span className="model-id-cell">
+                          <strong>{model.modelDisplayName}</strong>
+                          <small className="mono">{model.modelId}</small>
+                        </span>
+                      </td>
+                      <td>{formatModelContext(model.contextWindow)}</td>
+                      <td>{formatModelContext(model.maxOutputTokens)}</td>
+                      <td>{formatModalities(model.inputModalities)}</td>
+                      <td>{formatModalities(model.outputModalities)}</td>
+                      <td>{formatModelPrice(model.inputUsdPerMillionTokens)}</td>
+                      <td>{formatModelPrice(model.outputUsdPerMillionTokens)}</td>
+                      <td>{formatNullableBooleanFeature(model.supportsFunctionCalling)}</td>
+                      <td>{formatNullableBooleanFeature(model.supportsReasoning)}</td>
+                      <td>{formatBooleanFeature(model.supportsStreaming)}</td>
+                      <td>
+                        <ModelAvailabilityPill value={model.availability} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <Pagination
+                ariaLabel="Model pages"
+                itemLabel="models"
+                page={providerModelPage.page}
+                pageParam="modelPage"
+                searchParams={searchParams}
+                total={providerModelPage.total}
+                totalPages={providerModelPage.pageCount}
+              />
+            </div>
+          )}
+        </div>
+      ) : null}
     </>
   );
 }

@@ -1,9 +1,0 @@
-import "./delivery-hardening.e2e.case";
-import "./platform-foundation.e2e.case";
-import "./repository-release-guards.e2e.case";
-import "./retired-console-config-transfer.e2e.case";
-import "./retired-routing-agent-cost.e2e.case";
-import "./retired-runtime-pages.e2e.case";
-import "./retired-worker-surfaces.e2e.case";
-import "./schema-release-baseline.e2e.case";
-import "./schema-vocabulary.e2e.case";

@@ -73,13 +73,13 @@
       "evidence": "2026-07-16: Provider list defaults to fully collapsed and clicking the expanded row collapses it (selected URL param is the only expansion state); the Model library card renders only while a provider is selected. provider-list-collapse unit+E2E cases updated; pnpm run verify and verify:features passed."
     },
     {
-      "id": "release-guards",
-      "name": "Release Guards",
-      "description": "PostgreSQL 18.4 runtime, Compose-based multi-role Docker delivery, single 24-table baseline, retired-surface guards, standard verification, and repository hygiene.",
-      "verification": "pnpm exec vitest run tests/features/release-guards.unit.test.ts && pnpm test:e2e tests/e2e/release-guards.e2e.spec.ts --workers=1",
+      "id": "delivery-quality",
+      "name": "Delivery Quality",
+      "description": "Compose/Docker delivery hardening, migration idempotency and status CLI, schema vocabulary defenses, workspace scaffold, and cross-domain behavior smoke.",
+      "verification": "pnpm exec vitest run tests/features/delivery-quality.unit.test.ts && pnpm test:e2e tests/e2e/delivery-quality.e2e.spec.ts --workers=1",
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
-      "evidence": "2026-07-16: Compose delivery is two containers (app command:all + postgres); entrypoint all migrates then supervises Gateway/Console/Worker; Dockerfile CMD all. Focused release/delivery unit+e2e, pnpm run verify, and verify:features (9/9) passed."
+      "evidence": "2026-07-17: V1 shipped; release-freeze guards removed (feature-list/suite-mapping pins, progress.md line cap, single-migration/24-table freeze, retired-surface absence checks, PostgreSQL image pin, Compose boot check). Behavior tests kept under renamed delivery-quality suites. Focused unit (26) + E2E (6, incl. non-root image build), pnpm run verify (317 unit tests, coverage above thresholds), and verify:features (9/9 via per-feature fallback after a parallel e2e batch flake) passed on the rebased dev baseline."
     }
   ]
 }

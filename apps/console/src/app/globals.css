@@ -2210,13 +2210,16 @@ button.table-row-link {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-md);
-  align-items: start;
   margin-bottom: var(--space-md);
 }
 .agent-view-column {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-md);
   min-width: 0;
+}
+.agent-view-column > :last-child {
+  flex: 1;
 }
 @media (max-width: 56rem) {
   .agent-view-columns {

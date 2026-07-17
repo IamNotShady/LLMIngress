@@ -105,8 +105,13 @@ test("Agent dialogs show endpoint groups and integration tabs without the platfo
         await expect(dialog).toContainText("<YOUR_AGENT_API_KEY>");
         await expect(dialog).toContainText("llmi_guide_k");
 
-        // Two columns side by side on desktop, stacked on mobile, and no
-        // horizontal overflow with the dialog open at both checkpoints.
+        // The allowed-VM list is redundant with the endpoint groups.
+        await expect(dialog.getByRole("heading", { name: "Allowed Virtual Models" })).toHaveCount(
+          0,
+        );
+
+        // Two columns side by side with aligned bottoms on desktop, stacked
+        // on mobile, and no horizontal overflow at both checkpoints.
         const dialogColumns = dialog.locator(".agent-view-column");
         await expect(dialogColumns).toHaveCount(2);
         for (const viewport of [
@@ -124,6 +129,10 @@ test("Agent dialogs show endpoint groups and integration tabs without the platfo
             expect(rightBox.x, "columns sit side by side at 1280px").toBeGreaterThanOrEqual(
               leftBox.x + leftBox.width - 1,
             );
+            expect(
+              Math.abs(leftBox.y + leftBox.height - (rightBox.y + rightBox.height)),
+              "column bottoms align at 1280px",
+            ).toBeLessThanOrEqual(2);
           } else {
             expect(rightBox.y, "columns stack at 390px").toBeGreaterThanOrEqual(
               leftBox.y + leftBox.height - 1,

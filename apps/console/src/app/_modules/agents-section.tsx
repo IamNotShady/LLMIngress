@@ -104,16 +104,6 @@ function AgentViewDialog({
         </div>
         <div className="agent-view-column">
           <section className="agent-detail-section">
-            <h3>Allowed Virtual Models</h3>
-            <div className="agent-chip-list">
-              {allowedVirtualModels.map((virtualModel) => (
-                <span className="agent-chip" key={virtualModel.id}>
-                  {virtualModel.name}
-                </span>
-              ))}
-            </div>
-          </section>
-          <section className="agent-detail-section">
             <h3>Endpoints</h3>
             {allowedVirtualModels.length === 0 ? (
               <p>No Virtual Models are allowed for this Agent.</p>

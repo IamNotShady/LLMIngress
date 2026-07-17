@@ -88,7 +88,7 @@
       "verification": "pnpm exec vitest run tests/features/agent-integration-guidance.unit.test.ts && pnpm test:e2e tests/e2e/agent-integration-guidance.e2e.spec.ts --workers=1",
       "dependencies": ["agent-access-and-limits", "virtual-model-routing", "console-core"],
       "status": "passing",
-      "evidence": "2026-07-17: TDD red-to-green; focused unit (5) + e2e (1, incl. 1280 two-column side-by-side, 390 stacked, no-overflow with the detail dialog open) passed; pnpm run verify and verify:features (10/10, zero regression) passed. Integration Platform UI removed from create/edit/filter/detail (column retained, defaults 'other'); detail dialog widened to a two-column layout (left: fields, allowed VMs, limits; right: endpoint groups and 8-platform guide tabs) with the guides reused by the create-success dialog and one-time HTML page."
+      "evidence": "2026-07-17: TDD red-to-green; focused unit (5) + e2e (1, incl. 1280 two-column side-by-side, 390 stacked, no-overflow with the detail dialog open) passed; pnpm run verify and verify:features (10/10, zero regression) passed. Integration Platform UI removed from create/edit/filter/detail (column retained, defaults 'other'); detail dialog widened to a balanced two-column layout (left: fields and limits; right: allowed VMs and endpoint groups) with the 8-platform guide tabs full-width below, reused by the create-success dialog and one-time HTML page."
     }
   ]
 }

@@ -83,16 +83,6 @@ function AgentViewDialog({
             </div>
           </dl>
           <section className="agent-detail-section">
-            <h3>Allowed Virtual Models</h3>
-            <div className="agent-chip-list">
-              {allowedVirtualModels.map((virtualModel) => (
-                <span className="agent-chip" key={virtualModel.id}>
-                  {virtualModel.name}
-                </span>
-              ))}
-            </div>
-          </section>
-          <section className="agent-detail-section">
             <h3>Budget / Limit</h3>
             <div className="agent-limit-row">
               <span>Budget</span>
@@ -113,6 +103,16 @@ function AgentViewDialog({
           </section>
         </div>
         <div className="agent-view-column">
+          <section className="agent-detail-section">
+            <h3>Allowed Virtual Models</h3>
+            <div className="agent-chip-list">
+              {allowedVirtualModels.map((virtualModel) => (
+                <span className="agent-chip" key={virtualModel.id}>
+                  {virtualModel.name}
+                </span>
+              ))}
+            </div>
+          </section>
           <section className="agent-detail-section">
             <h3>Endpoints</h3>
             {allowedVirtualModels.length === 0 ? (
@@ -146,18 +146,18 @@ function AgentViewDialog({
               </div>
             ) : null}
           </section>
-          <section className="agent-detail-section">
-            <h3>Integration guide</h3>
-            <AgentIntegrationGuideTabs
-              apiKey={AGENT_API_KEY_PLACEHOLDER}
-              gatewayBaseUrl={gatewayBaseUrl}
-              idPrefix={`agent-view-${agent.id}`}
-              keyPrefix={agent.keyPrefix}
-              model={guideModel}
-            />
-          </section>
         </div>
       </div>
+      <section className="agent-detail-section">
+        <h3>Integration guide</h3>
+        <AgentIntegrationGuideTabs
+          apiKey={AGENT_API_KEY_PLACEHOLDER}
+          gatewayBaseUrl={gatewayBaseUrl}
+          idPrefix={`agent-view-${agent.id}`}
+          keyPrefix={agent.keyPrefix}
+          model={guideModel}
+        />
+      </section>
     </ConsoleDialog>
   );
 }

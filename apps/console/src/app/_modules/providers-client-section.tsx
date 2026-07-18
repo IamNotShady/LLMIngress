@@ -241,6 +241,7 @@ export function ProvidersClientSection({
                                     </a>
                                     <ConsoleMutationForm
                                       action="/api/providers"
+                                      errorPresentation="toast"
                                       fallbackError="Provider disable failed."
                                     >
                                       <input type="hidden" name="action" value="disable" />
@@ -271,6 +272,7 @@ export function ProvidersClientSection({
                                   <>
                                     <ConsoleMutationForm
                                       action="/api/providers"
+                                      errorPresentation="toast"
                                       fallbackError="Provider enable failed."
                                     >
                                       <input type="hidden" name="action" value="enable" />

@@ -403,7 +403,11 @@ function AgentDeleteDialog({ agent, closeHref }: { agent: ConsoleAgent; closeHre
 function AgentEnabledToggleForm({ agent }: { agent: ConsoleAgent }) {
   if (agent.enabled) {
     return (
-      <ConsoleMutationForm action="/api/agents" fallbackError="Agent disable failed.">
+      <ConsoleMutationForm
+        action="/api/agents"
+        errorPresentation="toast"
+        fallbackError="Agent disable failed."
+      >
         <input type="hidden" name="action" value="disable" />
         <input type="hidden" name="id" value={agent.id} />
         <button
@@ -419,7 +423,11 @@ function AgentEnabledToggleForm({ agent }: { agent: ConsoleAgent }) {
   }
 
   return (
-    <ConsoleMutationForm action="/api/agents" fallbackError="Agent enable failed.">
+    <ConsoleMutationForm
+      action="/api/agents"
+      errorPresentation="toast"
+      fallbackError="Agent enable failed."
+    >
       <input type="hidden" name="action" value="enable" />
       <input type="hidden" name="id" value={agent.id} />
       <button

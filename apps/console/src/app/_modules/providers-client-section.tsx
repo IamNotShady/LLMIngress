@@ -323,6 +323,7 @@ export function ProvidersClientSection({
                                         <ConsoleMutationForm
                                           action="/api/provider-oauth"
                                           className="provider-oauth-add-form"
+                                          errorPresentation="toast"
                                           fallbackError="Provider OAuth start failed."
                                         >
                                           <input type="hidden" name="action" value="start" />
@@ -553,6 +554,7 @@ function ProviderConnectionTable({
                     <span className="provider-table-actions">
                       <ConsoleMutationForm
                         action="/api/provider-health-probes"
+                        errorPresentation="toast"
                         fallbackError="Provider connection probe failed."
                       >
                         <input type="hidden" name="providerId" value={provider.id} />
@@ -571,6 +573,7 @@ function ProviderConnectionTable({
                         <>
                           <ConsoleMutationForm
                             action="/api/provider-oauth"
+                            errorPresentation="toast"
                             fallbackError="Provider OAuth update failed."
                           >
                             <input
@@ -594,6 +597,7 @@ function ProviderConnectionTable({
                           </ConsoleMutationForm>
                           <ConsoleMutationForm
                             action="/api/provider-oauth"
+                            errorPresentation="toast"
                             fallbackError="Provider OAuth deletion failed."
                           >
                             <input type="hidden" name="action" value="delete" />

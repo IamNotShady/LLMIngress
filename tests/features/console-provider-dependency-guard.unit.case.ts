@@ -46,10 +46,10 @@ describe("console provider dependency guard", () => {
           name: "Dependency VM",
         },
       ]);
-      expect(impact.agents).toEqual([
+      expect(impact.apiKeys).toEqual([
         {
-          id: ids.agentId,
-          name: "Dependency Agent",
+          id: ids.apiKeyId,
+          name: "Dependency ApiKey",
         },
       ]);
 
@@ -164,8 +164,8 @@ describe("console provider dependency guard", () => {
     try {
       await recordCompletedGatewayRequestActivity({
         activityId: randomUUID(),
-        agentApiKeyPrefix: "llmi_test",
-        agentId: ids.agentId,
+        apiKeyPrefix: "llmi_test",
+        apiKeyId: ids.apiKeyId,
         databaseUrl: fixture.databaseUrl,
         model: "dependency-vm",
         protocol: "chat_completions",
@@ -220,7 +220,7 @@ async function createSeededProviderDependencyFixture(options: { withRoutePolicy?
     databaseNamePrefix: `llmingress_provider_dependency_${randomUUID().replaceAll("-", "_")}`,
   });
   const ids = {
-    agentId: randomUUID(),
+    apiKeyId: randomUUID(),
     providerApiKeyId: randomUUID(),
     providerId: randomUUID(),
     providerModelId: randomUUID(),
@@ -251,10 +251,10 @@ async function createSeededProviderDependencyFixture(options: { withRoutePolicy?
   );
   await fixture.query(
     `
-      insert into agents (id, name, key_prefix, key_hash, default_virtual_model_id)
-      values ($1, 'Dependency Agent', 'llmi_test', 'hash', $2)
+      insert into api_keys (id, name, key_prefix, key_hash, default_virtual_model_id)
+      values ($1, 'Dependency ApiKey', 'llmi_test', 'hash', $2)
     `,
-    [ids.agentId, ids.virtualModelId],
+    [ids.apiKeyId, ids.virtualModelId],
   );
 
   if (options.withRoutePolicy !== false) {

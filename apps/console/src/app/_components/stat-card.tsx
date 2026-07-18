@@ -1,4 +1,4 @@
-// KPI stat card used across the redesigned dashboard pages (Overview, Agents,
+// KPI stat card used across the redesigned dashboard pages (Overview, API Keys,
 // Virtual Models, Usage, Limits). Matches the prototype's metric tiles.
 // Delta tones carry valence (good/bad/neutral), not direction — callers decide
 // per metric whether up or down is the good direction.

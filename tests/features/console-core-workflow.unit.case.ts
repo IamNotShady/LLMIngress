@@ -9,7 +9,7 @@ describe("Console core workflow", () => {
     expect(overview).toContain("Route your first request");
     expect(overview).toContain('href="/providers?providerDialog=new"');
     expect(overview).toContain('href="/models?virtualModelDialog=new"');
-    expect(overview).toContain('href="/agents?agentDialog=new"');
+    expect(overview).toContain('href="/api-keys?apiKeyDialog=new"');
     expect(overview).toContain('href="/playground"');
   });
 
@@ -20,13 +20,13 @@ describe("Console core workflow", () => {
   });
 
   it("gives every blocked empty state a path into the core setup flow", () => {
-    const agents = read("apps/console/src/app/_modules/agents-section.tsx");
+    const api_keys = read("apps/console/src/app/_modules/api-keys-section.tsx");
     const limits = read("apps/console/src/app/_modules/limits-section.tsx");
     const virtualModels = read("apps/console/src/app/_modules/virtual-models-section.tsx");
     const routeDialog = read("apps/console/src/app/_modules/virtual-model-route-dialog.tsx");
-    expect(agents).not.toContain("create one below");
-    expect(agents).toContain("Create an Agent");
-    expect(limits).toContain("Create an Agent and enable limits");
+    expect(api_keys).not.toContain("create one below");
+    expect(api_keys).toContain("Create an API Key");
+    expect(limits).toContain("Create an API Key and enable limits");
     expect(virtualModels).toContain("Add a Provider and refresh its models");
     expect(routeDialog).toContain("No compatible models available for this endpoint");
     expect(routeDialog).toContain("Open Providers");

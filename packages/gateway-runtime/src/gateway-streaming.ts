@@ -17,11 +17,11 @@ import type {
 import { isRecord } from "@llmingress/util";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
-  enforceGatewayAgentLimitsIfEnabled,
+  enforceGatewayApiKeyLimitsIfEnabled,
   type GatewayBudgetSettlement,
   type GatewayConcurrencyLease,
   releaseGatewayConcurrency,
-} from "./gateway-agent-limits.ts";
+} from "./gateway-api-key-limits.ts";
 import { normalizeOpenAIChatCompletionRequest } from "./gateway-chat-completions.ts";
 import type {
   GatewayConfigSnapshot,
@@ -111,7 +111,7 @@ export function readGatewayStreamingFlag(body: unknown): boolean {
 }
 
 export async function executeGatewayStreamingRequest(input: {
-  agentId: string;
+  apiKeyId: string;
   databaseUrl?: string;
   fetch?: typeof globalThis.fetch;
   limitsEnabled?: boolean;
@@ -192,8 +192,8 @@ export async function executeGatewayStreamingRequest(input: {
     }
 
     if (!limitsEnforced) {
-      const limits = await enforceGatewayAgentLimitsIfEnabled({
-        agentId: input.agentId,
+      const limits = await enforceGatewayApiKeyLimitsIfEnabled({
+        apiKeyId: input.apiKeyId,
         budgetPrice: candidates[0]?.price,
         databaseUrl: input.databaseUrl,
         limitsEnabled: input.limitsEnabled !== false,

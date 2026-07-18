@@ -26,9 +26,9 @@ vi.mock("@llmingress/db/client", async (importOriginal) => {
   };
 });
 
-vi.mock("@llmingress/gateway-runtime/gateway-agent-limits", async (importOriginal) => {
+vi.mock("@llmingress/gateway-runtime/gateway-api-key-limits", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("@llmingress/gateway-runtime/gateway-agent-limits")>();
+    await importOriginal<typeof import("@llmingress/gateway-runtime/gateway-api-key-limits")>();
   return {
     ...actual,
     recordGatewayBudgetUsage: vi.fn(
@@ -45,8 +45,8 @@ function fakeLogger() {
 }
 
 const baseInput = {
-  agentId: "agent-1",
-  agentApiKeyPrefix: "llmi_",
+  apiKeyId: "api-key-1",
+  apiKeyPrefix: "llmi_",
   model: "vm-a",
   protocol: "chat_completions" as const,
   requestId: "req-1",

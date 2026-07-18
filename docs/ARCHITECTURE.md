@@ -10,9 +10,9 @@ Browser  -> Console -> PostgreSQL <- Worker
                  |---- Gateway
 ```
 
-- Gateway owns Agent authentication, limits, routing, fallback, Provider execution, and request
+- Gateway owns API key authentication, limits, routing, fallback, Provider execution, and request
   metadata recording.
-- Console owns user-authored configuration and operational views. It never proxies Agent traffic
+- Console owns user-authored configuration and operational views. It never proxies API key traffic
   or performs Provider egress.
 - Worker owns model discovery, exact Provider-connection probes, price synchronization, retention,
   and stale-concurrency repair.
@@ -24,10 +24,10 @@ Browser  -> Console -> PostgreSQL <- Worker
 ## Request and configuration flow
 
 ```text
-authenticate Agent
+authenticate API key
   -> resolve an allowed Virtual Model
   -> validate known capability requirements
-  -> enforce enabled Agent limits
+  -> enforce enabled API key limits
   -> order Route Policy candidates
   -> attach healthy credentials and execute fallback
   -> stream or return the Provider response
@@ -79,7 +79,7 @@ advisory locks. They create no `jobs` or `job_attempts`. Retention deletes in ba
 
 ## Data invariants
 
-- `agents.limits_enabled` is the only Agent-level Limits switch. Disabled rules remain stored.
+- `api_keys.limits_enabled` is the only API-key-level Limits switch. Disabled rules remain stored.
 - Runtime counters survive restart in `rate_limit_windows` and `budget_periods`.
 - Completed requests use `request_activity`, `request_usage`, `request_costs`, and
   `fallback_events`.

@@ -10,7 +10,7 @@ import {
 } from "../support/gateway-process";
 import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
-const agentApiKey = "llmi_gateway_error_fidelity_key_094";
+const apiKey = "llmi_gateway_error_fidelity_key_094";
 
 test("gateway passes through non-retryable provider 4xx body and status", async () => {
   const fixture = await createTestPostgresFixture({
@@ -21,14 +21,14 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedOpenAIGatewayRoute({
-      agentApiKey,
+      apiKey,
       fixture,
       providerBaseUrl: `${fakeProvider.url}?mode=bad-request`,
       virtualModelName: "vm-provider-4xx",
     });
-    const responsesAgentApiKey = "llmi_resp_error_fidelity_key_094";
+    const responsesApiKey = "llmi_resp_error_fidelity_key_094";
     await seedOpenAIGatewayRoute({
-      agentApiKey: responsesAgentApiKey,
+      apiKey: responsesApiKey,
       endpointProtocol: "responses",
       fixture,
       providerBaseUrl: `${fakeProvider.url}?mode=bad-request`,
@@ -53,7 +53,7 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
           model: "vm-provider-4xx",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -77,7 +77,7 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
           stream: true,
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -95,7 +95,7 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
           model: "vm-provider-responses-4xx",
         }),
         headers: {
-          authorization: `Bearer ${responsesAgentApiKey}`,
+          authorization: `Bearer ${responsesApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -124,7 +124,7 @@ test("gateway messages endpoint passes through non-retryable provider 4xx body a
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     const seeded = await seedOpenAIGatewayRoute({
-      agentApiKey: `${agentApiKey}_messages`,
+      apiKey: `${apiKey}_messages`,
       endpointProtocol: "messages",
       fixture,
       providerBaseUrl: `${fakeProvider.url}?mode=bad-request`,
@@ -150,7 +150,7 @@ test("gateway messages endpoint passes through non-retryable provider 4xx body a
           model: "vm-provider-messages-4xx",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}_messages`,
+          authorization: `Bearer ${apiKey}_messages`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -184,7 +184,7 @@ test("gateway returns exhausted provider 429 body, status, and headers", async (
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedOpenAIGatewayRoute({
-      agentApiKey: `${agentApiKey}_rate_limit`,
+      apiKey: `${apiKey}_rate_limit`,
       fixture,
       providerBaseUrl: `${fakeProvider.url}?mode=rate-limit`,
       virtualModelName: "vm-provider-429",
@@ -205,7 +205,7 @@ test("gateway returns exhausted provider 429 body, status, and headers", async (
           model: "vm-provider-429",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}_rate_limit`,
+          authorization: `Bearer ${apiKey}_rate_limit`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -240,7 +240,7 @@ test("gateway skips a fallback candidate with missing credentials", async () => 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     const seeded = await seedOpenAIGatewayRoute({
-      agentApiKey: `${agentApiKey}_fallback`,
+      apiKey: `${apiKey}_fallback`,
       fixture,
       providerBaseUrl: fakeProvider.url,
       virtualModelName: "vm-missing-key-fallback",
@@ -262,7 +262,7 @@ test("gateway skips a fallback candidate with missing credentials", async () => 
           model: "vm-missing-key-fallback",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}_fallback`,
+          authorization: `Bearer ${apiKey}_fallback`,
           "content-type": "application/json",
         },
         method: "POST",

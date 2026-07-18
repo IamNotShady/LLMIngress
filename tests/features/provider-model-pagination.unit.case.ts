@@ -51,7 +51,7 @@ describe("core Console performance", () => {
   });
 
   it("parallelizes independent page reads and removes the full analytics snapshot", () => {
-    expect(read("apps/console/src/app/_modules/agents-section-data.ts")).toContain("Promise.all");
+    expect(read("apps/console/src/app/_modules/api-keys-section-data.ts")).toContain("Promise.all");
     expect(read("apps/console/src/app/_modules/limits-section.tsx")).toContain("Promise.all");
     expect(read("apps/console/src/app/_modules/providers-section.tsx")).toContain("Promise.all");
     expect(read("apps/console/src/app/_modules/overview-section.tsx")).toContain("Promise.all");

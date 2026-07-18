@@ -33,7 +33,7 @@ and control routing, access, limits, fallback, and usage from one Console.
 
 - 🔀 Route Virtual Models with `fixed`, `cost_first`, or `random` policies
 - 🚑 Track the health of each Provider connection and fall back before streaming begins
-- 🔐 Give every Agent a dedicated API key and explicit Virtual Model grants
+- 🔐 Create a dedicated API key for each agent or tool, with explicit Virtual Model grants
 - 🛡️ Enforce optional budget, RPM, TPM, token, and concurrency limits
 - 📊 Track activity, tokens, latency, failures, fallback, connection health, and request cost
 - 🕶️ Keep prompts, successful responses, tool arguments, and credentials out of operational logs
@@ -59,7 +59,7 @@ PostgreSQL.
 | Endpoint | Address | Purpose |
 | --- | --- | --- |
 | Console | [http://localhost:3000](http://localhost:3000) | Configure and observe LLMIngress |
-| Gateway | [http://localhost:4000](http://localhost:4000) | Serve Agent API traffic |
+| Gateway | [http://localhost:4000](http://localhost:4000) | Serve API key traffic |
 | PostgreSQL | `localhost:55432` | Store configuration and operational metadata |
 | Worker | Inside the app container | Refresh models, probe connections, and synchronize prices |
 
@@ -71,12 +71,12 @@ Open [http://localhost:3000](http://localhost:3000), create the administrator pa
 
 1. Add a Provider connection.
 2. Create a Virtual Model with at least one candidate.
-3. Create an Agent allowed to use that Virtual Model.
-4. Copy the Agent's one-time `llmi_` API key.
+3. Create an API key allowed to use that Virtual Model.
+4. Copy the one-time `llmi_` API key.
 
 ```bash
 curl http://localhost:4000/v1/chat/completions \
-  --header "Authorization: Bearer llmi_your_agent_key" \
+  --header "Authorization: Bearer llmi_your_api_key" \
   --header "Content-Type: application/json" \
   --data '{
     "model": "your-virtual-model",
@@ -105,7 +105,7 @@ from routing until a successful probe recovers them.
 
 ## Gateway APIs
 
-Agents use the same API key and Virtual Model grants across all supported protocols:
+API keys use the same Virtual Model grants across all supported protocols:
 
 | Protocol | Endpoint |
 | --- | --- |
@@ -117,7 +117,7 @@ Agents use the same API key and Virtual Model grants across all supported protoc
 Provider payloads remain protocol-native. LLMIngress replaces the Virtual Model name with the
 selected Provider model while preserving the Provider request and response contract.
 
-Gateway health endpoints do not require an Agent API key:
+Gateway health endpoints do not require an API key:
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -127,9 +127,9 @@ Gateway health endpoints do not require an Agent API key:
 
 ## How it works
 
-- **Gateway** authenticates Agents, enforces enabled limits, resolves Virtual Models, executes
+- **Gateway** authenticates API keys, enforces enabled limits, resolves Virtual Models, executes
   fallback, and records request metadata.
-- **Console** owns configuration and operational views. It does not proxy Agent traffic or call
+- **Console** owns configuration and operational views. It does not proxy API key traffic or call
   Providers.
 - **Worker** performs model discovery, exact Provider-connection probes, and price synchronization.
 - **PostgreSQL** stores durable configuration, jobs, usage, cost, fallback, and connection health.

@@ -7,7 +7,7 @@ type VirtualModelOption = {
   name: string;
 };
 
-export function AgentVirtualModelFields({
+export function ApiKeyVirtualModelFields({
   idPrefix,
   initialDefaultVirtualModelId = "",
   initialSelectedVirtualModelIds,
@@ -47,7 +47,7 @@ export function AgentVirtualModelFields({
       {virtualModels.length === 0 ? (
         <p className="form-hint">No virtual models configured.</p>
       ) : (
-        <fieldset aria-labelledby={labelId} className="agent-vm-checkbox-list">
+        <fieldset aria-labelledby={labelId} className="api-key-vm-checkbox-list">
           {virtualModels.map((virtualModel) => {
             const inputId = `${labelId}-${virtualModel.id}`;
             return (

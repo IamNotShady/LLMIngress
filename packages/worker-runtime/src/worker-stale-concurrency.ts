@@ -19,7 +19,7 @@ export async function reconcileGatewayConcurrencyWindows(
                (
                  select count(*)::int
                  from request_activity as ra
-                 where ra.agent_id = w2.agent_id
+                 where ra.api_key_id = w2.api_key_id
                    and ra.status = 'started'
                    and ra.started_at > now() - make_interval(mins => $1::int)
                ) as active_count

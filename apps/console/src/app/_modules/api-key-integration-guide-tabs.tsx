@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { AGENT_API_KEY_PLACEHOLDER, buildAgentIntegrationGuides } from "./agent-integration-guide";
+import { API_KEY_PLACEHOLDER, buildIntegrationGuides } from "./api-key-integration-guide";
 
-export function AgentIntegrationGuideTabs({
+export function IntegrationGuideTabs({
   apiKey,
   gatewayBaseUrl,
   idPrefix,
@@ -16,7 +16,7 @@ export function AgentIntegrationGuideTabs({
   keyPrefix?: string | null;
   model: string;
 }) {
-  const guides = buildAgentIntegrationGuides({ apiKey, gatewayBaseUrl, model });
+  const guides = buildIntegrationGuides({ apiKey, gatewayBaseUrl, model });
   const fallback = guides[0];
   if (!fallback) {
     throw new Error("Integration guides are required.");
@@ -25,8 +25,8 @@ export function AgentIntegrationGuideTabs({
   const active = guides.find((entry) => entry.platform === activePlatform) ?? fallback;
 
   return (
-    <div className="agent-integration-guide-tabs">
-      <div className="agent-integration-tabs" role="tablist" aria-label="Integration platform">
+    <div className="api-key-integration-guide-tabs">
+      <div className="api-key-integration-tabs" role="tablist" aria-label="Integration platform">
         {guides.map((entry) => (
           <button
             aria-controls={`${idPrefix}-integration-panel`}
@@ -44,13 +44,13 @@ export function AgentIntegrationGuideTabs({
       </div>
       <div
         aria-labelledby={`${idPrefix}-integration-tab-${active.platform}`}
-        className="agent-configuration-guide"
+        className="api-key-configuration-guide"
         id={`${idPrefix}-integration-panel`}
         role="tabpanel"
       >
         {keyPrefix ? (
-          <p className="agent-integration-key-note">
-            Replace {AGENT_API_KEY_PLACEHOLDER} with the Agent API key that starts with{" "}
+          <p className="api-key-integration-key-note">
+            Replace {API_KEY_PLACEHOLDER} with the API key that starts with{" "}
             <code className="mono">{keyPrefix}</code>. The full key was shown once at creation.
           </p>
         ) : null}

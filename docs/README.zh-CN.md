@@ -33,7 +33,7 @@ LLMIngress 是一个开源、可自托管的 Agent AI 网关。接入 Provider A
 
 - 🔀 按 `fixed`、`cost_first` 或 `load_balance` 策略路由虚拟模型
 - 🚑 跟踪每个 Provider 连接的健康状态，并在流式输出开始前完成回退
-- 🔐 为每个 Agent 分配独立 API Key，并显式授予可用的虚拟模型
+- 🔐 为每个 agent 或工具创建专属 API Key，并显式授予可用的虚拟模型
 - 🛡️ 可选执行预算、RPM、TPM、Token 与并发限制
 - 📊 跟踪活动、Token、延迟、失败、回退、连接健康与请求成本
 - 🕶️ 不把提示词、成功响应、工具参数和凭证写入运维日志
@@ -59,7 +59,7 @@ PostgreSQL。
 | 端点 | 地址 | 用途 |
 | --- | --- | --- |
 | Console | [http://localhost:3000](http://localhost:3000) | 配置与观测 LLMIngress |
-| Gateway | [http://localhost:4000](http://localhost:4000) | 承载 Agent API 流量 |
+| Gateway | [http://localhost:4000](http://localhost:4000) | 承载 API Key 流量 |
 | PostgreSQL | `localhost:55432` | 存储配置与运维元数据 |
 | Worker | 应用容器内部 | 刷新模型、探测连接并同步价格 |
 
@@ -71,12 +71,12 @@ PostgreSQL。
 
 1. 添加一个 Provider 连接。
 2. 创建一个至少包含一个候选的虚拟模型。
-3. 创建一个被允许使用该虚拟模型的 Agent。
-4. 复制 Agent 的一次性 `llmi_` API Key。
+3. 创建一个被允许使用该虚拟模型的 API Key。
+4. 复制一次性 `llmi_` API Key。
 
 ```bash
 curl http://localhost:4000/v1/chat/completions \
-  --header "Authorization: Bearer llmi_your_agent_key" \
+  --header "Authorization: Bearer llmi_your_api_key" \
   --header "Content-Type: application/json" \
   --data '{
     "model": "your-virtual-model",
@@ -103,7 +103,7 @@ LLMIngress 支持远程 API Key、订阅 OAuth 与本地模型服务。当前内
 
 ## Gateway API
 
-Agent 在所有支持的协议中使用同一把 API Key 与虚拟模型授权：
+API Key 在所有支持的协议中使用同一套虚拟模型授权：
 
 | 协议 | 端点 |
 | --- | --- |
@@ -115,7 +115,7 @@ Agent 在所有支持的协议中使用同一把 API Key 与虚拟模型授权�
 Provider 载荷保持协议原生形态。LLMIngress 会把虚拟模型名称替换为选中的
 Provider 模型，同时保留 Provider 的请求与响应约定。
 
-Gateway 健康检查端点不需要 Agent API Key：
+Gateway 健康检查端点不需要 API Key：
 
 | 端点 | 用途 |
 | --- | --- |
@@ -125,8 +125,8 @@ Gateway 健康检查端点不需要 Agent API Key：
 
 ## 工作原理
 
-- **Gateway** 认证 Agent、执行已启用的限制、解析虚拟模型、执行回退，并记录请求元数据。
-- **Console** 负责配置与运维视图。它不代理 Agent 流量，也不直接调用 Provider。
+- **Gateway** 认证 API Key、执行已启用的限制、解析虚拟模型、执行回退，并记录请求元数据。
+- **Console** 负责配置与运维视图。它不代理 API Key 流量，也不直接调用 Provider。
 - **Worker** 负责模型发现、精确的 Provider 连接探测，以及价格同步。
 - **PostgreSQL** 存储持久化配置、任务、用量、成本、回退与连接健康数据。
 

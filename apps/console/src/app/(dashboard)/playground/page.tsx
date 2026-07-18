@@ -15,7 +15,7 @@ export default function PlaygroundPage() {
           <>
             <span>Test live requests through the Gateway Public API.</span>
             <span className="playground-memory-note">
-              Note: Agent API Key stays in browser memory only. The Console backend does not store
+              Note: API key stays in browser memory only. The Console backend does not store
               plaintext keys.
             </span>
           </>

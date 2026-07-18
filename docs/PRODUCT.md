@@ -12,7 +12,7 @@ release unless it is added here with code and verification.
 - `POST /v1/messages`
 - `GET /v1/models`
 
-Agents authenticate with a dedicated `llmi_` key and may access only their granted Virtual
+Each API key carries a dedicated `llmi_` secret and may access only its granted Virtual
 Models. Provider payloads remain protocol-native; Gateway replaces the Virtual Model name with
 the selected Provider model and does not log prompts, successful responses, or tool arguments.
 
@@ -45,10 +45,10 @@ Before the first client byte, Gateway may try another credential or candidate. A
 starts, it never replays the request. Confirmed unhealthy connections are filtered; models and
 Providers do not have independent health state.
 
-### Agents, limits, and accounting
+### API keys, limits, and accounting
 
-Agent creation atomically stores its API key, Virtual Model grants, optional default model, Limits
-switch, and initial rules. Disabling an Agent preserves its key and configuration. Disabling Limits
+API key creation atomically stores its secret, Virtual Model grants, optional default model, Limits
+switch, and initial rules. Disabling an API key preserves its configuration. Disabling Limits
 preserves rules and skips all limit reads and enforcement.
 
 Supported rules are budget, RPM, TPM, concurrency, and per-request token limits. Supported
@@ -57,7 +57,7 @@ fallback attempts, and Provider-connection health history.
 
 ### Console, Worker, and health
 
-Supported Console pages are Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits,
+Supported Console pages are Overview, API Keys, Providers, Virtual Models, Activity, Usage, Limits,
 and Playground. Password setup, session authentication, stable operation errors, and secret
 encryption are required.
 
@@ -81,7 +81,7 @@ V1 does not include:
 - billing reconciliation or savings/baseline-cost reporting
 - Prometheus metrics or OpenTelemetry tracing
 - persisted runtime heartbeat, status, or error products
-- `quality_first`, legacy route rules, Agent modes, or request-logging switches
+- `quality_first`, legacy route rules, API key modes, or request-logging switches
 - configuration import/export or Route Preview APIs
 
 The project is pre-release. `packages/db/migrations/0001_core_baseline.sql` is authoritative;

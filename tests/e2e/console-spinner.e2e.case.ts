@@ -46,7 +46,7 @@ test("playground shows the shared Spinner while models load, with no overflow", 
             body: JSON.stringify({ data: [] }),
           });
         });
-        await page.getByLabel("1. Agent API Key").fill("llmi_pg_e2e_spinner_key");
+        await page.getByLabel("1. API Key").fill("llmi_pg_e2e_spinner_key");
         await page.getByLabel("3. Virtual Model").focus();
         await expect(page.getByRole("status", { name: "Loading models" })).toBeVisible();
         for (const viewport of [

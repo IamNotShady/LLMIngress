@@ -2,34 +2,40 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  AGENT_API_KEY_PLACEHOLDER,
-  agentEndpointPathByProtocol,
-  agentIntegrationGuidePlatforms,
-  buildAgentIntegrationGuides,
-  groupAgentVirtualModelEndpoints,
-} from "../../apps/console/src/app/_modules/agent-integration-guide.ts";
-import { renderOneTimeAgentResponse } from "../../apps/console/src/app/api/agents/_created-page.ts";
-import {
-  agentIntegrationPlatforms,
-  listAgentVirtualModelAccess,
-} from "../../packages/db/src/console-agents.ts";
+  API_KEY_PLACEHOLDER,
+  buildIntegrationGuides,
+  endpointPathByProtocol,
+  groupVirtualModelEndpoints,
+  integrationGuidePlatforms,
+} from "../../apps/console/src/app/_modules/api-key-integration-guide.ts";
+import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page.ts";
+import { listApiKeyVirtualModelAccess } from "../../packages/db/src/console-api-keys.ts";
 import {
   createTestPostgresFixture,
   runMigrations,
   withDedicatedPostgresClient,
 } from "../../packages/db/src/index.ts";
 
-describe("agent integration guidance", () => {
+describe("apiKey integration guidance", () => {
   it("builds guides for every Integration Platform with the key placeholder", () => {
-    expect([...agentIntegrationGuidePlatforms]).toEqual([...agentIntegrationPlatforms]);
+    expect([...integrationGuidePlatforms]).toEqual([
+      "codex",
+      "claude-code",
+      "cursor",
+      "opencode",
+      "hermes",
+      "openclaw",
+      "github-copilot",
+      "other",
+    ]);
 
-    const guides = buildAgentIntegrationGuides({
-      apiKey: AGENT_API_KEY_PLACEHOLDER,
+    const guides = buildIntegrationGuides({
+      apiKey: API_KEY_PLACEHOLDER,
       gatewayBaseUrl: "http://127.0.0.1:4000",
       model: "guide-vm",
     });
 
-    expect(guides.map((entry) => entry.platform)).toEqual([...agentIntegrationPlatforms]);
+    expect(guides.map((entry) => entry.platform)).toEqual([...integrationGuidePlatforms]);
     expect(guides.map((entry) => entry.label)).toEqual([
       "Codex",
       "Claude Code",
@@ -57,17 +63,17 @@ describe("agent integration guidance", () => {
       "other",
     ]) {
       const entry = guides.find((candidate) => candidate.platform === platform);
-      expect(JSON.stringify(entry?.guide), platform).toContain(AGENT_API_KEY_PLACEHOLDER);
+      expect(JSON.stringify(entry?.guide), platform).toContain(API_KEY_PLACEHOLDER);
     }
   });
 
   it("maps endpoint protocols to real Gateway paths and groups Virtual Models", () => {
     const gatewaySource = readFileSync("apps/gateway/src/main.ts", "utf8");
-    for (const path of Object.values(agentEndpointPathByProtocol)) {
+    for (const path of Object.values(endpointPathByProtocol)) {
       expect(gatewaySource).toContain(`"${path}"`);
     }
 
-    const groups = groupAgentVirtualModelEndpoints({
+    const groups = groupVirtualModelEndpoints({
       gatewayBaseUrl: "http://127.0.0.1:4000/",
       virtualModels: [
         { displayName: "A", endpointProtocol: "messages", id: "vm-a", name: "vm-a" },
@@ -95,13 +101,13 @@ describe("agent integration guidance", () => {
     expect(groups.unrouted).toEqual([expect.objectContaining({ name: "vm-d" })]);
   });
 
-  it("returns each allowed Virtual Model's route endpoint protocol from agent access", async () => {
+  it("returns each allowed Virtual Model's route endpoint protocol from apiKey access", async () => {
     const fixture = await createTestPostgresFixture({
-      databaseNamePrefix: `llmingress_agent_guide_${randomUUID().replaceAll("-", "_")}`,
+      databaseNamePrefix: `llmingress_api_key_guide_${randomUUID().replaceAll("-", "_")}`,
     });
     try {
       await runMigrations({ databaseUrl: fixture.databaseUrl });
-      const agentId = randomUUID();
+      const apiKeyId = randomUUID();
       const routedVmId = randomUUID();
       const unroutedVmId = randomUUID();
       await withDedicatedPostgresClient(fixture.databaseUrl, async (client) => {
@@ -117,20 +123,20 @@ describe("agent integration guidance", () => {
           [randomUUID(), routedVmId],
         );
         await client.query(
-          `insert into agents (id, name, default_virtual_model_id)
-           values ($1, 'guide-access-agent', $2)`,
-          [agentId, routedVmId],
+          `insert into api_keys (id, name, key_prefix, key_hash, default_virtual_model_id)
+           values ($1, 'guide-access-apiKey', left(gen_random_uuid()::text, 12), gen_random_uuid()::text, $2)`,
+          [apiKeyId, routedVmId],
         );
         await client.query(
-          `insert into agent_virtual_models (agent_id, virtual_model_id)
+          `insert into api_key_virtual_models (api_key_id, virtual_model_id)
            values ($1, $2), ($1, $3)`,
-          [agentId, routedVmId, unroutedVmId],
+          [apiKeyId, routedVmId, unroutedVmId],
         );
       });
 
-      const access = await listAgentVirtualModelAccess(fixture.databaseUrl);
-      const agentAccess = access.find((entry) => entry.agentId === agentId);
-      expect(agentAccess?.allowedVirtualModels).toEqual([
+      const access = await listApiKeyVirtualModelAccess(fixture.databaseUrl);
+      const apiKeyAccess = access.find((entry) => entry.apiKeyId === apiKeyId);
+      expect(apiKeyAccess?.allowedVirtualModels).toEqual([
         expect.objectContaining({ endpointProtocol: "messages", name: "guide-routed-vm" }),
         expect.objectContaining({ endpointProtocol: null, name: "guide-unrouted-vm" }),
       ]);
@@ -139,26 +145,21 @@ describe("agent integration guidance", () => {
     }
   });
 
-  it("removes the Integration Platform field from Agent UI and API surfaces", () => {
-    const agentsUi = readFileSync("apps/console/src/app/_modules/agents-section.tsx", "utf8");
-    const agentsRoute = readFileSync("apps/console/src/app/api/agents/route.ts", "utf8");
-    const mutationFailure = readFileSync(
-      "apps/console/src/app/_components/console-mutation-failure.ts",
-      "utf8",
-    );
+  it("removes the Integration Platform field from ApiKey UI and API surfaces", () => {
+    const apiKeysUi = readFileSync("apps/console/src/app/_modules/api-keys-section.tsx", "utf8");
+    const apiKeysRoute = readFileSync("apps/console/src/app/api/api-keys/route.ts", "utf8");
 
-    expect(agentsUi).not.toContain('name="integrationPlatform"');
-    expect(agentsUi).not.toContain("agentPlatform");
-    expect(agentsUi).not.toContain("<dt>Platform</dt>");
-    expect(agentsUi).not.toContain("agent-filter-platform");
-    expect(agentsUi).toContain("AgentIntegrationGuideTabs");
-    expect(agentsUi).toContain("<h3>Endpoints</h3>");
-    expect(agentsRoute).not.toContain("integrationPlatform");
-    expect(mutationFailure).not.toContain("agent_integration_platform_invalid");
+    expect(apiKeysUi).not.toContain('name="integrationPlatform"');
+    expect(apiKeysUi).not.toContain("apiKeyPlatform");
+    expect(apiKeysUi).not.toContain("<dt>Platform</dt>");
+    expect(apiKeysUi).not.toContain("api-key-filter-platform");
+    expect(apiKeysUi).toContain("IntegrationGuideTabs");
+    expect(apiKeysUi).toContain("<h3>Endpoints</h3>");
+    expect(apiKeysRoute).not.toContain("integrationPlatform");
   });
 
   it("lists every platform guide on the one-time created page fallback", async () => {
-    const response = renderOneTimeAgentResponse(
+    const response = renderOneTimeApiKeyResponse(
       {
         keyPrefix: "llmi_test_key",
         plaintext: "llmi_test_key_value",

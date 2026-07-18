@@ -16,14 +16,14 @@ const expectedActualTokens = 1200;
 test("gateway records non-streaming budget usage without reservations", async () => {
   await withSettlementGateway(
     { budgetLimitUsd: 1, mode: "cached-usage", virtualModelName: "vm-settlement-json" },
-    async ({ agentApiKey, baseUrl, fakeProvider, fixture, seeded }) => {
+    async ({ apiKey, baseUrl, fakeProvider, fixture, seeded }) => {
       const response = await fetch(`${baseUrl}/v1/chat/completions`, {
         body: JSON.stringify({
           messages: [{ content: "ping", role: "user" }],
           model: "vm-settlement-json",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -32,7 +32,7 @@ test("gateway records non-streaming budget usage without reservations", async ()
       expect(response.status).toBe(200);
       expect(fakeProvider.requests).toHaveLength(1);
       await expect
-        .poll(() => readBudgetUsage(fixture, seeded.agentId))
+        .poll(() => readBudgetUsage(fixture, seeded.apiKeyId))
         .toEqual({
           costUsedUsd: expectedActualCostUsd,
           tokensUsed: expectedActualTokens,
@@ -49,7 +49,7 @@ test("gateway records streaming budget usage after EOF without reservations", as
       mode: "stream&usage=chat&stream_end_ms=100",
       virtualModelName: "vm-settlement-stream",
     },
-    async ({ agentApiKey, baseUrl, fakeProvider, fixture, seeded }) => {
+    async ({ apiKey, baseUrl, fakeProvider, fixture, seeded }) => {
       const response = await fetch(`${baseUrl}/v1/chat/completions`, {
         body: JSON.stringify({
           messages: [{ content: "ping", role: "user" }],
@@ -57,7 +57,7 @@ test("gateway records streaming budget usage after EOF without reservations", as
           stream: true,
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -67,7 +67,7 @@ test("gateway records streaming budget usage after EOF without reservations", as
       expect(await response.text()).toContain("[DONE]");
       expect(fakeProvider.requests).toHaveLength(1);
       await expect
-        .poll(() => readBudgetUsage(fixture, seeded.agentId))
+        .poll(() => readBudgetUsage(fixture, seeded.apiKeyId))
         .toEqual({
           costUsedUsd: expectedActualCostUsd,
           tokensUsed: expectedActualTokens,
@@ -85,14 +85,14 @@ test("gateway records unknown-price JSON usage with zero cost", async () => {
       priceKnown: false,
       virtualModelName: "vm-settlement-unknown-json",
     },
-    async ({ agentApiKey, baseUrl, fakeProvider, fixture, seeded }) => {
+    async ({ apiKey, baseUrl, fakeProvider, fixture, seeded }) => {
       const response = await fetch(`${baseUrl}/v1/chat/completions`, {
         body: JSON.stringify({
           messages: [{ content: "ping", role: "user" }],
           model: "vm-settlement-unknown-json",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -101,7 +101,7 @@ test("gateway records unknown-price JSON usage with zero cost", async () => {
       expect(response.status).toBe(200);
       expect(fakeProvider.requests).toHaveLength(1);
       await expect
-        .poll(() => readBudgetUsage(fixture, seeded.agentId))
+        .poll(() => readBudgetUsage(fixture, seeded.apiKeyId))
         .toEqual({
           costUsedUsd: 0,
           tokensUsed: expectedActualTokens,
@@ -127,7 +127,7 @@ test("gateway records unknown-price streaming usage with zero cost", async () =>
       priceKnown: false,
       virtualModelName: "vm-settlement-unknown-stream",
     },
-    async ({ agentApiKey, baseUrl, fakeProvider, fixture, seeded }) => {
+    async ({ apiKey, baseUrl, fakeProvider, fixture, seeded }) => {
       const response = await fetch(`${baseUrl}/v1/chat/completions`, {
         body: JSON.stringify({
           messages: [{ content: "ping", role: "user" }],
@@ -135,7 +135,7 @@ test("gateway records unknown-price streaming usage with zero cost", async () =>
           stream: true,
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -145,7 +145,7 @@ test("gateway records unknown-price streaming usage with zero cost", async () =>
       expect(await response.text()).toContain("[DONE]");
       expect(fakeProvider.requests).toHaveLength(1);
       await expect
-        .poll(() => readBudgetUsage(fixture, seeded.agentId))
+        .poll(() => readBudgetUsage(fixture, seeded.apiKeyId))
         .toEqual({
           costUsedUsd: 0,
           tokensUsed: expectedActualTokens,
@@ -166,14 +166,14 @@ test("gateway records unknown-price streaming usage with zero cost", async () =>
 test("gateway rejects exceeded budgets before provider calls", async () => {
   await withSettlementGateway(
     { budgetLimitUsd: 0.000001, mode: "cached-usage", virtualModelName: "vm-budget-exceeded" },
-    async ({ agentApiKey, baseUrl, fakeProvider, fixture, seeded }) => {
+    async ({ apiKey, baseUrl, fakeProvider, fixture, seeded }) => {
       const response = await fetch(`${baseUrl}/v1/chat/completions`, {
         body: JSON.stringify({
           messages: [{ content: "ping", role: "user" }],
           model: "vm-budget-exceeded",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -184,14 +184,14 @@ test("gateway rejects exceeded budgets before provider calls", async () => {
         error: { code: "cost_budget_exceeded" },
       });
       expect(fakeProvider.requests).toHaveLength(0);
-      await expect.poll(() => readBudgetUsage(fixture, seeded.agentId)).toBeNull();
+      await expect.poll(() => readBudgetUsage(fixture, seeded.apiKeyId)).toBeNull();
       await expect.poll(() => budgetReservationsTableExists(fixture)).toBe(false);
     },
   );
 });
 
 type SettlementGatewayContext = {
-  agentApiKey: string;
+  apiKey: string;
   baseUrl: string;
   fakeProvider: Awaited<ReturnType<typeof createFakeProviderServer>>;
   fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>;
@@ -207,7 +207,7 @@ async function withSettlementGateway(
   },
   run: (context: SettlementGatewayContext) => Promise<void>,
 ): Promise<void> {
-  const agentApiKey = `llmi_gateway_settlement_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+  const apiKey = `llmi_gateway_settlement_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_settlement_e2e_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -216,7 +216,7 @@ async function withSettlementGateway(
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     const seeded = await seedOpenAIGatewayRoute({
-      agentApiKey,
+      apiKey,
       fixture,
       limitsEnabled: true,
       providerBaseUrl: `${fakeProvider.url}?mode=${input.mode}`,
@@ -236,10 +236,10 @@ async function withSettlementGateway(
     }
     await fixture.query(
       `
-        insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
+        insert into api_key_limits (id, api_key_id, limit_type, period, limit_value, unit, enabled)
         values ($1, $2, 'budget', 'day', $3, 'usd', true)
       `,
-      [randomUUID(), seeded.agentId, input.budgetLimitUsd],
+      [randomUUID(), seeded.apiKeyId, input.budgetLimitUsd],
     );
 
     const gateway = startGatewayProcess({
@@ -250,7 +250,7 @@ async function withSettlementGateway(
     try {
       const baseUrl = `http://127.0.0.1:${gateway.port}`;
       await waitForGateway(baseUrl, gateway);
-      await run({ agentApiKey, baseUrl, fakeProvider, fixture, seeded });
+      await run({ apiKey, baseUrl, fakeProvider, fixture, seeded });
     } finally {
       await stopGatewayProcess(gateway);
     }
@@ -269,7 +269,7 @@ type QueryableFixture = {
 
 async function readBudgetUsage(
   fixture: QueryableFixture,
-  agentId: string,
+  apiKeyId: string,
 ): Promise<{ costUsedUsd: number; tokensUsed: number } | null> {
   const result = await fixture.query<{
     cost_used_usd: string;
@@ -279,11 +279,11 @@ async function readBudgetUsage(
       select tokens_used::text,
              cost_used_usd::text
       from budget_periods
-      where agent_id = $1
+      where api_key_id = $1
       order by created_at desc
       limit 1
     `,
-    [agentId],
+    [apiKeyId],
   );
   const row = result.rows[0];
   if (!row) {

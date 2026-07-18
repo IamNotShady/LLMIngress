@@ -10,7 +10,7 @@ import {
 } from "../support/gateway-process";
 import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
-const agentApiKey = "llmi_gateway_stream_robustness_key_094";
+const apiKey = "llmi_gateway_stream_robustness_key_094";
 
 test("gateway times out a hung non-streaming provider request", async () => {
   const fixture = await createTestPostgresFixture({
@@ -21,7 +21,7 @@ test("gateway times out a hung non-streaming provider request", async () => {
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedOpenAIGatewayRoute({
-      agentApiKey,
+      apiKey,
       fixture,
       providerBaseUrl: `${fakeProvider.url}?mode=timeout`,
       virtualModelName: "vm-provider-timeout",
@@ -44,7 +44,7 @@ test("gateway times out a hung non-streaming provider request", async () => {
           model: "vm-provider-timeout",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -74,7 +74,7 @@ test("gateway terminates a streaming response that stalls after the first chunk"
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedOpenAIGatewayRoute({
-      agentApiKey: `${agentApiKey}_stream`,
+      apiKey: `${apiKey}_stream`,
       fixture,
       providerBaseUrl: `${fakeProvider.url}?mode=stream-stall`,
       virtualModelName: "vm-stream-stall",
@@ -97,7 +97,7 @@ test("gateway terminates a streaming response that stalls after the first chunk"
           stream: true,
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}_stream`,
+          authorization: `Bearer ${apiKey}_stream`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -138,7 +138,7 @@ test("gateway closes the upstream provider stream when the client aborts", async
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedOpenAIGatewayRoute({
-      agentApiKey: `${agentApiKey}_abort`,
+      apiKey: `${apiKey}_abort`,
       fixture,
       providerBaseUrl: `${fakeProvider.url}?mode=stream-stall`,
       virtualModelName: "vm-stream-abort",
@@ -162,7 +162,7 @@ test("gateway closes the upstream provider stream when the client aborts", async
           stream: true,
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}_abort`,
+          authorization: `Bearer ${apiKey}_abort`,
           "content-type": "application/json",
         },
         method: "POST",

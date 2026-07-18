@@ -102,7 +102,7 @@ export function normalizeAnthropicMessagesRequest(
 }
 
 export async function executeGatewayAnthropicMessages(input: {
-  agentId: string;
+  apiKeyId: string;
   adapter?: AnthropicProviderAdapter;
   databaseUrl?: string;
   limitsEnabled?: boolean;

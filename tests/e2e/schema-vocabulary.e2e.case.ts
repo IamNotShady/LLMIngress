@@ -17,7 +17,7 @@ test("extensible labels stay relaxed while persistent jobs remain core-only", as
     ).rejects.toThrow(/jobs_job_type_check/);
     await expect(
       fixture.query(
-        "insert into agents (id, name, integration_platform) values ($1, 'Vocab E2E Agent', 'future-platform')",
+        "insert into api_keys (id, name, key_prefix, key_hash) values ($1, 'Vocab E2E API Key', left(gen_random_uuid()::text, 12), gen_random_uuid()::text)",
         [randomUUID()],
       ),
     ).resolves.toBeDefined();

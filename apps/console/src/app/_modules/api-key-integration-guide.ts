@@ -1,16 +1,22 @@
-import type {
-  AgentAllowedVirtualModel,
-  AgentIntegrationPlatform,
-} from "@llmingress/db/console-agents";
+import type { ApiKeyAllowedVirtualModel } from "@llmingress/db/console-api-keys";
 import type { RouteEndpointProtocol } from "@llmingress/domain";
 
-export const AGENT_API_KEY_PLACEHOLDER = "<YOUR_AGENT_API_KEY>";
+export const API_KEY_PLACEHOLDER = "<YOUR_API_KEY>";
 
-// Local copy of the platform order: this module is bundled into client
+// Platform enum is a UI-local vocabulary: the API key entity no longer carries
+// an integration_platform column, and this module is bundled into client
 // components, so it must not runtime-import @llmingress/db (node-only).
-// tests/features/agent-integration-guidance.unit.case.ts pins it to
-// agentIntegrationPlatforms from the db package.
-export const agentIntegrationGuidePlatforms: readonly AgentIntegrationPlatform[] = [
+export type IntegrationPlatform =
+  | "codex"
+  | "claude-code"
+  | "cursor"
+  | "opencode"
+  | "hermes"
+  | "openclaw"
+  | "github-copilot"
+  | "other";
+
+export const integrationGuidePlatforms: readonly IntegrationPlatform[] = [
   "codex",
   "claude-code",
   "cursor",
@@ -21,19 +27,19 @@ export const agentIntegrationGuidePlatforms: readonly AgentIntegrationPlatform[]
   "other",
 ];
 
-export type AgentConfigurationGuide = {
+export type ConfigurationGuide = {
   codeBlocks: Array<{ code: string; label: string }>;
   steps: string[];
   title: string;
 };
 
-export type AgentIntegrationGuideEntry = {
-  guide: AgentConfigurationGuide;
+export type IntegrationGuideEntry = {
+  guide: ConfigurationGuide;
   label: string;
-  platform: AgentIntegrationPlatform;
+  platform: IntegrationPlatform;
 };
 
-const agentIntegrationPlatformLabels: Record<AgentIntegrationPlatform, string> = {
+const integrationPlatformLabels: Record<IntegrationPlatform, string> = {
   "claude-code": "Claude Code",
   codex: "Codex",
   cursor: "Cursor",
@@ -44,28 +50,28 @@ const agentIntegrationPlatformLabels: Record<AgentIntegrationPlatform, string> =
   other: "Other",
 };
 
-export function formatAgentIntegrationPlatformLabel(platform: AgentIntegrationPlatform): string {
-  return agentIntegrationPlatformLabels[platform];
+export function formatIntegrationPlatformLabel(platform: IntegrationPlatform): string {
+  return integrationPlatformLabels[platform];
 }
 
-export function buildAgentIntegrationGuides(input: {
+export function buildIntegrationGuides(input: {
   apiKey: string;
   gatewayBaseUrl: string;
   model: string;
-}): AgentIntegrationGuideEntry[] {
-  return agentIntegrationGuidePlatforms.map((platform) => ({
-    guide: buildAgentConfigurationGuide({ ...input, integrationPlatform: platform }),
-    label: formatAgentIntegrationPlatformLabel(platform),
+}): IntegrationGuideEntry[] {
+  return integrationGuidePlatforms.map((platform) => ({
+    guide: buildConfigurationGuide({ ...input, integrationPlatform: platform }),
+    label: formatIntegrationPlatformLabel(platform),
     platform,
   }));
 }
 
-export function buildAgentConfigurationGuide(input: {
+export function buildConfigurationGuide(input: {
   apiKey: string;
   gatewayBaseUrl: string;
-  integrationPlatform: AgentIntegrationPlatform;
+  integrationPlatform: IntegrationPlatform;
   model: string;
-}): AgentConfigurationGuide {
+}): ConfigurationGuide {
   const gatewayBaseUrl = normalizeGatewayBaseUrl(input.gatewayBaseUrl);
   const openAiBaseUrl = `${gatewayBaseUrl}/v1`;
   const model = normalizeSnippetField(input.model, "model");
@@ -76,7 +82,7 @@ export function buildAgentConfigurationGuide(input: {
       title: "Configure Codex",
       steps: [
         "Codex calls the Responses endpoint; use a Virtual Model routed to /v1/responses.",
-        "Export the Agent API key in your shell.",
+        "Export the API key in your shell.",
         "Add the LLMIngress provider to the user-level ~/.codex/config.toml file.",
         "Start Codex; the configured Virtual Model will be sent through LLMIngress.",
       ],
@@ -95,7 +101,7 @@ export function buildAgentConfigurationGuide(input: {
       title: "Configure Claude Code",
       steps: [
         "Claude Code calls the Messages endpoint; use a Virtual Model routed to /v1/messages.",
-        "Export the LLMIngress Agent key and Gateway URL.",
+        "Export the LLMIngress API key and Gateway URL.",
         "Start Claude Code with the selected Virtual Model.",
       ],
       codeBlocks: [
@@ -111,7 +117,7 @@ export function buildAgentConfigurationGuide(input: {
     return uiGuide("Configure Cursor", [
       "Cursor calls the Chat Completions endpoint; use a Virtual Model routed to /v1/chat/completions.",
       "Open Cursor Settings, then open Models.",
-      `Enter the Agent API key ${apiKey} in the OpenAI API key field.`,
+      `Enter the API key ${apiKey} in the OpenAI API key field.`,
       `Set Override OpenAI Base URL to ${openAiBaseUrl}.`,
       `Add or select the model ${model}, then verify the connection.`,
       "The Gateway URL must be reachable from Cursor's servers; a localhost or private address will not work.",
@@ -124,7 +130,7 @@ export function buildAgentConfigurationGuide(input: {
       title: "Configure OpenCode",
       steps: [
         "OpenCode calls the Chat Completions endpoint; use a Virtual Model routed to /v1/chat/completions.",
-        "Run /connect in OpenCode, pick Other, enter llmingress as the provider id, then paste the Agent API key.",
+        "Run /connect in OpenCode, pick Other, enter llmingress as the provider id, then paste the API key.",
         "Add the provider and Virtual Model to your OpenCode configuration.",
       ],
       codeBlocks: [
@@ -214,7 +220,7 @@ export function buildAgentConfigurationGuide(input: {
   ]);
 }
 
-function uiGuide(title: string, steps: string[]): AgentConfigurationGuide {
+function uiGuide(title: string, steps: string[]): ConfigurationGuide {
   return { codeBlocks: [], steps, title };
 }
 
@@ -229,43 +235,43 @@ function normalizeGatewayBaseUrl(value: string): string {
 function normalizeSnippetField(value: string, label: string): string {
   const normalized = value.trim();
   if (!normalized) {
-    throw new Error(`${label} is required for Agent connection details.`);
+    throw new Error(`${label} is required for API key connection details.`);
   }
   return normalized;
 }
 
 // ---- Endpoint grouping (Console-only; Gateway paths live in apps/gateway/src/main.ts) ----
 
-export const agentEndpointPathByProtocol: Record<RouteEndpointProtocol, string> = {
+export const endpointPathByProtocol: Record<RouteEndpointProtocol, string> = {
   chat_completions: "/v1/chat/completions",
   messages: "/v1/messages",
   responses: "/v1/responses",
 };
 
-const agentEndpointOrder: readonly RouteEndpointProtocol[] = [
+const apiKeyEndpointOrder: readonly RouteEndpointProtocol[] = [
   "chat_completions",
   "responses",
   "messages",
 ];
 
-export type AgentEndpointGroup = {
+export type EndpointGroup = {
   protocol: RouteEndpointProtocol;
   url: string;
-  virtualModels: AgentAllowedVirtualModel[];
+  virtualModels: ApiKeyAllowedVirtualModel[];
 };
 
-export type AgentEndpointGroups = {
-  configured: AgentEndpointGroup[];
-  unrouted: AgentAllowedVirtualModel[];
+export type EndpointGroups = {
+  configured: EndpointGroup[];
+  unrouted: ApiKeyAllowedVirtualModel[];
 };
 
-export function groupAgentVirtualModelEndpoints(input: {
+export function groupVirtualModelEndpoints(input: {
   gatewayBaseUrl: string;
-  virtualModels: readonly AgentAllowedVirtualModel[];
-}): AgentEndpointGroups {
+  virtualModels: readonly ApiKeyAllowedVirtualModel[];
+}): EndpointGroups {
   const gatewayBaseUrl = input.gatewayBaseUrl.trim().replace(/\/+$/, "");
-  const byProtocol = new Map<RouteEndpointProtocol, AgentAllowedVirtualModel[]>();
-  const unrouted: AgentAllowedVirtualModel[] = [];
+  const byProtocol = new Map<RouteEndpointProtocol, ApiKeyAllowedVirtualModel[]>();
+  const unrouted: ApiKeyAllowedVirtualModel[] = [];
   for (const virtualModel of input.virtualModels) {
     if (!virtualModel.endpointProtocol) {
       unrouted.push(virtualModel);
@@ -276,13 +282,13 @@ export function groupAgentVirtualModelEndpoints(input: {
     byProtocol.set(virtualModel.endpointProtocol, group);
   }
   return {
-    configured: agentEndpointOrder.flatMap((protocol) => {
+    configured: apiKeyEndpointOrder.flatMap((protocol) => {
       const virtualModels = byProtocol.get(protocol);
       return virtualModels
         ? [
             {
               protocol,
-              url: `${gatewayBaseUrl}${agentEndpointPathByProtocol[protocol]}`,
+              url: `${gatewayBaseUrl}${endpointPathByProtocol[protocol]}`,
               virtualModels,
             },
           ]

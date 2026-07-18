@@ -45,8 +45,8 @@ export type GatewayResponseMetadata = {
 
 type RecordCompletedGatewayRequestActivityInput = {
   activityId: string;
-  agentId: string;
-  agentApiKeyPrefix: string;
+  apiKeyId: string;
+  apiKeyPrefix: string;
   databaseUrl?: string;
   model: string;
   protocol: GatewayRequestActivityProtocol;
@@ -93,9 +93,9 @@ export async function recordCompletedGatewayRequestActivity(
         insert into request_activity (
           id,
           request_id,
-          agent_id,
+          api_key_id,
           virtual_model_id,
-          agent_key_prefix,
+          api_key_prefix,
           protocol,
           model,
           stream,
@@ -107,7 +107,7 @@ export async function recordCompletedGatewayRequestActivity(
           response_metadata,
           provider_api_key_id,
           provider_api_key_prefix,
-          agent_name_snapshot,
+          api_key_name_snapshot,
           virtual_model_name_snapshot,
           route_policy_strategy_snapshot,
           provider_key_snapshot,
@@ -140,7 +140,7 @@ export async function recordCompletedGatewayRequestActivity(
           $14::jsonb,
           $15,
           $16,
-          (select name from agents where id = $3),
+          (select name from api_keys where id = $3),
           (select name from virtual_models where id = $4),
           (select strategy::text from route_policies where id = $9),
           (select provider_key from providers where id = $10),
@@ -160,9 +160,9 @@ export async function recordCompletedGatewayRequestActivity(
       [
         input.activityId,
         input.requestId,
-        input.agentId,
+        input.apiKeyId,
         input.virtualModelId,
-        input.agentApiKeyPrefix,
+        input.apiKeyPrefix,
         input.protocol,
         input.model,
         input.stream,
@@ -193,7 +193,7 @@ export async function recordCompletedGatewayRequestActivity(
     if (completion.status === "succeeded" && input.usageCost) {
       await insertGatewayUsageAndCost(client, {
         activityId: input.activityId,
-        agentId: input.agentId,
+        apiKeyId: input.apiKeyId,
         usageCost: input.usageCost,
         virtualModelId: input.virtualModelId,
       });

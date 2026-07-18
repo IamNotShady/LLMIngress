@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGatewayAgentRequestLog } from "../../apps/gateway/src/main";
+import { buildGatewayApiKeyRequestLog } from "../../apps/gateway/src/main";
 import { createPinoLoggerOptions } from "../../packages/logging/src/index";
 
 const promptMarker = "UNIT_PROMPT_MARKER_DO_NOT_LOG";
@@ -7,9 +7,9 @@ const toolArgumentMarker = "UNIT_TOOL_ARGUMENT_MARKER_DO_NOT_LOG";
 
 describe("gateway-metadata-only-logging", () => {
   it("keeps request logging limited to gateway metadata", () => {
-    const payload = buildGatewayAgentRequestLog({
-      agentId: "agent-unit",
-      agentKeyPrefix: "llmi_unit",
+    const payload = buildGatewayApiKeyRequestLog({
+      apiKeyId: "api-key-unit",
+      apiKeyPrefix: "llmi_unit",
       method: "POST",
       protocol: "chat_completions",
       requestBody: {
@@ -30,8 +30,8 @@ describe("gateway-metadata-only-logging", () => {
     });
 
     expect(payload).toEqual({
-      agentId: "agent-unit",
-      agentKeyPrefix: "llmi_unit",
+      apiKeyId: "api-key-unit",
+      apiKeyPrefix: "llmi_unit",
       method: "POST",
       protocol: "chat_completions",
       requestId: "req-unit",

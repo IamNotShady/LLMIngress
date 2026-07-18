@@ -1,13 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getPostgresPool } from "@llmingress/db/client";
 
-export type GatewayAuthErrorCode =
-  | "disabled_agent_api_key"
-  | "invalid_agent_api_key"
-  | "missing_agent_api_key";
+export type GatewayAuthErrorCode = "disabled_api_key" | "invalid_api_key" | "missing_api_key";
 
-export type GatewayAuthenticatedAgent = {
-  agentId: string;
+export type GatewayAuthenticatedApiKey = {
+  apiKeyId: string;
   defaultVirtualModelId: string | null;
   id: string;
   keyPrefix: string;
@@ -15,7 +12,7 @@ export type GatewayAuthenticatedAgent = {
 };
 
 export type GatewayAuthSuccess = {
-  agentApiKey: GatewayAuthenticatedAgent;
+  apiKey: GatewayAuthenticatedApiKey;
   ok: true;
   requestId: string;
 };
@@ -38,8 +35,8 @@ export type GatewayAuthErrorBody = {
 
 type GatewayAuthHeaders = Record<string, string | string[] | undefined>;
 
-type AgentApiKeyAuthRow = {
-  agent_id: string;
+type ApiKeyAuthRow = {
+  api_key_id: string;
   default_virtual_model_id: string | null;
   enabled: boolean;
   id: string;
@@ -49,9 +46,9 @@ type AgentApiKeyAuthRow = {
 
 const gatewayRequestIdPattern = /^[A-Za-z0-9._:-]{1,128}$/;
 
-export function buildGatewayAgentApiKeyHash(plaintext: string): string {
+export function buildGatewayApiKeyHash(plaintext: string): string {
   return `sha256:v1:${createHash("sha256")
-    .update("llmingress:agent-api-key:v1")
+    .update("llmingress:api-key:v1")
     .update(plaintext.trim())
     .digest("base64url")}`;
 }
@@ -86,23 +83,20 @@ export async function authenticateGatewayRequest(input: {
   const requestId = readGatewayRequestId(input.headers);
   const credential = readGatewayApiKeyCredential(input.headers);
   if (!credential) {
-    return gatewayAuthFailure("missing_agent_api_key", requestId);
+    return gatewayAuthFailure("missing_api_key", requestId);
   }
 
-  const row = await readAgentApiKeyByHash(
-    input.databaseUrl,
-    buildGatewayAgentApiKeyHash(credential),
-  );
+  const row = await readApiKeyByHash(input.databaseUrl, buildGatewayApiKeyHash(credential));
   if (!row) {
-    return gatewayAuthFailure("invalid_agent_api_key", requestId);
+    return gatewayAuthFailure("invalid_api_key", requestId);
   }
   if (!row.enabled) {
-    return gatewayAuthFailure("disabled_agent_api_key", requestId);
+    return gatewayAuthFailure("disabled_api_key", requestId);
   }
 
   return {
-    agentApiKey: {
-      agentId: row.agent_id,
+    apiKey: {
+      apiKeyId: row.api_key_id,
       defaultVirtualModelId: row.default_virtual_model_id,
       id: row.id,
       keyPrefix: row.key_prefix,
@@ -126,21 +120,21 @@ function gatewayAuthFailure(code: GatewayAuthErrorCode, requestId: string): Gate
   };
 }
 
-async function readAgentApiKeyByHash(
+async function readApiKeyByHash(
   databaseUrl: string | undefined,
   keyHash: string,
-): Promise<AgentApiKeyAuthRow | undefined> {
-  const result = await getPostgresPool(databaseUrl).query<AgentApiKeyAuthRow>(
+): Promise<ApiKeyAuthRow | undefined> {
+  const result = await getPostgresPool(databaseUrl).query<ApiKeyAuthRow>(
     `
-      select agents.id::text,
-             agents.id::text as agent_id,
-             agents.key_prefix,
-             agents.default_virtual_model_id::text,
-             agents.enabled,
-             agents.limits_enabled
-      from agents
-      where agents.key_hash = $1
-        and agents.deleted_at is null
+      select api_keys.id::text,
+             api_keys.id::text as api_key_id,
+             api_keys.key_prefix,
+             api_keys.default_virtual_model_id::text,
+             api_keys.enabled,
+             api_keys.limits_enabled
+      from api_keys
+      where api_keys.key_hash = $1
+        and api_keys.deleted_at is null
     `,
     [keyHash],
   );
@@ -152,11 +146,11 @@ function firstHeaderValue(value: string | string[] | undefined): string | undefi
 }
 
 function authErrorMessage(code: GatewayAuthErrorCode): string {
-  if (code === "missing_agent_api_key") {
-    return "Agent API key is required.";
+  if (code === "missing_api_key") {
+    return "API key is required.";
   }
-  if (code === "disabled_agent_api_key") {
-    return "Agent API key is disabled.";
+  if (code === "disabled_api_key") {
+    return "API key is disabled.";
   }
-  return "Agent API key is invalid.";
+  return "API key is invalid.";
 }

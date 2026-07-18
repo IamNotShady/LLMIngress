@@ -38,7 +38,7 @@ export type ConsoleProvider = NormalizedProviderFormInput & {
 };
 
 export type ProviderDependencyImpact = {
-  agents: Array<{ id: string; name: string }>;
+  apiKeys: Array<{ id: string; name: string }>;
   apiKeyCount: number;
   oauthConnectionCount: number;
   pendingJobCount: number;
@@ -61,8 +61,8 @@ type ProviderRow = {
 };
 
 type ProviderDependencyImpactRow = {
-  agent_id: string | null;
-  agent_name: string | null;
+  api_key_id: string | null;
+  api_key_name: string | null;
   provider_model_display_name: string;
   provider_model_id: string;
   provider_model_model_id: string;
@@ -644,8 +644,8 @@ async function readProviderDependencyImpact(
                route_policies.id::text as route_policy_id,
                virtual_models.id::text as virtual_model_id,
                coalesce(nullif(virtual_models.description, ''), virtual_models.name) as virtual_model_name,
-               agents.id::text as agent_id,
-               agents.name as agent_name
+               api_keys.id::text as api_key_id,
+               api_keys.name as api_key_name
         from provider_models
         join route_policy_candidates
           on route_policy_candidates.provider_model_id = provider_models.id
@@ -655,24 +655,24 @@ async function readProviderDependencyImpact(
         join virtual_models
           on virtual_models.id = route_policies.virtual_model_id
          and virtual_models.deleted_at is null
-        left join agents
-          on agents.deleted_at is null
-         and agents.enabled = true
+        left join api_keys
+          on api_keys.deleted_at is null
+         and api_keys.enabled = true
          and (
-              agents.default_virtual_model_id = virtual_models.id
+              api_keys.default_virtual_model_id = virtual_models.id
               or exists (
                 select 1
-                from agent_virtual_models
-                where agent_virtual_models.agent_id = agents.id
-                  and agent_virtual_models.virtual_model_id = virtual_models.id
+                from api_key_virtual_models
+                where api_key_virtual_models.api_key_id = api_keys.id
+                  and api_key_virtual_models.virtual_model_id = virtual_models.id
               )
          )
         where provider_models.provider_id = $1
           and provider_models.deleted_at is null
         order by provider_models.display_name,
                  route_policies.id,
-                 agents.name nulls last,
-                 agents.id nulls last
+                 api_keys.name nulls last,
+                 api_keys.id nulls last
       `,
       [providerId],
     )
@@ -709,10 +709,10 @@ async function readProviderDependencyImpact(
   };
 
   return {
-    agents: uniqueBy(
+    apiKeys: uniqueBy(
       dependencyRows
-        .filter((row) => row.agent_id && row.agent_name)
-        .map((row) => ({ id: row.agent_id ?? "", name: row.agent_name ?? "" })),
+        .filter((row) => row.api_key_id && row.api_key_name)
+        .map((row) => ({ id: row.api_key_id ?? "", name: row.api_key_name ?? "" })),
       (row) => row.id,
     ),
     apiKeyCount: countRows.api_key_count,

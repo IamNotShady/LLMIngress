@@ -3,25 +3,25 @@ import { describe, expect, it } from "vitest";
 import type { TestPostgresFixture } from "../../packages/db/src/index";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import {
-  enforceGatewayAgentLimits,
+  enforceGatewayApiKeyLimits,
   recordGatewayBudgetUsage,
-} from "../../packages/gateway-runtime/src/gateway-agent-limits";
+} from "../../packages/gateway-runtime/src/gateway-api-key-limits";
 import { createCoreMaintenanceTasks } from "../../packages/worker-runtime/src/worker-maintenance-scheduler";
 import { reconcileGatewayConcurrencyWindows } from "../../packages/worker-runtime/src/worker-stale-concurrency";
 
 describe("gateway settlement integrity", () => {
   it("rejects a cost budget without budget reservation state", async () => {
     await withMigratedFixture(async (fixture) => {
-      const agentId = await seedAgent(fixture);
-      await seedAgentLimit(fixture, agentId, {
+      const apiKeyId = await seedApiKey(fixture);
+      await seedApiKeyLimit(fixture, apiKeyId, {
         limitType: "budget",
         limitValue: 0.0001,
         period: "day",
         unit: "usd",
       });
 
-      const decision = await enforceGatewayAgentLimits({
-        agentId,
+      const decision = await enforceGatewayApiKeyLimits({
+        apiKeyId,
         budgetPrice: pricedModel(),
         databaseUrl: fixture.databaseUrl,
         requestId: "req-budget-exceeded",
@@ -39,16 +39,16 @@ describe("gateway settlement integrity", () => {
 
   it("records successful budget usage after the request", async () => {
     await withMigratedFixture(async (fixture) => {
-      const agentId = await seedAgent(fixture);
-      await seedAgentLimit(fixture, agentId, {
+      const apiKeyId = await seedApiKey(fixture);
+      await seedApiKeyLimit(fixture, apiKeyId, {
         limitType: "budget",
         limitValue: 10,
         period: "day",
         unit: "usd",
       });
 
-      const decision = await enforceGatewayAgentLimits({
-        agentId,
+      const decision = await enforceGatewayApiKeyLimits({
+        apiKeyId,
         budgetPrice: pricedModel(),
         databaseUrl: fixture.databaseUrl,
         requestId: "req-budget-success",
@@ -60,7 +60,7 @@ describe("gateway settlement integrity", () => {
         return;
       }
       await recordGatewayBudgetUsage({
-        agentId,
+        apiKeyId,
         budgetSettlement: decision.budgetSettlement,
         databaseUrl: fixture.databaseUrl,
         requestId: "req-budget-success",
@@ -78,7 +78,7 @@ describe("gateway settlement integrity", () => {
         },
       });
 
-      const row = await readLatestBudgetPeriod(fixture, agentId);
+      const row = await readLatestBudgetPeriod(fixture, apiKeyId);
       expect(Number(row?.cost_used_usd)).toBe(0.0002);
       expect(Number(row?.tokens_used)).toBe(200);
       expect(await budgetReservationsTableExists(fixture)).toBe(false);
@@ -87,8 +87,8 @@ describe("gateway settlement integrity", () => {
 
   it("allows unknown-priced budget requests and records tokens with zero cost", async () => {
     await withMigratedFixture(async (fixture) => {
-      const agentId = await seedAgent(fixture);
-      await seedAgentLimit(fixture, agentId, {
+      const apiKeyId = await seedApiKey(fixture);
+      await seedApiKeyLimit(fixture, apiKeyId, {
         limitType: "budget",
         limitValue: 10,
         period: "day",
@@ -102,8 +102,8 @@ describe("gateway settlement integrity", () => {
         reason: "no_current_price" as const,
         status: "unknown_price" as const,
       };
-      const decision = await enforceGatewayAgentLimits({
-        agentId,
+      const decision = await enforceGatewayApiKeyLimits({
+        apiKeyId,
         budgetPrice: unknownPrice,
         databaseUrl: fixture.databaseUrl,
         requestId: "req-budget-unknown-price",
@@ -115,7 +115,7 @@ describe("gateway settlement integrity", () => {
         return;
       }
       await recordGatewayBudgetUsage({
-        agentId,
+        apiKeyId,
         budgetSettlement: decision.budgetSettlement,
         databaseUrl: fixture.databaseUrl,
         requestId: "req-budget-unknown-price",
@@ -133,7 +133,7 @@ describe("gateway settlement integrity", () => {
         },
       });
 
-      const row = await readLatestBudgetPeriod(fixture, agentId);
+      const row = await readLatestBudgetPeriod(fixture, apiKeyId);
       expect(Number(row?.cost_used_usd)).toBe(0);
       expect(Number(row?.tokens_used)).toBe(200);
     });
@@ -141,8 +141,8 @@ describe("gateway settlement integrity", () => {
 
   it("ignores disabled budget limits for start checks and end accounting", async () => {
     await withMigratedFixture(async (fixture) => {
-      const agentId = await seedAgent(fixture);
-      await seedAgentLimit(fixture, agentId, {
+      const apiKeyId = await seedApiKey(fixture);
+      await seedApiKeyLimit(fixture, apiKeyId, {
         enabled: false,
         limitType: "budget",
         limitValue: 0.0001,
@@ -150,8 +150,8 @@ describe("gateway settlement integrity", () => {
         unit: "usd",
       });
 
-      const decision = await enforceGatewayAgentLimits({
-        agentId,
+      const decision = await enforceGatewayApiKeyLimits({
+        apiKeyId,
         budgetPrice: pricedModel(),
         databaseUrl: fixture.databaseUrl,
         requestId: "req-budget-disabled",
@@ -164,7 +164,7 @@ describe("gateway settlement integrity", () => {
       }
       expect(decision.budgetSettlement).toBeUndefined();
       await recordGatewayBudgetUsage({
-        agentId,
+        apiKeyId,
         budgetSettlement: decision.budgetSettlement,
         databaseUrl: fixture.databaseUrl,
         requestId: "req-budget-disabled",
@@ -176,20 +176,20 @@ describe("gateway settlement integrity", () => {
         },
       });
 
-      expect(await readLatestBudgetPeriod(fixture, agentId)).toBeUndefined();
+      expect(await readLatestBudgetPeriod(fixture, apiKeyId)).toBeUndefined();
       expect(await budgetReservationsTableExists(fixture)).toBe(false);
     });
   });
 
   it("reconciles quiet leaked concurrency windows but leaves active windows alone", async () => {
     await withMigratedFixture(async (fixture) => {
-      const staleAgentId = await seedAgent(fixture);
-      const activeAgentId = await seedAgent(fixture);
-      await seedConcurrencyWindow(fixture, staleAgentId, {
+      const staleApiKeyId = await seedApiKey(fixture);
+      const activeApiKeyId = await seedApiKey(fixture);
+      await seedConcurrencyWindow(fixture, staleApiKeyId, {
         activeCount: 5,
         updatedAgoMinutes: 10,
       });
-      await seedConcurrencyWindow(fixture, activeAgentId, {
+      await seedConcurrencyWindow(fixture, activeApiKeyId, {
         activeCount: 7,
         updatedAgoMinutes: 1,
       });
@@ -201,8 +201,8 @@ describe("gateway settlement integrity", () => {
       });
 
       expect(result.reconciledWindowCount).toBe(1);
-      await expectConcurrencyCount(fixture, staleAgentId, 0);
-      await expectConcurrencyCount(fixture, activeAgentId, 7);
+      await expectConcurrencyCount(fixture, staleApiKeyId, 0);
+      await expectConcurrencyCount(fixture, activeApiKeyId, 7);
     });
   });
 
@@ -230,18 +230,18 @@ async function withMigratedFixture<T>(
   }
 }
 
-async function seedAgent(fixture: TestPostgresFixture): Promise<string> {
-  const agentId = randomUUID();
+async function seedApiKey(fixture: TestPostgresFixture): Promise<string> {
+  const apiKeyId = randomUUID();
   await fixture.query(
-    "insert into agents (id, name, enabled) values ($1, 'Settlement Agent', true)",
-    [agentId],
+    "insert into api_keys (id, name, key_prefix, key_hash, enabled) values ($1, 'Settlement ApiKey', left(gen_random_uuid()::text, 12), gen_random_uuid()::text, true)",
+    [apiKeyId],
   );
-  return agentId;
+  return apiKeyId;
 }
 
-async function seedAgentLimit(
+async function seedApiKeyLimit(
   fixture: TestPostgresFixture,
-  agentId: string,
+  apiKeyId: string,
   input: {
     enabled?: boolean;
     limitType: "budget" | "concurrency" | "rpm" | "token" | "tpm";
@@ -252,12 +252,12 @@ async function seedAgentLimit(
 ): Promise<void> {
   await fixture.query(
     `
-      insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
+      insert into api_key_limits (id, api_key_id, limit_type, period, limit_value, unit, enabled)
       values ($1, $2, $3, $4, $5, $6, $7)
     `,
     [
       randomUUID(),
-      agentId,
+      apiKeyId,
       input.limitType,
       input.period,
       input.limitValue,
@@ -281,7 +281,7 @@ function requestMetadata(input: { estimatedInputTokens: number; estimatedOutputT
 
 async function readLatestBudgetPeriod(
   fixture: TestPostgresFixture,
-  agentId: string,
+  apiKeyId: string,
 ): Promise<
   | {
       cost_used_usd: string;
@@ -297,25 +297,25 @@ async function readLatestBudgetPeriod(
       select cost_used_usd::text,
              tokens_used::text
       from budget_periods
-      where agent_id = $1
+      where api_key_id = $1
       order by created_at desc
       limit 1
     `,
-    [agentId],
+    [apiKeyId],
   );
   return result.rows[0];
 }
 
 async function seedConcurrencyWindow(
   fixture: TestPostgresFixture,
-  agentId: string,
+  apiKeyId: string,
   input: { activeCount: number; updatedAgoMinutes: number },
 ): Promise<void> {
   await fixture.query(
     `
       insert into rate_limit_windows (
         id,
-        agent_id,
+        api_key_id,
         limit_type,
         window_start,
         window_end,
@@ -324,18 +324,18 @@ async function seedConcurrencyWindow(
       )
       values ($1, $2, 'concurrency', '1970-01-01T00:00:00.000Z', '9999-12-31T23:59:59.999Z', $3, now() - make_interval(mins => $4))
     `,
-    [randomUUID(), agentId, input.activeCount, input.updatedAgoMinutes],
+    [randomUUID(), apiKeyId, input.activeCount, input.updatedAgoMinutes],
   );
 }
 
 async function expectConcurrencyCount(
   fixture: TestPostgresFixture,
-  agentId: string,
+  apiKeyId: string,
   expected: number,
 ): Promise<void> {
   const result = await fixture.query<{ active_count: number }>(
-    "select active_count from rate_limit_windows where agent_id = $1 and limit_type = 'concurrency'",
-    [agentId],
+    "select active_count from rate_limit_windows where api_key_id = $1 and limit_type = 'concurrency'",
+    [apiKeyId],
   );
   expect(result.rows[0]?.active_count).toBe(expected);
 }

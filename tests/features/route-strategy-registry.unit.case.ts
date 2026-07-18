@@ -147,12 +147,12 @@ describe("route strategy registry", () => {
     expect(result.chain.map((candidate) => candidate.candidateOrder)).toEqual([4, 2, 1, 3]);
   });
 
-  it("keeps random behavior deterministic under injected random", () => {
+  it("keeps load_balance behavior deterministic under injected random", () => {
     // random: () => 0 时 Fisher-Yates 在两候选上必定交换 → [2, 1]
-    const result = select("random");
+    const result = select("load_balance");
     expect(result.chain.map((c) => c.candidateOrder)).toEqual([2, 1]);
     expect(result.decision?.routeReason.message).toBe(
-      "random route for vm selected eligible candidate 2.",
+      "load balance route for vm selected eligible candidate 2.",
     );
   });
 

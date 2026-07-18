@@ -179,7 +179,7 @@ type ActivityRange = "24h" | "7d" | "30d";
 const routeStrategyLabels: Record<string, string> = {
   cost_first: "Cost First",
   fixed: "Fixed",
-  random: "Random",
+  load_balance: "Load Balance",
 };
 
 function parseActivityRange(value: string | undefined): ActivityRange {

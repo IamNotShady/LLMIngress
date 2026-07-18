@@ -270,8 +270,8 @@ function formatRouteStrategyLabel(strategy: string): string {
   if (strategy === "cost_first") {
     return "Cost First";
   }
-  if (strategy === "random") {
-    return "Random";
+  if (strategy === "load_balance") {
+    return "Load Balance";
   }
   return strategy.charAt(0).toUpperCase() + strategy.slice(1);
 }

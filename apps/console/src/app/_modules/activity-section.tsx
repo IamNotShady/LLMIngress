@@ -18,6 +18,7 @@ import {
 import { listProviders } from "@llmingress/db/console-providers";
 import { listVirtualModels } from "@llmingress/db/console-virtual-models";
 import { ConsoleDialog } from "../_components/console-dialog";
+import { EmptyState } from "../_components/empty-state";
 import { FlatIcon } from "../_components/flat-icon";
 import { Pagination } from "../_components/pagination";
 import { buildQueryHref, readPageParam } from "../_lib/pagination";
@@ -381,7 +382,9 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
               <tbody>
                 {activities.length === 0 ? (
                   <tr>
-                    <td colSpan={10}>No requests match the filters.</td>
+                    <td colSpan={10}>
+                      <EmptyState title="No requests match the filters" />
+                    </td>
                   </tr>
                 ) : (
                   activities.map((activity) => (

@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 import { ConsoleDialog } from "../_components/console-dialog";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
+import { EmptyState } from "../_components/empty-state";
 import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
@@ -450,22 +451,27 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                     <tr>
                       <td colSpan={10}>
                         {agents.length === 0 ? (
-                          <>
-                            <Link className="empty-state-action" href="/agents?agentDialog=new">
-                              Create an Agent and enable limits
-                            </Link>{" "}
-                            to add budget, token, RPM, TPM, and concurrency rules.
-                          </>
+                          <EmptyState
+                            title="No limits configured"
+                            description="Add budget, token, RPM, TPM, and concurrency rules to an Agent."
+                            action={
+                              <Link className="empty-state-action" href="/agents?agentDialog=new">
+                                Create an Agent and enable limits
+                              </Link>
+                            }
+                          />
                         ) : query ? (
-                          "No limit rules match the search."
+                          <EmptyState title="No limit rules match the search" />
                         ) : (
-                          <>
-                            No limit rules configured. Edit an Agent from the{" "}
-                            <Link className="empty-state-action" href="/agents">
-                              Agents page
-                            </Link>{" "}
-                            to enable them.
-                          </>
+                          <EmptyState
+                            title="No limit rules configured"
+                            description="Edit an Agent to enable budget, token, RPM, TPM, and concurrency rules."
+                            action={
+                              <Link className="empty-state-action" href="/agents">
+                                Agents page
+                              </Link>
+                            }
+                          />
                         )}
                       </td>
                     </tr>

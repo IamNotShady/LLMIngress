@@ -17,6 +17,7 @@ export type FlatIconName =
   | "filter"
   | "key"
   | "lock"
+  | "probe"
   | "refresh"
   | "save"
   | "settings"
@@ -60,6 +61,7 @@ const icons: Record<FlatIconName, ReactNode> = {
       <path d="M7.5 11V7a4.5 4.5 0 0 1 9 0v4" />
     </>
   ),
+  probe: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
   refresh: (
     <>
       <path d="M3 12a9 9 0 0 1 15.3-6.4L21 8M21 3v5h-5" />

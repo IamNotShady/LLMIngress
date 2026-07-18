@@ -91,7 +91,7 @@ export function ConsoleMutationError({
       return null;
     }
     return createPortal(
-      <ConsoleMutationToast message={failure.message} onDismiss={onDismiss} />,
+      <ConsoleMutationToast message={failure.message} onDismiss={onDismiss} tone="error" />,
       document.body,
     );
   }
@@ -112,6 +112,8 @@ export function ConsoleMutationForm({
   fallbackError = "Console operation failed.",
   id,
   successHref,
+  successMessage,
+  successRefreshDelayMs,
 }: {
   action: string;
   children: ReactNode;
@@ -120,10 +122,13 @@ export function ConsoleMutationForm({
   fallbackError?: string;
   id?: string;
   successHref?: string;
+  successMessage?: string;
+  successRefreshDelayMs?: number;
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [failure, setFailure] = useState<ConsoleMutationFailure | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -135,9 +140,19 @@ export function ConsoleMutationForm({
     return () => window.clearTimeout(timeout);
   }, [errorPresentation, failure]);
 
+  useEffect(() => {
+    if (!success) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setSuccess(null), 5_000);
+    return () => window.clearTimeout(timeout);
+  }, [success]);
+
   const submit: FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
     setFailure(null);
+    setSuccess(null);
     setSubmitting(true);
     try {
       const form = event.currentTarget;
@@ -159,7 +174,14 @@ export function ConsoleMutationForm({
         window.location.assign(response.url);
         return;
       }
-      router.refresh();
+      if (successMessage) {
+        setSuccess(successMessage);
+      }
+      if (successRefreshDelayMs && successRefreshDelayMs > 0) {
+        window.setTimeout(() => router.refresh(), successRefreshDelayMs);
+      } else {
+        router.refresh();
+      }
     } catch {
       setFailure({ message: fallbackError });
     } finally {
@@ -198,11 +220,29 @@ export function ConsoleMutationForm({
         formRef={formRef}
         onDismiss={() => setFailure(null)}
       />
+      {success && typeof document !== "undefined"
+        ? createPortal(
+            <ConsoleMutationToast
+              message={success}
+              onDismiss={() => setSuccess(null)}
+              tone="success"
+            />,
+            document.body,
+          )
+        : null}
     </form>
   );
 }
 
-function ConsoleMutationToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+export function ConsoleMutationToast({
+  message,
+  tone,
+  onDismiss,
+}: {
+  message: string;
+  tone: "error" | "success";
+  onDismiss: () => void;
+}) {
   const toastRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -219,10 +259,20 @@ function ConsoleMutationToast({ message, onDismiss }: { message: string; onDismi
     };
   }, []);
 
+  const toneClass = tone === "success" ? " console-mutation-toast--success" : "";
   return (
-    <div className="console-mutation-toast" popover="manual" ref={toastRef} role="alert">
+    <div
+      className={`console-mutation-toast${toneClass}`}
+      popover="manual"
+      ref={toastRef}
+      role={tone === "success" ? "status" : "alert"}
+    >
       <span>{message}</span>
-      <button aria-label="Dismiss error" onClick={onDismiss} type="button">
+      <button
+        aria-label={tone === "success" ? "Dismiss message" : "Dismiss error"}
+        onClick={onDismiss}
+        type="button"
+      >
         &times;
       </button>
     </div>

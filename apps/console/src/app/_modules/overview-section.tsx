@@ -15,6 +15,7 @@ import Link from "next/link";
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
 import { chartAccent, chartOk } from "../_components/charts/palette";
 import { TrendLineChart } from "../_components/charts/trend-line-chart";
+import { EmptyState } from "../_components/empty-state";
 import { StatCard } from "../_components/stat-card";
 import { ActivityStatusPill } from "./activity-status-pill";
 import {
@@ -187,7 +188,7 @@ export async function OverviewSection() {
         <div className="chart-card">
           <h2 className="chart-card-title">Recent requests</h2>
           {recentActivities.length === 0 ? (
-            <p>No activity recorded.</p>
+            <EmptyState title="No activity recorded" />
           ) : (
             <div className="data-table-wrap">
               <table className="data-table bounded-table overview-requests-table">

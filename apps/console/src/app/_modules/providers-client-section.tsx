@@ -7,6 +7,7 @@ import type { ConsoleProvider } from "@llmingress/db/console-providers";
 import type { ConsoleProviderModelPage } from "@llmingress/db/console-route-policies";
 import { type FormEvent, Fragment, useMemo, useState } from "react";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
+import { EmptyState } from "../_components/empty-state";
 import { FlatIcon } from "../_components/flat-icon";
 import { Pagination } from "../_components/pagination";
 import { buildQueryHref, type ConsoleSearchParams } from "../_lib/pagination";
@@ -103,7 +104,10 @@ export function ProvidersClientSection({
               </p>
             ) : null}
             {providers.length === 0 ? (
-              <p>No providers configured.</p>
+              <EmptyState
+                title="No providers configured"
+                description="Connect a provider to start routing requests."
+              />
             ) : (
               <div className="data-table-wrap">
                 <table className="data-table bounded-table providers-table">

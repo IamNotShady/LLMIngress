@@ -89,6 +89,15 @@
       "dependencies": ["agent-access-and-limits", "virtual-model-routing", "console-core"],
       "status": "passing",
       "evidence": "2026-07-17: TDD red-to-green; focused unit (5) + e2e (1, incl. 1280 two-column side-by-side, 390 stacked, no-overflow with the detail dialog open) passed; pnpm run verify and verify:features (10/10, zero regression) passed. Integration Platform UI removed from create/edit/filter/detail (column retained, defaults 'other'); detail dialog widened to a balanced two-column layout (left: fields and limits; right: endpoint groups, which subsume the allowed-VM list; bottoms aligned) with the 8-platform guide tabs full-width below, reused by the create-success dialog and one-time HTML page."
+    },
+    {
+      "id": "console-empty-state",
+      "name": "Console Empty State",
+      "description": "A shared EmptyState primitive replaces ad-hoc empty-table text across the dashboard sections; empty views (e.g. Providers with no providers) render a consistent titled block with an optional CTA and never overflow at 1280 or 390.",
+      "verification": "pnpm exec vitest run tests/features/console-empty-state.unit.test.ts && pnpm test:e2e tests/e2e/console-empty-state.e2e.spec.ts --workers=1",
+      "dependencies": ["console-core"],
+      "status": "passing",
+      "evidence": "2026-07-18: TDD red-to-green. New shared EmptyState primitive (apps/console/src/app/_components/empty-state.tsx, server-safe, .empty-state tokens in globals.css) replaces ad-hoc empty markup in providers-client-section, models-section, overview-section, activity-section (colspan) and limits-section (3-branch, CTA via .empty-state-action action slot). Focused unit (3) + E2E (1: /providers empty view renders .empty-state 'No providers configured', no overflow at 1280/390) passed."
     }
   ]
 }

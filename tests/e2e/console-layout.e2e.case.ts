@@ -222,7 +222,7 @@ test("console keeps layout integrity with real data: no overflow, visible limits
         const seeded = await seedConsoleData(fixture.databaseUrl);
 
         await page.goto(baseUrl);
-        await expect(page.getByText("layout-probe-apiKey").first()).toBeVisible();
+        await expect(page.getByText("layout-probe-api-key").first()).toBeVisible();
 
         // Trend window now has data: chart renders instead of the empty state.
         await expect(

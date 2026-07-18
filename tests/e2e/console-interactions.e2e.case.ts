@@ -211,7 +211,7 @@ test("console audit fixes keep time windows honest and prevent activity timestam
           "audit-old-apiKey",
         );
         await expect(
-          page.locator(".chart-card", { hasText: "Top api_keys by cost" }),
+          page.locator(".chart-card", { hasText: "Top API keys by cost" }),
         ).not.toContainText("$0.42");
 
         await page.goto(`${baseUrl}/usage`, { waitUntil: "networkidle" });
@@ -347,7 +347,7 @@ test("console audit fixes keep time windows honest and prevent activity timestam
         await page.goto(`${baseUrl}/activity?apiKeyId=${seeded.apiKeyId}`, {
           waitUntil: "networkidle",
         });
-        await expect(page.locator("#activity-apiKey")).toHaveValue(seeded.apiKeyId);
+        await expect(page.locator("#activity-api-key")).toHaveValue(seeded.apiKeyId);
         await expect(
           page.locator(".activity-table tbody tr", { hasText: "gw_audit_old_request" }),
         ).toBeVisible();

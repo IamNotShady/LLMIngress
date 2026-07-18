@@ -25,7 +25,7 @@
       "verification": "pnpm exec vitest run tests/features/virtual-model-routing.unit.test.ts tests/features/route-strategies.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-routing.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management"],
       "status": "passing",
-      "evidence": "2026-07-16: Route-policy capability mismatch errors now name the exact conflicting values (e.g. maxContextTokens 1000000 vs 1048576) via resolveVirtualModelCapabilityContract, and the route dialog renders precise grouped token counts (formatModelContextTokens) so near-identical context windows are distinguishable instead of both rounding to ~1M. Focused unit (message + formatter), DB + DOM E2E (precise display, 1280/390 no-overflow, enriched error end-to-end), pnpm run verify, and verify:features (9/9) passed."
+      "evidence": "2026-07-18: Route policy strategy renamed random → load_balance (label \"Load Balance\") end-to-end — domain union + dispatch key + \"load balance route for …\" decision message, db routePolicyStrategies const + validation, console UI labels + default + description. DB route_policies_strategy_check CHECK constraint dropped; allowed values enforced only in code (isRoutePolicyStrategy). Migration 0002_route_policy_load_balance.sql drops the constraint, renames route_policies rows, backfills request_activity.route_policy_strategy_snapshot + route_reason.strategy. TDD unit (load_balance deterministic shuffle, code-layer accept/reject contract, migration manifest), console-layout + virtual-model-routing E2E, pnpm run verify (318 unit + build), and verify:features (9/9) passed."
     },
     {
       "id": "gateway-protocol-execution",

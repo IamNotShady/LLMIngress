@@ -695,6 +695,17 @@ textarea.is-invalid {
   border-color: var(--danger);
   box-shadow: none;
 }
+.console-mutation-toast--success {
+  color: var(--ok);
+  background: color-mix(in oklch, var(--ok) 20%, var(--surface-raised));
+  border-color: var(--ok);
+  box-shadow: var(--shadow-pop), var(--glow-ok);
+}
+.console-mutation-toast--success button:hover {
+  color: var(--ok);
+  background: var(--ok-soft);
+  border-color: var(--ok);
+}
 .provider-create-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

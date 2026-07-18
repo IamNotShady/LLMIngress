@@ -156,9 +156,9 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(providerKeyRoute).toContain("303,");
     expect(mutationForm).toContain('errorPresentation?: "inline" | "toast"');
     expect(mutationForm).toContain("successHref?: string");
-    expect(mutationForm).toContain('className="console-mutation-toast"');
+    expect(mutationForm).toContain("console-mutation-toast");
     expect(mutationForm).toContain('popover="manual"');
-    expect(mutationForm).toContain('aria-label="Dismiss error"');
+    expect(mutationForm).toContain('"Dismiss error"');
     expect(mutationForm).toContain("5_000");
     expect(providerClient).toContain('errorPresentation="toast"');
     expect(providerServer).toContain('errorPresentation="toast"');

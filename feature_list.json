@@ -107,6 +107,15 @@
       "dependencies": ["console-core"],
       "status": "passing",
       "evidence": "2026-07-18: TDD red-to-green. New Spinner primitive (apps/console/src/app/_components/spinner.tsx, role=status + aria-label; .spinner CSS with spinner-rotate keyframes + prefers-reduced-motion guard). Wired into playground.tsx: model-loading spinner beside '3. Virtual Model' and send-button spinner. Focused unit (3) + E2E (1: page.route delays **/v1/models** 1.5s, focus model select surfaces role=status 'Loading models', no overflow at 1280/390) passed."
+    },
+    {
+      "id": "console-success-toast",
+      "name": "Console Success Toast",
+      "description": "The shared ConsoleMutationToast gains a success tone (role=status, .console-mutation-toast--success with ok tokens); ConsoleMutationForm accepts a successMessage that surfaces a self-dismissing success toast on the stay-on-page refresh path, opted into by the provider API key enable/disable toggle.",
+      "verification": "pnpm exec vitest run tests/features/console-success-toast.unit.test.ts && pnpm test:e2e tests/e2e/console-success-toast.e2e.spec.ts --workers=1",
+      "dependencies": ["console-core", "provider-model-management"],
+      "status": "passing",
+      "evidence": "2026-07-18: TDD red-to-green. Generalized ConsoleMutationToast with a tone param (role=status + .console-mutation-toast--success ok-token variant for success, role=alert danger for error); ConsoleMutationForm gains successMessage + success state + 5s auto-dismiss, firing only on the stay-on-page refresh path. Provider API key enable/disable toggle opts in with successMessage='Provider API key updated.'. Focused unit (3) + E2E (1: seed provider+key, /providers?selected toggle click surfaces .console-mutation-toast--success text, no overflow at 1280/390) passed."
     }
   ]
 }

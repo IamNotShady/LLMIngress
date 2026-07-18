@@ -625,6 +625,7 @@ function ProviderConnectionTable({
                             action="/api/provider-keys"
                             errorPresentation="toast"
                             fallbackError="Provider API key update failed."
+                            successMessage="Provider API key updated."
                           >
                             <input
                               type="hidden"

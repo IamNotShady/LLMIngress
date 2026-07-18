@@ -113,6 +113,7 @@ export function ConsoleMutationForm({
   id,
   successHref,
   successMessage,
+  successRefreshDelayMs,
 }: {
   action: string;
   children: ReactNode;
@@ -122,6 +123,7 @@ export function ConsoleMutationForm({
   id?: string;
   successHref?: string;
   successMessage?: string;
+  successRefreshDelayMs?: number;
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -175,7 +177,11 @@ export function ConsoleMutationForm({
       if (successMessage) {
         setSuccess(successMessage);
       }
-      router.refresh();
+      if (successRefreshDelayMs && successRefreshDelayMs > 0) {
+        window.setTimeout(() => router.refresh(), successRefreshDelayMs);
+      } else {
+        router.refresh();
+      }
     } catch {
       setFailure({ message: fallbackError });
     } finally {
@@ -228,7 +234,7 @@ export function ConsoleMutationForm({
   );
 }
 
-function ConsoleMutationToast({
+export function ConsoleMutationToast({
   message,
   tone,
   onDismiss,

@@ -5,8 +5,10 @@ import type { ProviderApiKeyMetadata } from "@llmingress/db/console-provider-key
 import type { ConsoleProviderOAuthConnection } from "@llmingress/db/console-provider-oauth";
 import type { ConsoleProvider } from "@llmingress/db/console-providers";
 import type { ConsoleProviderModelPage } from "@llmingress/db/console-route-policies";
-import { type FormEvent, Fragment, useMemo, useState } from "react";
-import { ConsoleMutationForm } from "../_components/console-mutation-form";
+import { useRouter } from "next/navigation";
+import { type FormEvent, Fragment, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { ConsoleMutationForm, ConsoleMutationToast } from "../_components/console-mutation-form";
 import { EmptyState } from "../_components/empty-state";
 import { FlatIcon } from "../_components/flat-icon";
 import { Pagination } from "../_components/pagination";
@@ -61,10 +63,20 @@ export function ProvidersClientSection({
     providers.find((provider) => provider.id === initialSelectedProviderId) ?? null;
   const [refreshingProviderId, setRefreshingProviderId] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
+  const router = useRouter();
+  useEffect(() => {
+    if (!refreshNotice) {
+      return;
+    }
+    const timeout = window.setTimeout(() => setRefreshNotice(null), 5_000);
+    return () => window.clearTimeout(timeout);
+  }, [refreshNotice]);
   const refreshProviderModels = async (event: FormEvent<HTMLFormElement>, providerId: string) => {
     event.preventDefault();
     const form = event.currentTarget;
     setRefreshError(null);
+    setRefreshNotice(null);
     setRefreshingProviderId(providerId);
     try {
       const response = await fetch(form.action, {
@@ -76,7 +88,10 @@ export function ProvidersClientSection({
       if (!response.ok) {
         const payload = (await response.json()) as { error?: string };
         setRefreshError(payload.error ?? "Provider model refresh failed.");
+        return;
       }
+      setRefreshNotice("Model refresh queued — models update shortly.");
+      window.setTimeout(() => router.refresh(), 2500);
     } catch {
       setRefreshError("Provider model refresh failed.");
     } finally {
@@ -103,6 +118,16 @@ export function ProvidersClientSection({
                 {refreshError}
               </p>
             ) : null}
+            {refreshNotice && typeof document !== "undefined"
+              ? createPortal(
+                  <ConsoleMutationToast
+                    message={refreshNotice}
+                    onDismiss={() => setRefreshNotice(null)}
+                    tone="success"
+                  />,
+                  document.body,
+                )
+              : null}
             {providers.length === 0 ? (
               <EmptyState
                 title="No providers configured"
@@ -556,6 +581,8 @@ function ProviderConnectionTable({
                         action="/api/provider-health-probes"
                         errorPresentation="toast"
                         fallbackError="Provider connection probe failed."
+                        successMessage="Connection probe queued — refreshing shortly."
+                        successRefreshDelayMs={2500}
                       >
                         <input type="hidden" name="providerId" value={provider.id} />
                         <input type="hidden" name="providerConnectionId" value={connection.id} />
@@ -566,7 +593,7 @@ function ProviderConnectionTable({
                           title="Probe connection"
                           type="submit"
                         >
-                          <FlatIcon name="refresh" />
+                          <FlatIcon name="probe" />
                         </button>
                       </ConsoleMutationForm>
                       {connection.kind === "oauth" ? (

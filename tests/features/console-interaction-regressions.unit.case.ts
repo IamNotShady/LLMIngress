@@ -16,7 +16,7 @@ const consoleSectionSource = () =>
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
-    "agents-section.tsx",
+    "api_keys-section.tsx",
     "limits-section.tsx",
     "models-section.tsx",
     "providers-section.tsx",
@@ -88,7 +88,7 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(overview).toContain("limit: 8");
     expect(overview).not.toContain("const activities = await listConsoleActivities();");
     expect(overview).not.toContain(
-      "buildTopAgentsByCost(usageSummary.agentBreakdowns, recentActivities)",
+      "buildTopApiKeysByCost(usageSummary.apiKeyBreakdowns, recentActivities)",
     );
   });
 
@@ -103,32 +103,32 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(sourceText).not.toContain('label="Avg failure rate"');
   });
 
-  test("agent forms use display labels and checkbox grants", () => {
-    const sourceText = sectionSource("agents-section.tsx");
-    const virtualModelFields = sectionSource("agent-virtual-model-fields.tsx");
-    const agentFormsSource = sourceText.slice(
-      sourceText.indexOf("function AgentCreateDialog"),
-      sourceText.indexOf("function AgentDeleteDialog"),
+  test("apiKey forms use display labels and checkbox grants", () => {
+    const sourceText = sectionSource("api_keys-section.tsx");
+    const virtualModelFields = sectionSource("api-key-virtual-model-fields.tsx");
+    const apiKeyFormsSource = sourceText.slice(
+      sourceText.indexOf("function ApiKeyCreateDialog"),
+      sourceText.indexOf("function ApiKeyDeleteDialog"),
     );
-    expect(sourceText).not.toContain("Edit agent name");
-    expect(sourceText).not.toContain("Edit agent type");
+    expect(sourceText).not.toContain("Edit apiKey name");
+    expect(sourceText).not.toContain("Edit apiKey type");
     expect(sourceText).not.toContain("Edit integration platform");
     expect(sourceText).not.toContain("Edit request logging");
     expect(sourceText).not.toContain('<option value="coding">coding</option>');
     expect(sourceText).not.toContain('<option value="terminal">terminal</option>');
     expect(sourceText).not.toContain('<option value="true">enabled</option>');
-    expect(agentFormsSource).not.toContain('<option value="day">day</option>');
-    expect(agentFormsSource).not.toContain('<option value="week">week</option>');
-    expect(agentFormsSource).not.toContain('<option value="month">month</option>');
-    expect(sourceText).not.toContain('name="agentType"');
+    expect(apiKeyFormsSource).not.toContain('<option value="day">day</option>');
+    expect(apiKeyFormsSource).not.toContain('<option value="week">week</option>');
+    expect(apiKeyFormsSource).not.toContain('<option value="month">month</option>');
+    expect(sourceText).not.toContain('name="apiKeyType"');
     expect(sourceText).not.toContain('name="requestLoggingEnabled"');
-    expect(agentFormsSource).toContain('<option value="day">Day</option>');
-    expect(agentFormsSource).toContain('<option value="week">Week</option>');
-    expect(agentFormsSource).toContain('<option value="month">Month</option>');
+    expect(apiKeyFormsSource).toContain('<option value="day">Day</option>');
+    expect(apiKeyFormsSource).toContain('<option value="week">Week</option>');
+    expect(apiKeyFormsSource).toContain('<option value="month">Month</option>');
     expect(virtualModelFields).toContain('type="checkbox"');
     expect(virtualModelFields).toContain('name="allowedVirtualModelIds"');
     expect(virtualModelFields).toContain("selectedVirtualModelIds.has(virtualModel.id)");
-    expect(agentFormsSource).not.toContain("multiple\n");
+    expect(apiKeyFormsSource).not.toContain("multiple\n");
   });
 
   test("row actions share a compact icon-button contract", () => {

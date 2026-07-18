@@ -23,8 +23,8 @@ describe("schema fallback single source", () => {
 
       await recordCompletedGatewayRequestActivity({
         activityId: randomUUID(),
-        agentApiKeyPrefix: "llmi_schema",
-        agentId: ids.agentId,
+        apiKeyPrefix: "llmi_schema",
+        apiKeyId: ids.apiKeyId,
         databaseUrl: fixture.databaseUrl,
         model: "schema-vm",
         protocol: "chat_completions",
@@ -70,8 +70,8 @@ describe("schema fallback single source", () => {
       await expect(
         recordCompletedGatewayRequestActivity({
           activityId: randomUUID(),
-          agentApiKeyPrefix: "llmi_schema",
-          agentId: ids.agentId,
+          apiKeyPrefix: "llmi_schema",
+          apiKeyId: ids.apiKeyId,
           databaseUrl: fixture.databaseUrl,
           model: "schema-vm",
           protocol: "chat_completions",
@@ -131,14 +131,14 @@ async function ensureFallbackRetryColumns(fixture: TestPostgresFixture): Promise
 
 async function seedRuntimeEntities(fixture: TestPostgresFixture) {
   const ids = {
-    agentId: randomUUID(),
+    apiKeyId: randomUUID(),
     providerId: randomUUID(),
     providerModelId: randomUUID(),
     virtualModelId: randomUUID(),
   };
   await fixture.query(
-    "insert into agents (id, name, key_prefix) values ($1, 'Schema Agent', 'llmi_schema')",
-    [ids.agentId],
+    "insert into api_keys (id, name, key_prefix, key_hash) values ($1, 'Schema ApiKey', 'llmi_schema', gen_random_uuid()::text)",
+    [ids.apiKeyId],
   );
   await fixture.query(
     "insert into virtual_models (id, name, description, enabled) values ($1, 'schema-vm', 'Schema VM', true)",
@@ -161,8 +161,8 @@ async function seedFailedActivityWithFallbackEvents(fixture: TestPostgresFixture
   await fixture.query(
     `
       insert into request_activity (
-        id, request_id, agent_id, virtual_model_id, provider_id,
-        provider_model_id, agent_key_prefix, protocol, model, stream,
+        id, request_id, api_key_id, virtual_model_id, provider_id,
+        provider_model_id, api_key_prefix, protocol, model, stream,
         status, error_code, error_message, http_status, latency_ms,
         started_at, completed_at, created_at
       )
@@ -175,7 +175,7 @@ async function seedFailedActivityWithFallbackEvents(fixture: TestPostgresFixture
         '2026-07-05T00:00:00.000Z'::timestamptz
       )
     `,
-    [activityId, ids.agentId, ids.virtualModelId, ids.providerId, ids.providerModelId],
+    [activityId, ids.apiKeyId, ids.virtualModelId, ids.providerId, ids.providerModelId],
   );
   for (const [attemptOrder, statusCode] of [503, 502, 400].entries()) {
     await fixture.query(

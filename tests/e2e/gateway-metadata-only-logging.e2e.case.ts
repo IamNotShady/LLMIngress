@@ -14,10 +14,10 @@ import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 const promptMarker = "E2E_PROMPT_MARKER_DO_NOT_LOG";
 const toolArgumentMarker = "E2E_TOOL_ARGUMENT_MARKER_DO_NOT_LOG";
 const testKeyMarker = "E2E_TEST_KEY_MARKER_DO_NOT_LOG";
-const jsonAgentApiKey = "llmi_json_metadata_key";
-const streamAgentApiKey = "llmi_stream_metadata_key";
-const errorAgentApiKey = "llmi_error_metadata_key";
-const fallbackAgentApiKey = "llmi_fallback_metadata_key";
+const jsonApiKey = "llmi_json_metadata_key";
+const streamApiKey = "llmi_stream_metadata_key";
+const errorApiKey = "llmi_error_metadata_key";
+const fallbackApiKey = "llmi_fallback_metadata_key";
 
 test("Gateway stdout logs omit prompt, tool arguments, and test keys across JSON, streaming, error, and fallback paths", async () => {
   const fixture = await createTestPostgresFixture({
@@ -34,25 +34,25 @@ test("Gateway stdout logs omit prompt, tool arguments, and test keys across JSON
     const fallbackSucceedingProvider = await createProvider(providers);
 
     await seedOpenAIGatewayRoute({
-      agentApiKey: jsonAgentApiKey,
+      apiKey: jsonApiKey,
       fixture,
       providerBaseUrl: jsonProvider.url,
       virtualModelName: "vm-metadata-json",
     });
     await seedOpenAIGatewayRoute({
-      agentApiKey: streamAgentApiKey,
+      apiKey: streamApiKey,
       fixture,
       providerBaseUrl: `${streamProvider.url}?mode=stream&stream_end_ms=20`,
       virtualModelName: "vm-metadata-stream",
     });
     await seedOpenAIGatewayRoute({
-      agentApiKey: errorAgentApiKey,
+      apiKey: errorApiKey,
       fixture,
       providerBaseUrl: `${errorProvider.url}?mode=bad-request`,
       virtualModelName: "vm-metadata-error",
     });
     const fallbackRoute = await seedOpenAIGatewayRoute({
-      agentApiKey: fallbackAgentApiKey,
+      apiKey: fallbackApiKey,
       fixture,
       providerBaseUrl: `${fallbackFailingProvider.url}?mode=rate-limit`,
       virtualModelName: "vm-metadata-fallback",
@@ -73,7 +73,7 @@ test("Gateway stdout logs omit prompt, tool arguments, and test keys across JSON
       await waitForGateway(baseUrl, gateway);
 
       const jsonResponse = await postChatCompletion({
-        agentApiKey: jsonAgentApiKey,
+        apiKey: jsonApiKey,
         baseUrl,
         model: "vm-metadata-json",
         stream: false,
@@ -82,7 +82,7 @@ test("Gateway stdout logs omit prompt, tool arguments, and test keys across JSON
       await jsonResponse.text();
 
       const streamResponse = await postChatCompletion({
-        agentApiKey: streamAgentApiKey,
+        apiKey: streamApiKey,
         baseUrl,
         model: "vm-metadata-stream",
         stream: true,
@@ -91,7 +91,7 @@ test("Gateway stdout logs omit prompt, tool arguments, and test keys across JSON
       expect(await streamResponse.text()).toContain("fake");
 
       const errorResponse = await postChatCompletion({
-        agentApiKey: errorAgentApiKey,
+        apiKey: errorApiKey,
         baseUrl,
         model: "vm-metadata-error",
         stream: false,
@@ -100,7 +100,7 @@ test("Gateway stdout logs omit prompt, tool arguments, and test keys across JSON
       await errorResponse.text();
 
       const fallbackResponse = await postChatCompletion({
-        agentApiKey: fallbackAgentApiKey,
+        apiKey: fallbackApiKey,
         baseUrl,
         model: "vm-metadata-fallback",
         stream: false,
@@ -110,7 +110,7 @@ test("Gateway stdout logs omit prompt, tool arguments, and test keys across JSON
 
       await expect
         .poll(() => gateway.stdout.join("") + gateway.stderr.join(""))
-        .toContain("gateway agent request");
+        .toContain("gateway apiKey request");
     } finally {
       await stopGatewayProcess(gateway);
     }
@@ -203,7 +203,7 @@ async function seedFallbackProviderCandidate(input: {
 }
 
 async function postChatCompletion(input: {
-  agentApiKey: string;
+  apiKey: string;
   baseUrl: string;
   model: string;
   stream: boolean;
@@ -230,7 +230,7 @@ async function postChatCompletion(input: {
       ],
     }),
     headers: {
-      authorization: `Bearer ${input.agentApiKey}`,
+      authorization: `Bearer ${input.apiKey}`,
       "content-type": "application/json",
       "x-api-key": testKeyMarker,
     },

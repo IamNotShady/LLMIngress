@@ -1,27 +1,27 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import {
-  listAgentLimitRuntimeSnapshots,
-  listAgentLimits,
-  listSavedAgentLimits,
-} from "../../packages/db/src/console-agent-limits";
+  listApiKeyLimitRuntimeSnapshots,
+  listApiKeyLimits,
+  listSavedApiKeyLimits,
+} from "../../packages/db/src/console-api-key-limits";
 import {
-  type AgentLimitRuleInput,
-  createAgentWithSettings,
-  normalizeAgentFormInput,
-  normalizeAgentVirtualModelSelectionInput,
-  setAgentEnabled,
-  updateAgentWithSettings,
-} from "../../packages/db/src/console-agents";
+  type ApiKeyLimitRuleInput,
+  createApiKeyWithSettings,
+  normalizeApiKeyFormInput,
+  normalizeApiKeyVirtualModelSelectionInput,
+  setApiKeyEnabled,
+  updateApiKeyWithSettings,
+} from "../../packages/db/src/console-api-keys";
 import {
   createTestPostgresFixture,
   runMigrations,
   withDedicatedPostgresClient,
 } from "../../packages/db/src/index";
-import { enforceGatewayAgentLimitsIfEnabled } from "../../packages/gateway-runtime/src/gateway-agent-limits";
+import { enforceGatewayApiKeyLimitsIfEnabled } from "../../packages/gateway-runtime/src/gateway-api-key-limits";
 import { authenticateGatewayRequest } from "../../packages/gateway-runtime/src/gateway-auth";
 
-const rpmRule: AgentLimitRuleInput = {
+const rpmRule: ApiKeyLimitRuleInput = {
   enforcementPolicy: "block",
   limitType: "rpm",
   limitValue: 60,
@@ -30,9 +30,9 @@ const rpmRule: AgentLimitRuleInput = {
   unit: "requests",
 };
 
-test("Agent creation is atomic and explicit switches preserve credentials, grants, and limits", async () => {
+test("ApiKey creation is atomic and explicit switches preserve credentials, grants, and limits", async () => {
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_agent_contract_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_api_key_contract_${randomUUID().replaceAll("-", "_")}`,
   });
 
   try {
@@ -41,28 +41,27 @@ test("Agent creation is atomic and explicit switches preserve credentials, grant
     await withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
       client.query(
         `insert into virtual_models (id, name, description, enabled)
-         values ($1, 'agent-contract-vm', 'Agent contract VM', true)`,
+         values ($1, 'api-key-contract-vm', 'ApiKey contract VM', true)`,
         [virtualModelId],
       ),
     );
 
-    const agent = normalizeAgentFormInput({
-      integrationPlatform: "codex",
-      name: "contract-agent",
+    const apiKey = normalizeApiKeyFormInput({
+      name: "contract-apiKey",
     });
-    const virtualModels = normalizeAgentVirtualModelSelectionInput({
+    const virtualModels = normalizeApiKeyVirtualModelSelectionInput({
       allowedVirtualModelIds: [virtualModelId],
       defaultVirtualModelId: virtualModelId,
     });
-    const created = await createAgentWithSettings({
-      agent,
+    const created = await createApiKeyWithSettings({
+      apiKey,
       databaseUrl: fixture.databaseUrl,
       limitRules: [rpmRule],
       limitsEnabled: true,
       virtualModels,
     });
 
-    await expectAgentState(fixture.databaseUrl, created.id, {
+    await expectApiKeyState(fixture.databaseUrl, created.id, {
       enabled: true,
       grantCount: 1,
       limitCount: 1,
@@ -70,12 +69,12 @@ test("Agent creation is atomic and explicit switches preserve credentials, grant
     });
 
     await expect(
-      createAgentWithSettings({
-        agent: normalizeAgentFormInput({ integrationPlatform: "other", name: "rolled-back" }),
+      createApiKeyWithSettings({
+        apiKey: normalizeApiKeyFormInput({ name: "rolled-back" }),
         databaseUrl: fixture.databaseUrl,
-        limitRules: [{ ...rpmRule, limitType: "invalid" } as unknown as AgentLimitRuleInput],
+        limitRules: [{ ...rpmRule, limitType: "invalid" } as unknown as ApiKeyLimitRuleInput],
         limitsEnabled: true,
-        virtualModels: normalizeAgentVirtualModelSelectionInput({
+        virtualModels: normalizeApiKeyVirtualModelSelectionInput({
           allowedVirtualModelIds: [virtualModelId],
           defaultVirtualModelId: null,
         }),
@@ -83,58 +82,58 @@ test("Agent creation is atomic and explicit switches preserve credentials, grant
     ).rejects.toThrow();
 
     const rolledBack = await withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
-      client.query("select 1 from agents where name = 'rolled-back'"),
+      client.query("select 1 from api_keys where name = 'rolled-back'"),
     );
     expect(rolledBack.rows).toEqual([]);
 
-    await updateAgentWithSettings({
-      agent,
+    await updateApiKeyWithSettings({
+      apiKey,
       databaseUrl: fixture.databaseUrl,
       id: created.id,
       limitRules: [],
       limitsEnabled: false,
       virtualModels,
     });
-    await expectAgentState(fixture.databaseUrl, created.id, {
+    await expectApiKeyState(fixture.databaseUrl, created.id, {
       enabled: true,
       grantCount: 1,
       limitCount: 1,
       limitsEnabled: false,
     });
-    await expect(listSavedAgentLimits(fixture.databaseUrl)).resolves.toMatchObject([
-      { agentId: created.id, limitType: "rpm", limitValue: 60 },
+    await expect(listSavedApiKeyLimits(fixture.databaseUrl)).resolves.toMatchObject([
+      { apiKeyId: created.id, limitType: "rpm", limitValue: 60 },
     ]);
 
-    await setAgentEnabled({ databaseUrl: fixture.databaseUrl, enabled: false, id: created.id });
+    await setApiKeyEnabled({ databaseUrl: fixture.databaseUrl, enabled: false, id: created.id });
     await expect(
       authenticateGatewayRequest({
         databaseUrl: fixture.databaseUrl,
         headers: { authorization: `Bearer ${created.plaintext}` },
       }),
     ).resolves.toMatchObject({
-      body: { error: { code: "disabled_agent_api_key" } },
+      body: { error: { code: "disabled_api_key" } },
       ok: false,
     });
 
-    await setAgentEnabled({ databaseUrl: fixture.databaseUrl, enabled: true, id: created.id });
+    await setApiKeyEnabled({ databaseUrl: fixture.databaseUrl, enabled: true, id: created.id });
     await expect(
       authenticateGatewayRequest({
         databaseUrl: fixture.databaseUrl,
         headers: { authorization: `Bearer ${created.plaintext}` },
       }),
     ).resolves.toMatchObject({
-      agentApiKey: { limitsEnabled: false },
+      apiKey: { limitsEnabled: false },
       ok: true,
     });
-    await expectAgentState(fixture.databaseUrl, created.id, {
+    await expectApiKeyState(fixture.databaseUrl, created.id, {
       enabled: true,
       grantCount: 1,
       limitCount: 1,
       limitsEnabled: false,
     });
 
-    await updateAgentWithSettings({
-      agent,
+    await updateApiKeyWithSettings({
+      apiKey,
       databaseUrl: fixture.databaseUrl,
       id: created.id,
       limitRules: [rpmRule],
@@ -142,15 +141,15 @@ test("Agent creation is atomic and explicit switches preserve credentials, grant
       virtualModels,
     });
     await expect(
-      enforceGatewayAgentLimitsIfEnabled({
-        agentId: created.id,
+      enforceGatewayApiKeyLimitsIfEnabled({
+        apiKeyId: created.id,
         databaseUrl: fixture.databaseUrl,
         limitsEnabled: true,
-        requestId: "gw_agent_limits_restored",
+        requestId: "gw_api_key_limits_restored",
         requestMetadata: { estimatedInputTokens: 1, estimatedOutputTokens: 1 },
       }),
     ).resolves.toMatchObject({ ok: true });
-    await expectAgentState(fixture.databaseUrl, created.id, {
+    await expectApiKeyState(fixture.databaseUrl, created.id, {
       enabled: true,
       grantCount: 1,
       limitCount: 1,
@@ -161,73 +160,73 @@ test("Agent creation is atomic and explicit switches preserve credentials, grant
   }
 });
 
-test("Limits list and runtime metrics include only enabled Agents with Limits enabled", async () => {
+test("Limits list and runtime metrics include only enabled ApiKeys with Limits enabled", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_limits_list_${randomUUID().replaceAll("-", "_")}`,
   });
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    const visibleAgentId = randomUUID();
-    const disabledAgentId = randomUUID();
-    const limitsDisabledAgentId = randomUUID();
-    const noRulesAgentId = randomUUID();
+    const visibleApiKeyId = randomUUID();
+    const disabledApiKeyId = randomUUID();
+    const limitsDisabledApiKeyId = randomUUID();
+    const noRulesApiKeyId = randomUUID();
 
     await withDedicatedPostgresClient(fixture.databaseUrl, async (client) => {
       await client.query(
-        `insert into agents (id, name, enabled, limits_enabled)
-         values ($1, 'visible-limits', true, true),
-                ($2, 'disabled-agent', false, true),
-                ($3, 'limits-disabled', true, false),
-                ($4, 'no-rules', true, true)`,
-        [visibleAgentId, disabledAgentId, limitsDisabledAgentId, noRulesAgentId],
+        `insert into api_keys (id, name, key_prefix, key_hash, enabled, limits_enabled)
+         values ($1, 'visible-limits', left(gen_random_uuid()::text, 12), gen_random_uuid()::text, true, true),
+                ($2, 'disabled-apiKey', left(gen_random_uuid()::text, 12), gen_random_uuid()::text, false, true),
+                ($3, 'limits-disabled', left(gen_random_uuid()::text, 12), gen_random_uuid()::text, true, false),
+                ($4, 'no-rules', left(gen_random_uuid()::text, 12), gen_random_uuid()::text, true, true)`,
+        [visibleApiKeyId, disabledApiKeyId, limitsDisabledApiKeyId, noRulesApiKeyId],
       );
       await client.query(
-        `insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit)
+        `insert into api_key_limits (id, api_key_id, limit_type, period, limit_value, unit)
          values ($1, $2, 'rpm', 'minute', 60, 'requests'),
                 ($3, $4, 'rpm', 'minute', 60, 'requests'),
                 ($5, $6, 'rpm', 'minute', 60, 'requests')`,
         [
           randomUUID(),
-          visibleAgentId,
+          visibleApiKeyId,
           randomUUID(),
-          disabledAgentId,
+          disabledApiKeyId,
           randomUUID(),
-          limitsDisabledAgentId,
+          limitsDisabledApiKeyId,
         ],
       );
       await client.query(
         `insert into rate_limit_windows (
-           id, agent_id, limit_type, window_start, window_end, request_count
+           id, api_key_id, limit_type, window_start, window_end, request_count
          ) values
            ($1, $2, 'rpm', now() - interval '1 minute', now() + interval '1 minute', 5),
            ($3, $4, 'rpm', now() - interval '1 minute', now() + interval '1 minute', 9),
            ($5, $6, 'rpm', now() - interval '1 minute', now() + interval '1 minute', 11)`,
         [
           randomUUID(),
-          visibleAgentId,
+          visibleApiKeyId,
           randomUUID(),
-          disabledAgentId,
+          disabledApiKeyId,
           randomUUID(),
-          limitsDisabledAgentId,
+          limitsDisabledApiKeyId,
         ],
       );
     });
 
-    await expect(listAgentLimits(fixture.databaseUrl)).resolves.toMatchObject([
-      { agentId: visibleAgentId, limitType: "rpm", limitValue: 60 },
+    await expect(listApiKeyLimits(fixture.databaseUrl)).resolves.toMatchObject([
+      { apiKeyId: visibleApiKeyId, limitType: "rpm", limitValue: 60 },
     ]);
-    await expect(listAgentLimitRuntimeSnapshots(fixture.databaseUrl)).resolves.toMatchObject([
-      { agentId: visibleAgentId, currentRpm: 5 },
+    await expect(listApiKeyLimitRuntimeSnapshots(fixture.databaseUrl)).resolves.toMatchObject([
+      { apiKeyId: visibleApiKeyId, currentRpm: 5 },
     ]);
   } finally {
     await fixture.dispose();
   }
 });
 
-async function expectAgentState(
+async function expectApiKeyState(
   databaseUrl: string,
-  agentId: string,
+  apiKeyId: string,
   expected: {
     enabled: boolean;
     grantCount: number;
@@ -242,15 +241,15 @@ async function expectAgentState(
       limit_count: number;
       limits_enabled: boolean;
     }>(
-      `select agents.enabled,
-              agents.limits_enabled,
-              (select count(*)::integer from agent_virtual_models where agent_id = agents.id)
+      `select api_keys.enabled,
+              api_keys.limits_enabled,
+              (select count(*)::integer from api_key_virtual_models where api_key_id = api_keys.id)
                 as grant_count,
-              (select count(*)::integer from agent_limits where agent_id = agents.id)
+              (select count(*)::integer from api_key_limits where api_key_id = api_keys.id)
                 as limit_count
-       from agents
-       where agents.id = $1`,
-      [agentId],
+       from api_keys
+       where api_keys.id = $1`,
+      [apiKeyId],
     ),
   );
   expect(result.rows[0]).toEqual({

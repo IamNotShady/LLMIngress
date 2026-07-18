@@ -45,11 +45,11 @@ test("fresh Console guides users through only the retained core workflow", async
         ).toBeVisible();
       }
 
-      await page.goto(`${baseUrl}/agents`, { waitUntil: "networkidle" });
-      await expect(page.getByText(/Create an Agent to issue an API key/)).toBeVisible();
+      await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
+      await expect(page.getByText(/Create an ApiKey to issue an API key/)).toBeVisible();
 
       await page.goto(`${baseUrl}/limits`, { waitUntil: "networkidle" });
-      await expect(page.getByText(/Create an Agent and enable limits/)).toBeVisible();
+      await expect(page.getByText(/Create an ApiKey and enable limits/)).toBeVisible();
 
       await page.goto(`${baseUrl}/models`, { waitUntil: "networkidle" });
       await expect(
@@ -141,7 +141,7 @@ test("fresh Console guides users through only the retained core workflow", async
         });
       });
       await page.goto(`${baseUrl}/playground`, { waitUntil: "networkidle" });
-      await page.getByLabel("1. Agent API Key").fill("llmi_test_key");
+      await page.getByLabel("1. API Key").fill("llmi_test_key");
       await expect(page.getByLabel("3. Virtual Model").locator("option")).toHaveCount(2);
       await page.getByLabel("3. Virtual Model").selectOption("audit-playground-vm");
       await page.getByRole("button", { name: "Send" }).click();

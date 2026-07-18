@@ -11,7 +11,7 @@ import {
 } from "../support/gateway-process";
 import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
-const agentApiKey = "llmi_gateway_fallback_health_key_119";
+const apiKey = "llmi_gateway_fallback_health_key_119";
 
 test("JSON fallback skips a recognized client request error without recording provider health", async () => {
   const fixture = await createTestPostgresFixture({
@@ -23,7 +23,7 @@ test("JSON fallback skips a recognized client request error without recording pr
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     const seeded = await seedOpenAIGatewayRoute({
-      agentApiKey: `${agentApiKey}_json`,
+      apiKey: `${apiKey}_json`,
       fixture,
       providerBaseUrl: `${failingProvider.url}?mode=unsupported-parameter`,
       virtualModelName: "vm-json-fallback-health",
@@ -44,7 +44,7 @@ test("JSON fallback skips a recognized client request error without recording pr
       await waitForGateway(baseUrl, gateway);
 
       const response = await postChatCompletion({
-        agentApiKey: `${agentApiKey}_json`,
+        apiKey: `${apiKey}_json`,
         baseUrl,
         model: "vm-json-fallback-health",
         stream: false,
@@ -79,7 +79,7 @@ test("Streaming fallback does not record connection health for a provider 5xx be
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     const seeded = await seedOpenAIGatewayRoute({
-      agentApiKey: `${agentApiKey}_stream`,
+      apiKey: `${apiKey}_stream`,
       fixture,
       providerBaseUrl: `${failingProvider.url}?mode=first-byte-failure`,
       virtualModelName: "vm-stream-fallback-health",
@@ -100,7 +100,7 @@ test("Streaming fallback does not record connection health for a provider 5xx be
       await waitForGateway(baseUrl, gateway);
 
       const response = await postChatCompletion({
-        agentApiKey: `${agentApiKey}_stream`,
+        apiKey: `${apiKey}_stream`,
         baseUrl,
         model: "vm-stream-fallback-health",
         stream: true,
@@ -220,7 +220,7 @@ async function countProviderConnectionProbeJobs(
 }
 
 async function postChatCompletion(input: {
-  agentApiKey: string;
+  apiKey: string;
   baseUrl: string;
   model: string;
   stream: boolean;
@@ -232,7 +232,7 @@ async function postChatCompletion(input: {
       stream: input.stream,
     }),
     headers: {
-      authorization: `Bearer ${input.agentApiKey}`,
+      authorization: `Bearer ${input.apiKey}`,
       "content-type": "application/json",
     },
     method: "POST",

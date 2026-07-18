@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { normalizeAgentFormInput } from "../../packages/db/src/console-agents";
 import { getOpenAICompatibleProviderTemplate } from "../../packages/db/src/console-provider-templates";
 import type { TestPostgresFixture } from "../../packages/db/src/index";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
@@ -14,17 +13,6 @@ describe("schema vocab checks relaxed", () => {
           [randomUUID()],
         ),
       ).rejects.toThrow(/jobs_job_type_check/);
-    });
-  });
-
-  it("accepts an agent integration_platform outside the current product vocabulary", async () => {
-    await withMigratedFixture(async (fixture) => {
-      await expect(
-        fixture.query(
-          "insert into agents (id, name, integration_platform) values ($1, 'Vocab Agent', 'future-platform')",
-          [randomUUID()],
-        ),
-      ).resolves.toBeDefined();
     });
   });
 
@@ -51,12 +39,6 @@ describe("schema vocab checks relaxed", () => {
   });
 
   it("keeps application-layer vocabulary validation as the write-path defense", () => {
-    expect(() =>
-      normalizeAgentFormInput({
-        integrationPlatform: "future-platform",
-        name: "Vocab Agent",
-      }),
-    ).toThrow(/Agent integration platform must be/);
     expect(() => getOpenAICompatibleProviderTemplate("future_template")).toThrow(
       /whitelisted provider template/,
     );

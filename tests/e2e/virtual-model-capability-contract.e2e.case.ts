@@ -18,7 +18,7 @@ import {
 } from "../support/gateway-process";
 import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
-const agentApiKey = "llmi_virtual_model_capability_contract_key";
+const apiKey = "llmi_virtual_model_capability_contract_key";
 
 test("route policy save allows unknown and rejects mismatched provider model capabilities", async () => {
   const fixture = await createTestPostgresFixture({
@@ -208,7 +208,7 @@ test("gateway rejects requests that exceed the Virtual Model capability contract
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedOpenAIGatewayRoute({
-      agentApiKey,
+      apiKey,
       fixture,
       providerBaseUrl: provider.url,
       virtualModelName: "vm-contract-gateway",
@@ -241,7 +241,7 @@ test("gateway rejects requests that exceed the Virtual Model capability contract
           tools: [{ function: { name: "lookup" }, type: "function" }],
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -271,7 +271,7 @@ test("gateway skips request checks for unknown Virtual Model capability fields",
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedOpenAIGatewayRoute({
-      agentApiKey,
+      apiKey,
       fixture,
       providerBaseUrl: provider.url,
       virtualModelName: "vm-contract-unknown",
@@ -304,7 +304,7 @@ test("gateway skips request checks for unknown Virtual Model capability fields",
           tools: [{ function: { name: "lookup" }, type: "function" }],
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
         method: "POST",

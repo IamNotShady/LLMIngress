@@ -15,7 +15,7 @@ const consoleSectionSource = () =>
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
-    "agents-section.tsx",
+    "api_keys-section.tsx",
     "limits-section.tsx",
     "models-section.tsx",
     "providers-section.tsx",
@@ -116,9 +116,9 @@ describe("console dark restyle static contract", () => {
     expect(stylesheet).toMatch(/\.sidebar-runtime-status\s*\{[^}]*align-items:\s*center/s);
   });
 
-  test("agents filters use a compact filter button aligned with the controls", () => {
-    const agentsPage = readFileSync(join(appDir, "(dashboard)/agents/page.tsx"), "utf8");
-    const sections = moduleSource("agents-section.tsx");
+  test("api_keys filters use a compact filter button aligned with the controls", () => {
+    const apiKeysPage = readFileSync(join(appDir, "(dashboard)/api-keys/page.tsx"), "utf8");
+    const sections = moduleSource("api_keys-section.tsx");
     const stylesheet = css();
 
     expect(sections).not.toContain("Apply filters");
@@ -127,11 +127,11 @@ describe("console dark restyle static contract", () => {
     expect(sections).not.toContain(
       '<FlatIcon name="filter" />\n                  <span>Filter</span>',
     );
-    expect(agentsPage).not.toContain("FlatIcon");
-    expect(agentsPage).toContain("<span>Create Agent</span>");
-    expect(stylesheet).toMatch(/\.agents-filter-actions button\s*\{[^}]*min-height:\s*2\.25rem/s);
+    expect(apiKeysPage).not.toContain("FlatIcon");
+    expect(apiKeysPage).toContain("<span>Create API Key</span>");
+    expect(stylesheet).toMatch(/\.api_keys-filter-actions button\s*\{[^}]*min-height:\s*2\.25rem/s);
     expect(stylesheet).toMatch(
-      /\.agents-filter-actions button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
+      /\.api_keys-filter-actions button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
     );
   });
 
@@ -160,8 +160,8 @@ describe("console dark restyle static contract", () => {
     expect(vmFilterForm).not.toContain("<span>Query</span>");
     expect(vmFilterForm).not.toContain("FlatIcon");
     expect(vmFilterForm).not.toContain("<span>Apply</span>");
-    expect(vmTable).toContain('className="agent-table-actions"');
-    expect(vmTable).toContain('className="link-button agent-action-edit row-action-button"');
+    expect(vmTable).toContain('className="api-key-table-actions"');
+    expect(vmTable).toContain('className="link-button api-key-action-edit row-action-button"');
     expect(vmTable).toContain('<FlatIcon name="edit" />');
     expect(vmTable).not.toContain('className="table-action-link"');
     expect(stylesheet).toMatch(/\.providers-page,\s*\.models-page\s*\{[^}]*margin:\s*0/s);
@@ -229,7 +229,7 @@ describe("console dark restyle static contract", () => {
   });
 
   test("dialog form submit buttons stay compact and text-only", () => {
-    const agentCreateDialog = moduleSource("agent-create-dialog-client.tsx");
+    const apiKeyCreateDialog = moduleSource("api-key-create-dialog-client.tsx");
     const sections = consoleSectionSource();
     const providerCreateForm = readFileSync(
       join(appDir, "_modules/provider-create-form.tsx"),
@@ -240,10 +240,10 @@ describe("console dark restyle static contract", () => {
       "utf8",
     );
     const stylesheet = css();
-    const agentCreateFormStart = agentCreateDialog.indexOf("<form");
-    const agentCreateForm = agentCreateDialog.slice(
-      agentCreateFormStart,
-      agentCreateDialog.indexOf("</form>", agentCreateFormStart),
+    const apiKeyCreateFormStart = apiKeyCreateDialog.indexOf("<form");
+    const apiKeyCreateForm = apiKeyCreateDialog.slice(
+      apiKeyCreateFormStart,
+      apiKeyCreateDialog.indexOf("</form>", apiKeyCreateFormStart),
     );
     const providerCreateSubmit = providerCreateForm.slice(
       providerCreateForm.lastIndexOf('<button type="submit">'),
@@ -253,8 +253,8 @@ describe("console dark restyle static contract", () => {
       ),
     );
 
-    expect(agentCreateForm).toContain('<span>{submitting ? "Creating…" : "Create"}</span>');
-    expect(agentCreateForm).not.toContain("FlatIcon");
+    expect(apiKeyCreateForm).toContain('<span>{submitting ? "Creating…" : "Create"}</span>');
+    expect(apiKeyCreateForm).not.toContain("FlatIcon");
     expect(providerCreateSubmit).toContain("<span>Create</span>");
     expect(providerCreateSubmit).not.toContain("FlatIcon");
     expect(sections).not.toContain("Save provider");
@@ -277,7 +277,7 @@ describe("console dark restyle static contract", () => {
     );
     const limitsDialog = sections.slice(
       sections.indexOf("function LimitsConfigDialog"),
-      sections.indexOf("function getAgentLimitRuntimeSnapshot"),
+      sections.indexOf("function getApiKeyLimitRuntimeSnapshot"),
     );
     const limitsActions = limitsDialog.slice(
       limitsDialog.indexOf('<div className="limits-config-actions">'),
@@ -287,11 +287,11 @@ describe("console dark restyle static contract", () => {
       ),
     );
 
-    expect(limitsSection).toContain("limitDialog: row.agent.id");
+    expect(limitsSection).toContain("limitDialog: row.apiKey.id");
     expect(limitsSection).toContain('<FlatIcon name="edit" />');
     expect(limitsSection).not.toContain('<FlatIcon name="delete" />');
-    expect(limitsSection).toContain('className="agent-table-actions"');
-    expect(limitsSection).toContain('className="link-button agent-action-edit row-action-button"');
+    expect(limitsSection).toContain('className="api-key-table-actions"');
+    expect(limitsSection).toContain('className="link-button api-key-action-edit row-action-button"');
     expect(limitsSection).not.toContain('className="table-action-link"');
     expect(limitsSection).not.toContain("<LimitsConfigPanel");
     expect(limitsSection).not.toContain('className="table-row-link"');
@@ -300,7 +300,7 @@ describe("console dark restyle static contract", () => {
     expect(limitsDialog).toContain("<ConsoleDialog");
     expect(limitsDialog).toContain("<span>Save</span>");
     expect(limitsDialog).not.toContain("Save rules");
-    expect(limitsDialog).not.toContain("formatLimitsKeyPrefix(agent.keyPrefix)");
+    expect(limitsDialog).not.toContain("formatLimitsKeyPrefix(apiKey.keyPrefix)");
     expect(limitsActions).not.toContain("FlatIcon");
     expect(limitsDialog).not.toContain("<aside");
     expect(stylesheet).toMatch(/\.limits-main\s*\{[^}]*display:\s*block/s);
@@ -315,10 +315,10 @@ describe("console dark restyle static contract", () => {
     const sections = moduleSource("virtual-models-section.tsx");
     const stylesheet = css();
 
-    expect(sections).not.toContain('<aside className="agent-detail-card vm-detail-card"');
+    expect(sections).not.toContain('<aside className="api-key-detail-card vm-detail-card"');
     expect(sections).toContain("virtualModelView");
     expect(sections).toContain("VirtualModelViewDialog");
-    expect(sections).toContain('className="console-dialog agent-view-dialog vm-view-dialog"');
+    expect(sections).toContain('className="console-dialog api-key-view-dialog vm-view-dialog"');
     expect(stylesheet).toMatch(/\.vm-shell\s*\{[^}]*display:\s*block/s);
     expect(stylesheet).not.toContain(".vm-detail-card");
     expect(stylesheet).toMatch(/\.vm-view-dialog\s*\{[^}]*width:\s*min\(64rem/s);
@@ -360,21 +360,21 @@ describe("console dark restyle static contract", () => {
     expect(stylesheet).toMatch(/\.activity-detail-dialog\s*\{[^}]*width:\s*min\(48rem/s);
   });
 
-  test("agents list opens read-only details in a dialog instead of a side card", () => {
-    const sections = moduleSource("agents-section.tsx");
+  test("api_keys list opens read-only details in a dialog instead of a side card", () => {
+    const sections = moduleSource("api_keys-section.tsx");
     const stylesheet = css();
 
-    expect(sections).not.toContain('<aside className="agent-detail-card"');
-    expect(sections).toContain("agentView");
-    expect(sections).toContain("AgentViewDialog");
-    expect(sections).toContain('className="console-dialog agent-view-dialog"');
-    expect(stylesheet).toMatch(/\.agents-shell\s*\{[^}]*display:\s*block/s);
-    expect(stylesheet).toMatch(/\.agent-view-dialog\s*\{[^}]*width:\s*min\(42rem/s);
+    expect(sections).not.toContain('<aside className="api-key-detail-card"');
+    expect(sections).toContain("apiKeyView");
+    expect(sections).toContain("ApiKeyViewDialog");
+    expect(sections).toContain('className="console-dialog api-key-view-dialog"');
+    expect(stylesheet).toMatch(/\.api_keys-shell\s*\{[^}]*display:\s*block/s);
+    expect(stylesheet).toMatch(/\.api-key-view-dialog\s*\{[^}]*width:\s*min\(42rem/s);
     expect(stylesheet).toMatch(
-      /\.agent-view-dialog \.agent-detail-fields\s*\{[^}]*grid-template-columns:\s*1fr/s,
+      /\.api-key-view-dialog \.api-key-detail-fields\s*\{[^}]*grid-template-columns:\s*1fr/s,
     );
     expect(stylesheet).toMatch(
-      /\.agent-view-dialog \.agent-detail-fields div\s*\{[^}]*grid-template-columns:\s*minmax\(8rem,\s*0\.45fr\)\s*minmax\(0,\s*1fr\)/s,
+      /\.api-key-view-dialog \.api-key-detail-fields div\s*\{[^}]*grid-template-columns:\s*minmax\(8rem,\s*0\.45fr\)\s*minmax\(0,\s*1fr\)/s,
     );
   });
 

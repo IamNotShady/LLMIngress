@@ -16,7 +16,7 @@ import {
 const MODEL_COUNT = 60;
 
 // Seeds a provider with 60 models (the shape that rendered an 8500px page),
-// plus agents so the Agents KPI cards carry real values on mobile.
+// plus api_keys so the ApiKeys KPI cards carry real values on mobile.
 async function seedIaData(databaseUrl: string) {
   const providerId = randomUUID();
 
@@ -40,16 +40,16 @@ async function seedIaData(databaseUrl: string) {
     }
     for (let i = 0; i < 3; i++) {
       await client.query(
-        `insert into agents (id, name, key_prefix, key_hash, enabled)
+        `insert into api_keys (id, name, key_prefix, key_hash, enabled)
          values ($1, $2, $3, $4, true)`,
-        [randomUUID(), `ia-probe-agent-${i}`, `llmi_ia_probe_${i}`, `test-hash-${i}`],
+        [randomUUID(), `ia-probe-api-key-${i}`, `llmi_ia_probe_${i}`, `test-hash-${i}`],
       );
     }
   });
   return providerId;
 }
 
-test("providers page shows one provider representation with a searchable capped model library; agents KPIs and settings forms behave on mobile", async ({
+test("providers page shows one provider representation with a searchable capped model library; api_keys KPIs and settings forms behave on mobile", async ({
   browser,
 }) => {
   test.setTimeout(240_000);
@@ -169,15 +169,15 @@ test("providers page shows one provider representation with a searchable capped 
           deleteProviderDialog.getByText("Provider is still used by active route policies."),
         ).toBeVisible();
 
-        // --- Agents KPIs on mobile: two columns, no truncated values.
+        // --- ApiKeys KPIs on mobile: two columns, no truncated values.
         await page.setViewportSize({ width: 390, height: 844 });
-        await page.goto(`${baseUrl}/agents`, { waitUntil: "networkidle" });
+        await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
         const columns = await page
-          .locator(".agents-stat-grid")
+          .locator(".api_keys-stat-grid")
           .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
         expect(columns).toBe(2);
         const truncated = await page
-          .locator(".agents-stat-grid .stat-card-value")
+          .locator(".api_keys-stat-grid .stat-card-value")
           .evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth).length);
         expect(truncated).toBe(0);
 

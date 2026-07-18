@@ -25,8 +25,8 @@ describe("console providers IA and form polish static contract", () => {
     const files = [
       "apps/console/src/app/_components/auth-screens.tsx",
       "apps/console/src/app/_components/sidebar.tsx",
-      "apps/console/src/app/_modules/agent-create-dialog-client.tsx",
-      "apps/console/src/app/_modules/agents-section.tsx",
+      "apps/console/src/app/_modules/api-key-create-dialog-client.tsx",
+      "apps/console/src/app/_modules/api-keys-section.tsx",
       "apps/console/src/app/_modules/limits-section.tsx",
       "apps/console/src/app/_modules/models-section.tsx",
       "apps/console/src/app/_modules/provider-create-form.tsx",
@@ -72,9 +72,9 @@ describe("console providers IA and form polish static contract", () => {
     expect(querySource).toContain("limit 50");
   });
 
-  test("agents KPI grid collapses to two columns on mobile", () => {
+  test("api_keys KPI grid collapses to two columns on mobile", () => {
     expect(css()).toMatch(
-      /@media \(max-width: 56rem\)[\s\S]*?\.agents-stat-grid\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+      /@media \(max-width: 56rem\)[\s\S]*?\.api_keys-stat-grid\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
     );
   });
 

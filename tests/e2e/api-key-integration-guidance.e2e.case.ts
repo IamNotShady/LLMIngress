@@ -21,17 +21,17 @@ async function pageOverflowPx(page: Page): Promise<number> {
   );
 }
 
-test("Agent dialogs show endpoint groups and integration tabs without the platform field", async ({
+test("ApiKey dialogs show endpoint groups and integration tabs without the platform field", async ({
   browser,
 }) => {
   test.setTimeout(240_000);
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_agent_guide_e2e_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_api_key_guide_e2e_${randomUUID().replaceAll("-", "_")}`,
   });
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    const agentId = randomUUID();
+    const apiKeyId = randomUUID();
     const routedVmId = randomUUID();
     const unroutedVmId = randomUUID();
     await withDedicatedPostgresClient(fixture.databaseUrl, async (client) => {
@@ -47,14 +47,14 @@ test("Agent dialogs show endpoint groups and integration tabs without the platfo
         [randomUUID(), routedVmId],
       );
       await client.query(
-        `insert into agents (id, name, key_prefix, key_hash, enabled, default_virtual_model_id)
-         values ($1, 'guide-agent', 'llmi_guide_k', 'test-hash', true, $2)`,
-        [agentId, routedVmId],
+        `insert into api_keys (id, name, key_prefix, key_hash, enabled, default_virtual_model_id)
+         values ($1, 'guide-apiKey', 'llmi_guide_k', 'test-hash', true, $2)`,
+        [apiKeyId, routedVmId],
       );
       await client.query(
-        `insert into agent_virtual_models (agent_id, virtual_model_id)
+        `insert into api_key_virtual_models (api_key_id, virtual_model_id)
          values ($1, $2), ($1, $3)`,
-        [agentId, routedVmId, unroutedVmId],
+        [apiKeyId, routedVmId, unroutedVmId],
       );
     });
 
@@ -74,23 +74,23 @@ test("Agent dialogs show endpoint groups and integration tabs without the platfo
         await page.setViewportSize({ width: 1280, height: 800 });
         await signInFromFirstRun(page, baseUrl);
 
-        // Platform filter is gone from the Agents list.
-        await page.goto(`${baseUrl}/agents`);
-        await expect(page.getByRole("heading", { name: "Agent list" })).toBeVisible();
-        await expect(page.locator("#agent-filter-platform")).toHaveCount(0);
+        // Platform filter is gone from the ApiKeys list.
+        await page.goto(`${baseUrl}/api-keys`);
+        await expect(page.getByRole("heading", { name: "API Key list" })).toBeVisible();
+        await expect(page.locator("#api-key-filter-platform")).toHaveCount(0);
 
         // Detail dialog: no Platform row, endpoint groups, 8 integration tabs.
-        await page.goto(`${baseUrl}/agents?agentView=${agentId}`);
-        const dialog = page.getByRole("dialog", { name: "guide-agent" });
+        await page.goto(`${baseUrl}/api-keys?apiKeyView=${apiKeyId}`);
+        const dialog = page.getByRole("dialog", { name: "guide-apiKey" });
         await expect(dialog).toBeVisible();
         await expect(dialog.locator("dt").filter({ hasText: "Platform" })).toHaveCount(0);
 
         await expect(dialog).toContainText(`${gatewayUrl}/v1/messages`);
-        const routedGroup = dialog.locator(".agent-endpoint-group", {
+        const routedGroup = dialog.locator(".api-key-endpoint-group", {
           hasText: "/v1/messages",
         });
         await expect(routedGroup).toContainText("guide-routed-vm");
-        const unroutedGroup = dialog.locator(".agent-endpoint-group-unrouted");
+        const unroutedGroup = dialog.locator(".api-key-endpoint-group-unrouted");
         await expect(unroutedGroup).toContainText("No route policy configured");
         await expect(unroutedGroup).toContainText("guide-unrouted-vm");
 
@@ -102,7 +102,7 @@ test("Agent dialogs show endpoint groups and integration tabs without the platfo
         );
         await tablist.getByRole("tab", { name: "Claude Code" }).click();
         await expect(dialog).toContainText("ANTHROPIC_BASE_URL=");
-        await expect(dialog).toContainText("<YOUR_AGENT_API_KEY>");
+        await expect(dialog).toContainText("<YOUR_API_KEY>");
         await expect(dialog).toContainText("llmi_guide_k");
 
         // The allowed-VM list is redundant with the endpoint groups.
@@ -112,7 +112,7 @@ test("Agent dialogs show endpoint groups and integration tabs without the platfo
 
         // Two columns side by side with aligned bottoms on desktop, stacked
         // on mobile, and no horizontal overflow at both checkpoints.
-        const dialogColumns = dialog.locator(".agent-view-column");
+        const dialogColumns = dialog.locator(".api-key-view-column");
         await expect(dialogColumns).toHaveCount(2);
         for (const viewport of [
           { width: 1280, height: 800 },
@@ -123,7 +123,7 @@ test("Agent dialogs show endpoint groups and integration tabs without the platfo
           const leftBox = await dialogColumns.nth(0).boundingBox();
           const rightBox = await dialogColumns.nth(1).boundingBox();
           if (!leftBox || !rightBox) {
-            throw new Error(`Agent view columns are not visible at ${viewport.width}px.`);
+            throw new Error(`ApiKey view columns are not visible at ${viewport.width}px.`);
           }
           if (viewport.width === 1280) {
             expect(rightBox.x, "columns sit side by side at 1280px").toBeGreaterThanOrEqual(
@@ -143,28 +143,21 @@ test("Agent dialogs show endpoint groups and integration tabs without the platfo
         // Create flow: no platform field; created dialog reuses the tabs with
         // the one-time plaintext key; DB stores the default platform.
         await page.setViewportSize({ width: 1280, height: 800 });
-        await page.goto(`${baseUrl}/agents?agentDialog=new`);
-        await expect(page.getByLabel("Agent name")).toBeVisible();
+        await page.goto(`${baseUrl}/api-keys?apiKeyDialog=new`);
+        await expect(page.getByLabel("Name")).toBeVisible();
         await expect(page.getByLabel("Integration platform")).toHaveCount(0);
-        await page.getByLabel("Agent name").fill("guide-created-agent");
+        await page.getByLabel("Name").fill("guide-created-apiKey");
         await page.getByLabel("guide-routed-vm").check();
         await page.getByRole("button", { name: "Create" }).click();
 
-        const createdDialog = page.getByRole("dialog", { name: "Agent created" });
+        const createdDialog = page.getByRole("dialog", { name: "API Key created" });
         await expect(createdDialog).toBeVisible();
-        const apiKey = await createdDialog.getByLabel("Agent API key").inputValue();
+        const apiKey = await createdDialog.getByLabel("API key").inputValue();
         expect(apiKey.startsWith("llmi_")).toBe(true);
         await expect(createdDialog.getByRole("tab")).toHaveCount(8);
         await expect(createdDialog).toContainText(`export LLMINGRESS_API_KEY='${apiKey}'`);
         await createdDialog.getByRole("tab", { name: "Other" }).click();
         await expect(createdDialog).toContainText(`Use ${gatewayUrl} as the Gateway URL.`);
-
-        const storedPlatform = await withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
-          client.query<{ integration_platform: string }>(
-            "select integration_platform from agents where name = 'guide-created-agent'",
-          ),
-        );
-        expect(storedPlatform.rows[0]?.integration_platform).toBe("other");
       } finally {
         await context.close();
       }

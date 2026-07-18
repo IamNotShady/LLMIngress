@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { buildGatewayAgentApiKeyHash } from "../../packages/gateway-runtime/src/gateway-auth";
+import { buildGatewayApiKeyHash } from "../../packages/gateway-runtime/src/gateway-auth";
 import { createFakeProviderServer } from "../support/fake-provider";
 import {
   getFreePort,
@@ -16,7 +16,7 @@ import {
 } from "../support/provider-coverage-smoke";
 
 const encryptionKey = "test-master-key";
-const agentApiKey = "llmi_v1_provider_coverage_smoke_key_094";
+const apiKey = "llmi_v1_provider_coverage_smoke_key_094";
 
 test("provider coverage routes core providers local providers and validates long tail templates available", async () => {
   const fixture = await createTestPostgresFixture({
@@ -68,8 +68,8 @@ async function seedProviderCoverageRoutes(
   fixture: Fixture,
   scenarios: readonly ProviderCoverageScenario[],
 ): Promise<void> {
-  const agentId = randomUUID();
-  const seedAgentId = randomUUID();
+  const apiKeyId = randomUUID();
+  const seedApiKeyId = randomUUID();
   const encryptedKeys = scenarios.map((scenario) =>
     createSecretEncryption({ kind: "inline", value: encryptionKey }).encrypt(
       scenario.providerApiKey,
@@ -78,8 +78,8 @@ async function seedProviderCoverageRoutes(
   const seededVirtualModelIds: string[] = [];
 
   await fixture.query(
-    "insert into agents (id, name, enabled) values ($1, 'Provider Coverage Agent', true)",
-    [seedAgentId],
+    "insert into api_keys (id, name, key_prefix, key_hash, enabled) values ($1, 'Provider Coverage ApiKey', left(gen_random_uuid()::text, 12), gen_random_uuid()::text, true)",
+    [seedApiKeyId],
   );
 
   for (const [index, scenario] of scenarios.entries()) {
@@ -172,13 +172,13 @@ async function seedProviderCoverageRoutes(
 
   await fixture.query(
     `
-      update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
+      update api_keys set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
-      agentId,
-      seedAgentId,
-      agentApiKey.slice(0, 12),
-      buildGatewayAgentApiKeyHash(agentApiKey),
+      apiKeyId,
+      seedApiKeyId,
+      apiKey.slice(0, 12),
+      buildGatewayApiKeyHash(apiKey),
       seededVirtualModelIds[0],
     ],
   );
@@ -186,10 +186,10 @@ async function seedProviderCoverageRoutes(
   for (const virtualModelId of seededVirtualModelIds) {
     await fixture.query(
       `
-        insert into agent_virtual_models (agent_id, virtual_model_id)
+        insert into api_key_virtual_models (api_key_id, virtual_model_id)
         values ($1, $2)
       `,
-      [agentId, virtualModelId],
+      [apiKeyId, virtualModelId],
     );
   }
   await fixture.query(
@@ -220,7 +220,7 @@ async function requestScenario(
   return fetch(endpoint, {
     body: JSON.stringify(body),
     headers: {
-      authorization: `Bearer ${agentApiKey}`,
+      authorization: `Bearer ${apiKey}`,
       "content-type": "application/json",
       "x-request-id": scenario.requestId,
     },

@@ -1721,6 +1721,11 @@ body:has(.console-dialog[open]) {
   flex: 1;
   min-width: 0;
 }
+.api-key-secret-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
 .api-key-detail-fields div {
   display: grid;
   grid-template-columns: minmax(6rem, 0.8fr) minmax(0, 1.2fr);
@@ -1765,7 +1770,7 @@ body:has(.console-dialog[open]) {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  width: min(42rem, calc(100vw - 2rem));
+  width: min(72rem, calc(100vw - 2rem));
 }
 .vm-view-dialog {
   display: grid;
@@ -2256,10 +2261,6 @@ button.table-row-link {
   color: var(--text-muted);
   overflow-wrap: anywhere;
 }
-.api-key-created-guide {
-  display: grid;
-  gap: var(--space-sm);
-}
 .api-key-endpoint-group {
   display: grid;
   gap: var(--space-xs);
@@ -2275,9 +2276,6 @@ button.table-row-link {
 .api-key-endpoint-protocol {
   margin: 0;
   color: var(--text-muted);
-}
-.api-key-view-dialog {
-  width: min(72rem, calc(100vw - 2rem));
 }
 .api-key-view-columns {
   display: grid;

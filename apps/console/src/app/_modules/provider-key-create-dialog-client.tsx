@@ -102,7 +102,7 @@ export function ProviderKeyCreateDialogClient({
           </a>
         </div>
         <p>Copy this API key now. It will not be shown again.</p>
-        <dl className="agent-detail-fields">
+        <dl className="api-key-detail-fields">
           <div>
             <dt>Provider API key</dt>
             <dd>

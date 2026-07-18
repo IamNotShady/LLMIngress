@@ -15,6 +15,7 @@ import Link from "next/link";
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
 import { chartAccent, chartOk } from "../_components/charts/palette";
 import { TrendLineChart } from "../_components/charts/trend-line-chart";
+import { EmptyState } from "../_components/empty-state";
 import { StatCard } from "../_components/stat-card";
 import { ActivityStatusPill } from "./activity-status-pill";
 import {
@@ -50,8 +51,8 @@ function formatSignedDecimal(value: number): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(1)}`;
 }
 
-function buildTopAgentsByCost(agentBreakdowns: ConsoleUsageDimensionBreakdown[]) {
-  return agentBreakdowns
+function buildTopApiKeysByCost(apiKeyBreakdowns: ConsoleUsageDimensionBreakdown[]) {
+  return apiKeyBreakdowns
     .map((breakdown) => ({
       name: breakdown.label,
       value: Number(breakdown.totalCostUsd ?? 0),
@@ -75,15 +76,15 @@ export async function OverviewSection() {
       limit: 8,
     }),
   ]);
-  const activeAgentCount = usageSummary.agentBreakdowns.filter(
-    (agent) => agent.requestCount > 0,
+  const activeApiKeyCount = usageSummary.apiKeyBreakdowns.filter(
+    (apiKey) => apiKey.requestCount > 0,
   ).length;
   const failureRate =
     usageSummary.requestCount > 0
       ? `${((usageSummary.failureCount / usageSummary.requestCount) * 100).toFixed(2)}%`
       : "0.00%";
   const trend = usageSummary.trend.map(formatOverviewTrendPoint);
-  const topAgents = buildTopAgentsByCost(usageSummary.agentBreakdowns);
+  const topApiKeys = buildTopApiKeysByCost(usageSummary.apiKeyBreakdowns);
 
   return (
     <section className="overview-dashboard" aria-label="Overview">
@@ -108,9 +109,9 @@ export async function OverviewSection() {
               </Link>
             </li>
             <li>
-              <Link href="/agents?agentDialog=new">
+              <Link href="/api-keys?apiKeyDialog=new">
                 <span>3</span>
-                Create an Agent
+                Create an API Key
               </Link>
             </li>
             <li>
@@ -180,21 +181,21 @@ export async function OverviewSection() {
             "down-good",
           )}
         />
-        <StatCard icon="AG" label="Active agents 24h" value={String(activeAgentCount)} />
+        <StatCard icon="AG" label="Active API keys 24h" value={String(activeApiKeyCount)} />
       </div>
 
       <div className="detail-layout">
         <div className="chart-card">
           <h2 className="chart-card-title">Recent requests</h2>
           {recentActivities.length === 0 ? (
-            <p>No activity recorded.</p>
+            <EmptyState title="No activity recorded" />
           ) : (
             <div className="data-table-wrap">
               <table className="data-table bounded-table overview-requests-table">
                 <thead>
                   <tr>
                     <th>Time</th>
-                    <th>Agent</th>
+                    <th>API Key</th>
                     <th>Virtual model</th>
                     <th>Hit model</th>
                     <th>Provider</th>
@@ -207,7 +208,7 @@ export async function OverviewSection() {
                   {recentActivities.map((activity) => (
                     <tr key={activity.id}>
                       <td className="mono">{formatConsoleTimestamp(activity.startedAt)}</td>
-                      <td>{activity.agentName ?? "Unknown agent"}</td>
+                      <td>{activity.apiKeyName ?? "Unknown API key"}</td>
                       <td>{formatActivityVirtualModelLabel(activity)}</td>
                       <td>{formatActivityModelSummary(activity)}</td>
                       <td>{formatActivityProviderLabel(activity)}</td>
@@ -239,11 +240,11 @@ export async function OverviewSection() {
           />
         </div>
         <div className="chart-card">
-          <h2 className="chart-card-title">Top agents by cost</h2>
-          {topAgents.length === 0 ? (
-            <p>No agent activity recorded.</p>
+          <h2 className="chart-card-title">Top API keys by cost</h2>
+          {topApiKeys.length === 0 ? (
+            <p>No API key activity recorded.</p>
           ) : (
-            <DonutBreakdown ariaLabel="Top agents by cost" data={topAgents} valueFormat="usd" />
+            <DonutBreakdown ariaLabel="Top API keys by cost" data={topApiKeys} valueFormat="usd" />
           )}
         </div>
       </div>

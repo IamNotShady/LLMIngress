@@ -7,7 +7,7 @@ import {
 import {
   type GatewayBudgetSettlement,
   recordGatewayBudgetUsage,
-} from "@llmingress/gateway-runtime/gateway-agent-limits";
+} from "@llmingress/gateway-runtime/gateway-api-key-limits";
 import { runGatewayBackgroundTask } from "@llmingress/gateway-runtime/gateway-background-tasks";
 import type { GatewayRequestMetadata } from "@llmingress/gateway-runtime/gateway-request-metadata";
 import { wrapProviderStreamWithActivityCompletion } from "@llmingress/gateway-runtime/gateway-stream-pipeline";
@@ -58,8 +58,8 @@ function runRecordingTask(input: {
 }
 
 export async function executeRecordedGatewayJsonRequest(input: {
-  agentId: string;
-  agentApiKeyPrefix: string;
+  apiKeyId: string;
+  apiKeyPrefix: string;
   execute: () => Promise<GatewayJsonEndpointResponse>;
   logger: FastifyBaseLogger;
   model: string;
@@ -75,7 +75,7 @@ export async function executeRecordedGatewayJsonRequest(input: {
 
   if (response.statusCode < 400 && usageCost) {
     scheduleBudgetUsage({
-      agentId: input.agentId,
+      apiKeyId: input.apiKeyId,
       budgetSettlement: response.budgetSettlement,
       input,
       message: "gateway budget usage recording failed",
@@ -99,8 +99,8 @@ export async function executeRecordedGatewayJsonRequest(input: {
 }
 
 export async function executeRecordedGatewayStreamingRequest(input: {
-  agentId: string;
-  agentApiKeyPrefix: string;
+  apiKeyId: string;
+  apiKeyPrefix: string;
   execute: () => Promise<GatewayStreamingResult>;
   logger: FastifyBaseLogger;
   model: string;
@@ -139,7 +139,7 @@ export async function executeRecordedGatewayStreamingRequest(input: {
 
         if (statusCode < 400 && usageCostWithProviderUsage) {
           scheduleBudgetUsage({
-            agentId: input.agentId,
+            apiKeyId: input.apiKeyId,
             budgetSettlement: response.budgetSettlement,
             input,
             message: "gateway stream budget usage recording failed",
@@ -171,8 +171,8 @@ function startActivity(): { id: string; startedAt: Date } {
 function scheduleRecordActivity(input: {
   activity: { id: string; startedAt: Date };
   input: {
-    agentId: string;
-    agentApiKeyPrefix: string;
+    apiKeyId: string;
+    apiKeyPrefix: string;
     logger: FastifyBaseLogger;
     model: string;
     protocol: GatewayRequestActivityProtocol;
@@ -196,8 +196,8 @@ function scheduleRecordActivity(input: {
     task: () =>
       input.recorder.recordActivity({
         activityId: input.activity.id,
-        agentApiKeyPrefix: input.input.agentApiKeyPrefix,
-        agentId: input.input.agentId,
+        apiKeyPrefix: input.input.apiKeyPrefix,
+        apiKeyId: input.input.apiKeyId,
         model: input.input.model,
         protocol: input.input.protocol,
         requestId: input.input.requestId,
@@ -214,7 +214,7 @@ function scheduleRecordActivity(input: {
 }
 
 function scheduleBudgetUsage(input: {
-  agentId: string;
+  apiKeyId: string;
   budgetSettlement: GatewayBudgetSettlement | undefined;
   input: {
     logger: FastifyBaseLogger;
@@ -230,7 +230,7 @@ function scheduleBudgetUsage(input: {
     requestId: input.input.requestId,
     task: () =>
       recordGatewayBudgetUsage({
-        agentId: input.agentId,
+        apiKeyId: input.apiKeyId,
         budgetSettlement: input.budgetSettlement,
         requestId: input.input.requestId,
         usageCost: input.usageCost,

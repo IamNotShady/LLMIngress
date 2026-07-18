@@ -32,14 +32,14 @@ test("console JSON routes preserve stable authenticated boundary errors", async 
         await waitForConsole(baseUrl, consoleApp);
         await signInFromFirstRun(page, baseUrl);
 
-        const response = await page.request.post(`${baseUrl}/api/agents`, {
+        const response = await page.request.post(`${baseUrl}/api/api-keys`, {
           form: { action: "unknown" },
           headers: { origin: baseUrl },
         });
         expect(response.status()).toBe(400);
         await expect(response.json()).resolves.toMatchObject({
-          code: "agent_action_unknown",
-          error: "Unknown agent action.",
+          code: "api_key_action_unknown",
+          error: "Unknown API key action.",
         });
       } finally {
         await context.close();

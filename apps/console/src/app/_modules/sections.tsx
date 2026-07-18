@@ -1,5 +1,5 @@
 import type { ConsoleActivity } from "@llmingress/db/console-activity";
-import type { ConsoleAgentLimit } from "@llmingress/db/console-agent-limits";
+import type { ConsoleApiKeyLimit } from "@llmingress/db/console-api-key-limits";
 import type { ConsoleProviderHealthSummary } from "@llmingress/db/console-provider-health";
 import type {
   ConsoleProviderModelOption,
@@ -116,19 +116,19 @@ export function getConsoleProviderOrder(providerKey: string): number {
   return preferredOrder.get(providerKey) ?? 100;
 }
 
-export function findAgentLimit(
-  limits: readonly ConsoleAgentLimit[],
-  limitType: ConsoleAgentLimit["limitType"],
-): ConsoleAgentLimit | undefined {
+export function findApiKeyLimit(
+  limits: readonly ConsoleApiKeyLimit[],
+  limitType: ConsoleApiKeyLimit["limitType"],
+): ConsoleApiKeyLimit | undefined {
   return limits.find((limit) => limit.limitType === limitType);
 }
 
-export function groupByAgentId<T extends { agentId: string }>(values: T[]): Map<string, T[]> {
+export function groupByApiKeyId<T extends { apiKeyId: string }>(values: T[]): Map<string, T[]> {
   const grouped = new Map<string, T[]>();
   for (const value of values) {
-    const group = grouped.get(value.agentId) ?? [];
+    const group = grouped.get(value.apiKeyId) ?? [];
     group.push(value);
-    grouped.set(value.agentId, group);
+    grouped.set(value.apiKeyId, group);
   }
   return grouped;
 }

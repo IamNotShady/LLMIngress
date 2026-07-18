@@ -158,7 +158,7 @@ describe("provider adapter headers", () => {
 
     const result = await adapter.chatCompletion({
       headers: {
-        authorization: "Bearer agent-key",
+        authorization: "Bearer api-key-key",
         "openai-beta": "responses=v1",
         "openai-organization": "org_123",
         "openai-project": "proj_123",
@@ -208,7 +208,7 @@ describe("provider adapter headers", () => {
       headers: {
         "anthropic-beta": "context-1m-2025-08-07",
         "anthropic-version": "2024-01-01",
-        "x-api-key": "agent-key",
+        "x-api-key": "api-key-key",
       },
       request: {
         maxOutputTokens: 128,

@@ -94,7 +94,7 @@ async function seedExpiredData(
   now: Date,
 ): Promise<void> {
   const requestId = randomUUID();
-  const agentId = randomUUID();
+  const apiKeyId = randomUUID();
   const jobId = randomUUID();
   const preservedEventId = randomUUID();
   const expiredEventId = randomUUID();
@@ -105,21 +105,21 @@ async function seedExpiredData(
 
   await fixture.query(
     `insert into request_activity
-      (id, request_id, agent_id, agent_key_prefix, protocol, status, created_at)
+      (id, request_id, api_key_id, api_key_prefix, protocol, status, created_at)
      values ($1, 'retention-old-request', $2, 'llmi_test', 'responses', 'succeeded', $3)`,
-    [requestId, agentId, old],
+    [requestId, apiKeyId, old],
   );
   await fixture.query(
     `insert into request_usage
-      (id, request_activity_id, agent_id, token_source, created_at)
+      (id, request_activity_id, api_key_id, token_source, created_at)
      values ($1, $2, $3, 'estimated', $4)`,
-    [randomUUID(), requestId, agentId, old],
+    [randomUUID(), requestId, apiKeyId, old],
   );
   await fixture.query(
     `insert into request_costs
-      (id, request_activity_id, agent_id, cost_source, created_at)
+      (id, request_activity_id, api_key_id, cost_source, created_at)
      values ($1, $2, $3, 'estimated', $4)`,
-    [randomUUID(), requestId, agentId, old],
+    [randomUUID(), requestId, apiKeyId, old],
   );
   await fixture.query(
     `insert into fallback_events

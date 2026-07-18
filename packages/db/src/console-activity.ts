@@ -3,8 +3,8 @@ import { isRecord } from "@llmingress/util";
 import { consoleValidationError } from "./console-operation-error.ts";
 
 export type ConsoleActivity = {
-  agentKeyPrefix: string | null;
-  agentName: string | null;
+  apiKeyPrefix: string | null;
+  apiKeyName: string | null;
   completedAt: Date | null;
   errorCode: string | null;
   errorMessage: string | null;
@@ -35,7 +35,7 @@ export type ConsoleActivity = {
 };
 
 export type ConsoleActivityFilters = {
-  agentId?: string;
+  apiKeyId?: string;
   from?: Date;
   protocol?: ConsoleActivityProtocol;
   providerId?: string;
@@ -55,7 +55,7 @@ export type ConsoleActivityListInput = {
 };
 
 export type ConsoleActivityFiltersInput = {
-  agentId?: string | null;
+  apiKeyId?: string | null;
   from?: Date | string | null;
   limit?: number | string | null;
   page?: number | string | null;
@@ -96,8 +96,8 @@ type ConsoleActivityProtocol = "chat_completions" | "messages" | "responses";
 type ConsoleActivityStatus = "canceled" | "failed" | "started" | "succeeded";
 
 type ActivityRow = {
-  agent_key_prefix: string | null;
-  agent_name: string | null;
+  api_key_prefix: string | null;
+  api_key_name: string | null;
   completed_at: Date | null;
   error_code: string | null;
   error_message: string | null;
@@ -191,8 +191,8 @@ export async function listConsoleActivities(
                coalesce(fallback_counts.failed_count, 0)::integer as fallback_failed_count,
                coalesce(request_activity.route_policy_strategy_snapshot, route_policies.strategy::text)
                  as route_policy_strategy,
-               request_activity.agent_key_prefix,
-               coalesce(request_activity.agent_name_snapshot, agents.name) as agent_name,
+               request_activity.api_key_prefix,
+               coalesce(request_activity.api_key_name_snapshot, api_keys.name) as api_key_name,
                request_activity.provider_api_key_id::text as provider_api_key_id,
                request_activity.provider_api_key_prefix,
                coalesce(
@@ -216,7 +216,7 @@ export async function listConsoleActivities(
                request_usage.total_tokens,
                request_costs.total_cost_usd::text
         from request_activity
-        left join agents on agents.id = request_activity.agent_id
+        left join api_keys on api_keys.id = request_activity.api_key_id
         left join virtual_models on virtual_models.id = request_activity.virtual_model_id
         left join route_policies on route_policies.id = request_activity.route_policy_id
         left join providers on providers.id = request_activity.provider_id
@@ -297,8 +297,8 @@ export async function getConsoleActivityDetail(input: {
                request_activity.response_metadata,
                coalesce(request_activity.route_policy_strategy_snapshot, route_policies.strategy::text)
                  as route_policy_strategy,
-               request_activity.agent_key_prefix,
-               coalesce(request_activity.agent_name_snapshot, agents.name) as agent_name,
+               request_activity.api_key_prefix,
+               coalesce(request_activity.api_key_name_snapshot, api_keys.name) as api_key_name,
                request_activity.provider_api_key_id::text as provider_api_key_id,
                request_activity.provider_api_key_prefix,
                coalesce(
@@ -322,7 +322,7 @@ export async function getConsoleActivityDetail(input: {
                request_usage.total_tokens,
                request_costs.total_cost_usd::text
         from request_activity
-        left join agents on agents.id = request_activity.agent_id
+        left join api_keys on api_keys.id = request_activity.api_key_id
         left join virtual_models on virtual_models.id = request_activity.virtual_model_id
         left join route_policies on route_policies.id = request_activity.route_policy_id
         left join providers on providers.id = request_activity.provider_id
@@ -385,7 +385,7 @@ export function normalizeConsoleActivityFilters(
   const protocol = readEnum(input.protocol, activityProtocols);
 
   return {
-    agentId: readTrimmed(input.agentId),
+    apiKeyId: readTrimmed(input.apiKeyId),
     from: readDate(input.from),
     limit: normalizeLimit(input.limit),
     page: normalizePage(input.page),
@@ -440,8 +440,8 @@ function buildActivityWhereClause(filters: ConsoleActivityFilters): {
   if (filters.virtualModelId) {
     add("request_activity.virtual_model_id = ?::uuid", filters.virtualModelId);
   }
-  if (filters.agentId) {
-    add("request_activity.agent_id = ?::uuid", filters.agentId);
+  if (filters.apiKeyId) {
+    add("request_activity.api_key_id = ?::uuid", filters.apiKeyId);
   }
   if (filters.requestId) {
     add("request_activity.request_id = ?", filters.requestId);
@@ -481,8 +481,8 @@ export function formatConsoleActivityMetadata(metadata: unknown): string[] {
 
 function rowToConsoleActivity(row: ActivityRow): ConsoleActivity {
   return {
-    agentKeyPrefix: row.agent_key_prefix,
-    agentName: row.agent_name,
+    apiKeyPrefix: row.api_key_prefix,
+    apiKeyName: row.api_key_name,
     completedAt: row.completed_at,
     errorCode: row.error_code,
     errorMessage: row.error_message,

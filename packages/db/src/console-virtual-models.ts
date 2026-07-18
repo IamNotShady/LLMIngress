@@ -31,9 +31,9 @@ export type CreatedVirtualModelWithRoute = {
 };
 
 export type ConsoleVirtualModel = NormalizedVirtualModelFormInput & {
-  allowedAgentCount: number;
+  allowedApiKeyCount: number;
   cost24hUsd: string | null;
-  defaultAgentCount: number;
+  defaultApiKeyCount: number;
   enabled: boolean;
   failureCountTotal: number;
   id: string;
@@ -48,15 +48,15 @@ export type ConsoleVirtualModelFallbackBreakdown = {
 };
 
 type VirtualModelDependencyCounts = {
-  allowedAgentCount: number;
-  defaultAgentCount: number;
+  allowedApiKeyCount: number;
+  defaultApiKeyCount: number;
   routePolicyCount: number;
 };
 
 type VirtualModelRow = {
-  allowed_agent_count: number;
+  allowed_api_key_count: number;
   cost_24h_usd: string | null;
-  default_agent_count: number;
+  default_api_key_count: number;
   display_name: string;
   enabled: boolean;
   failure_count_total: number;
@@ -68,8 +68,8 @@ type VirtualModelRow = {
 };
 
 type VirtualModelDependencyRow = {
-  allowed_agent_count: number;
-  default_agent_count: number;
+  allowed_api_key_count: number;
+  default_api_key_count: number;
   route_policy_count: number;
 };
 
@@ -117,11 +117,11 @@ export function normalizeVirtualModelFormInput(
 export function getVirtualModelDeleteDependencyError(
   input: VirtualModelDependencyCounts,
 ): string | null {
-  if (input.defaultAgentCount > 0) {
-    return "Cannot delete Virtual Model used as an Agent default.";
+  if (input.defaultApiKeyCount > 0) {
+    return "Cannot delete Virtual Model used as an ApiKey default.";
   }
-  if (input.allowedAgentCount > 0) {
-    return "Cannot delete Virtual Model allowed by an Agent.";
+  if (input.allowedApiKeyCount > 0) {
+    return "Cannot delete Virtual Model allowed by an ApiKey.";
   }
   return null;
 }
@@ -218,8 +218,8 @@ export async function createVirtualModelWithRoute(input: {
                     description as display_name,
                     enabled,
                     0::integer as route_policy_count,
-                    0::integer as default_agent_count,
-                    0::integer as allowed_agent_count,
+                    0::integer as default_api_key_count,
+                    0::integer as allowed_api_key_count,
                     0::integer as request_count_total,
                     0::integer as failure_count_total,
                     0::integer as request_count_24h,
@@ -275,14 +275,14 @@ export async function updateVirtualModel(input: {
                     ) as route_policy_count,
                     (
                       select count(*)::integer
-                      from agents
-                      where agents.default_virtual_model_id = virtual_models.id
-                    ) as default_agent_count,
+                      from api_keys
+                      where api_keys.default_virtual_model_id = virtual_models.id
+                    ) as default_api_key_count,
                     (
                       select count(*)::integer
-                      from agent_virtual_models
-                      where agent_virtual_models.virtual_model_id = virtual_models.id
-                    ) as allowed_agent_count,
+                      from api_key_virtual_models
+                      where api_key_virtual_models.virtual_model_id = virtual_models.id
+                    ) as allowed_api_key_count,
                     (
                       select count(*)::integer
                       from request_activity
@@ -421,24 +421,24 @@ async function readVirtualModelDependencyCounts(
              ) as route_policy_count,
              (
                select count(*)::integer
-               from agents
-               where agents.default_virtual_model_id = $1
-                 and agents.deleted_at is null
-             ) as default_agent_count,
+               from api_keys
+               where api_keys.default_virtual_model_id = $1
+                 and api_keys.deleted_at is null
+             ) as default_api_key_count,
              (
                select count(*)::integer
-               from agent_virtual_models
-               join agents on agents.id = agent_virtual_models.agent_id
-               where agent_virtual_models.virtual_model_id = $1
-                 and agents.deleted_at is null
-             ) as allowed_agent_count
+               from api_key_virtual_models
+               join api_keys on api_keys.id = api_key_virtual_models.api_key_id
+               where api_key_virtual_models.virtual_model_id = $1
+                 and api_keys.deleted_at is null
+             ) as allowed_api_key_count
     `,
     [id],
   );
   const row = requireRow(result.rows[0]);
   return {
-    allowedAgentCount: row.allowed_agent_count,
-    defaultAgentCount: row.default_agent_count,
+    allowedApiKeyCount: row.allowed_api_key_count,
+    defaultApiKeyCount: row.default_api_key_count,
     routePolicyCount: row.route_policy_count,
   };
 }
@@ -457,17 +457,17 @@ function buildVirtualModelListSql(): string {
            ) as route_policy_count,
            (
              select count(*)::integer
-             from agents
-             where agents.default_virtual_model_id = virtual_models.id
-               and agents.deleted_at is null
-           ) as default_agent_count,
+             from api_keys
+             where api_keys.default_virtual_model_id = virtual_models.id
+               and api_keys.deleted_at is null
+           ) as default_api_key_count,
            (
              select count(*)::integer
-             from agent_virtual_models
-             join agents on agents.id = agent_virtual_models.agent_id
-             where agent_virtual_models.virtual_model_id = virtual_models.id
-               and agents.deleted_at is null
-           ) as allowed_agent_count,
+             from api_key_virtual_models
+             join api_keys on api_keys.id = api_key_virtual_models.api_key_id
+             where api_key_virtual_models.virtual_model_id = virtual_models.id
+               and api_keys.deleted_at is null
+           ) as allowed_api_key_count,
            (
              select count(*)::integer
              from request_activity
@@ -501,9 +501,9 @@ function buildVirtualModelListSql(): string {
 
 function rowToConsoleVirtualModel(row: VirtualModelRow): ConsoleVirtualModel {
   return {
-    allowedAgentCount: row.allowed_agent_count,
+    allowedApiKeyCount: row.allowed_api_key_count,
     cost24hUsd: row.cost_24h_usd,
-    defaultAgentCount: row.default_agent_count,
+    defaultApiKeyCount: row.default_api_key_count,
     description: row.display_name,
     enabled: row.enabled,
     failureCountTotal: row.failure_count_total,

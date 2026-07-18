@@ -145,7 +145,7 @@ describe("gateway error fidelity", () => {
 
       const authorizationHeaders: string[] = [];
       const response = await executeGatewayStreamingRequest({
-        agentId: randomUUID(),
+        apiKeyId: randomUUID(),
         databaseUrl: fixture.databaseUrl,
         fetch: async (_url, init) => {
           const authorization = readAuthorization(init?.headers);

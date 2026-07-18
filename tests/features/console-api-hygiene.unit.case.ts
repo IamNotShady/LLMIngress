@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 import { ConsoleOperationError } from "@llmingress/db/console-operation-error";
 import { describe, expect, it } from "vitest";
 import { classifyConsoleActionError } from "../../apps/console/src/app/api/_error-classify";
-import { renderOneTimeAgentResponse } from "../../apps/console/src/app/api/agents/_created-page";
+import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page";
 
 const guardedRoutes = [
-  "apps/console/src/app/api/agent-limits/route.ts",
-  "apps/console/src/app/api/agents/route.ts",
+  "apps/console/src/app/api/api-key-limits/route.ts",
+  "apps/console/src/app/api/api-keys/route.ts",
   "apps/console/src/app/api/playground/result/route.ts",
   "apps/console/src/app/api/prices/override/route.ts",
   "apps/console/src/app/api/provider-keys/route.ts",
@@ -73,14 +73,14 @@ describe("console api hygiene", () => {
     }
   });
 
-  it("keeps the agent-created HTML out of the route handler", () => {
-    const source = readFileSync("apps/console/src/app/api/agents/route.ts", "utf8");
+  it("keeps the api-key-created HTML out of the route handler", () => {
+    const source = readFileSync("apps/console/src/app/api/api-keys/route.ts", "utf8");
     expect(source).not.toContain("<!doctype");
-    expect(source).toContain("renderOneTimeAgentResponse");
+    expect(source).toContain("renderOneTimeApiKeyResponse");
   });
 
-  it("returns the actual virtual model name in one-time agent connection details", async () => {
-    const response = renderOneTimeAgentResponse(
+  it("returns the actual virtual model name in one-time apiKey connection details", async () => {
+    const response = renderOneTimeApiKeyResponse(
       {
         keyPrefix: "llmi_test_key",
         plaintext: "llmi_test_key_value",

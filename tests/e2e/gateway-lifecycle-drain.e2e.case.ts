@@ -11,7 +11,7 @@ import {
 } from "../support/gateway-process";
 import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
-const agentApiKey = "llmi_gateway_lifecycle_drain_key";
+const apiKey = "llmi_gateway_lifecycle_drain_key";
 
 test("gateway shutdown drains background tasks and exits non-zero when the drain times out", async () => {
   const fixture = await createTestPostgresFixture({
@@ -22,7 +22,7 @@ test("gateway shutdown drains background tasks and exits non-zero when the drain
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedOpenAIGatewayRoute({
-      agentApiKey,
+      apiKey,
       fixture,
       providerBaseUrl: fakeProvider.url,
       virtualModelName: "vm-lifecycle-drain",
@@ -67,7 +67,7 @@ async function postChatCompletion(input: { baseUrl: string }): Promise<Response>
       model: "vm-lifecycle-drain",
     }),
     headers: {
-      authorization: `Bearer ${agentApiKey}`,
+      authorization: `Bearer ${apiKey}`,
       "content-type": "application/json",
     },
     method: "POST",

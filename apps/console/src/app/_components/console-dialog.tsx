@@ -40,7 +40,7 @@ export function ConsoleDialog({
       initialFocus === "first-field"
         ? '[data-dialog-initial-focus], input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])'
         : initialFocus === "cancel"
-          ? ".agent-delete-cancel, .secondary-button"
+          ? ".api-key-delete-cancel, .secondary-button"
           : ".secondary-button";
     dialog.querySelector<HTMLElement>(selector)?.focus();
 

@@ -1,7 +1,7 @@
 import {
-  formatAgentLimitSummaries,
-  normalizeAgentLimitFormInput,
-} from "@llmingress/db/console-agent-limits";
+  formatApiKeyLimitSummaries,
+  normalizeApiKeyLimitFormInput,
+} from "@llmingress/db/console-api-key-limits";
 import {
   getVirtualModelDeleteDependencyError,
   normalizeVirtualModelFormInput,
@@ -36,8 +36,8 @@ const listed = (modelId: string, overrides: Partial<ListedProviderModel> = {}) =
 
 describe("core delivery behavior coverage", () => {
   it("normalizes limits and returns stable summaries", () => {
-    const normalized = normalizeAgentLimitFormInput({
-      agentId: " agent-1 ",
+    const normalized = normalizeApiKeyLimitFormInput({
+      apiKeyId: " api-key-1 ",
       budgetPeriod: "week",
       budgetUsd: "12.5",
       concurrency: "3",
@@ -45,7 +45,7 @@ describe("core delivery behavior coverage", () => {
       tokenLimit: "4096",
       tpm: "120000",
     });
-    expect(normalized.agentId).toBe("agent-1");
+    expect(normalized.apiKeyId).toBe("api-key-1");
     expect(normalized.rules.map((rule) => [rule.limitType, rule.limitValue, rule.period])).toEqual([
       ["budget", 12.5, "week"],
       ["rpm", 60, "minute"],
@@ -53,11 +53,11 @@ describe("core delivery behavior coverage", () => {
       ["concurrency", 3, "request"],
       ["token", 4096, "request"],
     ]);
-    expect(() => normalizeAgentLimitFormInput({ agentId: "", budgetPeriod: "year" })).toThrow();
+    expect(() => normalizeApiKeyLimitFormInput({ apiKeyId: "", budgetPeriod: "year" })).toThrow();
     expect(
-      formatAgentLimitSummaries([
+      formatApiKeyLimitSummaries([
         {
-          agentId: "agent-1",
+          apiKeyId: "api-key-1",
           enabled: true,
           enforcementPolicy: "block",
           id: "limit-1",
@@ -82,29 +82,29 @@ describe("core delivery behavior coverage", () => {
     expect(() => normalizeVirtualModelFormInput({ description: "", name: "valid" })).toThrow();
     expect(
       getVirtualModelDeleteDependencyError({
-        allowedAgentCount: 0,
-        defaultAgentCount: 0,
+        allowedApiKeyCount: 0,
+        defaultApiKeyCount: 0,
         routePolicyCount: 1,
       }),
     ).toBeNull();
     expect(
       getVirtualModelDeleteDependencyError({
-        allowedAgentCount: 0,
-        defaultAgentCount: 1,
+        allowedApiKeyCount: 0,
+        defaultApiKeyCount: 1,
         routePolicyCount: 0,
       }),
     ).toContain("default");
     expect(
       getVirtualModelDeleteDependencyError({
-        allowedAgentCount: 1,
-        defaultAgentCount: 0,
+        allowedApiKeyCount: 1,
+        defaultApiKeyCount: 0,
         routePolicyCount: 0,
       }),
     ).toContain("allowed");
     expect(
       getVirtualModelDeleteDependencyError({
-        allowedAgentCount: 0,
-        defaultAgentCount: 0,
+        allowedApiKeyCount: 0,
+        defaultApiKeyCount: 0,
         routePolicyCount: 0,
       }),
     ).toBeNull();

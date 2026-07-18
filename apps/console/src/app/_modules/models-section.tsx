@@ -3,6 +3,7 @@ import {
   listProviderModelOptions,
 } from "@llmingress/db/console-route-policies";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
+import { EmptyState } from "../_components/empty-state";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
 import { type ConsoleSearchParams, readSingleSearchParam } from "./sections";
@@ -100,7 +101,10 @@ export async function ModelsSection({ searchParams }: { searchParams: ConsoleSea
       {providerModelOptions.length === 0 ? (
         <div className="chart-card">
           <h2 className="chart-card-title">Model directory</h2>
-          <p>No provider models discovered yet. Refresh models on the Providers page.</p>
+          <EmptyState
+            title="No provider models yet"
+            description="Refresh models on the Providers page."
+          />
         </div>
       ) : (
         <div className="detail-layout">

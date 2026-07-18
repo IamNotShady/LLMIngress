@@ -41,7 +41,7 @@ test("all dashboard pages render signed-in without horizontal overflow", async (
         const routes = [
           "/",
           "/activity",
-          "/agents",
+          "/api-keys",
           "/providers",
           "/models",
           "/routing",

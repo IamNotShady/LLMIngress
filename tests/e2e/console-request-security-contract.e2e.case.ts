@@ -25,7 +25,7 @@ test("console mutating requests do not enforce request Origin", async () => {
       const baseUrl = `http://localhost:${consoleApp.port}`;
       await waitForConsole(baseUrl, consoleApp);
 
-      const unauthenticated = await fetch(`${baseUrl}/api/agents`, {
+      const unauthenticated = await fetch(`${baseUrl}/api/api-keys`, {
         body: new URLSearchParams({ action: "create" }),
         method: "POST",
       });

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { buildGatewayAgentApiKeyHash } from "../../packages/gateway-runtime/src/gateway-auth";
+import { buildGatewayApiKeyHash } from "../../packages/gateway-runtime/src/gateway-auth";
 import { createFakeProviderServer } from "../support/fake-provider";
 import {
   getFreePort,
@@ -12,7 +12,7 @@ import {
 } from "../support/gateway-process";
 
 const encryptionKey = "test-master-key";
-const agentApiKey = "llmi_gateway_pool_test_key_094";
+const apiKey = "llmi_gateway_pool_test_key_094";
 
 test("gateway serves a 30-request burst with bounded postgres connections", async () => {
   const fixture = await createTestPostgresFixture({
@@ -42,7 +42,7 @@ test("gateway serves a 30-request burst with bounded postgres connections", asyn
             model: "vm-pool",
           }),
           headers: {
-            authorization: `Bearer ${agentApiKey}`,
+            authorization: `Bearer ${apiKey}`,
             "content-type": "application/json",
           },
           method: "POST",
@@ -67,7 +67,7 @@ test("gateway serves a 30-request burst with bounded postgres connections", asyn
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 
 async function seedPoolRoute(fixture: Fixture, providerBaseUrl: string): Promise<void> {
-  const agentId = randomUUID();
+  const apiKeyId = randomUUID();
   const providerId = randomUUID();
   const providerModelId = randomUUID();
   const virtualModelId = randomUUID();
@@ -78,16 +78,16 @@ async function seedPoolRoute(fixture: Fixture, providerBaseUrl: string): Promise
 
   await fixture.query(
     `
-      insert into agents (
+      insert into api_keys (
         id,
         name,
         key_prefix,
         key_hash,
         enabled
       )
-      values ($1, 'Pool Test Agent', $2, $3, true)
+      values ($1, 'Pool Test ApiKey', $2, $3, true)
     `,
-    [agentId, agentApiKey.slice(0, 12), buildGatewayAgentApiKeyHash(agentApiKey)],
+    [apiKeyId, apiKey.slice(0, 12), buildGatewayApiKeyHash(apiKey)],
   );
   await fixture.query(
     `
@@ -135,8 +135,8 @@ async function seedPoolRoute(fixture: Fixture, providerBaseUrl: string): Promise
     "insert into virtual_models (id, name, description, enabled) values ($1, 'vm-pool', 'VM Pool', true)",
     [virtualModelId],
   );
-  await fixture.query("update agents set default_virtual_model_id = $2 where id = $1", [
-    agentId,
+  await fixture.query("update api_keys set default_virtual_model_id = $2 where id = $1", [
+    apiKeyId,
     virtualModelId,
   ]);
   await fixture.query(
@@ -156,8 +156,8 @@ async function seedPoolRoute(fixture: Fixture, providerBaseUrl: string): Promise
     [randomUUID(), routePolicyId, providerModelId],
   );
   await fixture.query(
-    "insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)",
-    [agentId, virtualModelId],
+    "insert into api_key_virtual_models (api_key_id, virtual_model_id) values ($1, $2)",
+    [apiKeyId, virtualModelId],
   );
   await fixture.query(
     "insert into config_versions (version, source, description) values (1, 'console', 'Gateway pool test config')",

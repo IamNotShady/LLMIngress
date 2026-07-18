@@ -20,8 +20,8 @@ test("fallback_events is the persisted retry-chain source", async () => {
 
     await recordCompletedGatewayRequestActivity({
       activityId,
-      agentApiKeyPrefix: "llmi_schema",
-      agentId: ids.agentId,
+      apiKeyPrefix: "llmi_schema",
+      apiKeyId: ids.apiKeyId,
       databaseUrl: fixture.databaseUrl,
       model: "schema-vm",
       protocol: "chat_completions",
@@ -67,14 +67,14 @@ test("fallback_events is the persisted retry-chain source", async () => {
 
 async function seedRuntimeEntities(fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>) {
   const ids = {
-    agentId: randomUUID(),
+    apiKeyId: randomUUID(),
     providerId: randomUUID(),
     providerModelId: randomUUID(),
     virtualModelId: randomUUID(),
   };
   await fixture.query(
-    "insert into agents (id, name, key_prefix) values ($1, 'Schema Agent', 'llmi_schema')",
-    [ids.agentId],
+    "insert into api_keys (id, name, key_prefix, key_hash) values ($1, 'Schema ApiKey', 'llmi_schema', gen_random_uuid()::text)",
+    [ids.apiKeyId],
   );
   await fixture.query(
     "insert into virtual_models (id, name, description, enabled) values ($1, 'schema-vm', 'Schema VM', true)",

@@ -779,14 +779,14 @@ function readOptionalPositiveInteger(value: unknown, name: string): number | und
   return value;
 }
 
-export const agentLimitTypes = ["budget", "concurrency", "rpm", "token", "tpm"] as const;
-export type AgentLimitType = (typeof agentLimitTypes)[number];
+export const apiKeyLimitTypes = ["budget", "concurrency", "rpm", "token", "tpm"] as const;
+export type ApiKeyLimitType = (typeof apiKeyLimitTypes)[number];
 
-export const agentLimitEnforcementPolicies = ["block", "warn_only"] as const;
-export type AgentLimitEnforcementPolicy = (typeof agentLimitEnforcementPolicies)[number];
+export const apiKeyLimitEnforcementPolicies = ["block", "warn_only"] as const;
+export type ApiKeyLimitEnforcementPolicy = (typeof apiKeyLimitEnforcementPolicies)[number];
 
-export const agentLimitPeriods = ["day", "hour", "minute", "month", "request", "week"] as const;
-export type AgentLimitPeriod = (typeof agentLimitPeriods)[number];
+export const apiKeyLimitPeriods = ["day", "hour", "minute", "month", "request", "week"] as const;
+export type ApiKeyLimitPeriod = (typeof apiKeyLimitPeriods)[number];
 
-export const agentLimitUnits = ["requests", "tokens", "usd"] as const;
-export type AgentLimitUnit = (typeof agentLimitUnits)[number];
+export const apiKeyLimitUnits = ["requests", "tokens", "usd"] as const;
+export type ApiKeyLimitUnit = (typeof apiKeyLimitUnits)[number];

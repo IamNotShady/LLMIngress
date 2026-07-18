@@ -37,20 +37,20 @@
       "evidence": "2026-07-15: POST /v1/embeddings is unregistered, returns 404, and never forwards to Providers; the dedicated executor, adapter contract, errors, protocol vocabulary, and docs were removed while embedding model metadata remains. Focused unit/E2E, verify, and feature regression passed."
     },
     {
-      "id": "agent-access-and-limits",
-      "name": "Agent Access And Limits",
-      "description": "Agent keys, Virtual Model grants, enabled state, and budget/rate/token/concurrency limits.",
-      "verification": "pnpm exec vitest run tests/features/agent-access-limits.unit.test.ts && pnpm test:e2e tests/e2e/agent-access-limits.e2e.spec.ts --workers=1",
+      "id": "api-key-access-and-limits",
+      "name": "API Key Access And Limits",
+      "description": "API keys, Virtual Model grants, enabled state, and budget/rate/token/concurrency limits.",
+      "verification": "pnpm exec vitest run tests/features/api-key-access-limits.unit.test.ts && pnpm test:e2e tests/e2e/api-key-access-limits.e2e.spec.ts --workers=1",
       "dependencies": ["gateway-protocol-execution"],
       "status": "passing",
-      "evidence": "2026-07-14: agent-access-limits focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
+      "evidence": "2026-07-18: Renamed Agent entity to API Key; api-key-access-limits focused suites and full verify:features regression passed."
     },
     {
       "id": "usage-and-activity",
       "name": "Usage And Activity",
       "description": "Activity, tokens, latency, failures, fallback, connection health, and actual or estimated cost.",
       "verification": "pnpm exec vitest run tests/features/usage-activity.unit.test.ts && pnpm test:e2e tests/e2e/usage-activity.e2e.spec.ts --workers=1",
-      "dependencies": ["agent-access-and-limits"],
+      "dependencies": ["api-key-access-and-limits"],
       "status": "passing",
       "evidence": "2026-07-14: usage-activity focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
     },
@@ -82,13 +82,40 @@
       "evidence": "2026-07-17: V1 shipped; release-freeze guards removed (feature-list/suite-mapping pins, progress.md line cap, single-migration/24-table freeze, retired-surface absence checks, PostgreSQL image pin, Compose boot check). Behavior tests kept under renamed delivery-quality suites. Focused unit (26) + E2E (6, incl. non-root image build), pnpm run verify (317 unit tests, coverage above thresholds), and verify:features (9/9 via per-feature fallback after a parallel e2e batch flake) passed on the rebased dev baseline."
     },
     {
-      "id": "agent-integration-guidance",
-      "name": "Agent Integration Guidance",
-      "description": "Agent detail dialog shows per-platform integration guide tabs for all 8 Integration Platforms (placeholder key plus stored key prefix) and an Endpoints section grouping allowed Virtual Models by their route policy endpoint URL; the create-success dialog and one-time HTML page reuse the same guides with the plaintext key; the Integration Platform selector is removed from Agent create, edit, list filter, and detail UI while the database column stays with default 'other'.",
-      "verification": "pnpm exec vitest run tests/features/agent-integration-guidance.unit.test.ts && pnpm test:e2e tests/e2e/agent-integration-guidance.e2e.spec.ts --workers=1",
-      "dependencies": ["agent-access-and-limits", "virtual-model-routing", "console-core"],
+      "id": "api-key-integration-guidance",
+      "name": "API Key Integration Guidance",
+      "description": "API key detail dialog shows per-platform integration guide tabs for all 8 Integration Platforms (placeholder key plus stored key prefix) and an Endpoints section grouping allowed Virtual Models by their route policy endpoint URL; the create-success dialog and one-time HTML page reuse the same guides with the plaintext key; the Integration Platform selector is removed from API key create, edit, list filter, and detail UI, and the platform enum is a UI-local vocabulary with no corresponding database column.",
+      "verification": "pnpm exec vitest run tests/features/api-key-integration-guidance.unit.test.ts && pnpm test:e2e tests/e2e/api-key-integration-guidance.e2e.spec.ts --workers=1",
+      "dependencies": ["api-key-access-and-limits", "virtual-model-routing", "console-core"],
       "status": "passing",
-      "evidence": "2026-07-17: TDD red-to-green; focused unit (5) + e2e (1, incl. 1280 two-column side-by-side, 390 stacked, no-overflow with the detail dialog open) passed; pnpm run verify and verify:features (10/10, zero regression) passed. Integration Platform UI removed from create/edit/filter/detail (column retained, defaults 'other'); detail dialog widened to a balanced two-column layout (left: fields and limits; right: endpoint groups, which subsume the allowed-VM list; bottoms aligned) with the 8-platform guide tabs full-width below, reused by the create-success dialog and one-time HTML page."
+      "evidence": "2026-07-18: Renamed Agent entity to API Key; platform enum moved to a UI-local vocabulary (integration_platform column dropped). Focused unit + e2e and full verify:features regression passed."
+    },
+    {
+      "id": "console-empty-state",
+      "name": "Console Empty State",
+      "description": "A shared EmptyState primitive replaces ad-hoc empty-table text across the dashboard sections; empty views (e.g. Providers with no providers) render a consistent titled block with an optional CTA and never overflow at 1280 or 390.",
+      "verification": "pnpm exec vitest run tests/features/console-empty-state.unit.test.ts && pnpm test:e2e tests/e2e/console-empty-state.e2e.spec.ts --workers=1",
+      "dependencies": ["console-core"],
+      "status": "passing",
+      "evidence": "2026-07-18: TDD red-to-green. New shared EmptyState primitive (apps/console/src/app/_components/empty-state.tsx, server-safe, .empty-state tokens in globals.css) replaces ad-hoc empty markup in providers-client-section, models-section, overview-section, activity-section (colspan) and limits-section (3-branch, CTA via .empty-state-action action slot). Focused unit (3) + E2E (1: /providers empty view renders .empty-state 'No providers configured', no overflow at 1280/390) passed."
+    },
+    {
+      "id": "console-spinner",
+      "name": "Console Spinner",
+      "description": "A shared, accessible Spinner primitive (role=status, prefers-reduced-motion aware) marks client-side in-flight states in the Playground (model loading and send); the loading spinner is observable while the allowed-models request is pending and the page never overflows at 1280 or 390.",
+      "verification": "pnpm exec vitest run tests/features/console-spinner.unit.test.ts && pnpm test:e2e tests/e2e/console-spinner.e2e.spec.ts --workers=1",
+      "dependencies": ["console-core"],
+      "status": "passing",
+      "evidence": "2026-07-18: TDD red-to-green. New Spinner primitive (apps/console/src/app/_components/spinner.tsx, role=status + aria-label; .spinner CSS with spinner-rotate keyframes + prefers-reduced-motion guard). Wired into playground.tsx: model-loading spinner beside '3. Virtual Model' and send-button spinner. Focused unit (3) + E2E (1: page.route delays **/v1/models** 1.5s, focus model select surfaces role=status 'Loading models', no overflow at 1280/390) passed."
+    },
+    {
+      "id": "console-success-toast",
+      "name": "Console Success Toast",
+      "description": "The shared ConsoleMutationToast gains a success tone (role=status, .console-mutation-toast--success with ok tokens); ConsoleMutationForm accepts a successMessage that surfaces a self-dismissing success toast on the stay-on-page refresh path, opted into by the provider API key enable/disable toggle.",
+      "verification": "pnpm exec vitest run tests/features/console-success-toast.unit.test.ts && pnpm test:e2e tests/e2e/console-success-toast.e2e.spec.ts --workers=1",
+      "dependencies": ["console-core", "provider-model-management"],
+      "status": "passing",
+      "evidence": "2026-07-18: TDD red-to-green. Generalized ConsoleMutationToast with a tone param (role=status + .console-mutation-toast--success ok-token variant for success, role=alert danger for error); ConsoleMutationForm gains successMessage + success state + 5s auto-dismiss, firing only on the stay-on-page refresh path. Provider API key enable/disable toggle opts in with successMessage='Provider API key updated.'. Focused unit (3) + E2E (1: seed provider+key, /providers?selected toggle click surfaces .console-mutation-toast--success text, no overflow at 1280/390) passed."
     }
   ]
 }

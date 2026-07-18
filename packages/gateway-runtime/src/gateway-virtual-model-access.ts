@@ -99,7 +99,7 @@ export function readRequestedModelName(body: unknown): string | null {
 }
 
 export async function listAllowedGatewayVirtualModels(input: {
-  agentId: string;
+  apiKeyId: string;
   databaseUrl?: string;
 }): Promise<GatewayVirtualModel[]> {
   const result = await getPostgresPool(input.databaseUrl).query<VirtualModelRow>(
@@ -107,14 +107,14 @@ export async function listAllowedGatewayVirtualModels(input: {
       select virtual_models.id::text,
              virtual_models.name,
              virtual_models.description as display_name
-      from agent_virtual_models
-      join virtual_models on virtual_models.id = agent_virtual_models.virtual_model_id
-      where agent_virtual_models.agent_id = $1
+      from api_key_virtual_models
+      join virtual_models on virtual_models.id = api_key_virtual_models.virtual_model_id
+      where api_key_virtual_models.api_key_id = $1
         and virtual_models.enabled = true
         and virtual_models.deleted_at is null
       order by virtual_models.name
     `,
-    [input.agentId],
+    [input.apiKeyId],
   );
   return result.rows.map((row) => ({
     displayName: row.display_name,
@@ -138,5 +138,5 @@ function virtualModelAccessErrorMessage(code: GatewayVirtualModelAccessErrorCode
   if (code === "missing_model") {
     return "Model is required and no default Virtual Model is configured.";
   }
-  return "Virtual Model is not allowed for this Agent API key.";
+  return "Virtual Model is not allowed for this API key.";
 }

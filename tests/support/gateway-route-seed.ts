@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type { RouteEndpointProtocol } from "@llmingress/domain";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
-import { buildGatewayAgentApiKeyHash } from "../../packages/gateway-runtime/src/gateway-auth";
+import { buildGatewayApiKeyHash } from "../../packages/gateway-runtime/src/gateway-auth";
 
 export type QueryableFixture = {
   query: (text: string, values?: readonly unknown[]) => Promise<unknown>;
 };
 
 export type SeedOpenAIGatewayRouteInput = {
-  agentApiKey: string;
+  apiKey: string;
   endpointProtocol?: RouteEndpointProtocol;
   fixture: QueryableFixture;
   limitsEnabled?: boolean;
@@ -20,7 +20,7 @@ export type SeedOpenAIGatewayRouteInput = {
 };
 
 export type SeedOpenAIGatewayRouteResult = {
-  agentId: string;
+  apiKeyId: string;
   providerId: string;
   providerModelId: string;
   routePolicyId: string;
@@ -30,7 +30,7 @@ export type SeedOpenAIGatewayRouteResult = {
 export async function seedOpenAIGatewayRoute(
   input: SeedOpenAIGatewayRouteInput,
 ): Promise<SeedOpenAIGatewayRouteResult> {
-  const agentId = randomUUID();
+  const apiKeyId = randomUUID();
   const providerId = randomUUID();
   const providerModelId = randomUUID();
   const virtualModelId = randomUUID();
@@ -43,7 +43,7 @@ export async function seedOpenAIGatewayRoute(
 
   await input.fixture.query(
     `
-      insert into agents (
+      insert into api_keys (
         id,
         name,
         key_prefix,
@@ -51,12 +51,12 @@ export async function seedOpenAIGatewayRoute(
         enabled,
         limits_enabled
       )
-      values ($1, 'Gateway E2E Agent', $2, $3, true, $4)
+      values ($1, 'Gateway E2E ApiKey', $2, $3, true, $4)
     `,
     [
-      agentId,
-      input.agentApiKey.slice(0, 12),
-      buildGatewayAgentApiKeyHash(input.agentApiKey),
+      apiKeyId,
+      input.apiKey.slice(0, 12),
+      buildGatewayApiKeyHash(input.apiKey),
       input.limitsEnabled ?? false,
     ],
   );
@@ -112,8 +112,8 @@ export async function seedOpenAIGatewayRoute(
     "insert into virtual_models (id, name, description, enabled) values ($1, $2, 'Gateway E2E VM', true)",
     [virtualModelId, input.virtualModelName],
   );
-  await input.fixture.query("update agents set default_virtual_model_id = $2 where id = $1", [
-    agentId,
+  await input.fixture.query("update api_keys set default_virtual_model_id = $2 where id = $1", [
+    apiKeyId,
     virtualModelId,
   ]);
   await input.fixture.query(
@@ -133,12 +133,12 @@ export async function seedOpenAIGatewayRoute(
     [randomUUID(), routePolicyId, providerModelId],
   );
   await input.fixture.query(
-    "insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)",
-    [agentId, virtualModelId],
+    "insert into api_key_virtual_models (api_key_id, virtual_model_id) values ($1, $2)",
+    [apiKeyId, virtualModelId],
   );
   await input.fixture.query(
     "insert into config_versions (version, source, description) values (1, 'console', 'Gateway E2E config') on conflict (version) do nothing",
   );
 
-  return { agentId, providerId, providerModelId, routePolicyId, virtualModelId };
+  return { apiKeyId, providerId, providerModelId, routePolicyId, virtualModelId };
 }

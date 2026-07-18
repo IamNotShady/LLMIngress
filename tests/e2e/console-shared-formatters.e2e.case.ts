@@ -18,7 +18,7 @@ import {
 // sub-cent cost with token usage (today), an older request from a previous
 // day, and a failed request with no usage or cost.
 async function seedFormatterData(databaseUrl: string) {
-  const agentId = randomUUID();
+  const apiKeyId = randomUUID();
   const virtualModelId = randomUUID();
   const todayActivityId = randomUUID();
   const oldActivityId = randomUUID();
@@ -28,9 +28,9 @@ async function seedFormatterData(databaseUrl: string) {
 
   await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
-      `insert into agents (id, name, key_prefix, key_hash, enabled)
-       values ($1, 'format-probe-agent', 'llmi_format_probe', 'test-hash', true)`,
-      [agentId],
+      `insert into api_keys (id, name, key_prefix, key_hash, enabled)
+       values ($1, 'format-probe-apiKey', 'llmi_format_probe', 'test-hash', true)`,
+      [apiKeyId],
     );
     await client.query(
       `insert into virtual_models (id, name, description, enabled)
@@ -51,22 +51,22 @@ async function seedFormatterData(databaseUrl: string) {
     for (const row of rows) {
       await client.query(
         `insert into request_activity (
-           id, request_id, agent_id, virtual_model_id, agent_key_prefix,
+           id, request_id, api_key_id, virtual_model_id, api_key_prefix,
            protocol, model, stream, status, http_status, latency_ms,
            started_at, completed_at,
-           agent_name_snapshot, virtual_model_name_snapshot
+           api_key_name_snapshot, virtual_model_name_snapshot
          )
          values (
            $1, $2, $3, $4, 'llmi_format_probe',
            'chat_completions', 'format-probe-model', false,
            $5, $6, 1200,
            $7, $7,
-           'format-probe-agent', 'format-probe-vm'
+           'format-probe-apiKey', 'format-probe-vm'
          )`,
         [
           row.id,
           `gw_${randomUUID()}`,
-          agentId,
+          apiKeyId,
           virtualModelId,
           row.status,
           row.httpStatus,
@@ -81,18 +81,18 @@ async function seedFormatterData(databaseUrl: string) {
     ] as const) {
       await client.query(
         `insert into request_usage (
-           id, request_activity_id, agent_id, virtual_model_id,
+           id, request_activity_id, api_key_id, virtual_model_id,
            input_tokens, output_tokens, total_tokens, token_source
          )
          values ($1, $2, $3, $4, $5, 100, $6, 'provider')`,
-        [randomUUID(), activityId, agentId, virtualModelId, tokens - 100, tokens],
+        [randomUUID(), activityId, apiKeyId, virtualModelId, tokens - 100, tokens],
       );
       await client.query(
         `insert into request_costs (
-           id, request_activity_id, agent_id, total_cost_usd, cost_source
+           id, request_activity_id, api_key_id, total_cost_usd, cost_source
          )
          values ($1, $2, $3, $4, 'provider')`,
-        [randomUUID(), activityId, agentId, cost],
+        [randomUUID(), activityId, apiKeyId, cost],
       );
     }
   });

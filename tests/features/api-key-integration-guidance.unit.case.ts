@@ -9,10 +9,7 @@ import {
   groupVirtualModelEndpoints,
 } from "../../apps/console/src/app/_modules/api-key-integration-guide.ts";
 import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page.ts";
-import {
-  apiKeyIntegrationPlatforms,
-  listApiKeyVirtualModelAccess,
-} from "../../packages/db/src/console-api-keys.ts";
+import { listApiKeyVirtualModelAccess } from "../../packages/db/src/console-api-keys.ts";
 import {
   createTestPostgresFixture,
   runMigrations,
@@ -21,7 +18,16 @@ import {
 
 describe("apiKey integration guidance", () => {
   it("builds guides for every Integration Platform with the key placeholder", () => {
-    expect([...integrationGuidePlatforms]).toEqual([...apiKeyIntegrationPlatforms]);
+    expect([...integrationGuidePlatforms]).toEqual([
+      "codex",
+      "claude-code",
+      "cursor",
+      "opencode",
+      "hermes",
+      "openclaw",
+      "github-copilot",
+      "other",
+    ]);
 
     const guides = buildIntegrationGuides({
       apiKey: API_KEY_PLACEHOLDER,
@@ -29,7 +35,7 @@ describe("apiKey integration guidance", () => {
       model: "guide-vm",
     });
 
-    expect(guides.map((entry) => entry.platform)).toEqual([...apiKeyIntegrationPlatforms]);
+    expect(guides.map((entry) => entry.platform)).toEqual([...integrationGuidePlatforms]);
     expect(guides.map((entry) => entry.label)).toEqual([
       "Codex",
       "Claude Code",

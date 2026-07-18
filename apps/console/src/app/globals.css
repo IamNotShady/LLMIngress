@@ -696,15 +696,15 @@ textarea.is-invalid {
   box-shadow: none;
 }
 .console-mutation-toast--success {
-  color: var(--ok);
-  background: color-mix(in oklch, var(--ok) 20%, var(--surface-raised));
-  border-color: var(--ok);
-  box-shadow: var(--shadow-pop), var(--glow-ok);
+  color: var(--text);
+  background: color-mix(in oklch, var(--ok) 10%, var(--surface-raised));
+  border-color: color-mix(in oklch, var(--ok) 40%, var(--border));
+  box-shadow: var(--shadow-pop);
 }
 .console-mutation-toast--success button:hover {
   color: var(--ok);
   background: var(--ok-soft);
-  border-color: var(--ok);
+  border-color: color-mix(in oklch, var(--ok) 40%, var(--border));
 }
 .provider-create-tabs {
   display: grid;

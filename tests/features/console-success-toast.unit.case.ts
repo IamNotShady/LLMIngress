@@ -18,7 +18,7 @@ describe("console success toast", () => {
   test("stylesheet defines the success toast variant with ok tokens", () => {
     const css = read("globals.css");
     expect(css).toMatch(/\.console-mutation-toast--success\s*\{[\s\S]*?var\(--ok\)/);
-    expect(css).toMatch(/\.console-mutation-toast--success\s*\{[\s\S]*?var\(--glow-ok\)/);
+    expect(css).toMatch(/\.console-mutation-toast--success\s*\{[\s\S]*?var\(--surface-raised\)/);
   });
 
   test("a refresh-path mutation opts into the success toast", () => {

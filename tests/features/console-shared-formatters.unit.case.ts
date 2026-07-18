@@ -19,7 +19,7 @@ const consoleSectionSource = () =>
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
-    "api_keys-section.tsx",
+    "api-keys-section.tsx",
     "limits-section.tsx",
     "models-section.tsx",
     "providers-section.tsx",

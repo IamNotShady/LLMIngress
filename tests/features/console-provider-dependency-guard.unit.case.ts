@@ -46,7 +46,7 @@ describe("console provider dependency guard", () => {
           name: "Dependency VM",
         },
       ]);
-      expect(impact.api_keys).toEqual([
+      expect(impact.apiKeys).toEqual([
         {
           id: ids.apiKeyId,
           name: "Dependency ApiKey",

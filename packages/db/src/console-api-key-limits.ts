@@ -361,7 +361,9 @@ async function readApiKeyLimits(
   }));
 }
 
-async function readVisibleApiKeyLimits(client: ApiKeyLimitQueryClient): Promise<ConsoleApiKeyLimit[]> {
+async function readVisibleApiKeyLimits(
+  client: ApiKeyLimitQueryClient,
+): Promise<ConsoleApiKeyLimit[]> {
   const result = await client.query<ApiKeyLimitRow>(
     `
       select api_key_limits.id::text,

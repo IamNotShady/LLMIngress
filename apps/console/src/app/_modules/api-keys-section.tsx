@@ -12,10 +12,7 @@ import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
 import { ApiKeyCreateDialogClient } from "./api-key-create-dialog-client";
-import {
-  API_KEY_PLACEHOLDER,
-  groupVirtualModelEndpoints,
-} from "./api-key-integration-guide";
+import { API_KEY_PLACEHOLDER, groupVirtualModelEndpoints } from "./api-key-integration-guide";
 import { IntegrationGuideTabs } from "./api-key-integration-guide-tabs";
 import { ApiKeyVirtualModelFields } from "./api-key-virtual-model-fields";
 import { loadApiKeysSectionData } from "./api-keys-section-data";
@@ -442,7 +439,10 @@ function ApiKeyEnabledToggleForm({ apiKey }: { apiKey: ConsoleApiKey }) {
   );
 }
 
-function filterApiKeys(apiKeys: ConsoleApiKey[], filters: { apiKeySearch: string }): ConsoleApiKey[] {
+function filterApiKeys(
+  apiKeys: ConsoleApiKey[],
+  filters: { apiKeySearch: string },
+): ConsoleApiKey[] {
   const normalizedSearch = filters.apiKeySearch.toLowerCase();
   if (!normalizedSearch) {
     return apiKeys;
@@ -498,7 +498,9 @@ export async function ApiKeysSection({ searchParams }: { searchParams: ConsoleSe
   );
   const apiKeyLimitsByApiKeyId = groupByApiKeyId(apiKeyLimits);
   const enabledApiKeyCount = apiKeys.filter((apiKey) => apiKey.enabled).length;
-  const usageTodayByApiKeyId = new Map(usageToday.apiKeyBreakdowns.map((apiKey) => [apiKey.id, apiKey]));
+  const usageTodayByApiKeyId = new Map(
+    usageToday.apiKeyBreakdowns.map((apiKey) => [apiKey.id, apiKey]),
+  );
   const apiKeySearch = readSingleSearchParam(searchParams.apiKeySearch)?.trim() ?? "";
   const visibleApiKeys = filterApiKeys(apiKeys, { apiKeySearch });
   const selectedApiKeyId = readSingleSearchParam(searchParams.selected);

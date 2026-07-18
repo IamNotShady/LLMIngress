@@ -74,7 +74,7 @@ describe("console providers IA and form polish static contract", () => {
 
   test("api_keys KPI grid collapses to two columns on mobile", () => {
     expect(css()).toMatch(
-      /@media \(max-width: 56rem\)[\s\S]*?\.api_keys-stat-grid\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+      /@media \(max-width: 56rem\)[\s\S]*?\.api-keys-stat-grid\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
     );
   });
 

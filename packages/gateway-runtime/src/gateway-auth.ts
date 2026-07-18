@@ -1,10 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getPostgresPool } from "@llmingress/db/client";
 
-export type GatewayAuthErrorCode =
-  | "disabled_api_key"
-  | "invalid_api_key"
-  | "missing_api_key";
+export type GatewayAuthErrorCode = "disabled_api_key" | "invalid_api_key" | "missing_api_key";
 
 export type GatewayAuthenticatedApiKey = {
   apiKeyId: string;
@@ -89,10 +86,7 @@ export async function authenticateGatewayRequest(input: {
     return gatewayAuthFailure("missing_api_key", requestId);
   }
 
-  const row = await readApiKeyByHash(
-    input.databaseUrl,
-    buildGatewayApiKeyHash(credential),
-  );
+  const row = await readApiKeyByHash(input.databaseUrl, buildGatewayApiKeyHash(credential));
   if (!row) {
     return gatewayAuthFailure("invalid_api_key", requestId);
   }

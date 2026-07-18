@@ -173,11 +173,11 @@ test("providers page shows one provider representation with a searchable capped 
         await page.setViewportSize({ width: 390, height: 844 });
         await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
         const columns = await page
-          .locator(".api_keys-stat-grid")
+          .locator(".api-keys-stat-grid")
           .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
         expect(columns).toBe(2);
         const truncated = await page
-          .locator(".api_keys-stat-grid .stat-card-value")
+          .locator(".api-keys-stat-grid .stat-card-value")
           .evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth).length);
         expect(truncated).toBe(0);
 

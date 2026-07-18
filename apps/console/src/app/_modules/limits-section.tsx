@@ -455,7 +455,10 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                             title="No limits configured"
                             description="Add budget, token, RPM, TPM, and concurrency rules to an API key."
                             action={
-                              <Link className="empty-state-action" href="/api-keys?apiKeyDialog=new">
+                              <Link
+                                className="empty-state-action"
+                                href="/api-keys?apiKeyDialog=new"
+                              >
                                 Create an API Key and enable limits
                               </Link>
                             }
@@ -484,7 +487,9 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                       return (
                         <tr
                           key={row.apiKey.id}
-                          className={selectedApiKey?.id === row.apiKey.id ? "is-selected" : undefined}
+                          className={
+                            selectedApiKey?.id === row.apiKey.id ? "is-selected" : undefined
+                          }
                         >
                           <td>{row.apiKey.name}</td>
                           <td className="mono">{formatLimitsKeyPrefix(row.apiKey.keyPrefix)}</td>

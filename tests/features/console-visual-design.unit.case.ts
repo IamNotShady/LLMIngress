@@ -15,7 +15,7 @@ const consoleSectionSource = () =>
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
-    "api_keys-section.tsx",
+    "api-keys-section.tsx",
     "limits-section.tsx",
     "models-section.tsx",
     "providers-section.tsx",
@@ -118,7 +118,7 @@ describe("console dark restyle static contract", () => {
 
   test("api_keys filters use a compact filter button aligned with the controls", () => {
     const apiKeysPage = readFileSync(join(appDir, "(dashboard)/api-keys/page.tsx"), "utf8");
-    const sections = moduleSource("api_keys-section.tsx");
+    const sections = moduleSource("api-keys-section.tsx");
     const stylesheet = css();
 
     expect(sections).not.toContain("Apply filters");
@@ -129,9 +129,9 @@ describe("console dark restyle static contract", () => {
     );
     expect(apiKeysPage).not.toContain("FlatIcon");
     expect(apiKeysPage).toContain("<span>Create API Key</span>");
-    expect(stylesheet).toMatch(/\.api_keys-filter-actions button\s*\{[^}]*min-height:\s*2\.25rem/s);
+    expect(stylesheet).toMatch(/\.api-keys-filter-actions button\s*\{[^}]*min-height:\s*2\.25rem/s);
     expect(stylesheet).toMatch(
-      /\.api_keys-filter-actions button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
+      /\.api-keys-filter-actions button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
     );
   });
 
@@ -291,7 +291,9 @@ describe("console dark restyle static contract", () => {
     expect(limitsSection).toContain('<FlatIcon name="edit" />');
     expect(limitsSection).not.toContain('<FlatIcon name="delete" />');
     expect(limitsSection).toContain('className="api-key-table-actions"');
-    expect(limitsSection).toContain('className="link-button api-key-action-edit row-action-button"');
+    expect(limitsSection).toContain(
+      'className="link-button api-key-action-edit row-action-button"',
+    );
     expect(limitsSection).not.toContain('className="table-action-link"');
     expect(limitsSection).not.toContain("<LimitsConfigPanel");
     expect(limitsSection).not.toContain('className="table-row-link"');
@@ -361,14 +363,14 @@ describe("console dark restyle static contract", () => {
   });
 
   test("api_keys list opens read-only details in a dialog instead of a side card", () => {
-    const sections = moduleSource("api_keys-section.tsx");
+    const sections = moduleSource("api-keys-section.tsx");
     const stylesheet = css();
 
     expect(sections).not.toContain('<aside className="api-key-detail-card"');
     expect(sections).toContain("apiKeyView");
     expect(sections).toContain("ApiKeyViewDialog");
     expect(sections).toContain('className="console-dialog api-key-view-dialog"');
-    expect(stylesheet).toMatch(/\.api_keys-shell\s*\{[^}]*display:\s*block/s);
+    expect(stylesheet).toMatch(/\.api-keys-shell\s*\{[^}]*display:\s*block/s);
     expect(stylesheet).toMatch(/\.api-key-view-dialog\s*\{[^}]*width:\s*min\(42rem/s);
     expect(stylesheet).toMatch(
       /\.api-key-view-dialog \.api-key-detail-fields\s*\{[^}]*grid-template-columns:\s*1fr/s,

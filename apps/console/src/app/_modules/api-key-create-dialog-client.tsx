@@ -102,12 +102,7 @@ export function ApiKeyCreateDialogClient({
           <div>
             <dt>API key</dt>
             <dd>
-              <input
-                aria-label="API key"
-                className="mono"
-                readOnly
-                value={createdApiKey.apiKey}
-              />
+              <input aria-label="API key" className="mono" readOnly value={createdApiKey.apiKey} />
             </dd>
           </div>
           <div>

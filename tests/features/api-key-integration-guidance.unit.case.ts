@@ -3,10 +3,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   API_KEY_PLACEHOLDER,
-  endpointPathByProtocol,
-  integrationGuidePlatforms,
   buildIntegrationGuides,
+  endpointPathByProtocol,
   groupVirtualModelEndpoints,
+  integrationGuidePlatforms,
 } from "../../apps/console/src/app/_modules/api-key-integration-guide.ts";
 import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page.ts";
 import { listApiKeyVirtualModelAccess } from "../../packages/db/src/console-api-keys.ts";

@@ -8,7 +8,7 @@ const css = () => readFileSync(join(appDir, "globals.css"), "utf8");
 
 const currentListTables = [
   ["_modules/overview-section.tsx", "overview-requests-table"],
-  ["_modules/api-keys-section.tsx", "api_keys-table"],
+  ["_modules/api-keys-section.tsx", "api-keys-table"],
   ["_modules/providers-client-section.tsx", "providers-table"],
   ["_modules/providers-client-section.tsx", "provider-key-table"],
   ["_modules/providers-client-section.tsx", "model-library-table"],
@@ -31,7 +31,7 @@ describe("console P0 layout static contract", () => {
     // A bare `1fr` track resolves to minmax(auto, 1fr), which reintroduces
     // the intrinsic-width blowout the desktop minmax(0, …) tracks prevent.
     expect(css()).toMatch(
-      /\.detail-layout,\s*\.overview-dashboard \.detail-layout,\s*\.api_keys-shell\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+      /\.detail-layout,\s*\.overview-dashboard \.detail-layout,\s*\.api-keys-shell\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
     );
   });
 

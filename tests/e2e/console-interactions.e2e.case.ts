@@ -259,12 +259,14 @@ test("console audit fixes keep time windows honest and prevent activity timestam
         await expect(createdApiKeyDialog).not.toContainText("<Virtual Model Name>");
         await expect(createdApiKeyDialog).not.toContainText("API key prefix");
         await createdApiKeyDialog.getByRole("link", { name: "Close" }).click();
-        const createdApiKeyRow = page.locator(".api_keys-table tbody tr", {
+        const createdApiKeyRow = page.locator(".api-keys-table tbody tr", {
           hasText: "audit-created-apiKey",
         });
         await expect(createdApiKeyRow).toContainText("audit-probe-vm");
         await expect(createdApiKeyRow).toContainText("True");
-        await createdApiKeyRow.getByRole("button", { name: "Disable audit-created-apiKey" }).click();
+        await createdApiKeyRow
+          .getByRole("button", { name: "Disable audit-created-apiKey" })
+          .click();
         await expect(createdApiKeyRow).toContainText("False");
         await createdApiKeyRow.getByRole("button", { name: "Enable audit-created-apiKey" }).click();
         await expect(createdApiKeyRow).toContainText("True");

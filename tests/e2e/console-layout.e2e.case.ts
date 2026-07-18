@@ -234,7 +234,7 @@ test("console keeps layout integrity with real data: no overflow, visible limits
         await page.setViewportSize({ width: 1904, height: 1080 });
         await expectTableColumnsContained(page, [".overview-requests-table"]);
         await page.goto(`${baseUrl}/api-keys`);
-        await expectTableColumnsContained(page, [".api_keys-table"]);
+        await expectTableColumnsContained(page, [".api-keys-table"]);
         await page.goto(`${baseUrl}/providers?selected=${seeded.providerId}`);
         await expectTableColumnsContained(page, [
           ".providers-table",

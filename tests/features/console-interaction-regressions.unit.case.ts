@@ -16,7 +16,7 @@ const consoleSectionSource = () =>
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
-    "api_keys-section.tsx",
+    "api-keys-section.tsx",
     "limits-section.tsx",
     "models-section.tsx",
     "providers-section.tsx",
@@ -104,7 +104,7 @@ describe("console UI audit confirmed fixes static contract", () => {
   });
 
   test("apiKey forms use display labels and checkbox grants", () => {
-    const sourceText = sectionSource("api_keys-section.tsx");
+    const sourceText = sectionSource("api-keys-section.tsx");
     const virtualModelFields = sectionSource("api-key-virtual-model-fields.tsx");
     const apiKeyFormsSource = sourceText.slice(
       sourceText.indexOf("function ApiKeyCreateDialog"),

@@ -1,8 +1,8 @@
 import { gatewayPublicBaseUrl } from "@llmingress/config";
 import { NextResponse } from "next/server";
 import {
-  type IntegrationGuideEntry,
   buildIntegrationGuides,
+  type IntegrationGuideEntry,
 } from "../../_modules/api-key-integration-guide";
 
 export function renderOneTimeApiKeyResponse(

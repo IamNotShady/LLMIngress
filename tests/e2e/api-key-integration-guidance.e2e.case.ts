@@ -152,7 +152,7 @@ test("ApiKey dialogs show endpoint groups and integration tabs without the platf
 
         const createdDialog = page.getByRole("dialog", { name: "API Key created" });
         await expect(createdDialog).toBeVisible();
-        const apiKey = await createdDialog.getByLabel("API key").inputValue();
+        const apiKey = await createdDialog.getByRole("textbox", { name: "API key" }).inputValue();
         expect(apiKey.startsWith("llmi_")).toBe(true);
         await expect(createdDialog.getByRole("tab")).toHaveCount(8);
         await expect(createdDialog).toContainText(`export LLMINGRESS_API_KEY='${apiKey}'`);

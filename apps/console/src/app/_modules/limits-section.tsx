@@ -1,16 +1,16 @@
 import {
-  type ConsoleAgentLimit,
-  type ConsoleAgentLimitRuntimeSnapshot,
-  defaultAgentLimitFormValues,
-  formatAgentLimitSummaries,
-  listAgentLimitRuntimeSnapshots,
-  listAgentLimits,
-} from "@llmingress/db/console-agent-limits";
+  type ConsoleApiKeyLimit,
+  type ConsoleApiKeyLimitRuntimeSnapshot,
+  defaultApiKeyLimitFormValues,
+  formatApiKeyLimitSummaries,
+  listApiKeyLimitRuntimeSnapshots,
+  listApiKeyLimits,
+} from "@llmingress/db/console-api-key-limits";
 import {
-  type AgentVirtualModelAccess,
-  listAgents,
-  listAgentVirtualModelAccess,
-} from "@llmingress/db/console-agents";
+  type ApiKeyVirtualModelAccess,
+  listApiKeys,
+  listApiKeyVirtualModelAccess,
+} from "@llmingress/db/console-api-keys";
 import Link from "next/link";
 import { ConsoleDialog } from "../_components/console-dialog";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
@@ -20,46 +20,46 @@ import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
 import {
   type ConsoleSearchParams,
-  findAgentLimit,
+  findApiKeyLimit,
   formatDeltaTone,
-  groupByAgentId,
+  groupByApiKeyId,
   readSingleSearchParam,
 } from "./sections";
 
 function LimitsConfigDialog({
-  agent,
+  apiKey,
   closeHref,
   limits,
   allowedVirtualModels,
   runtime,
 }: {
-  agent: { id: string; keyPrefix: string | null; name: string };
+  apiKey: { id: string; keyPrefix: string | null; name: string };
   closeHref: string;
-  limits: readonly ConsoleAgentLimit[];
+  limits: readonly ConsoleApiKeyLimit[];
   allowedVirtualModels: ReadonlyArray<{ id: string; displayName: string; name: string }>;
-  runtime: ConsoleAgentLimitRuntimeSnapshot;
+  runtime: ConsoleApiKeyLimitRuntimeSnapshot;
 }) {
-  const budgetLimit = findAgentLimit(limits, "budget");
-  const rpmLimit = findAgentLimit(limits, "rpm");
-  const tpmLimit = findAgentLimit(limits, "tpm");
-  const concurrencyLimit = findAgentLimit(limits, "concurrency");
-  const tokenLimit = findAgentLimit(limits, "token");
+  const budgetLimit = findApiKeyLimit(limits, "budget");
+  const rpmLimit = findApiKeyLimit(limits, "rpm");
+  const tpmLimit = findApiKeyLimit(limits, "tpm");
+  const concurrencyLimit = findApiKeyLimit(limits, "concurrency");
+  const tokenLimit = findApiKeyLimit(limits, "token");
   const usagePercent = runtime.budgetUsagePercent;
   const usageTone = usagePercent >= 95 ? "is-danger" : usagePercent >= 80 ? "is-warn" : "";
 
   return (
     <ConsoleDialog
-      ariaLabelledby={`limits-config-title-${agent.id}`}
+      ariaLabelledby={`limits-config-title-${apiKey.id}`}
       className="console-dialog limits-config-dialog"
       closeHref={closeHref}
-      triggerId={`limits-edit-${agent.id}-trigger`}
+      triggerId={`limits-edit-${apiKey.id}-trigger`}
     >
       <div className="console-dialog-head limits-config-head">
         <div>
-          <h2 className="limits-config-title" id={`limits-config-title-${agent.id}`}>
+          <h2 className="limits-config-title" id={`limits-config-title-${apiKey.id}`}>
             Rule configuration
           </h2>
-          <p>{agent.name}</p>
+          <p>{apiKey.name}</p>
         </div>
         <a className="secondary-button" href={closeHref}>
           <FlatIcon name="cancel" />
@@ -67,47 +67,47 @@ function LimitsConfigDialog({
         </a>
       </div>
       <ConsoleMutationForm
-        action="/api/agent-limits"
+        action="/api/api-key-limits"
         className="limits-config-form"
-        fallbackError="Agent limit update failed."
+        fallbackError="API key limit update failed."
       >
         <input type="hidden" name="action" value="saveLimitRules" />
-        <input type="hidden" name="agentId" value={agent.id} />
+        <input type="hidden" name="apiKeyId" value={apiKey.id} />
         <div className="limits-form-grid">
           <div className="console-field">
-            <label htmlFor={`limits-budget-${agent.id}`}>Cost limit (USD)</label>
+            <label htmlFor={`limits-budget-${apiKey.id}`}>Cost limit (USD)</label>
             <input
-              id={`limits-budget-${agent.id}`}
+              id={`limits-budget-${apiKey.id}`}
               name="budgetUsd"
               type="number"
               min="0.000001"
               step="0.000001"
               defaultValue={formatInputNumber(
-                budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd,
+                budgetLimit?.limitValue ?? defaultApiKeyLimitFormValues.budgetUsd,
               )}
               required
             />
           </div>
           <div className="console-field">
-            <label htmlFor={`limits-token-${agent.id}`}>Token limit</label>
+            <label htmlFor={`limits-token-${apiKey.id}`}>Token limit</label>
             <input
-              id={`limits-token-${agent.id}`}
+              id={`limits-token-${apiKey.id}`}
               name="tokenLimit"
               type="number"
               min="1"
               step="1"
               defaultValue={formatInputNumber(
-                tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit,
+                tokenLimit?.limitValue ?? defaultApiKeyLimitFormValues.tokenLimit,
               )}
               required
             />
           </div>
           <div className="console-field">
-            <label htmlFor={`limits-budget-period-${agent.id}`}>Period</label>
+            <label htmlFor={`limits-budget-period-${apiKey.id}`}>Period</label>
             <select
-              id={`limits-budget-period-${agent.id}`}
+              id={`limits-budget-period-${apiKey.id}`}
               name="budgetPeriod"
-              defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
+              defaultValue={budgetLimit?.period ?? defaultApiKeyLimitFormValues.budgetPeriod}
               required
             >
               <option value="day">Day</option>
@@ -134,43 +134,43 @@ function LimitsConfigDialog({
           <h3 className="limits-config-subtitle">Rate limit caps</h3>
           <div className="limits-rate-grid">
             <div className="console-field">
-              <label htmlFor={`limits-rpm-${agent.id}`}>RPM</label>
+              <label htmlFor={`limits-rpm-${apiKey.id}`}>RPM</label>
               <input
-                id={`limits-rpm-${agent.id}`}
+                id={`limits-rpm-${apiKey.id}`}
                 name="rpm"
                 type="number"
                 min="1"
                 step="1"
                 defaultValue={formatInputNumber(
-                  rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm,
+                  rpmLimit?.limitValue ?? defaultApiKeyLimitFormValues.rpm,
                 )}
                 required
               />
             </div>
             <div className="console-field">
-              <label htmlFor={`limits-tpm-${agent.id}`}>TPM</label>
+              <label htmlFor={`limits-tpm-${apiKey.id}`}>TPM</label>
               <input
-                id={`limits-tpm-${agent.id}`}
+                id={`limits-tpm-${apiKey.id}`}
                 name="tpm"
                 type="number"
                 min="1"
                 step="1"
                 defaultValue={formatInputNumber(
-                  tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm,
+                  tpmLimit?.limitValue ?? defaultApiKeyLimitFormValues.tpm,
                 )}
                 required
               />
             </div>
             <div className="console-field">
-              <label htmlFor={`limits-concurrency-${agent.id}`}>Concurrency</label>
+              <label htmlFor={`limits-concurrency-${apiKey.id}`}>Concurrency</label>
               <input
-                id={`limits-concurrency-${agent.id}`}
+                id={`limits-concurrency-${apiKey.id}`}
                 name="concurrency"
                 type="number"
                 min="1"
                 step="1"
                 defaultValue={formatInputNumber(
-                  concurrencyLimit?.limitValue ?? defaultAgentLimitFormValues.concurrency,
+                  concurrencyLimit?.limitValue ?? defaultApiKeyLimitFormValues.concurrency,
                 )}
                 required
               />
@@ -204,15 +204,15 @@ function LimitsConfigDialog({
   );
 }
 
-function getAgentLimitRuntimeSnapshot(
-  agentId: string,
-  snapshotsByAgentId: Map<string, ConsoleAgentLimitRuntimeSnapshot>,
-): ConsoleAgentLimitRuntimeSnapshot {
-  return snapshotsByAgentId.get(agentId) ?? getEmptyAgentLimitRuntimeSnapshot(agentId);
+function getApiKeyLimitRuntimeSnapshot(
+  apiKeyId: string,
+  snapshotsByApiKeyId: Map<string, ConsoleApiKeyLimitRuntimeSnapshot>,
+): ConsoleApiKeyLimitRuntimeSnapshot {
+  return snapshotsByApiKeyId.get(apiKeyId) ?? getEmptyApiKeyLimitRuntimeSnapshot(apiKeyId);
 }
 
 function getLimitsVisibleVirtualModels(
-  access: AgentVirtualModelAccess | undefined,
+  access: ApiKeyVirtualModelAccess | undefined,
 ): ReadonlyArray<{ id: string; displayName: string; name: string }> {
   if (!access) {
     return [];
@@ -232,9 +232,9 @@ function getLimitsVisibleVirtualModels(
   return models;
 }
 
-function getEmptyAgentLimitRuntimeSnapshot(agentId: string): ConsoleAgentLimitRuntimeSnapshot {
+function getEmptyApiKeyLimitRuntimeSnapshot(apiKeyId: string): ConsoleApiKeyLimitRuntimeSnapshot {
   return {
-    agentId,
+    apiKeyId,
     budgetUsagePercent: 0,
     currentConcurrency: 0,
     currentRpm: 0,
@@ -278,8 +278,8 @@ function formatLimitsKeyPrefix(keyPrefix: string | null): string {
   return `${keyPrefix.slice(0, 5)}...${keyPrefix.slice(-3)}`;
 }
 
-function formatLimitBudgetCell(limits: readonly ConsoleAgentLimit[]): string {
-  const limit = findAgentLimit(limits, "budget");
+function formatLimitBudgetCell(limits: readonly ConsoleApiKeyLimit[]): string {
+  const limit = findApiKeyLimit(limits, "budget");
   if (!limit?.enabled) {
     return "Not configured";
   }
@@ -290,10 +290,10 @@ function formatLimitBudgetCell(limits: readonly ConsoleAgentLimit[]): string {
 }
 
 function formatLimitNumericCell(
-  limits: readonly ConsoleAgentLimit[],
-  limitType: ConsoleAgentLimit["limitType"],
+  limits: readonly ConsoleApiKeyLimit[],
+  limitType: ConsoleApiKeyLimit["limitType"],
 ): string {
-  const limit = findAgentLimit(limits, limitType);
+  const limit = findApiKeyLimit(limits, limitType);
   if (!limit?.enabled) {
     return "Not configured";
   }
@@ -312,48 +312,48 @@ function formatInteger(value: number): string {
   return Math.round(value).toLocaleString("en-US");
 }
 export async function LimitsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
-  const selectedAgentId = readSingleSearchParam(searchParams.selected);
-  const dialogAgentId = readSingleSearchParam(searchParams.limitDialog);
+  const selectedApiKeyId = readSingleSearchParam(searchParams.selected);
+  const dialogApiKeyId = readSingleSearchParam(searchParams.limitDialog);
   const query = readSingleSearchParam(searchParams.q)?.trim() ?? "";
-  const [agents, agentLimits, runtimeSnapshots, agentVirtualModelAccess] = await Promise.all([
-    listAgents(),
-    listAgentLimits(),
-    listAgentLimitRuntimeSnapshots(),
-    listAgentVirtualModelAccess(),
+  const [apiKeys, apiKeyLimits, runtimeSnapshots, apiKeyVirtualModelAccess] = await Promise.all([
+    listApiKeys(),
+    listApiKeyLimits(),
+    listApiKeyLimitRuntimeSnapshots(),
+    listApiKeyVirtualModelAccess(),
   ]);
-  const agentLimitsByAgentId = groupByAgentId(agentLimits);
-  const runtimeByAgentId = new Map(
-    runtimeSnapshots.map((snapshot) => [snapshot.agentId, snapshot]),
+  const apiKeyLimitsByApiKeyId = groupByApiKeyId(apiKeyLimits);
+  const runtimeByApiKeyId = new Map(
+    runtimeSnapshots.map((snapshot) => [snapshot.apiKeyId, snapshot]),
   );
-  const accessById = new Map(agentVirtualModelAccess.map((access) => [access.agentId, access]));
+  const accessById = new Map(apiKeyVirtualModelAccess.map((access) => [access.apiKeyId, access]));
 
-  const ruleAgents = agents.filter(
-    (agent) => (agentLimitsByAgentId.get(agent.id) ?? []).length > 0,
+  const ruleApiKeys = apiKeys.filter(
+    (apiKey) => (apiKeyLimitsByApiKeyId.get(apiKey.id) ?? []).length > 0,
   );
-  const selectedAgent = selectedAgentId
-    ? (agents.find((agent) => agent.id === selectedAgentId) ?? null)
+  const selectedApiKey = selectedApiKeyId
+    ? (apiKeys.find((apiKey) => apiKey.id === selectedApiKeyId) ?? null)
     : null;
-  const dialogAgent = dialogAgentId
-    ? (agents.find((agent) => agent.id === dialogAgentId) ?? null)
+  const dialogApiKey = dialogApiKeyId
+    ? (apiKeys.find((apiKey) => apiKey.id === dialogApiKeyId) ?? null)
     : null;
 
-  const rows = ruleAgents.map((agent) => {
-    const limits = agentLimitsByAgentId.get(agent.id) ?? [];
-    const summaries = formatAgentLimitSummaries(limits);
-    const runtime = getAgentLimitRuntimeSnapshot(agent.id, runtimeByAgentId);
+  const rows = ruleApiKeys.map((apiKey) => {
+    const limits = apiKeyLimitsByApiKeyId.get(apiKey.id) ?? [];
+    const summaries = formatApiKeyLimitSummaries(limits);
+    const runtime = getApiKeyLimitRuntimeSnapshot(apiKey.id, runtimeByApiKeyId);
     const budgetUsagePercent = runtime.budgetUsagePercent;
     const status = getLimitRuleStatus({
-      enabled: agent.enabled,
+      enabled: apiKey.enabled,
       usagePercent: budgetUsagePercent,
     });
-    return { agent, budgetUsagePercent, limits, runtime, status, summaries };
+    return { apiKey, budgetUsagePercent, limits, runtime, status, summaries };
   });
   const filteredRows = query
     ? rows.filter((row) => {
         const normalizedQuery = query.toLowerCase();
         return (
-          row.agent.name.toLowerCase().includes(normalizedQuery) ||
-          (row.agent.keyPrefix?.toLowerCase().includes(normalizedQuery) ?? false)
+          row.apiKey.name.toLowerCase().includes(normalizedQuery) ||
+          (row.apiKey.keyPrefix?.toLowerCase().includes(normalizedQuery) ?? false)
         );
       })
     : rows;
@@ -371,9 +371,9 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
     0,
   );
   const nearBudgetCount = rows.filter((row) => row.budgetUsagePercent >= 100).length;
-  const dialogLimits = dialogAgent ? (agentLimitsByAgentId.get(dialogAgent.id) ?? []) : [];
-  const dialogRuntime = dialogAgent
-    ? getAgentLimitRuntimeSnapshot(dialogAgent.id, runtimeByAgentId)
+  const dialogLimits = dialogApiKey ? (apiKeyLimitsByApiKeyId.get(dialogApiKey.id) ?? []) : [];
+  const dialogRuntime = dialogApiKey
+    ? getApiKeyLimitRuntimeSnapshot(dialogApiKey.id, runtimeByApiKeyId)
     : null;
   const dialogCloseHref = buildQueryHref(searchParams, { limitDialog: undefined });
 
@@ -386,7 +386,7 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
               icon="R"
               label="Configured rules"
               value={String(rows.length)}
-              delta="Agent API Key"
+              delta="API Key"
             />
             <StatCard
               icon="!"
@@ -410,8 +410,8 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
           </div>
           <div className="limits-toolbar">
             <form className="limits-search-form" action="/limits" method="get">
-              {selectedAgent ? (
-                <input type="hidden" name="selected" value={selectedAgent.id} />
+              {selectedApiKey ? (
+                <input type="hidden" name="selected" value={selectedApiKey.id} />
               ) : null}
               <label className="sr-only" htmlFor="limits-search">
                 Search limit rules
@@ -421,7 +421,7 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                 name="q"
                 type="search"
                 defaultValue={query}
-                placeholder="Search Agent or API Key prefix"
+                placeholder="Search by name or key prefix"
               />
               <button type="submit">
                 <span>Search</span>
@@ -434,7 +434,7 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
               <table className="data-table bounded-table limits-rule-table">
                 <thead>
                   <tr>
-                    <th>Agent</th>
+                    <th>Name</th>
                     <th>API Key</th>
                     <th className="num">Budget</th>
                     <th className="num">Tokens</th>
@@ -450,13 +450,13 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                   {filteredRows.length === 0 ? (
                     <tr>
                       <td colSpan={10}>
-                        {agents.length === 0 ? (
+                        {apiKeys.length === 0 ? (
                           <EmptyState
                             title="No limits configured"
-                            description="Add budget, token, RPM, TPM, and concurrency rules to an Agent."
+                            description="Add budget, token, RPM, TPM, and concurrency rules to an API key."
                             action={
-                              <Link className="empty-state-action" href="/agents?agentDialog=new">
-                                Create an Agent and enable limits
+                              <Link className="empty-state-action" href="/api-keys?apiKeyDialog=new">
+                                Create an API Key and enable limits
                               </Link>
                             }
                           />
@@ -465,10 +465,10 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                         ) : (
                           <EmptyState
                             title="No limit rules configured"
-                            description="Edit an Agent to enable budget, token, RPM, TPM, and concurrency rules."
+                            description="Edit an API key to enable budget, token, RPM, TPM, and concurrency rules."
                             action={
-                              <Link className="empty-state-action" href="/agents">
-                                Agents page
+                              <Link className="empty-state-action" href="/api-keys">
+                                API Keys page
                               </Link>
                             }
                           />
@@ -478,16 +478,16 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                   ) : (
                     filteredRows.map((row) => {
                       const editHref = buildQueryHref(searchParams, {
-                        limitDialog: row.agent.id,
-                        selected: row.agent.id,
+                        limitDialog: row.apiKey.id,
+                        selected: row.apiKey.id,
                       });
                       return (
                         <tr
-                          key={row.agent.id}
-                          className={selectedAgent?.id === row.agent.id ? "is-selected" : undefined}
+                          key={row.apiKey.id}
+                          className={selectedApiKey?.id === row.apiKey.id ? "is-selected" : undefined}
                         >
-                          <td>{row.agent.name}</td>
-                          <td className="mono">{formatLimitsKeyPrefix(row.agent.keyPrefix)}</td>
+                          <td>{row.apiKey.name}</td>
+                          <td className="mono">{formatLimitsKeyPrefix(row.apiKey.keyPrefix)}</td>
                           <td className="num">{formatLimitBudgetCell(row.limits)}</td>
                           <td className="num">{formatLimitNumericCell(row.limits, "token")}</td>
                           <td className="num">{formatLimitNumericCell(row.limits, "rpm")}</td>
@@ -502,12 +502,12 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                             </span>
                           </td>
                           <td className="limits-rule-action-cell">
-                            <span className="agent-table-actions">
+                            <span className="api-key-table-actions">
                               <a
-                                aria-label={`Edit ${row.agent.name}`}
-                                className="link-button agent-action-edit row-action-button"
+                                aria-label={`Edit ${row.apiKey.name}`}
+                                className="link-button api-key-action-edit row-action-button"
                                 href={editHref}
-                                id={`limits-edit-${row.agent.id}-trigger`}
+                                id={`limits-edit-${row.apiKey.id}-trigger`}
                                 title="Edit"
                               >
                                 <FlatIcon name="edit" />
@@ -524,13 +524,13 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
           </div>
         </div>
       </div>
-      {dialogAgent ? (
+      {dialogApiKey ? (
         <LimitsConfigDialog
-          agent={dialogAgent}
+          apiKey={dialogApiKey}
           closeHref={dialogCloseHref}
           limits={dialogLimits}
-          allowedVirtualModels={getLimitsVisibleVirtualModels(accessById.get(dialogAgent.id))}
-          runtime={dialogRuntime ?? getEmptyAgentLimitRuntimeSnapshot(dialogAgent.id)}
+          allowedVirtualModels={getLimitsVisibleVirtualModels(accessById.get(dialogApiKey.id))}
+          runtime={dialogRuntime ?? getEmptyApiKeyLimitRuntimeSnapshot(dialogApiKey.id)}
         />
       ) : null}
     </section>

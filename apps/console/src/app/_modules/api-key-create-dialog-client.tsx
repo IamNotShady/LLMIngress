@@ -9,16 +9,16 @@ import {
 } from "../_components/console-mutation-failure";
 import { ConsoleMutationError } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
-import { AgentIntegrationGuideTabs } from "./agent-integration-guide-tabs";
+import { IntegrationGuideTabs } from "./api-key-integration-guide-tabs";
 
-type CreatedAgentDetails = {
+type CreatedApiKeyDetails = {
   apiKey: string;
   gatewayBaseUrl: string;
   keyPrefix: string;
   virtualModelName: string;
 };
 
-export function AgentCreateDialogClient({
+export function ApiKeyCreateDialogClient({
   children,
   closeHref,
 }: {
@@ -26,7 +26,7 @@ export function AgentCreateDialogClient({
   closeHref: string;
 }) {
   const router = useRouter();
-  const [createdAgent, setCreatedAgent] = useState<CreatedAgentDetails | null>(null);
+  const [createdApiKey, setCreatedApiKey] = useState<CreatedApiKeyDetails | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [failure, setFailure] = useState<ConsoleMutationFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -42,19 +42,19 @@ export function AgentCreateDialogClient({
         form.querySelector<HTMLInputElement>('input[name="allowedVirtualModelIds"]')?.focus();
         return;
       }
-      const response = await fetch(form.getAttribute("action") ?? "/api/agents", {
+      const response = await fetch(form.getAttribute("action") ?? "/api/api-keys", {
         body: new FormData(form),
         credentials: "same-origin",
         headers: { accept: "application/json" },
         method: "POST",
       });
-      const payload = (await response.json()) as Partial<CreatedAgentDetails> & {
+      const payload = (await response.json()) as Partial<CreatedApiKeyDetails> & {
         code?: string;
         details?: Record<string, unknown>;
         error?: string;
       };
       if (!response.ok) {
-        setFailure(toConsoleMutationFailure(payload, "Agent creation failed."));
+        setFailure(toConsoleMutationFailure(payload, "API key creation failed."));
         return;
       }
       if (
@@ -63,10 +63,10 @@ export function AgentCreateDialogClient({
         !payload.keyPrefix ||
         !payload.virtualModelName
       ) {
-        setFailure({ message: "Agent creation returned incomplete connection details." });
+        setFailure({ message: "API key creation returned incomplete connection details." });
         return;
       }
-      setCreatedAgent({
+      setCreatedApiKey({
         apiKey: payload.apiKey,
         gatewayBaseUrl: payload.gatewayBaseUrl,
         keyPrefix: payload.keyPrefix,
@@ -74,54 +74,54 @@ export function AgentCreateDialogClient({
       });
       router.refresh();
     } catch {
-      setFailure({ message: "Agent creation failed." });
+      setFailure({ message: "API key creation failed." });
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (createdAgent) {
+  if (createdApiKey) {
     return (
       <ConsoleDialog
-        ariaLabelledby="agent-created-dialog-title"
-        className="console-dialog agent-created-dialog"
+        ariaLabelledby="api-key-created-dialog-title"
+        className="console-dialog api-key-created-dialog"
         closeHref={closeHref}
         initialFocus="close"
         key="created"
-        triggerId="agent-create-dialog-trigger"
+        triggerId="api-key-create-dialog-trigger"
       >
         <div className="console-dialog-head">
-          <h2 id="agent-created-dialog-title">Agent created</h2>
+          <h2 id="api-key-created-dialog-title">API Key created</h2>
           <a className="secondary-button" href={closeHref}>
             <FlatIcon name="cancel" />
             <span>Close</span>
           </a>
         </div>
         <p>Copy this API key now. It will not be shown again.</p>
-        <dl className="agent-detail-fields">
+        <dl className="api-key-detail-fields">
           <div>
-            <dt>Agent API key</dt>
+            <dt>API key</dt>
             <dd>
               <input
-                aria-label="Agent API key"
+                aria-label="API key"
                 className="mono"
                 readOnly
-                value={createdAgent.apiKey}
+                value={createdApiKey.apiKey}
               />
             </dd>
           </div>
           <div>
             <dt>Gateway URL</dt>
-            <dd>{createdAgent.gatewayBaseUrl}</dd>
+            <dd>{createdApiKey.gatewayBaseUrl}</dd>
           </div>
         </dl>
-        <section className="agent-created-guide">
+        <section className="api-key-created-guide">
           <h3>Integration guide</h3>
-          <AgentIntegrationGuideTabs
-            apiKey={createdAgent.apiKey}
-            gatewayBaseUrl={createdAgent.gatewayBaseUrl}
-            idPrefix="agent-created"
-            model={createdAgent.virtualModelName}
+          <IntegrationGuideTabs
+            apiKey={createdApiKey.apiKey}
+            gatewayBaseUrl={createdApiKey.gatewayBaseUrl}
+            idPrefix="api-key-created"
+            model={createdApiKey.virtualModelName}
           />
         </section>
       </ConsoleDialog>
@@ -130,14 +130,14 @@ export function AgentCreateDialogClient({
 
   return (
     <ConsoleDialog
-      ariaLabelledby="new-agent-dialog-title"
+      ariaLabelledby="new-api-key-dialog-title"
       className="console-dialog"
       closeHref={closeHref}
       key="create"
-      triggerId="agent-create-dialog-trigger"
+      triggerId="api-key-create-dialog-trigger"
     >
       <div className="console-dialog-head">
-        <h2 id="new-agent-dialog-title">New agent</h2>
+        <h2 id="new-api-key-dialog-title">New API Key</h2>
         <a className="secondary-button" href={closeHref}>
           <FlatIcon name="cancel" />
           <span>Close</span>
@@ -145,8 +145,8 @@ export function AgentCreateDialogClient({
       </div>
       <form
         className="provider-create-form"
-        action="/api/agents"
-        id="new-agent"
+        action="/api/api-keys"
+        id="new-api-key"
         method="post"
         onInput={() => setFailure(null)}
         onSubmit={submit}

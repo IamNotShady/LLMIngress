@@ -55,9 +55,9 @@ const endpointOptions: Array<{ label: string; value: PlaygroundProtocol }> = [
 
 export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
   const gatewayBaseUrl = defaultGatewayBaseUrl;
-  const agentApiKeyRef = useRef("");
+  const apiKeyRef = useRef("");
   const modelLoadTimerRef = useRef<number | null>(null);
-  const [agentApiKey, setAgentApiKey] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [maxTokens, setMaxTokens] = useState("1024");
@@ -66,7 +66,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
   const [protocol, setProtocol] = useState<PlaygroundProtocol>("chat_completions");
   const [result, setResult] = useState<PlaygroundResult | null>(null);
   const [selectedModel, setSelectedModel] = useState("");
-  const [status, setStatus] = useState("Enter an Agent API Key to send a test.");
+  const [status, setStatus] = useState("Enter an API key to send a test.");
   const [statusTone, setStatusTone] = useState<"error" | "idle" | "success">("idle");
   const [streamMode, setStreamMode] = useState<"off" | "on">("off");
   const [systemPrompt, setSystemPrompt] = useState(
@@ -76,12 +76,12 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
   const [topP, setTopP] = useState("0.9");
 
   async function loadAllowedModels(
-    options: { agentApiKey?: string; announce?: boolean } = {},
+    options: { apiKey?: string; announce?: boolean } = {},
   ): Promise<PlaygroundModel[]> {
-    const apiKey = (options.agentApiKey ?? agentApiKey).trim();
-    if (!apiKey) {
+    const resolvedApiKey = (options.apiKey ?? apiKey).trim();
+    if (!resolvedApiKey) {
       if (options.announce !== false) {
-        setStatus("Enter an Agent API Key first.");
+        setStatus("Enter an API key first.");
         setStatusTone("error");
       }
       return [];
@@ -100,7 +100,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
       try {
         response = await fetch(`${normalizedGatewayBaseUrl}/v1/models`, {
           headers: {
-            authorization: `Bearer ${apiKey}`,
+            authorization: `Bearer ${resolvedApiKey}`,
           },
         });
       } catch (error) {
@@ -117,7 +117,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
       }
 
       const allowedModels = readGatewayModels(body);
-      if (apiKey !== agentApiKeyRef.current.trim()) {
+      if (resolvedApiKey !== apiKeyRef.current.trim()) {
         return [];
       }
       setModels(allowedModels);
@@ -140,14 +140,14 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
     if (modelLoadTimerRef.current !== null) {
       window.clearTimeout(modelLoadTimerRef.current);
     }
-    const apiKey = nextApiKey.trim();
-    if (!apiKey) {
+    const resolvedApiKey = nextApiKey.trim();
+    if (!resolvedApiKey) {
       modelLoadTimerRef.current = null;
       return;
     }
     modelLoadTimerRef.current = window.setTimeout(() => {
       modelLoadTimerRef.current = null;
-      void loadAllowedModels({ agentApiKey: apiKey, announce: false });
+      void loadAllowedModels({ apiKey: resolvedApiKey, announce: false });
     }, 350);
   }
 
@@ -167,8 +167,8 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
       temperature,
       topP,
     });
-    if (!agentApiKey.trim()) {
-      setStatus("Enter an Agent API Key first.");
+    if (!apiKey.trim()) {
+      setStatus("Enter an API key first.");
       setStatusTone("error");
       return;
     }
@@ -207,7 +207,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
         response = await fetch(`${normalizedGatewayBaseUrl}${endpointPath}`, {
           body: JSON.stringify(requestBody),
           headers: {
-            authorization: `Bearer ${agentApiKey}`,
+            authorization: `Bearer ${apiKey}`,
             "content-type": "application/json",
             "x-request-id": requestId,
           },
@@ -310,15 +310,15 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
           <h2 className="playground-card-title">Request configuration</h2>
           <div className="playground-config">
             <div className="console-field playground-field">
-              <label htmlFor="playground-agent-api-key">1. Agent API Key</label>
+              <label htmlFor="playground-api-key">1. API Key</label>
               <input
-                id="playground-agent-api-key"
+                id="playground-api-key"
                 type="password"
                 autoComplete="off"
                 placeholder="llmi_************************"
-                value={agentApiKey}
+                value={apiKey}
                 onBlur={() => {
-                  if (agentApiKey.trim() && models.length === 0 && !isLoadingModels) {
+                  if (apiKey.trim() && models.length === 0 && !isLoadingModels) {
                     if (modelLoadTimerRef.current !== null) {
                       window.clearTimeout(modelLoadTimerRef.current);
                       modelLoadTimerRef.current = null;
@@ -328,8 +328,8 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
                 }}
                 onChange={(event) => {
                   const nextApiKey = event.target.value;
-                  agentApiKeyRef.current = nextApiKey;
-                  setAgentApiKey(nextApiKey);
+                  apiKeyRef.current = nextApiKey;
+                  setApiKey(nextApiKey);
                   setModels([]);
                   setSelectedModel("");
                   scheduleAllowedModelsLoad(nextApiKey);
@@ -359,7 +359,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
                 id="playground-model"
                 value={selectedModel}
                 onFocus={() => {
-                  if (agentApiKey.trim() && models.length === 0 && !isLoadingModels) {
+                  if (apiKey.trim() && models.length === 0 && !isLoadingModels) {
                     void loadAllowedModels({ announce: false });
                   }
                 }}

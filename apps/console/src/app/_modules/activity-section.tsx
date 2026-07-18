@@ -9,7 +9,7 @@ import {
   getConsoleActivityDetail,
   listConsoleActivities,
 } from "@llmingress/db/console-activity";
-import { listAgents } from "@llmingress/db/console-agents";
+import { listApiKeys } from "@llmingress/db/console-api-keys";
 import {
   formatConsoleCount,
   formatConsoleTimestamp,
@@ -62,7 +62,7 @@ function ActivityReferenceDetail({
       triggerId={`activity-${activity.id}-trigger`}
     >
       <div className="console-dialog-head">
-        <div className="agent-view-dialog-title">
+        <div className="api-key-view-dialog-title">
           <h2 id="activity-detail-title">Request detail</h2>
           <ActivityStatusPill status={activity.status} />
         </div>
@@ -78,12 +78,12 @@ function ActivityReferenceDetail({
           <dd>{activity.requestId}</dd>
         </div>
         <div className="detail-field">
-          <dt>Agent</dt>
-          <dd>{activity.agentName ?? "Unknown agent"}</dd>
+          <dt>API Key</dt>
+          <dd>{activity.apiKeyName ?? "Unknown API key"}</dd>
         </div>
         <div className="detail-field">
           <dt>API Key Prefix</dt>
-          <dd>{activity.agentKeyPrefix ?? "Unknown"}</dd>
+          <dd>{activity.apiKeyPrefix ?? "Unknown"}</dd>
         </div>
         <div className="detail-field">
           <dt>Virtual Model</dt>
@@ -255,15 +255,15 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
   const selectedActivityId = readSingleSearchParam(searchParams.activityId);
   const activityRange = parseActivityRange(readSingleSearchParam(searchParams.activityRange));
   const filters = {
-    agentId: readSingleSearchParam(searchParams.agentId),
+    apiKeyId: readSingleSearchParam(searchParams.apiKeyId),
     from: getActivityWindowStart(new Date(), activityRange),
     providerId: readSingleSearchParam(searchParams.providerId),
     requestIdQuery: readSingleSearchParam(searchParams.q),
     status: readSingleSearchParam(searchParams.status),
     virtualModelId: readSingleSearchParam(searchParams.virtualModelId),
   } satisfies ConsoleActivityFiltersInput;
-  const [agents, virtualModels, providers, total, activities] = await Promise.all([
-    listAgents(),
+  const [apiKeys, virtualModels, providers, total, activities] = await Promise.all([
+    listApiKeys(),
     listVirtualModels(),
     listProviders(),
     countConsoleActivities({ filters }),
@@ -290,12 +290,12 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
     <section className="activity-workspace" id="activity" aria-label="Activity">
       <form className="activity-filter-grid" action="/activity" method="get">
         <div className="console-field">
-          <label htmlFor="activity-agent">Agent</label>
-          <select id="activity-agent" name="agentId" defaultValue={filters.agentId ?? ""}>
-            <option value="">All agents</option>
-            {agents.map((agent) => (
-              <option key={agent.id} value={agent.id}>
-                {agent.name}
+          <label htmlFor="activity-api-key">API Key</label>
+          <select id="activity-api-key" name="apiKeyId" defaultValue={filters.apiKeyId ?? ""}>
+            <option value="">All API keys</option>
+            {apiKeys.map((apiKey) => (
+              <option key={apiKey.id} value={apiKey.id}>
+                {apiKey.name}
               </option>
             ))}
           </select>
@@ -369,7 +369,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
                 <tr>
                   <th>Time</th>
                   <th>Request ID</th>
-                  <th>Agent</th>
+                  <th>API Key</th>
                   <th>Virtual Model</th>
                   <th>Provider / Model</th>
                   <th className="num">Tokens</th>
@@ -403,7 +403,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
                           {activity.requestId}
                         </a>
                       </td>
-                      <td>{activity.agentName ?? "Unknown agent"}</td>
+                      <td>{activity.apiKeyName ?? "Unknown API key"}</td>
                       <td>{formatActivityVirtualModelLabel(activity)}</td>
                       <td>{formatActivityProviderModelLabel(activity)}</td>
                       <td className="num">{formatConsoleCount(activity.totalTokens)}</td>

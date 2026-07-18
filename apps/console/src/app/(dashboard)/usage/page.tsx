@@ -12,7 +12,7 @@ export default async function UsagePage({
     <div className="page usage-page">
       <PageHeader
         title="Usage & Cost"
-        description="Analyze tokens, actual cost, latency, and failure rate by agent, virtual model, provider, and model."
+        description="Analyze tokens, actual cost, latency, and failure rate by API key, virtual model, provider, and model."
       />
       <UsageSection searchParams={resolved} />
     </div>

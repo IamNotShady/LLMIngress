@@ -19,7 +19,7 @@ export type ConsoleNavItem = {
 // (docs/UI/*). The sidebar renders this as a single icon-chip list.
 export const consoleNavItems: ConsoleNavItem[] = [
   { label: "Overview", href: "/", hint: "Gateway & spend at a glance", icon: "OV" },
-  { label: "Agents", href: "/agents", hint: "Agents & API keys", icon: "AG" },
+  { label: "API Keys", href: "/api-keys", hint: "Keys, model access & limits", icon: "AK" },
   {
     label: "Providers",
     pageTitle: "Providers & Models",

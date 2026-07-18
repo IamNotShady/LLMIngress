@@ -12,7 +12,7 @@ export default async function LimitsPage({
     <div className="page limits-page">
       <PageHeader
         title="Limits"
-        description="Manage Agent API Key budgets, tokens, RPM, TPM, and concurrency limits."
+        description="Manage API key budgets, tokens, RPM, TPM, and concurrency limits."
       />
       <LimitsSection searchParams={resolved} />
     </div>

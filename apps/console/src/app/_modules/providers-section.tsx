@@ -315,7 +315,7 @@ function ProviderDeleteDialog({
   return (
     <ConsoleDialog
       ariaLabelledby="provider-delete-title"
-      className="console-dialog agent-delete-dialog"
+      className="console-dialog api-key-delete-dialog"
       closeHref={closeHref}
       initialFocus="cancel"
       triggerId={`provider-delete-${provider.id}-trigger`}
@@ -333,7 +333,7 @@ function ProviderDeleteDialog({
         </p>
       )}
       {impact.providerModels.length > 0 ? (
-        <div className="agent-delete-warning">
+        <div className="api-key-delete-warning">
           <p>Provider Models referenced by active Route Policies:</p>
           <ul>
             {impact.providerModels.map((model) => (
@@ -345,7 +345,7 @@ function ProviderDeleteDialog({
         </div>
       ) : null}
       {impact.virtualModels.length > 0 ? (
-        <div className="agent-delete-warning">
+        <div className="api-key-delete-warning">
           <p>Virtual Models using this provider:</p>
           <ul>
             {impact.virtualModels.map((virtualModel) => (
@@ -357,7 +357,7 @@ function ProviderDeleteDialog({
         </div>
       ) : null}
       {impact.routePolicies.length > 0 ? (
-        <div className="agent-delete-warning">
+        <div className="api-key-delete-warning">
           <p>Route Policies to update first:</p>
           <ul>
             {impact.routePolicies.map((routePolicy) => (
@@ -368,13 +368,13 @@ function ProviderDeleteDialog({
           </ul>
         </div>
       ) : null}
-      {impact.agents.length > 0 ? (
-        <div className="agent-delete-warning">
-          <p>Agents affected by those Virtual Models:</p>
+      {impact.apiKeys.length > 0 ? (
+        <div className="api-key-delete-warning">
+          <p>API keys affected by those Virtual Models:</p>
           <ul>
-            {impact.agents.map((agent) => (
-              <li key={agent.id}>
-                <a href={`/agents?selected=${agent.id}`}>{agent.name}</a>
+            {impact.apiKeys.map((apiKey) => (
+              <li key={apiKey.id}>
+                <a href={`/api-keys?selected=${apiKey.id}`}>{apiKey.name}</a>
               </li>
             ))}
           </ul>
@@ -384,8 +384,8 @@ function ProviderDeleteDialog({
         Cleanup impact: {impact.apiKeyCount} API keys, {impact.oauthConnectionCount} OAuth
         connections, {impact.pendingJobCount} pending jobs, {impact.runningJobCount} running jobs.
       </p>
-      <div className="agent-delete-actions">
-        <a className="agent-delete-cancel" href={closeHref}>
+      <div className="api-key-delete-actions">
+        <a className="api-key-delete-cancel" href={closeHref}>
           <FlatIcon name="cancel" />
           <span>Cancel</span>
         </a>
@@ -393,7 +393,7 @@ function ProviderDeleteDialog({
           <ConsoleMutationForm action="/api/providers" fallbackError="Provider deletion failed.">
             <input type="hidden" name="action" value="delete" />
             <input type="hidden" name="id" value={provider.id} />
-            <button className="agent-delete-confirm" type="submit">
+            <button className="api-key-delete-confirm" type="submit">
               <FlatIcon name="delete" />
               <span>Delete provider</span>
             </button>
@@ -418,7 +418,7 @@ function ProviderKeyDeleteDialog({
   return (
     <ConsoleDialog
       ariaLabelledby="provider-key-delete-title"
-      className="console-dialog agent-delete-dialog"
+      className="console-dialog api-key-delete-dialog"
       closeHref={closeHref}
       initialFocus="cancel"
       triggerId={`provider-key-delete-${providerApiKeyId}-trigger`}
@@ -427,8 +427,8 @@ function ProviderKeyDeleteDialog({
       <p>
         This removes key {keyPrefix} from {provider.displayName}.
       </p>
-      <div className="agent-delete-actions">
-        <a className="agent-delete-cancel" href={closeHref}>
+      <div className="api-key-delete-actions">
+        <a className="api-key-delete-cancel" href={closeHref}>
           <FlatIcon name="cancel" />
           <span>Cancel</span>
         </a>
@@ -440,7 +440,7 @@ function ProviderKeyDeleteDialog({
         >
           <input type="hidden" name="action" value="delete" />
           <input type="hidden" name="providerApiKeyId" value={providerApiKeyId} />
-          <button className="agent-delete-confirm" type="submit">
+          <button className="api-key-delete-confirm" type="submit">
             <FlatIcon name="delete" />
             <span>Delete key</span>
           </button>
@@ -609,7 +609,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
           closeHref={providerDeleteCloseHref}
           impact={
             deleteProviderImpact ?? {
-              agents: [],
+              apiKeys: [],
               apiKeyCount: 0,
               oauthConnectionCount: 0,
               pendingJobCount: 0,

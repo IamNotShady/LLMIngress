@@ -1,4 +1,4 @@
-import { listAgents } from "@llmingress/db/console-agents";
+import { listApiKeys } from "@llmingress/db/console-api-keys";
 import {
   formatConsoleCompactCount,
   formatConsoleUsd,
@@ -99,7 +99,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
   const usageWindow = parseConsoleUsageWindow(readSingleSearchParam(searchParams.usageWindow));
   const dateFromParam = readSingleSearchParam(searchParams.dateFrom);
   const dateToParam = readSingleSearchParam(searchParams.dateTo);
-  const selectedAgentId = readOptionalFilterParam(searchParams.agentId);
+  const selectedApiKeyId = readOptionalFilterParam(searchParams.apiKeyId);
   const selectedVirtualModelId = readOptionalFilterParam(searchParams.virtualModelId);
   const selectedProviderId = readOptionalFilterParam(searchParams.providerId);
   const now = new Date();
@@ -110,9 +110,9 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
     window: usageWindow,
   });
   const { dateFromValue, dateToValue } = usageDateRange;
-  const [usageSummary, agents, virtualModels, providers] = await Promise.all([
+  const [usageSummary, apiKeys, virtualModels, providers] = await Promise.all([
     getConsoleUsageSummary({
-      agentId: selectedAgentId,
+      apiKeyId: selectedApiKeyId,
       dateFrom: usageDateRange.start,
       dateTo: usageDateRange.endExclusive,
       now,
@@ -120,7 +120,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
       virtualModelId: selectedVirtualModelId,
       window: usageWindow,
     }),
-    listAgents(),
+    listApiKeys(),
     listVirtualModels(),
     listProviders(),
   ]);
@@ -156,12 +156,12 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
           </div>
         </fieldset>
         <div className="console-field">
-          <label htmlFor="usage-agent">Agent</label>
-          <select id="usage-agent" name="agentId" defaultValue={selectedAgentId ?? ""}>
-            <option value="">All agents</option>
-            {agents.map((agent) => (
-              <option key={agent.id} value={agent.id}>
-                {agent.name}
+          <label htmlFor="usage-api-key">API Key</label>
+          <select id="usage-api-key" name="apiKeyId" defaultValue={selectedApiKeyId ?? ""}>
+            <option value="">All API keys</option>
+            {apiKeys.map((apiKey) => (
+              <option key={apiKey.id} value={apiKey.id}>
+                {apiKey.name}
               </option>
             ))}
           </select>
@@ -246,8 +246,8 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
 
       <div className="usage-distribution-grid">
         <div className="chart-card">
-          <h2 className="chart-card-title">Agent cost distribution</h2>
-          <UsageCostDonut breakdowns={usageSummary.agentBreakdowns} label="agent" />
+          <h2 className="chart-card-title">API key cost distribution</h2>
+          <UsageCostDonut breakdowns={usageSummary.apiKeyBreakdowns} label="API key" />
         </div>
         <div className="chart-card">
           <h2 className="chart-card-title">Virtual Model cost distribution</h2>

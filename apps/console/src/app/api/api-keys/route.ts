@@ -1,21 +1,21 @@
-import { normalizeAgentLimitRulesInput } from "@llmingress/db/console-agent-limits";
+import { normalizeApiKeyLimitRulesInput } from "@llmingress/db/console-api-key-limits";
 import {
-  createAgentWithSettings,
-  deleteAgent,
-  normalizeAgentFormInput,
-  normalizeAgentVirtualModelAccessFormInput,
-  normalizeAgentVirtualModelSelectionInput,
-  setAgentEnabled,
-  updateAgent,
-  updateAgentVirtualModelAccess,
-  updateAgentWithSettings,
-} from "@llmingress/db/console-agents";
+  createApiKeyWithSettings,
+  deleteApiKey,
+  normalizeApiKeyFormInput,
+  normalizeApiKeyVirtualModelAccessFormInput,
+  normalizeApiKeyVirtualModelSelectionInput,
+  setApiKeyEnabled,
+  updateApiKey,
+  updateApiKeyVirtualModelAccess,
+  updateApiKeyWithSettings,
+} from "@llmingress/db/console-api-keys";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { consoleActionErrorResponse } from "../_errors";
 import { readRequiredText, readText, readTextValues } from "../_form";
 import { redirectToConsolePath } from "../_redirect";
-import { renderOneTimeAgentResponse } from "./_created-page";
+import { renderOneTimeApiKeyResponse } from "./_created-page";
 
 export const POST = withConsoleAuth(async (request) => {
   const form = await request.formData();
@@ -24,28 +24,28 @@ export const POST = withConsoleAuth(async (request) => {
   try {
     if (action === "create") {
       const limitsEnabled = readText(form, "enableLimits") === "true";
-      const agent = normalizeAgentFormInput({
+      const apiKey = normalizeApiKeyFormInput({
         name: readText(form, "name"),
       });
-      const result = await createAgentWithSettings({
-        agent,
-        limitRules: limitsEnabled ? readAgentLimitRules(form) : [],
+      const result = await createApiKeyWithSettings({
+        apiKey,
+        limitRules: limitsEnabled ? readApiKeyLimitRules(form) : [],
         limitsEnabled,
-        virtualModels: normalizeAgentVirtualModelSelectionInput({
+        virtualModels: normalizeApiKeyVirtualModelSelectionInput({
           allowedVirtualModelIds: readTextValues(form, "allowedVirtualModelIds"),
           defaultVirtualModelId: readText(form, "defaultVirtualModelId") ?? null,
         }),
       });
-      return renderOneTimeAgentResponse(
+      return renderOneTimeApiKeyResponse(
         {
           ...result,
-          virtualModelName: readAgentConnectionVirtualModelName(result.virtualModelAccess),
+          virtualModelName: readApiKeyConnectionVirtualModelName(result.virtualModelAccess),
         },
         request.headers.get("accept")?.includes("application/json") ? "json" : "html",
       );
     } else if (action === "update") {
-      await updateAgent({
-        agent: normalizeAgentFormInput({
+      await updateApiKey({
+        apiKey: normalizeApiKeyFormInput({
           name: readText(form, "name"),
         }),
         id: readRequiredText(form, "id"),
@@ -53,31 +53,31 @@ export const POST = withConsoleAuth(async (request) => {
     } else if (action === "saveAll") {
       const id = readRequiredText(form, "id");
       const limitsEnabled = readText(form, "enableLimits") === "true";
-      await updateAgentWithSettings({
-        agent: normalizeAgentFormInput({
+      await updateApiKeyWithSettings({
+        apiKey: normalizeApiKeyFormInput({
           name: readText(form, "name"),
         }),
         id,
-        limitRules: limitsEnabled ? readAgentLimitRules(form) : [],
+        limitRules: limitsEnabled ? readApiKeyLimitRules(form) : [],
         limitsEnabled,
-        virtualModels: normalizeAgentVirtualModelSelectionInput({
+        virtualModels: normalizeApiKeyVirtualModelSelectionInput({
           allowedVirtualModelIds: readTextValues(form, "allowedVirtualModelIds"),
           defaultVirtualModelId: readText(form, "defaultVirtualModelId") ?? null,
         }),
       });
-      return redirectToConsolePath(`/agents?selected=${encodeURIComponent(id)}`);
+      return redirectToConsolePath(`/api-keys?selected=${encodeURIComponent(id)}`);
     } else if (action === "enable" || action === "disable") {
-      await setAgentEnabled({
+      await setApiKeyEnabled({
         enabled: action === "enable",
         id: readRequiredText(form, "id"),
       });
     } else if (action === "delete") {
-      await deleteAgent({
+      await deleteApiKey({
         id: readRequiredText(form, "id"),
       });
     } else if (action === "updateVirtualModelAccess") {
-      await updateAgentVirtualModelAccess({
-        access: normalizeAgentVirtualModelAccessFormInput({
+      await updateApiKeyVirtualModelAccess({
+        access: normalizeApiKeyVirtualModelAccessFormInput({
           allowedVirtualModelIds: readTextValues(form, "allowedVirtualModelIds"),
           defaultVirtualModelId: readText(form, "defaultVirtualModelId") ?? null,
           id: readRequiredText(form, "id"),
@@ -85,19 +85,19 @@ export const POST = withConsoleAuth(async (request) => {
       });
     } else {
       return NextResponse.json(
-        { error: "Unknown agent action.", code: "agent_action_unknown" },
+        { error: "Unknown API key action.", code: "api_key_action_unknown" },
         { status: 400 },
       );
     }
   } catch (error) {
-    return consoleActionErrorResponse(error, "Agent action failed.");
+    return consoleActionErrorResponse(error, "API key action failed.");
   }
 
-  return redirectToConsolePath("/agents");
+  return redirectToConsolePath("/api-keys");
 });
 
-function readAgentLimitRules(form: FormData) {
-  return normalizeAgentLimitRulesInput({
+function readApiKeyLimitRules(form: FormData) {
+  return normalizeApiKeyLimitRulesInput({
     budgetPeriod: readRequiredText(form, "budgetPeriod"),
     budgetUsd: readRequiredText(form, "budgetUsd"),
     concurrency: readText(form, "concurrency") ?? null,
@@ -107,7 +107,7 @@ function readAgentLimitRules(form: FormData) {
   });
 }
 
-function readAgentConnectionVirtualModelName(access: {
+function readApiKeyConnectionVirtualModelName(access: {
   allowedVirtualModels: Array<{ name: string }>;
   defaultVirtualModel: { name: string } | null;
 }): string | null {

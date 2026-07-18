@@ -6,9 +6,9 @@ import {
   withPostgresTransaction,
 } from "@llmingress/db/client";
 import type {
-  AgentLimitEnforcementPolicy,
-  AgentLimitPeriod,
-  AgentLimitType,
+  ApiKeyLimitEnforcementPolicy,
+  ApiKeyLimitPeriod,
+  ApiKeyLimitType,
 } from "@llmingress/domain";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import {
@@ -16,19 +16,19 @@ import {
   type GatewayUsageCostDetails,
 } from "./gateway-usage-recorder.ts";
 
-export type GatewayAgentLimitType = AgentLimitType;
-export type GatewayAgentLimitEnforcementPolicy = AgentLimitEnforcementPolicy;
-export type GatewayRateLimitType = Extract<AgentLimitType, "concurrency" | "rpm" | "tpm">;
-export type GatewayBudgetPeriod = Extract<AgentLimitPeriod, "day" | "hour" | "month" | "week">;
+export type GatewayApiKeyLimitType = ApiKeyLimitType;
+export type GatewayApiKeyLimitEnforcementPolicy = ApiKeyLimitEnforcementPolicy;
+export type GatewayRateLimitType = Extract<ApiKeyLimitType, "concurrency" | "rpm" | "tpm">;
+export type GatewayBudgetPeriod = Extract<ApiKeyLimitPeriod, "day" | "hour" | "month" | "week">;
 
-export type GatewayAgentLimitErrorCode =
+export type GatewayApiKeyLimitErrorCode =
   | "cost_budget_exceeded"
   | "rate_limit_exceeded"
   | "token_budget_exceeded";
 
-export type GatewayEnabledAgentLimit = {
-  enforcementPolicy: GatewayAgentLimitEnforcementPolicy;
-  limitType: GatewayAgentLimitType;
+export type GatewayEnabledApiKeyLimit = {
+  enforcementPolicy: GatewayApiKeyLimitEnforcementPolicy;
+  limitType: GatewayApiKeyLimitType;
   limitValue: number;
   manualBypass: boolean;
   period: string;
@@ -36,7 +36,7 @@ export type GatewayEnabledAgentLimit = {
 };
 
 export type GatewayConcurrencyLease = {
-  agentId: string;
+  apiKeyId: string;
   window: WindowBoundary;
 };
 
@@ -46,9 +46,9 @@ export type GatewayBudgetSettlement = {
   periodType: GatewayBudgetPeriod;
 };
 
-export type GatewayAgentLimitErrorBody = {
+export type GatewayApiKeyLimitErrorBody = {
   error: {
-    code: GatewayAgentLimitErrorCode;
+    code: GatewayApiKeyLimitErrorCode;
     message: string;
   };
   limitType?: GatewayRateLimitType;
@@ -57,22 +57,22 @@ export type GatewayAgentLimitErrorBody = {
   retryAfterSeconds?: number;
 };
 
-export type GatewayAgentLimitDecision =
+export type GatewayApiKeyLimitDecision =
   | {
       budgetSettlement?: GatewayBudgetSettlement;
       concurrencyLease?: GatewayConcurrencyLease;
       ok: true;
     }
   | {
-      body: GatewayAgentLimitErrorBody;
+      body: GatewayApiKeyLimitErrorBody;
       ok: false;
       retryAfterSeconds?: number;
       statusCode: 402 | 429;
     };
 
-type AgentLimitRow = {
-  enforcement_policy: GatewayAgentLimitEnforcementPolicy;
-  limit_type: GatewayAgentLimitType;
+type ApiKeyLimitRow = {
+  enforcement_policy: GatewayApiKeyLimitEnforcementPolicy;
+  limit_type: GatewayApiKeyLimitType;
   limit_value: string;
   manual_bypass: boolean;
   period: string;
@@ -94,11 +94,11 @@ type WindowBoundary = {
   windowStart: Date;
 };
 
-export async function readEnabledGatewayAgentLimits(input: {
-  agentId: string;
+export async function readEnabledGatewayApiKeyLimits(input: {
+  apiKeyId: string;
   databaseUrl?: string;
-}): Promise<GatewayEnabledAgentLimit[]> {
-  const result = await getPostgresPool(input.databaseUrl).query<AgentLimitRow>(
+}): Promise<GatewayEnabledApiKeyLimit[]> {
+  const result = await getPostgresPool(input.databaseUrl).query<ApiKeyLimitRow>(
     `
       select limit_type,
              period,
@@ -106,12 +106,12 @@ export async function readEnabledGatewayAgentLimits(input: {
              unit,
              enforcement_policy,
              manual_bypass
-      from agent_limits
-      where agent_id = $1
+      from api_key_limits
+      where api_key_id = $1
         and enabled = true
         and limit_type in ('budget', 'concurrency', 'rpm', 'token', 'tpm')
     `,
-    [input.agentId],
+    [input.apiKeyId],
   );
 
   return result.rows.map((row) => ({
@@ -124,25 +124,25 @@ export async function readEnabledGatewayAgentLimits(input: {
   }));
 }
 
-export async function enforceGatewayAgentLimits(input: {
-  agentId: string;
+export async function enforceGatewayApiKeyLimits(input: {
+  apiKeyId: string;
   budgetPrice?: ModelTokenPrice;
   databaseUrl?: string;
-  enabledLimits?: readonly GatewayEnabledAgentLimit[];
+  enabledLimits?: readonly GatewayEnabledApiKeyLimit[];
   requestId: string;
   requestMetadata: GatewayRequestMetadata;
-}): Promise<GatewayAgentLimitDecision> {
+}): Promise<GatewayApiKeyLimitDecision> {
   const enabledLimits =
     input.enabledLimits ??
-    (await readEnabledGatewayAgentLimits({
-      agentId: input.agentId,
+    (await readEnabledGatewayApiKeyLimits({
+      apiKeyId: input.apiKeyId,
       databaseUrl: input.databaseUrl,
     }));
 
   return withPostgresTransaction(input.databaseUrl, async (client) => {
     const now = new Date();
     const budgetDecision = await evaluateBudgetLimits(client, {
-      agentId: input.agentId,
+      apiKeyId: input.apiKeyId,
       budgetPrice: input.budgetPrice,
       enabledLimits,
       now,
@@ -154,7 +154,7 @@ export async function enforceGatewayAgentLimits(input: {
     }
 
     const rateLimitDecision = await evaluateAndIncrementRateLimits(client, {
-      agentId: input.agentId,
+      apiKeyId: input.apiKeyId,
       enabledLimits,
       now,
       requestId: input.requestId,
@@ -172,13 +172,13 @@ export async function enforceGatewayAgentLimits(input: {
   });
 }
 
-export async function enforceGatewayAgentLimitsIfEnabled(
-  input: Parameters<typeof enforceGatewayAgentLimits>[0] & { limitsEnabled: boolean },
-): Promise<GatewayAgentLimitDecision> {
+export async function enforceGatewayApiKeyLimitsIfEnabled(
+  input: Parameters<typeof enforceGatewayApiKeyLimits>[0] & { limitsEnabled: boolean },
+): Promise<GatewayApiKeyLimitDecision> {
   if (!input.limitsEnabled) {
     return { ok: true };
   }
-  return enforceGatewayAgentLimits(input);
+  return enforceGatewayApiKeyLimits(input);
 }
 
 export async function releaseGatewayConcurrency(input: {
@@ -194,16 +194,16 @@ export async function releaseGatewayConcurrency(input: {
       update rate_limit_windows
       set active_count = greatest(active_count - 1, 0),
           updated_at = now()
-      where agent_id = $1
+      where api_key_id = $1
         and limit_type = 'concurrency'
         and window_start = $2
     `,
-    [input.lease.agentId, input.lease.window.windowStart],
+    [input.lease.apiKeyId, input.lease.window.windowStart],
   );
 }
 
 export async function recordGatewayBudgetUsage(input: {
-  agentId: string;
+  apiKeyId: string;
   budgetSettlement: GatewayBudgetSettlement | undefined;
   databaseUrl?: string;
   requestId: string;
@@ -224,17 +224,17 @@ export async function recordGatewayBudgetUsage(input: {
       `
         insert into budget_periods (
           id,
-          agent_id,
+          api_key_id,
           period_type,
           period_start,
           period_end
         )
         values ($1, $2, $3, $4, $5)
-        on conflict (agent_id, period_type, period_start) do nothing
+        on conflict (api_key_id, period_type, period_start) do nothing
       `,
       [
         randomUUID(),
-        input.agentId,
+        input.apiKeyId,
         budgetSettlement.periodType,
         budgetSettlement.periodStart,
         budgetSettlement.periodEnd,
@@ -246,14 +246,14 @@ export async function recordGatewayBudgetUsage(input: {
         set tokens_used = tokens_used + $1,
             cost_used_usd = cost_used_usd + $2,
             updated_at = now()
-        where agent_id = $3
+        where api_key_id = $3
           and period_type = $4
           and period_start = $5
       `,
       [
         records.requestUsage.totalTokens,
         records.requestCost.totalCostUsd,
-        input.agentId,
+        input.apiKeyId,
         budgetSettlement.periodType,
         budgetSettlement.periodStart,
       ],
@@ -264,13 +264,13 @@ export async function recordGatewayBudgetUsage(input: {
 async function evaluateAndIncrementRateLimits(
   client: PostgresQueryClient,
   input: {
-    agentId: string;
-    enabledLimits: readonly GatewayEnabledAgentLimit[];
+    apiKeyId: string;
+    enabledLimits: readonly GatewayEnabledApiKeyLimit[];
     now: Date;
     requestId: string;
     requestMetadata: GatewayRequestMetadata;
   },
-): Promise<GatewayAgentLimitDecision> {
+): Promise<GatewayApiKeyLimitDecision> {
   const limits = readEnabledGatewayRateLimits(input.enabledLimits);
   if (limits.length === 0) {
     return { ok: true };
@@ -293,7 +293,7 @@ async function evaluateAndIncrementRateLimits(
 
   for (const increment of increments) {
     const currentCount = await lockRateLimitWindow(client, {
-      agentId: input.agentId,
+      apiKeyId: input.apiKeyId,
       limitType: increment.limitType,
       window: increment.window,
     });
@@ -322,7 +322,7 @@ async function evaluateAndIncrementRateLimits(
 
   for (const increment of increments) {
     await incrementRateLimitWindow(client, {
-      agentId: input.agentId,
+      apiKeyId: input.apiKeyId,
       increment: increment.increment,
       limitType: increment.limitType,
       window: increment.window,
@@ -334,7 +334,7 @@ async function evaluateAndIncrementRateLimits(
   );
   return {
     concurrencyLease: concurrencyIncrement
-      ? { agentId: input.agentId, window: concurrencyIncrement.window }
+      ? { apiKeyId: input.apiKeyId, window: concurrencyIncrement.window }
       : undefined,
     ok: true,
   };
@@ -343,14 +343,14 @@ async function evaluateAndIncrementRateLimits(
 async function evaluateBudgetLimits(
   client: PostgresQueryClient,
   input: {
-    agentId: string;
+    apiKeyId: string;
     budgetPrice: ModelTokenPrice | undefined;
-    enabledLimits: readonly GatewayEnabledAgentLimit[];
+    enabledLimits: readonly GatewayEnabledApiKeyLimit[];
     now: Date;
     requestId: string;
     requestMetadata: GatewayRequestMetadata;
   },
-): Promise<GatewayAgentLimitDecision> {
+): Promise<GatewayApiKeyLimitDecision> {
   const limits = readEnabledBudgetLimits(input.enabledLimits);
   const totalTokens =
     input.requestMetadata.estimatedInputTokens + input.requestMetadata.estimatedOutputTokens;
@@ -390,7 +390,7 @@ async function evaluateBudgetLimits(
   }
 
   const currentCostUsd = await readCurrentBudgetPeriodCost(client, {
-    agentId: input.agentId,
+    apiKeyId: input.apiKeyId,
     period,
     periodType: costLimit.period,
   });
@@ -410,14 +410,14 @@ async function evaluateBudgetLimits(
 
 function evaluateGatewayRateLimitWindow(input: {
   currentCount: number;
-  enforcementPolicy?: GatewayAgentLimitEnforcementPolicy;
+  enforcementPolicy?: GatewayApiKeyLimitEnforcementPolicy;
   increment: number;
   limitType: GatewayRateLimitType;
   limitValue: number;
   manualBypass?: boolean;
   requestId: string;
   retryAfterMs: number;
-}): GatewayAgentLimitDecision {
+}): GatewayApiKeyLimitDecision {
   if (input.currentCount + input.increment <= input.limitValue) {
     return { ok: true };
   }
@@ -443,12 +443,12 @@ function createGatewayRateLimitErrorBody(input: {
   limitType: GatewayRateLimitType;
   requestId: string;
   retryAfterMs: number;
-}): GatewayAgentLimitErrorBody {
+}): GatewayApiKeyLimitErrorBody {
   const retryAfterSeconds = Math.max(1, Math.ceil(input.retryAfterMs / 1000));
   return {
     error: {
       code: "rate_limit_exceeded",
-      message: `Agent API key exceeded its ${input.limitType.toUpperCase()} limit.`,
+      message: `API key exceeded its ${input.limitType.toUpperCase()} limit.`,
     },
     limitType: input.limitType,
     requestId: input.requestId,
@@ -458,9 +458,9 @@ function createGatewayRateLimitErrorBody(input: {
 }
 
 function budgetFailure(
-  code: Exclude<GatewayAgentLimitErrorCode, "rate_limit_exceeded">,
+  code: Exclude<GatewayApiKeyLimitErrorCode, "rate_limit_exceeded">,
   requestId: string,
-): GatewayAgentLimitDecision {
+): GatewayApiKeyLimitDecision {
   return {
     body: {
       error: {
@@ -474,15 +474,15 @@ function budgetFailure(
   };
 }
 
-function readEnabledGatewayRateLimits(enabledLimits: readonly GatewayEnabledAgentLimit[]): Array<{
-  enforcementPolicy: GatewayAgentLimitEnforcementPolicy;
+function readEnabledGatewayRateLimits(enabledLimits: readonly GatewayEnabledApiKeyLimit[]): Array<{
+  enforcementPolicy: GatewayApiKeyLimitEnforcementPolicy;
   limitType: GatewayRateLimitType;
   limitValue: number;
   manualBypass: boolean;
 }> {
   return enabledLimits
     .filter(
-      (limit): limit is GatewayEnabledAgentLimit & { limitType: GatewayRateLimitType } =>
+      (limit): limit is GatewayEnabledApiKeyLimit & { limitType: GatewayRateLimitType } =>
         (limit.limitType === "concurrency" &&
           limit.period === "request" &&
           limit.unit === "requests") ||
@@ -498,7 +498,7 @@ function readEnabledGatewayRateLimits(enabledLimits: readonly GatewayEnabledAgen
     }));
 }
 
-function readEnabledBudgetLimits(enabledLimits: readonly GatewayEnabledAgentLimit[]): Array<{
+function readEnabledBudgetLimits(enabledLimits: readonly GatewayEnabledApiKeyLimit[]): Array<{
   limitType: "budget" | "token";
   limitValue: number;
   period: string;
@@ -506,7 +506,7 @@ function readEnabledBudgetLimits(enabledLimits: readonly GatewayEnabledAgentLimi
 }> {
   return enabledLimits
     .filter(
-      (limit): limit is GatewayEnabledAgentLimit & { limitType: "budget" | "token" } =>
+      (limit): limit is GatewayEnabledApiKeyLimit & { limitType: "budget" | "token" } =>
         limit.limitType === "budget" || limit.limitType === "token",
     )
     .sort((a, b) => budgetPeriodOrder(a.period) - budgetPeriodOrder(b.period))
@@ -537,7 +537,7 @@ function budgetPeriodOrder(period: string): number {
 async function lockRateLimitWindow(
   client: PostgresQueryClient,
   input: {
-    agentId: string;
+    apiKeyId: string;
     limitType: GatewayRateLimitType;
     window: WindowBoundary;
   },
@@ -546,17 +546,17 @@ async function lockRateLimitWindow(
     `
       insert into rate_limit_windows (
         id,
-        agent_id,
+        api_key_id,
         limit_type,
         window_start,
         window_end
       )
       values ($1, $2, $3, $4, $5)
-      on conflict (agent_id, limit_type, window_start) do nothing
+      on conflict (api_key_id, limit_type, window_start) do nothing
     `,
     [
       randomUUID(),
-      input.agentId,
+      input.apiKeyId,
       input.limitType,
       input.window.windowStart,
       input.window.windowEnd,
@@ -569,12 +569,12 @@ async function lockRateLimitWindow(
              token_count,
              active_count
       from rate_limit_windows
-      where agent_id = $1
+      where api_key_id = $1
         and limit_type = $2
         and window_start = $3
       for update
     `,
-    [input.agentId, input.limitType, input.window.windowStart],
+    [input.apiKeyId, input.limitType, input.window.windowStart],
   );
   const row = result.rows[0];
   if (!row) {
@@ -591,7 +591,7 @@ async function lockRateLimitWindow(
 async function incrementRateLimitWindow(
   client: PostgresQueryClient,
   input: {
-    agentId: string;
+    apiKeyId: string;
     increment: number;
     limitType: GatewayRateLimitType;
     window: WindowBoundary;
@@ -604,7 +604,7 @@ async function incrementRateLimitWindow(
           token_count = token_count + $2,
           active_count = active_count + $3,
           updated_at = now()
-      where agent_id = $4
+      where api_key_id = $4
         and limit_type = $5
         and window_start = $6
     `,
@@ -612,7 +612,7 @@ async function incrementRateLimitWindow(
       input.limitType === "rpm" ? 1 : 0,
       input.limitType === "tpm" ? input.increment : 0,
       input.limitType === "concurrency" ? input.increment : 0,
-      input.agentId,
+      input.apiKeyId,
       input.limitType,
       input.window.windowStart,
     ],
@@ -622,7 +622,7 @@ async function incrementRateLimitWindow(
 async function readCurrentBudgetPeriodCost(
   client: PostgresQueryClient,
   input: {
-    agentId: string;
+    apiKeyId: string;
     period: WindowBoundary;
     periodType: GatewayBudgetPeriod;
   },
@@ -631,12 +631,12 @@ async function readCurrentBudgetPeriodCost(
     `
       select cost_used_usd::text
       from budget_periods
-      where agent_id = $1
+      where api_key_id = $1
         and period_type = $2
         and period_start = $3
       for update
     `,
-    [input.agentId, input.periodType, input.period.windowStart],
+    [input.apiKeyId, input.periodType, input.period.windowStart],
   );
   return Number(result.rows[0]?.cost_used_usd ?? 0);
 }
@@ -694,9 +694,9 @@ function isBudgetPeriod(period: string): period is GatewayBudgetPeriod {
   return period === "hour" || period === "day" || period === "week" || period === "month";
 }
 
-function budgetErrorMessage(code: Exclude<GatewayAgentLimitErrorCode, "rate_limit_exceeded">) {
+function budgetErrorMessage(code: Exclude<GatewayApiKeyLimitErrorCode, "rate_limit_exceeded">) {
   if (code === "token_budget_exceeded") {
-    return "Agent API key token budget was exceeded.";
+    return "API key token budget was exceeded.";
   }
-  return "Agent API key cost budget was exceeded.";
+  return "API key cost budget was exceeded.";
 }

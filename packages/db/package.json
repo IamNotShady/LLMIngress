@@ -40,13 +40,13 @@
       "types": "./src/console-activity.ts",
       "default": "./src/console-activity.ts"
     },
-    "./console-agent-limits": {
-      "types": "./src/console-agent-limits.ts",
-      "default": "./src/console-agent-limits.ts"
+    "./console-api-key-limits": {
+      "types": "./src/console-api-key-limits.ts",
+      "default": "./src/console-api-key-limits.ts"
     },
-    "./console-agents": {
-      "types": "./src/console-agents.ts",
-      "default": "./src/console-agents.ts"
+    "./console-api-keys": {
+      "types": "./src/console-api-keys.ts",
+      "default": "./src/console-api-keys.ts"
     },
     "./console-auth": {
       "types": "./src/console-auth.ts",

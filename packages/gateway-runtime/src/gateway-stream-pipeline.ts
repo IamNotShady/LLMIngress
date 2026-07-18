@@ -1,5 +1,5 @@
 import { PassThrough, Readable } from "node:stream";
-import { type GatewayConcurrencyLease, releaseGatewayConcurrency } from "./gateway-agent-limits.ts";
+import { type GatewayConcurrencyLease, releaseGatewayConcurrency } from "./gateway-api-key-limits.ts";
 import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
 import { gatewayStreamIdleTimeoutMs } from "./gateway-env.ts";
 
@@ -146,7 +146,7 @@ export function wrapProviderStreamWithConcurrencyRelease(
       message: "gateway concurrency release failed",
       metadata: input.lease
         ? {
-            agentId: input.lease.agentId,
+            apiKeyId: input.lease.apiKeyId,
             windowStart: input.lease.window.windowStart.toISOString(),
           }
         : undefined,

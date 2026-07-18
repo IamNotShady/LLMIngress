@@ -4,30 +4,30 @@ import { createConfigPublisher } from "@llmingress/db/config-versions";
 import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 
 export type {
-  AgentLimitEnforcementPolicy,
-  AgentLimitPeriod,
-  AgentLimitType,
-  AgentLimitUnit,
+  ApiKeyLimitEnforcementPolicy,
+  ApiKeyLimitPeriod,
+  ApiKeyLimitType,
+  ApiKeyLimitUnit,
 } from "@llmingress/domain";
 
 import type {
-  AgentLimitEnforcementPolicy,
-  AgentLimitPeriod,
-  AgentLimitType,
-  AgentLimitUnit,
+  ApiKeyLimitEnforcementPolicy,
+  ApiKeyLimitPeriod,
+  ApiKeyLimitType,
+  ApiKeyLimitUnit,
 } from "@llmingress/domain";
 
-export type AgentLimitRuleInput = {
-  enforcementPolicy?: AgentLimitEnforcementPolicy;
-  limitType: AgentLimitType;
+export type ApiKeyLimitRuleInput = {
+  enforcementPolicy?: ApiKeyLimitEnforcementPolicy;
+  limitType: ApiKeyLimitType;
   limitValue: number;
   manualBypass?: boolean;
-  period: AgentLimitPeriod;
-  unit: AgentLimitUnit;
+  period: ApiKeyLimitPeriod;
+  unit: ApiKeyLimitUnit;
 };
 
-export type AgentLimitFormInput = {
-  agentId?: string | null;
+export type ApiKeyLimitFormInput = {
+  apiKeyId?: string | null;
   budgetPeriod?: string | null;
   budgetUsd?: string | number | null;
   concurrency?: string | number | null;
@@ -36,19 +36,19 @@ export type AgentLimitFormInput = {
   tpm?: string | number | null;
 };
 
-export type NormalizedAgentLimitFormInput = {
-  agentId: string;
-  rules: AgentLimitRuleInput[];
+export type NormalizedApiKeyLimitFormInput = {
+  apiKeyId: string;
+  rules: ApiKeyLimitRuleInput[];
 };
 
-export type ConsoleAgentLimit = AgentLimitRuleInput & {
-  agentId: string;
+export type ConsoleApiKeyLimit = ApiKeyLimitRuleInput & {
+  apiKeyId: string;
   enabled: boolean;
   id: string;
 };
 
-export type ConsoleAgentLimitRuntimeSnapshot = {
-  agentId: string;
+export type ConsoleApiKeyLimitRuntimeSnapshot = {
+  apiKeyId: string;
   budgetUsagePercent: number;
   currentConcurrency: number;
   currentRpm: number;
@@ -58,38 +58,38 @@ export type ConsoleAgentLimitRuntimeSnapshot = {
   rateLimitHits24h: number;
 };
 
-type AgentLimitRow = {
-  agent_id: string;
+type ApiKeyLimitRow = {
+  api_key_id: string;
   enabled: boolean;
-  enforcement_policy: AgentLimitEnforcementPolicy;
+  enforcement_policy: ApiKeyLimitEnforcementPolicy;
   id: string;
-  limit_type: AgentLimitType;
+  limit_type: ApiKeyLimitType;
   limit_value: string;
   manual_bypass: boolean;
-  period: AgentLimitPeriod;
-  unit: AgentLimitUnit;
+  period: ApiKeyLimitPeriod;
+  unit: ApiKeyLimitUnit;
 };
 
-type AgentLimitBudgetUsageRow = {
-  agent_id: string;
+type ApiKeyLimitBudgetUsageRow = {
+  api_key_id: string;
   budget_usage_percent: string | null;
 };
 
-type AgentLimitRateWindowRow = {
-  agent_id: string;
+type ApiKeyLimitRateWindowRow = {
+  api_key_id: string;
   current_concurrency: number | null;
   current_rpm: number | null;
   current_tpm: number | null;
 };
 
-type AgentLimitErrorCountRow = {
-  agent_id: string;
+type ApiKeyLimitErrorCountRow = {
+  api_key_id: string;
   over_limit_today_count: number;
   over_limit_yesterday_count: number;
   rate_limit_hits_24h: number;
 };
 
-export type AgentLimitQueryClient = {
+export type ApiKeyLimitQueryClient = {
   query: <T = Record<string, unknown>>(
     text: string,
     values?: readonly unknown[],
@@ -98,7 +98,7 @@ export type AgentLimitQueryClient = {
 
 const budgetPeriods = ["day", "week", "month"] as const;
 
-export const defaultAgentLimitFormValues = {
+export const defaultApiKeyLimitFormValues = {
   budgetPeriod: "month",
   budgetUsd: 10,
   concurrency: 10,
@@ -107,16 +107,16 @@ export const defaultAgentLimitFormValues = {
   tpm: 1_000_000,
 } as const;
 
-export function normalizeAgentLimitFormInput(
-  input: AgentLimitFormInput,
-): NormalizedAgentLimitFormInput {
-  const agentId = normalizeRequiredText(input.agentId, "Agent id");
-  return { agentId, rules: normalizeAgentLimitRulesInput(input) };
+export function normalizeApiKeyLimitFormInput(
+  input: ApiKeyLimitFormInput,
+): NormalizedApiKeyLimitFormInput {
+  const apiKeyId = normalizeRequiredText(input.apiKeyId, "API key id");
+  return { apiKeyId, rules: normalizeApiKeyLimitRulesInput(input) };
 }
 
-export function normalizeAgentLimitRulesInput(
-  input: Omit<AgentLimitFormInput, "agentId">,
-): AgentLimitRuleInput[] {
+export function normalizeApiKeyLimitRulesInput(
+  input: Omit<ApiKeyLimitFormInput, "apiKeyId">,
+): ApiKeyLimitRuleInput[] {
   const budgetPeriod = normalizeBudgetPeriod(input.budgetPeriod);
 
   return [
@@ -148,7 +148,7 @@ export function normalizeAgentLimitRulesInput(
       enforcementPolicy: "block",
       limitType: "concurrency",
       limitValue: normalizePositiveNumber(
-        input.concurrency ?? defaultAgentLimitFormValues.concurrency,
+        input.concurrency ?? defaultApiKeyLimitFormValues.concurrency,
         "Concurrency limit",
       ),
       manualBypass: false,
@@ -166,9 +166,9 @@ export function normalizeAgentLimitRulesInput(
   ];
 }
 
-export function formatAgentLimitSummaries(
-  limits: readonly ConsoleAgentLimit[],
-): Record<AgentLimitType, string> {
+export function formatApiKeyLimitSummaries(
+  limits: readonly ConsoleApiKeyLimit[],
+): Record<ApiKeyLimitType, string> {
   return {
     budget: formatLimitSummary(limits.find((limit) => limit.limitType === "budget")),
     concurrency: formatLimitSummary(limits.find((limit) => limit.limitType === "concurrency")),
@@ -178,29 +178,29 @@ export function formatAgentLimitSummaries(
   };
 }
 
-export async function listAgentLimits(databaseUrl?: string): Promise<ConsoleAgentLimit[]> {
-  return withPooledPostgresClient(databaseUrl, (client) => readVisibleAgentLimits(client));
+export async function listApiKeyLimits(databaseUrl?: string): Promise<ConsoleApiKeyLimit[]> {
+  return withPooledPostgresClient(databaseUrl, (client) => readVisibleApiKeyLimits(client));
 }
 
-export async function listSavedAgentLimits(databaseUrl?: string): Promise<ConsoleAgentLimit[]> {
-  return withPooledPostgresClient(databaseUrl, (client) => readAgentLimits(client));
+export async function listSavedApiKeyLimits(databaseUrl?: string): Promise<ConsoleApiKeyLimit[]> {
+  return withPooledPostgresClient(databaseUrl, (client) => readApiKeyLimits(client));
 }
 
-export async function listAgentLimitRuntimeSnapshots(
+export async function listApiKeyLimitRuntimeSnapshots(
   databaseUrl?: string,
-): Promise<ConsoleAgentLimitRuntimeSnapshot[]> {
+): Promise<ConsoleApiKeyLimitRuntimeSnapshot[]> {
   return withPooledPostgresClient(databaseUrl, async (client) => {
-    const budgetUsage = await readAgentLimitBudgetUsage(client);
-    const rateWindows = await readAgentLimitRateWindows(client);
-    const errorCounts = await readAgentLimitErrorCounts(client);
-    const snapshotsByAgentId = new Map<string, ConsoleAgentLimitRuntimeSnapshot>();
-    const ensureSnapshot = (agentId: string) => {
-      const existing = snapshotsByAgentId.get(agentId);
+    const budgetUsage = await readApiKeyLimitBudgetUsage(client);
+    const rateWindows = await readApiKeyLimitRateWindows(client);
+    const errorCounts = await readApiKeyLimitErrorCounts(client);
+    const snapshotsByApiKeyId = new Map<string, ConsoleApiKeyLimitRuntimeSnapshot>();
+    const ensureSnapshot = (apiKeyId: string) => {
+      const existing = snapshotsByApiKeyId.get(apiKeyId);
       if (existing) {
         return existing;
       }
-      const snapshot: ConsoleAgentLimitRuntimeSnapshot = {
-        agentId,
+      const snapshot: ConsoleApiKeyLimitRuntimeSnapshot = {
+        apiKeyId,
         budgetUsagePercent: 0,
         currentConcurrency: 0,
         currentRpm: 0,
@@ -209,77 +209,77 @@ export async function listAgentLimitRuntimeSnapshots(
         overLimitYesterdayCount: 0,
         rateLimitHits24h: 0,
       };
-      snapshotsByAgentId.set(agentId, snapshot);
+      snapshotsByApiKeyId.set(apiKeyId, snapshot);
       return snapshot;
     };
 
     for (const row of budgetUsage) {
-      ensureSnapshot(row.agent_id).budgetUsagePercent = clampPercent(
+      ensureSnapshot(row.api_key_id).budgetUsagePercent = clampPercent(
         Number(row.budget_usage_percent ?? 0),
       );
     }
     for (const row of rateWindows) {
-      const snapshot = ensureSnapshot(row.agent_id);
+      const snapshot = ensureSnapshot(row.api_key_id);
       snapshot.currentConcurrency = Number(row.current_concurrency ?? 0);
       snapshot.currentRpm = Number(row.current_rpm ?? 0);
       snapshot.currentTpm = Number(row.current_tpm ?? 0);
     }
     for (const row of errorCounts) {
-      const snapshot = ensureSnapshot(row.agent_id);
+      const snapshot = ensureSnapshot(row.api_key_id);
       snapshot.overLimitTodayCount = Number(row.over_limit_today_count ?? 0);
       snapshot.overLimitYesterdayCount = Number(row.over_limit_yesterday_count ?? 0);
       snapshot.rateLimitHits24h = Number(row.rate_limit_hits_24h ?? 0);
     }
 
-    return Array.from(snapshotsByAgentId.values());
+    return Array.from(snapshotsByApiKeyId.values());
   });
 }
 
-export async function saveAgentLimitRules(input: {
+export async function saveApiKeyLimitRules(input: {
   databaseUrl?: string;
-  limits: NormalizedAgentLimitFormInput;
-}): Promise<ConsoleAgentLimit[]> {
-  let savedLimits: ConsoleAgentLimit[] | undefined;
+  limits: NormalizedApiKeyLimitFormInput;
+}): Promise<ConsoleApiKeyLimit[]> {
+  let savedLimits: ConsoleApiKeyLimit[] | undefined;
 
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
   await publisher.publish({
     source: "console",
-    description: `Update Agent limits ${input.limits.agentId}`,
-    changes: [{ table: "agent_limits", recordId: input.limits.agentId }],
+    description: `Update API key limits ${input.limits.apiKeyId}`,
+    changes: [{ table: "api_key_limits", recordId: input.limits.apiKeyId }],
     write: async (client) => {
-      await assertAgentExists(client, input.limits.agentId);
-      await replaceAgentLimitRulesWithClient(client, input.limits.agentId, input.limits.rules);
+      await assertApiKeyExists(client, input.limits.apiKeyId);
+      await replaceApiKeyLimitRulesWithClient(client, input.limits.apiKeyId, input.limits.rules);
 
-      savedLimits = await readAgentLimits(client, input.limits.agentId);
+      savedLimits = await readApiKeyLimits(client, input.limits.apiKeyId);
     },
   });
 
   if (!savedLimits) {
-    throw new Error("Agent limits were not saved.");
+    throw new Error("API key limits were not saved.");
   }
   return savedLimits;
 }
 
-export async function replaceAgentLimitRulesWithClient(
-  client: AgentLimitQueryClient,
-  agentId: string,
-  rules: readonly AgentLimitRuleInput[],
+export async function replaceApiKeyLimitRulesWithClient(
+  client: ApiKeyLimitQueryClient,
+  apiKeyId: string,
+  rules: readonly ApiKeyLimitRuleInput[],
 ): Promise<void> {
   await client.query(
     `
-      delete from agent_limits
-      where agent_id = $1
+      delete from api_key_limits
+      where api_key_id = $1
         and limit_type = any($2::text[])
     `,
-    [agentId, rules.map((rule) => rule.limitType)],
+    [apiKeyId, rules.map((rule) => rule.limitType)],
   );
 
   for (const rule of rules) {
     await client.query(
       `
-        insert into agent_limits (
+        insert into api_key_limits (
           id,
-          agent_id,
+          api_key_id,
           limit_type,
           period,
           limit_value,
@@ -292,7 +292,7 @@ export async function replaceAgentLimitRulesWithClient(
       `,
       [
         randomUUID(),
-        agentId,
+        apiKeyId,
         rule.limitType,
         rule.period,
         rule.limitValue,
@@ -304,37 +304,37 @@ export async function replaceAgentLimitRulesWithClient(
   }
 }
 
-export async function deleteAgentLimitRules(input: {
-  agentId: string;
+export async function deleteApiKeyLimitRules(input: {
+  apiKeyId: string;
   databaseUrl?: string;
 }): Promise<void> {
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
   await publisher.publish({
     source: "console",
-    description: `Delete Agent limits ${input.agentId}`,
-    changes: [{ table: "agent_limits", recordId: input.agentId }],
+    description: `Delete API key limits ${input.apiKeyId}`,
+    changes: [{ table: "api_key_limits", recordId: input.apiKeyId }],
     write: async (client) => {
-      await assertAgentExists(client, input.agentId);
-      await client.query("delete from agent_limits where agent_id = $1", [input.agentId]);
+      await assertApiKeyExists(client, input.apiKeyId);
+      await client.query("delete from api_key_limits where api_key_id = $1", [input.apiKeyId]);
     },
   });
 }
 
-async function assertAgentExists(client: AgentLimitQueryClient, id: string): Promise<void> {
-  const result = await client.query("select 1 from agents where id = $1 for update", [id]);
+async function assertApiKeyExists(client: ApiKeyLimitQueryClient, id: string): Promise<void> {
+  const result = await client.query("select 1 from api_keys where id = $1 for update", [id]);
   if (!result.rows[0]) {
-    throw consoleNotFoundError("Agent was not found.", "agent_not_found", { agentId: id });
+    throw consoleNotFoundError("API key was not found.", "api_key_not_found", { apiKeyId: id });
   }
 }
 
-async function readAgentLimits(
-  client: AgentLimitQueryClient,
-  agentId?: string,
-): Promise<ConsoleAgentLimit[]> {
-  const result = await client.query<AgentLimitRow>(
+async function readApiKeyLimits(
+  client: ApiKeyLimitQueryClient,
+  apiKeyId?: string,
+): Promise<ConsoleApiKeyLimit[]> {
+  const result = await client.query<ApiKeyLimitRow>(
     `
       select id::text,
-             agent_id::text as agent_id,
+             api_key_id::text as api_key_id,
              limit_type,
              period,
              limit_value::text,
@@ -342,14 +342,14 @@ async function readAgentLimits(
              enabled,
              enforcement_policy,
              manual_bypass
-      from agent_limits
-      where ($1::uuid is null or agent_id = $1::uuid)
-      order by agent_id, limit_type
+      from api_key_limits
+      where ($1::uuid is null or api_key_id = $1::uuid)
+      order by api_key_id, limit_type
     `,
-    [agentId ?? null],
+    [apiKeyId ?? null],
   );
   return result.rows.map((row) => ({
-    agentId: row.agent_id,
+    apiKeyId: row.api_key_id,
     enabled: row.enabled,
     enforcementPolicy: row.enforcement_policy,
     id: row.id,
@@ -361,28 +361,28 @@ async function readAgentLimits(
   }));
 }
 
-async function readVisibleAgentLimits(client: AgentLimitQueryClient): Promise<ConsoleAgentLimit[]> {
-  const result = await client.query<AgentLimitRow>(
+async function readVisibleApiKeyLimits(client: ApiKeyLimitQueryClient): Promise<ConsoleApiKeyLimit[]> {
+  const result = await client.query<ApiKeyLimitRow>(
     `
-      select agent_limits.id::text,
-             agent_limits.agent_id::text as agent_id,
-             agent_limits.limit_type,
-             agent_limits.period,
-             agent_limits.limit_value::text,
-             agent_limits.unit,
-             agent_limits.enabled,
-             agent_limits.enforcement_policy,
-             agent_limits.manual_bypass
-      from agent_limits
-      inner join agents on agents.id = agent_limits.agent_id
-      where agents.enabled = true
-        and agents.limits_enabled = true
-        and agents.deleted_at is null
-      order by agent_limits.agent_id, agent_limits.limit_type
+      select api_key_limits.id::text,
+             api_key_limits.api_key_id::text as api_key_id,
+             api_key_limits.limit_type,
+             api_key_limits.period,
+             api_key_limits.limit_value::text,
+             api_key_limits.unit,
+             api_key_limits.enabled,
+             api_key_limits.enforcement_policy,
+             api_key_limits.manual_bypass
+      from api_key_limits
+      inner join api_keys on api_keys.id = api_key_limits.api_key_id
+      where api_keys.enabled = true
+        and api_keys.limits_enabled = true
+        and api_keys.deleted_at is null
+      order by api_key_limits.api_key_id, api_key_limits.limit_type
     `,
   );
   return result.rows.map((row) => ({
-    agentId: row.agent_id,
+    apiKeyId: row.api_key_id,
     enabled: row.enabled,
     enforcementPolicy: row.enforcement_policy,
     id: row.id,
@@ -394,41 +394,41 @@ async function readVisibleAgentLimits(client: AgentLimitQueryClient): Promise<Co
   }));
 }
 
-async function readAgentLimitBudgetUsage(
-  client: AgentLimitQueryClient,
-): Promise<AgentLimitBudgetUsageRow[]> {
-  const result = await client.query<AgentLimitBudgetUsageRow>(
+async function readApiKeyLimitBudgetUsage(
+  client: ApiKeyLimitQueryClient,
+): Promise<ApiKeyLimitBudgetUsageRow[]> {
+  const result = await client.query<ApiKeyLimitBudgetUsageRow>(
     `
-      select agent_limits.agent_id::text as agent_id,
+      select api_key_limits.api_key_id::text as api_key_id,
              max(
                (
-                 budget_periods.cost_used_usd / nullif(agent_limits.limit_value, 0)
+                 budget_periods.cost_used_usd / nullif(api_key_limits.limit_value, 0)
                ) * 100
              )::text as budget_usage_percent
-      from agent_limits
-      join agents on agents.id = agent_limits.agent_id
+      from api_key_limits
+      join api_keys on api_keys.id = api_key_limits.api_key_id
       join budget_periods
-        on budget_periods.agent_id = agent_limits.agent_id
-       and budget_periods.period_type = agent_limits.period
-      where agent_limits.enabled = true
-        and agents.enabled = true
-        and agents.limits_enabled = true
-        and agents.deleted_at is null
-        and agent_limits.limit_type = 'budget'
+        on budget_periods.api_key_id = api_key_limits.api_key_id
+       and budget_periods.period_type = api_key_limits.period
+      where api_key_limits.enabled = true
+        and api_keys.enabled = true
+        and api_keys.limits_enabled = true
+        and api_keys.deleted_at is null
+        and api_key_limits.limit_type = 'budget'
         and now() >= budget_periods.period_start
         and now() < budget_periods.period_end
-      group by agent_limits.agent_id
+      group by api_key_limits.api_key_id
     `,
   );
   return result.rows;
 }
 
-async function readAgentLimitRateWindows(
-  client: AgentLimitQueryClient,
-): Promise<AgentLimitRateWindowRow[]> {
-  const result = await client.query<AgentLimitRateWindowRow>(
+async function readApiKeyLimitRateWindows(
+  client: ApiKeyLimitQueryClient,
+): Promise<ApiKeyLimitRateWindowRow[]> {
+  const result = await client.query<ApiKeyLimitRateWindowRow>(
     `
-      select rate_limit_windows.agent_id::text as agent_id,
+      select rate_limit_windows.api_key_id::text as api_key_id,
              max(rate_limit_windows.request_count)
                filter (where rate_limit_windows.limit_type = 'rpm') as current_rpm,
              max(rate_limit_windows.token_count)
@@ -436,24 +436,24 @@ async function readAgentLimitRateWindows(
              max(rate_limit_windows.active_count)
                filter (where rate_limit_windows.limit_type = 'concurrency') as current_concurrency
       from rate_limit_windows
-      join agents on agents.id = rate_limit_windows.agent_id
+      join api_keys on api_keys.id = rate_limit_windows.api_key_id
       where now() >= rate_limit_windows.window_start
         and now() < rate_limit_windows.window_end
-        and agents.enabled = true
-        and agents.limits_enabled = true
-        and agents.deleted_at is null
-      group by rate_limit_windows.agent_id
+        and api_keys.enabled = true
+        and api_keys.limits_enabled = true
+        and api_keys.deleted_at is null
+      group by rate_limit_windows.api_key_id
     `,
   );
   return result.rows;
 }
 
-async function readAgentLimitErrorCounts(
-  client: AgentLimitQueryClient,
-): Promise<AgentLimitErrorCountRow[]> {
-  const result = await client.query<AgentLimitErrorCountRow>(
+async function readApiKeyLimitErrorCounts(
+  client: ApiKeyLimitQueryClient,
+): Promise<ApiKeyLimitErrorCountRow[]> {
+  const result = await client.query<ApiKeyLimitErrorCountRow>(
     `
-      select request_activity.agent_id::text as agent_id,
+      select request_activity.api_key_id::text as api_key_id,
              count(*) filter (
                where request_activity.error_code in (
                  'rate_limit_exceeded',
@@ -476,22 +476,22 @@ async function readAgentLimitErrorCounts(
                  and request_activity.started_at >= now() - interval '24 hours'
              )::integer as rate_limit_hits_24h
       from request_activity
-      join agents on agents.id = request_activity.agent_id
+      join api_keys on api_keys.id = request_activity.api_key_id
       where request_activity.error_code in (
         'rate_limit_exceeded',
         'cost_budget_exceeded',
         'token_budget_exceeded'
       )
-        and agents.enabled = true
-        and agents.limits_enabled = true
-        and agents.deleted_at is null
-      group by request_activity.agent_id
+        and api_keys.enabled = true
+        and api_keys.limits_enabled = true
+        and api_keys.deleted_at is null
+      group by request_activity.api_key_id
     `,
   );
   return result.rows;
 }
 
-function formatLimitSummary(limit: ConsoleAgentLimit | undefined): string {
+function formatLimitSummary(limit: ConsoleApiKeyLimit | undefined): string {
   if (!limit?.enabled) {
     return "Not configured";
   }
@@ -517,7 +517,7 @@ function normalizePositiveNumber(value: string | number | null | undefined, labe
   if (!Number.isFinite(numberValue) || numberValue <= 0) {
     throw consoleValidationError(
       `${label} must be greater than zero.`,
-      "agent_limit_value_invalid",
+      "api_key_limit_value_invalid",
       {
         field: label,
       },

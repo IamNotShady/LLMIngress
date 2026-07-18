@@ -110,7 +110,7 @@ test("Gateway stdout logs omit prompt, tool arguments, and test keys across JSON
 
       await expect
         .poll(() => gateway.stdout.join("") + gateway.stderr.join(""))
-        .toContain("gateway apiKey request");
+        .toContain("gateway api key request");
     } finally {
       await stopGatewayProcess(gateway);
     }

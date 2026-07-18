@@ -46,10 +46,10 @@ test("fresh Console guides users through only the retained core workflow", async
       }
 
       await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
-      await expect(page.getByText(/Create an ApiKey to issue an API key/)).toBeVisible();
+      await expect(page.getByText(/Create an API Key to issue an API key/)).toBeVisible();
 
       await page.goto(`${baseUrl}/limits`, { waitUntil: "networkidle" });
-      await expect(page.getByText(/Create an ApiKey and enable limits/)).toBeVisible();
+      await expect(page.getByText(/Create an API Key and enable limits/)).toBeVisible();
 
       await page.goto(`${baseUrl}/models`, { waitUntil: "networkidle" });
       await expect(

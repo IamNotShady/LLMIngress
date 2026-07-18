@@ -39,7 +39,7 @@ test("console JSON routes preserve stable authenticated boundary errors", async 
         expect(response.status()).toBe(400);
         await expect(response.json()).resolves.toMatchObject({
           code: "api_key_action_unknown",
-          error: "Unknown apiKey action.",
+          error: "Unknown API key action.",
         });
       } finally {
         await context.close();

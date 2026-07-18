@@ -119,11 +119,13 @@ test("API key created and detail dialogs share one layout and differ only in the
         expect(masked).not.toContain("llmi_");
         expect(masked).toMatch(/^•+$/);
         await created.getByRole("button", { name: "Copy API key" }).click();
-        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(plaintext);
+        // The title only flips once writeText resolves, so waiting on it first
+        // keeps the clipboard read from racing the copy.
         await expect(created.getByRole("button", { name: "Copy API key" })).toHaveAttribute(
           "title",
           "Copied",
         );
+        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(plaintext);
         await created.getByRole("button", { name: "Show API key" }).click();
         expect(await createdField.inputValue()).toBe(plaintext);
 
@@ -131,7 +133,11 @@ test("API key created and detail dialogs share one layout and differ only in the
         await created.getByRole("link", { name: "Close" }).click();
 
         // --- Detail -----------------------------------------------------
+        // The list row is a plain anchor, so this is a full navigation. The
+        // dialog paints before React hydrates, so wait for the load to settle
+        // or the interaction assertions below land on a dead dialog.
         await page.getByRole("link", { name: "parity-key", exact: true }).first().click();
+        await page.waitForLoadState("networkidle");
         const detail = page.getByRole("dialog", { name: "parity-key" });
         await expect(detail).toBeVisible();
         const detailBudget = await expectSharedDetailLayout(detail);
@@ -149,11 +155,11 @@ test("API key created and detail dialogs share one layout and differ only in the
         await expect(detail.getByRole("button", { name: /^(Show|Hide) API key/ })).toHaveCount(0);
 
         await detail.getByRole("button", { name: "Copy API key prefix" }).click();
-        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(shownPrefix);
         await expect(detail.getByRole("button", { name: "Copy API key prefix" })).toHaveAttribute(
           "title",
           "Copied",
         );
+        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(shownPrefix);
 
         await expectNoOverflow(page, "detail dialog");
       } finally {

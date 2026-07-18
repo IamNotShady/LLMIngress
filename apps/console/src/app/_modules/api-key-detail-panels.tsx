@@ -71,6 +71,11 @@ export function ApiKeyDetailPanels({
 
   return (
     <>
+      <section className="api-key-detail-section">
+        <h3>{secretLabel}</h3>
+        <SecretRevealField hideable={secretHideable} label={secretLabel} value={secretValue} />
+        <p className="api-key-secret-note">{secretNote}</p>
+      </section>
       <div className="api-key-view-columns">
         <div className="api-key-view-column">
           <dl className="api-key-detail-fields">
@@ -140,11 +145,6 @@ export function ApiKeyDetailPanels({
           </section>
         </div>
       </div>
-      <section className="api-key-detail-section">
-        <h3>{secretLabel}</h3>
-        <SecretRevealField hideable={secretHideable} label={secretLabel} value={secretValue} />
-        <p className="api-key-secret-note">{secretNote}</p>
-      </section>
       <section className="api-key-detail-section">
         <h3>Integration guide</h3>
         <IntegrationGuideTabs

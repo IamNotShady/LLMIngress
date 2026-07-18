@@ -82,9 +82,15 @@ describe("console api hygiene", () => {
   it("returns the actual virtual model name in one-time apiKey connection details", async () => {
     const response = renderOneTimeApiKeyResponse(
       {
+        createdAt: new Date("2026-07-18T00:00:00.000Z"),
+        defaultVirtualModelName: "audit-probe-vm",
+        enabled: true,
         keyPrefix: "llmi_test_key",
+        limits: [],
+        name: "audit-probe-apiKey",
         plaintext: "llmi_test_key_value",
         virtualModelName: "audit-probe-vm",
+        virtualModels: [],
       },
       "json",
     );

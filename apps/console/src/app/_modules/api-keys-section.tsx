@@ -12,14 +12,13 @@ import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
 import { ApiKeyCreateDialogClient } from "./api-key-create-dialog-client";
-import { API_KEY_PLACEHOLDER, groupVirtualModelEndpoints } from "./api-key-integration-guide";
-import { IntegrationGuideTabs } from "./api-key-integration-guide-tabs";
+import { ApiKeyDetailPanels } from "./api-key-detail-panels";
+import { API_KEY_PLACEHOLDER } from "./api-key-integration-guide";
 import { ApiKeyVirtualModelFields } from "./api-key-virtual-model-fields";
 import { loadApiKeysSectionData } from "./api-keys-section-data";
 import {
   type ConsoleSearchParams,
   findApiKeyLimit,
-  formatRouteEndpointProtocolLabel,
   groupByApiKeyId,
   readSingleSearchParam,
 } from "./sections";
@@ -35,16 +34,8 @@ function ApiKeyViewDialog({
   closeHref: string;
   limits: readonly ConsoleApiKeyLimit[];
 }) {
-  const budgetLimit = findApiKeyLimit(limits, "budget");
-  const rpmLimit = findApiKeyLimit(limits, "rpm");
-  const tokenLimit = findApiKeyLimit(limits, "token");
-  const tpmLimit = findApiKeyLimit(limits, "tpm");
   const gatewayBaseUrl = gatewayPublicBaseUrl();
   const allowedVirtualModels = access?.allowedVirtualModels ?? [];
-  const endpointGroups = groupVirtualModelEndpoints({
-    gatewayBaseUrl,
-    virtualModels: allowedVirtualModels,
-  });
   const guideModel =
     access?.defaultVirtualModel?.name ?? allowedVirtualModels[0]?.name ?? "<Virtual Model Name>";
 
@@ -63,88 +54,22 @@ function ApiKeyViewDialog({
           <span>Close</span>
         </a>
       </div>
-      <div className="api-key-view-columns">
-        <div className="api-key-view-column">
-          <dl className="api-key-detail-fields">
-            <div>
-              <dt>Created</dt>
-              <dd>{formatApiKeyDetailDate(apiKey.createdAt)}</dd>
-            </div>
-            <div>
-              <dt>Enabled</dt>
-              <dd>{apiKey.enabled ? "True" : "False"}</dd>
-            </div>
-            <div>
-              <dt>Default model</dt>
-              <dd>{access?.defaultVirtualModel?.name ?? "None"}</dd>
-            </div>
-          </dl>
-          <section className="api-key-detail-section">
-            <h3>Budget / Limit</h3>
-            <div className="api-key-limit-row">
-              <span>Budget</span>
-              <strong>{formatApiKeyBudgetLimit(budgetLimit)}</strong>
-            </div>
-            <div className="api-key-limit-row">
-              <span>RPM</span>
-              <strong>{formatApiKeyNumericLimit(rpmLimit)}</strong>
-            </div>
-            <div className="api-key-limit-row">
-              <span>TPM</span>
-              <strong>{formatApiKeyNumericLimit(tpmLimit)}</strong>
-            </div>
-            <div className="api-key-limit-row">
-              <span>Token limit</span>
-              <strong>{formatApiKeyTokenLimit(tokenLimit)}</strong>
-            </div>
-          </section>
-        </div>
-        <div className="api-key-view-column">
-          <section className="api-key-detail-section">
-            <h3>Endpoints</h3>
-            {allowedVirtualModels.length === 0 ? (
-              <p>No Virtual Models are allowed for this API key.</p>
-            ) : null}
-            {endpointGroups.configured.map((group) => (
-              <div className="api-key-endpoint-group" key={group.protocol}>
-                <p className="api-key-endpoint-url mono">{group.url}</p>
-                <p className="api-key-endpoint-protocol">
-                  {formatRouteEndpointProtocolLabel(group.protocol)}
-                </p>
-                <div className="api-key-chip-list">
-                  {group.virtualModels.map((virtualModel) => (
-                    <span className="api-key-chip" key={virtualModel.id}>
-                      {virtualModel.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {endpointGroups.unrouted.length > 0 ? (
-              <div className="api-key-endpoint-group api-key-endpoint-group-unrouted">
-                <p className="api-key-endpoint-url">No route policy configured</p>
-                <div className="api-key-chip-list">
-                  {endpointGroups.unrouted.map((virtualModel) => (
-                    <span className="api-key-chip" key={virtualModel.id}>
-                      {virtualModel.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </section>
-        </div>
-      </div>
-      <section className="api-key-detail-section">
-        <h3>Integration guide</h3>
-        <IntegrationGuideTabs
-          apiKey={API_KEY_PLACEHOLDER}
-          gatewayBaseUrl={gatewayBaseUrl}
-          idPrefix={`api-key-view-${apiKey.id}`}
-          keyPrefix={apiKey.keyPrefix}
-          model={guideModel}
-        />
-      </section>
+      <ApiKeyDetailPanels
+        createdAt={apiKey.createdAt}
+        defaultVirtualModelName={access?.defaultVirtualModel?.name ?? null}
+        enabled={apiKey.enabled}
+        gatewayBaseUrl={gatewayBaseUrl}
+        guideApiKey={API_KEY_PLACEHOLDER}
+        guideKeyPrefix={apiKey.keyPrefix}
+        guideModel={guideModel}
+        idPrefix={`api-key-view-${apiKey.id}`}
+        limits={limits}
+        secretHideable={false}
+        secretLabel="API key prefix"
+        secretNote="Only the prefix is stored. The full key was shown once at creation."
+        secretValue={apiKey.keyPrefix}
+        virtualModels={allowedVirtualModels}
+      />
     </ConsoleDialog>
   );
 }
@@ -456,38 +381,6 @@ function filterApiKeys(
 
 function formatApiKeyKeyPrefixDisplay(keyPrefix: string): string {
   return keyPrefix.length <= 8 ? keyPrefix : `${keyPrefix.slice(0, 6)}...${keyPrefix.slice(-4)}`;
-}
-
-function formatApiKeyDetailDate(value: Date): string {
-  return value.toLocaleString("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-function formatApiKeyBudgetLimit(limit: ConsoleApiKeyLimit | undefined): string {
-  if (!limit?.enabled) {
-    return "Not configured";
-  }
-  return `$${limit.limitValue.toLocaleString()} / ${limit.period}`;
-}
-
-function formatApiKeyNumericLimit(limit: ConsoleApiKeyLimit | undefined): string {
-  if (!limit?.enabled) {
-    return "Not configured";
-  }
-  return `${formatConsoleCompactCount(limit.limitValue)} / ${limit.period}`;
-}
-
-function formatApiKeyTokenLimit(limit: ConsoleApiKeyLimit | undefined): string {
-  if (!limit?.enabled) {
-    return "Not configured";
-  }
-  return `${formatConsoleCompactCount(limit.limitValue)} / ${limit.period}`;
 }
 
 export async function ApiKeysSection({ searchParams }: { searchParams: ConsoleSearchParams }) {

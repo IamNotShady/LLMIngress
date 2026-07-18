@@ -27,6 +27,20 @@ export function ApiKeyCreateDialogClient({
 }) {
   const router = useRouter();
   const [createdApiKey, setCreatedApiKey] = useState<CreatedApiKeyDetails | null>(null);
+  const [keyCopied, setKeyCopied] = useState(false);
+
+  async function copyApiKey() {
+    if (!createdApiKey) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(createdApiKey.apiKey);
+      setKeyCopied(true);
+      window.setTimeout(() => setKeyCopied(false), 2000);
+    } catch {
+      // Clipboard unavailable (e.g. insecure context); the input stays selectable.
+    }
+  }
   const formRef = useRef<HTMLFormElement>(null);
   const [failure, setFailure] = useState<ConsoleMutationFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -102,7 +116,23 @@ export function ApiKeyCreateDialogClient({
           <div>
             <dt>API key</dt>
             <dd>
-              <input aria-label="API key" className="mono" readOnly value={createdApiKey.apiKey} />
+              <span className="api-key-reveal-field">
+                <input
+                  aria-label="API key"
+                  className="mono"
+                  readOnly
+                  value={createdApiKey.apiKey}
+                />
+                <button
+                  aria-label="Copy API key"
+                  className="secondary-button row-action-button"
+                  onClick={copyApiKey}
+                  title={keyCopied ? "Copied" : "Copy API key"}
+                  type="button"
+                >
+                  <FlatIcon name={keyCopied ? "confirm" : "copy"} />
+                </button>
+              </span>
             </dd>
           </div>
           <div>

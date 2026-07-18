@@ -10,6 +10,7 @@ export type FlatIconName =
   | "add"
   | "cancel"
   | "confirm"
+  | "copy"
   | "delete"
   | "disable"
   | "edit"
@@ -28,6 +29,12 @@ const icons: Record<FlatIconName, ReactNode> = {
   add: <path d="M12 5v14M5 12h14" />,
   cancel: <path d="M18 6 6 18M6 6l12 12" />,
   confirm: <path d="M20 6 9 17l-5-5" />,
+  copy: (
+    <>
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </>
+  ),
   delete: (
     <>
       <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />

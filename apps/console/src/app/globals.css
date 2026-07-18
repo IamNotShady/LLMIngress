@@ -1712,6 +1712,15 @@ body:has(.console-dialog[open]) {
   gap: var(--space-md);
   margin: 0;
 }
+.api-key-reveal-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.api-key-reveal-field input {
+  flex: 1;
+  min-width: 0;
+}
 .api-key-detail-fields div {
   display: grid;
   grid-template-columns: minmax(6rem, 0.8fr) minmax(0, 1.2fr);

@@ -70,7 +70,7 @@
       "verification": "pnpm exec vitest run tests/features/console-core.unit.test.ts tests/features/console-layout-interactions.unit.test.ts && pnpm test:e2e tests/e2e/console-core.e2e.spec.ts tests/e2e/console-layout-interactions.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-16: Provider list defaults to fully collapsed and clicking the expanded row collapses it (selected URL param is the only expansion state); the Model library card renders only while a provider is selected. provider-list-collapse unit+E2E cases updated; pnpm run verify and verify:features passed."
+      "evidence": "2026-07-16: Provider list defaults to fully collapsed and clicking the expanded row collapses it (selected URL param is the only expansion state); the Model library card renders only while a provider is selected. provider-list-collapse unit+E2E cases updated; pnpm run verify and verify:features passed. 2026-07-18: .api-key-view-dialog width consolidated to a single 72rem declaration (the 42rem block was dead CSS that console-visual-design was asserting against); the created dialog now reuses the same shell class."
     },
     {
       "id": "delivery-quality",
@@ -88,7 +88,7 @@
       "verification": "pnpm exec vitest run tests/features/api-key-integration-guidance.unit.test.ts && pnpm test:e2e tests/e2e/api-key-integration-guidance.e2e.spec.ts --workers=1",
       "dependencies": ["api-key-access-and-limits", "virtual-model-routing", "console-core"],
       "status": "passing",
-      "evidence": "2026-07-18: Renamed Agent entity to API Key; platform enum moved to a UI-local vocabulary (integration_platform column dropped). Focused unit + e2e and full verify:features regression passed."
+      "evidence": "2026-07-18: Renamed Agent entity to API Key; platform enum moved to a UI-local vocabulary (integration_platform column dropped). Focused unit + e2e and full verify:features regression passed. 2026-07-18: Endpoints and the guide tabs moved into the shared ApiKeyDetailPanels module rendered by both API key dialogs; assertions repointed and the Platform-field negative guards now cover the new module too."
     },
     {
       "id": "console-empty-state",
@@ -116,6 +116,15 @@
       "dependencies": ["console-core", "provider-model-management"],
       "status": "passing",
       "evidence": "2026-07-18: TDD red-to-green. Generalized ConsoleMutationToast with a tone param (role=status + .console-mutation-toast--success ok-token variant for success, role=alert danger for error); ConsoleMutationForm gains successMessage + success state + 5s auto-dismiss, firing only on the stay-on-page refresh path. Provider API key enable/disable toggle opts in with successMessage='Provider API key updated.'. Focused unit (3) + E2E (1: seed provider+key, /providers?selected toggle click surfaces .console-mutation-toast--success text, no overflow at 1280/390) passed."
+    },
+    {
+      "id": "api-key-dialog-parity",
+      "name": "API Key Dialog Parity",
+      "description": "The API key created dialog and the API key detail dialog render from one shared ApiKeyDetailPanels component inside the same api-key-view-dialog shell, so both show the Created/Enabled/Default model fields, the Budget/RPM/TPM/Token section, Endpoints, and the integration guide. They differ only in the key field: the created dialog shows the plaintext key with an eye toggle that masks it on demand, the detail dialog shows the stored 12-character prefix directly with no toggle. Both fields use the shared SecretRevealField, whose copy button copies the real value even while masked.",
+      "verification": "pnpm exec vitest run tests/features/api-key-dialog-parity.unit.test.ts && pnpm test:e2e tests/e2e/api-key-dialog-parity.e2e.spec.ts --workers=1",
+      "dependencies": ["api-key-integration-guidance", "console-core"],
+      "status": "passing",
+      "evidence": "2026-07-18: TDD red-to-green. New shared SecretRevealField (always starts revealed; hideable opts into the eye toggle; copy sends the real value even while masked) and ApiKeyDetailPanels rendered by both dialogs; createApiKeyWithSettings now reads saved limits back in-transaction so the created dialog can render the Budget section. Focused unit (6) + E2E (1: create then open the detail from a list row, hide/show/copy on created, copy-only on detail, identical Budget text in both, no overflow at 1280/390) passed."
     }
   ]
 }

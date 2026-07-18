@@ -53,9 +53,15 @@ describe("apiKey management contract", () => {
 
     const response = renderOneTimeApiKeyResponse(
       {
+        createdAt: new Date("2026-07-18T00:00:00.000Z"),
+        defaultVirtualModelName: null,
+        enabled: true,
         keyPrefix: "llmi_test",
+        limits: [],
+        name: "xss-probe-apiKey",
         plaintext: "llmi_<script>alert('x')</script>",
         virtualModelName: '<img src=x onerror="alert(1)">',
+        virtualModels: [],
       },
       "html",
     );

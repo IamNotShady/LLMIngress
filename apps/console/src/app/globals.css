@@ -2142,6 +2142,90 @@ button.table-row-link {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
 }
+.agent-integration-guide-tabs {
+  display: grid;
+  gap: var(--space-sm);
+}
+.agent-integration-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+}
+.agent-integration-tabs button {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 2rem;
+  justify-content: center;
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+}
+.agent-integration-tabs button.is-active {
+  background: var(--surface-sunken);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+.agent-integration-tabs button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-integration-key-note {
+  margin: 0;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.agent-created-guide {
+  display: grid;
+  gap: var(--space-sm);
+}
+.agent-endpoint-group {
+  display: grid;
+  gap: var(--space-xs);
+  padding: var(--space-sm) 0;
+}
+.agent-endpoint-group + .agent-endpoint-group {
+  border-top: 1px solid var(--border);
+}
+.agent-endpoint-url {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.agent-endpoint-protocol {
+  margin: 0;
+  color: var(--text-muted);
+}
+.agent-view-dialog {
+  width: min(72rem, calc(100vw - 2rem));
+}
+.agent-view-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+.agent-view-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+}
+.agent-view-column > :last-child {
+  flex: 1;
+}
+@media (max-width: 56rem) {
+  .agent-view-columns {
+    grid-template-columns: 1fr;
+  }
+}
 .agent-table-actions .link-button {
   appearance: none !important;
   display: inline-flex !important;

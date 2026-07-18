@@ -56,6 +56,26 @@ describe("virtual model endpoint routing", () => {
     ).toThrow(/endpoint protocol must be chat_completions, responses, or messages/i);
   });
 
+  it("enforces the route policy strategy set in code (load_balance accepted, random rejected)", () => {
+    expect(
+      normalizeRoutePolicyFormInput({
+        endpointProtocol: "chat_completions",
+        providerModelIds: [providerModelId],
+        strategy: "load_balance",
+        virtualModelId,
+      }),
+    ).toMatchObject({ strategy: "load_balance" });
+
+    expect(() =>
+      normalizeRoutePolicyFormInput({
+        endpointProtocol: "chat_completions",
+        providerModelIds: [providerModelId],
+        strategy: "random",
+        virtualModelId,
+      }),
+    ).toThrow(/must be fixed, cost_first, or load_balance/i);
+  });
+
   it("derives route endpoint protocols from provider templates and direct providers", () => {
     expect(
       listProviderRouteEndpointProtocols({

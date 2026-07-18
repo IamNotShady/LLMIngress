@@ -21,11 +21,11 @@
     {
       "id": "virtual-model-routing",
       "name": "Virtual Model Routing",
-      "description": "Atomic Virtual Models, capability contracts, fixed/cost-first/random ordering, and fallback chains.",
+      "description": "Atomic Virtual Models, capability contracts, fixed/cost-first/load-balance ordering, and fallback chains.",
       "verification": "pnpm exec vitest run tests/features/virtual-model-routing.unit.test.ts tests/features/route-strategies.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-routing.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management"],
       "status": "passing",
-      "evidence": "2026-07-16: Route-policy capability mismatch errors now name the exact conflicting values (e.g. maxContextTokens 1000000 vs 1048576) via resolveVirtualModelCapabilityContract, and the route dialog renders precise grouped token counts (formatModelContextTokens) so near-identical context windows are distinguishable instead of both rounding to ~1M. Focused unit (message + formatter), DB + DOM E2E (precise display, 1280/390 no-overflow, enriched error end-to-end), pnpm run verify, and verify:features (9/9) passed."
+      "evidence": "2026-07-18: Route policy strategy renamed random → load_balance (label \"Load Balance\") end-to-end — domain union + dispatch key + \"load balance route for …\" decision message, db routePolicyStrategies const + validation, console UI labels + default + description. DB route_policies_strategy_check CHECK constraint dropped; allowed values enforced only in code (isRoutePolicyStrategy). Migration 0002_route_policy_load_balance.sql drops the constraint, renames route_policies rows, backfills request_activity.route_policy_strategy_snapshot + route_reason.strategy. TDD unit (load_balance deterministic shuffle, code-layer accept/reject contract, migration manifest), console-layout + virtual-model-routing E2E, pnpm run verify (318 unit + build), and verify:features (9/9) passed."
     },
     {
       "id": "gateway-protocol-execution",
@@ -80,6 +80,15 @@
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
       "evidence": "2026-07-17: V1 shipped; release-freeze guards removed (feature-list/suite-mapping pins, progress.md line cap, single-migration/24-table freeze, retired-surface absence checks, PostgreSQL image pin, Compose boot check). Behavior tests kept under renamed delivery-quality suites. Focused unit (26) + E2E (6, incl. non-root image build), pnpm run verify (317 unit tests, coverage above thresholds), and verify:features (9/9 via per-feature fallback after a parallel e2e batch flake) passed on the rebased dev baseline."
+    },
+    {
+      "id": "agent-integration-guidance",
+      "name": "Agent Integration Guidance",
+      "description": "Agent detail dialog shows per-platform integration guide tabs for all 8 Integration Platforms (placeholder key plus stored key prefix) and an Endpoints section grouping allowed Virtual Models by their route policy endpoint URL; the create-success dialog and one-time HTML page reuse the same guides with the plaintext key; the Integration Platform selector is removed from Agent create, edit, list filter, and detail UI while the database column stays with default 'other'.",
+      "verification": "pnpm exec vitest run tests/features/agent-integration-guidance.unit.test.ts && pnpm test:e2e tests/e2e/agent-integration-guidance.e2e.spec.ts --workers=1",
+      "dependencies": ["agent-access-and-limits", "virtual-model-routing", "console-core"],
+      "status": "passing",
+      "evidence": "2026-07-17: TDD red-to-green; focused unit (5) + e2e (1, incl. 1280 two-column side-by-side, 390 stacked, no-overflow with the detail dialog open) passed; pnpm run verify and verify:features (10/10, zero regression) passed. Integration Platform UI removed from create/edit/filter/detail (column retained, defaults 'other'); detail dialog widened to a balanced two-column layout (left: fields and limits; right: endpoint groups, which subsume the allowed-VM list; bottoms aligned) with the 8-platform guide tabs full-width below, reused by the create-success dialog and one-time HTML page."
     }
   ]
 }

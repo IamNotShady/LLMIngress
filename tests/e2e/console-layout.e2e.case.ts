@@ -259,11 +259,11 @@ test("console keeps layout integrity with real data: no overflow, visible limits
             overflowPx: element.scrollWidth - element.clientWidth,
           })),
         ).toEqual({ overflowPx: 0, scrollLeft: 0 });
-        const randomStrategy = page.getByRole("radio", {
-          name: "Random Pick a random eligible candidate each request",
+        const loadBalanceStrategy = page.getByRole("radio", {
+          name: "Load Balance Distribute requests across eligible candidates each request",
         });
-        await randomStrategy.check();
-        await expect(randomStrategy).toBeChecked();
+        await loadBalanceStrategy.check();
+        await expect(loadBalanceStrategy).toBeChecked();
         await expect(
           page.getByRole("radio", { name: "Fixed Always use the first candidate" }),
         ).not.toBeChecked();

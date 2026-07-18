@@ -1,9 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-  buildAgentConfigurationGuide,
-  renderOneTimeAgentResponse,
-} from "../../apps/console/src/app/api/agents/_created-page.ts";
+import { buildAgentConfigurationGuide } from "../../apps/console/src/app/_modules/agent-integration-guide.ts";
+import { renderOneTimeAgentResponse } from "../../apps/console/src/app/api/agents/_created-page.ts";
 import {
   agentIntegrationPlatforms,
   normalizeAgentVirtualModelSelectionInput,
@@ -55,7 +53,6 @@ describe("agent management contract", () => {
 
     const response = renderOneTimeAgentResponse(
       {
-        integrationPlatform: "other",
         keyPrefix: "llmi_test",
         plaintext: "llmi_<script>alert('x')</script>",
         virtualModelName: '<img src=x onerror="alert(1)">',

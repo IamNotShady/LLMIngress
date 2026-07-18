@@ -91,6 +91,7 @@ describe("platform foundation", () => {
   it("keeps the migration manifest aligned with loaded SQL", () => {
     expect(loadSqlMigrations().map(({ id, name }) => ({ id, name }))).toEqual([
       { id: "0001", name: "core_baseline" },
+      { id: "0002", name: "route_policy_load_balance" },
     ]);
     expect(shippedSqlMigrations).toEqual(
       loadSqlMigrations().map(({ checksum, id, name }) => ({ checksum, id, name })),

@@ -4,7 +4,7 @@ import { omitUndefined } from "@llmingress/util";
 export const routeEndpointProtocols = ["chat_completions", "responses", "messages"] as const;
 
 export type RouteEndpointProtocol = (typeof routeEndpointProtocols)[number];
-export type RoutePolicyStrategy = "fixed" | "cost_first" | "random";
+export type RoutePolicyStrategy = "fixed" | "cost_first" | "load_balance";
 
 export const modelInputModalities = ["text", "image", "audio", "video", "document"] as const;
 export const modelOutputModalities = ["text", "image", "audio", "video", "embedding"] as const;
@@ -382,9 +382,9 @@ const routeStrategyHandlers: Record<RoutePolicyStrategy, RouteStrategyHandler> =
     orderCandidates: (candidates) => candidates,
     reportsSelectedPrice: false,
   },
-  random: {
+  load_balance: {
     decisionMessage: ({ selectedCandidateOrder, virtualModelName }) =>
-      `random route for ${virtualModelName} selected eligible candidate ${selectedCandidateOrder}.`,
+      `load balance route for ${virtualModelName} selected eligible candidate ${selectedCandidateOrder}.`,
     orderCandidates: (candidates, context) => {
       const shuffled = [...candidates];
       for (let i = shuffled.length - 1; i > 0; i--) {
@@ -442,7 +442,7 @@ export function selectRouteAttempts<TCandidate extends RouteCandidate>(
     reasons: [],
   }));
 
-  // Build the ordered attempt chain ONCE (single shuffle for random strategy)
+  // Build the ordered attempt chain ONCE (single shuffle for load_balance strategy)
   const chain = buildRouteAttemptCandidates({
     routePolicy,
     estimatedInputTokens: input.estimatedInputTokens,

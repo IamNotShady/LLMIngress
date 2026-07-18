@@ -7,7 +7,7 @@ import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 import { formatModelContextTokens } from "./model-capability-format";
 
-type Strategy = "fixed" | "cost_first" | "random";
+type Strategy = "fixed" | "cost_first" | "load_balance";
 type EndpointProtocol = "chat_completions" | "responses" | "messages";
 
 type ProviderModelOption = {
@@ -43,7 +43,7 @@ type VirtualModel = {
   name: string;
 };
 
-const strategies: Strategy[] = ["fixed", "cost_first", "random"];
+const strategies: Strategy[] = ["fixed", "cost_first", "load_balance"];
 const endpointProtocols: EndpointProtocol[] = ["chat_completions", "responses", "messages"];
 
 export function VirtualModelRouteDialogClient({
@@ -59,7 +59,7 @@ export function VirtualModelRouteDialogClient({
   routePolicy: RoutePolicy | null;
   virtualModel: VirtualModel | null;
 }) {
-  const [strategy, setStrategy] = useState<Strategy>(routePolicy?.strategy ?? "random");
+  const [strategy, setStrategy] = useState<Strategy>(routePolicy?.strategy ?? "load_balance");
   const [endpointProtocol, setEndpointProtocol] = useState<EndpointProtocol>(() =>
     readInitialEndpointProtocol(routePolicy),
   );
@@ -440,8 +440,8 @@ function formatRouteStrategyLabel(strategy: Strategy): string {
   if (strategy === "cost_first") {
     return "Cost First";
   }
-  if (strategy === "random") {
-    return "Random";
+  if (strategy === "load_balance") {
+    return "Load Balance";
   }
   return strategy.charAt(0).toUpperCase() + strategy.slice(1);
 }
@@ -471,7 +471,7 @@ function formatRouteStrategyDescription(strategy: Strategy): string {
   if (strategy === "cost_first") {
     return "Prefer the lowest-cost candidate";
   }
-  return "Pick a random eligible candidate each request";
+  return "Distribute requests across eligible candidates each request";
 }
 
 function formatModelPrice(price: number | null): string {

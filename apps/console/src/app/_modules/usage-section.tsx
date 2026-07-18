@@ -138,7 +138,6 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
       <form className="usage-filter-bar" action="/usage" method="get">
         <input type="hidden" name="usageWindow" value={usageSummary.window} />
         <fieldset className="usage-date-range" aria-label="Date range">
-          <legend>Date range</legend>
           <div className="usage-date-range-fields">
             <div className="console-field">
               <label htmlFor="usage-date-from">Start date</label>

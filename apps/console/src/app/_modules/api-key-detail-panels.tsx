@@ -9,7 +9,7 @@ import { formatConsoleCompactCount } from "@llmingress/db/console-format";
 import { SecretRevealField } from "../_components/secret-reveal-field";
 import { groupVirtualModelEndpoints } from "./api-key-integration-guide";
 import { IntegrationGuideTabs } from "./api-key-integration-guide-tabs";
-import { findApiKeyLimit, formatRouteEndpointProtocolLabel } from "./sections";
+import { findApiKeyLimit } from "./sections";
 
 export function formatApiKeyDetailDate(value: Date | string): string {
   return new Date(value).toLocaleString("en-US", {
@@ -116,9 +116,6 @@ export function ApiKeyDetailPanels({
             {endpointGroups.configured.map((group) => (
               <div className="api-key-endpoint-group" key={group.protocol}>
                 <p className="api-key-endpoint-url mono">{group.url}</p>
-                <p className="api-key-endpoint-protocol">
-                  {formatRouteEndpointProtocolLabel(group.protocol)}
-                </p>
                 <div className="api-key-chip-list">
                   {group.virtualModels.map((virtualModel) => (
                     <span className="api-key-chip" key={virtualModel.id}>

@@ -2273,10 +2273,6 @@ button.table-row-link {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.api-key-endpoint-protocol {
-  margin: 0;
-  color: var(--text-muted);
-}
 .api-key-view-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -23,7 +23,7 @@ import { listProviderTemplateEndpointProtocols } from "./console-provider-templa
 import { lockProvidersForProviderModels } from "./console-providers.ts";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
-export const routePolicyStrategies = ["fixed", "cost_first", "random"] as const;
+export const routePolicyStrategies = ["fixed", "cost_first", "load_balance"] as const;
 
 export type RoutePolicyStrategy = (typeof routePolicyStrategies)[number];
 
@@ -216,7 +216,7 @@ export function normalizeRoutePolicyFormInput(
   }
   if (!isRoutePolicyStrategy(strategy)) {
     throw consoleValidationError(
-      "Route policy strategy must be fixed, cost_first, or random.",
+      "Route policy strategy must be fixed, cost_first, or load_balance.",
       "route_policy_strategy_invalid",
       { field: "strategy" },
     );

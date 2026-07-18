@@ -50,7 +50,7 @@ responses may be logged with status and response headers for diagnosis.
 ## Routing and health invariants
 
 - One Virtual Model owns one Route Policy and at least one candidate.
-- Strategies are `fixed`, `cost_first`, and `random`.
+- Strategies are `fixed`, `cost_first`, and `load_balance`.
 - Capability conflicts are rejected only when every relevant value is known.
 - Unknown-price candidates remain eligible at the end of `cost_first`; successful unknown-price
   requests record tokens and zero monetary cost with an unavailable price source.

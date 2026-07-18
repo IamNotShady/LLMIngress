@@ -21,7 +21,7 @@
     {
       "id": "virtual-model-routing",
       "name": "Virtual Model Routing",
-      "description": "Atomic Virtual Models, capability contracts, fixed/cost-first/random ordering, and fallback chains.",
+      "description": "Atomic Virtual Models, capability contracts, fixed/cost-first/load-balance ordering, and fallback chains.",
       "verification": "pnpm exec vitest run tests/features/virtual-model-routing.unit.test.ts tests/features/route-strategies.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-routing.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management"],
       "status": "passing",

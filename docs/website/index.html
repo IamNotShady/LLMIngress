@@ -912,10 +912,10 @@ main, .footer { position: relative; z-index: 1; }
         <p class="spec-id"><span class="n">02</span> <span class="code">VIRTUAL_MODELS</span></p>
         <h3>Stable names, routed models</h3>
         <p>Agents ask for <code>code-fast</code>. A route policy — fixed
-          order, cost-first, or random — resolves the real model, and
+          order, cost-first, or load balance — resolves the real model, and
           capability pre-checks validate context length and tool use before
           dispatch. No LLM judge in the loop.</p>
-        <p class="spec-line"><b>spec:</b> fixed · cost_first · random</p>
+        <p class="spec-line"><b>spec:</b> fixed · cost_first · load_balance</p>
       </article>
       <article class="spec">
         <p class="spec-id"><span class="n">03</span> <span class="code">FALLBACK_CHAIN</span></p>

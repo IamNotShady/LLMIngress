@@ -37,7 +37,7 @@ Provider has one logical connection. Worker probes up to three chat models. The 
 ### Virtual Model routing
 
 A Virtual Model is created atomically with one Route Policy and at least one candidate. Supported
-strategies are `fixed`, `cost_first`, and `random`. `cost_first` orders by input price plus output
+strategies are `fixed`, `cost_first`, and `load_balance`. `cost_first` orders by input price plus output
 price and places unknown prices last. Known capability values must agree across candidates;
 unknown values skip only the corresponding request pre-check.
 

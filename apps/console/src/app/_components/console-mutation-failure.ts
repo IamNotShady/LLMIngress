@@ -10,8 +10,8 @@ export type ConsoleErrorPayload = {
 };
 
 const errorFieldByCode: Record<string, string> = {
-  agent_allowed_virtual_model_required: "allowedVirtualModelIds",
-  agent_name_required: "name",
+  api_key_allowed_virtual_model_required: "allowedVirtualModelIds",
+  api_key_name_required: "name",
   invalid_admin_password: "password",
   provider_api_key_label_too_long: "label",
   provider_api_key_priority_invalid: "priority",

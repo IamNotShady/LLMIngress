@@ -78,7 +78,7 @@ export function normalizeOpenAIChatCompletionRequest(
 }
 
 export async function executeGatewayOpenAIChatCompletion(input: {
-  agentId: string;
+  apiKeyId: string;
   adapter?: OpenAIProviderAdapter;
   databaseUrl?: string;
   limitsEnabled?: boolean;

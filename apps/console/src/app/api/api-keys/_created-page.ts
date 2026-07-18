@@ -1,11 +1,11 @@
 import { gatewayPublicBaseUrl } from "@llmingress/config";
 import { NextResponse } from "next/server";
 import {
-  type AgentIntegrationGuideEntry,
-  buildAgentIntegrationGuides,
-} from "../../_modules/agent-integration-guide";
+  buildIntegrationGuides,
+  type IntegrationGuideEntry,
+} from "../../_modules/api-key-integration-guide";
 
-export function renderOneTimeAgentResponse(
+export function renderOneTimeApiKeyResponse(
   input: {
     keyPrefix: string | null;
     plaintext: string;
@@ -15,11 +15,11 @@ export function renderOneTimeAgentResponse(
 ): NextResponse {
   const apiKey = input.plaintext.trim();
   if (!apiKey) {
-    throw new Error("API key is required for Agent connection details.");
+    throw new Error("API key is required for connection details.");
   }
   const gatewayBaseUrl = gatewayPublicBaseUrl().trim().replace(/\/+$/, "");
   const virtualModelName = input.virtualModelName?.trim() || "No Virtual Model configured";
-  const guides = buildAgentIntegrationGuides({ apiKey, gatewayBaseUrl, model: virtualModelName });
+  const guides = buildIntegrationGuides({ apiKey, gatewayBaseUrl, model: virtualModelName });
   const keyPrefix = input.keyPrefix ?? apiKey.slice(0, 12);
 
   if (format === "json") {
@@ -35,7 +35,7 @@ export function renderOneTimeAgentResponse(
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Agent created</title>
+    <title>API Key created</title>
     <style>
       :root { color: #101828; background: #f6f7f9; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       * { box-sizing: border-box; }
@@ -53,12 +53,12 @@ export function renderOneTimeAgentResponse(
   </head>
   <body>
     <main>
-      <h1>Agent created</h1>
+      <h1>API Key created</h1>
       <section aria-label="Connection details">
         <h2>Connection details</h2>
         <dl>
           <div>
-            <dt>Agent API key</dt>
+            <dt>API key</dt>
             <dd><code>${escapeHtml(apiKey)}</code></dd>
           </div>
           <div>
@@ -68,7 +68,7 @@ export function renderOneTimeAgentResponse(
         </dl>
       </section>
       ${guides.map((entry) => renderGuideSection(entry)).join("")}
-      <a href="/agents">Back to dashboard</a>
+      <a href="/api-keys">Back to dashboard</a>
     </main>
   </body>
 </html>`,
@@ -82,7 +82,7 @@ export function renderOneTimeAgentResponse(
   );
 }
 
-function renderGuideSection(entry: AgentIntegrationGuideEntry): string {
+function renderGuideSection(entry: IntegrationGuideEntry): string {
   return `<section aria-label="${escapeHtml(entry.label)} configuration">
         <h2>${escapeHtml(entry.guide.title)}</h2>
         <ol>${entry.guide.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>

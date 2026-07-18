@@ -14,19 +14,19 @@ import {
 } from "../support/console-app";
 
 async function seedAuditData(databaseUrl: string) {
-  const agentId = randomUUID();
-  const otherAgentId = randomUUID();
+  const apiKeyId = randomUUID();
+  const otherApiKeyId = randomUUID();
   const virtualModelId = randomUUID();
   const activityId = randomUUID();
   const otherActivityId = randomUUID();
 
   await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
-      `insert into agents (id, name, key_prefix, key_hash, enabled)
+      `insert into api_keys (id, name, key_prefix, key_hash, enabled)
        values
-         ($1, 'audit-old-agent', 'llmi_audit_old', 'test-hash', true),
-         ($2, 'audit-other-agent', 'llmi_audit_other', 'test-hash-other', true)`,
-      [agentId, otherAgentId],
+         ($1, 'audit-old-apiKey', 'llmi_audit_old', 'test-hash', true),
+         ($2, 'audit-other-apiKey', 'llmi_audit_other', 'test-hash-other', true)`,
+      [apiKeyId, otherApiKeyId],
     );
     await client.query(
       `insert into virtual_models (id, name, description, enabled)
@@ -35,42 +35,42 @@ async function seedAuditData(databaseUrl: string) {
     );
     await client.query(
       `insert into request_activity (
-         id, request_id, agent_id, virtual_model_id, agent_key_prefix,
+         id, request_id, api_key_id, virtual_model_id, api_key_prefix,
          protocol, model, stream, status, http_status, latency_ms,
          route_reason,
          started_at, completed_at,
-         agent_name_snapshot, virtual_model_name_snapshot
+         api_key_name_snapshot, virtual_model_name_snapshot
        )
        values (
          $1, 'gw_audit_old_request', $2, $3, 'llmi_audit_old',
          'chat_completions', 'audit-model', false, 'succeeded', 200, 1200,
          '{"strategy":"cost_first"}'::jsonb,
          now() - interval '3 days', now() - interval '3 days',
-         'audit-old-agent', 'audit-probe-vm'
+         'audit-old-apiKey', 'audit-probe-vm'
        )`,
-      [activityId, agentId, virtualModelId],
+      [activityId, apiKeyId, virtualModelId],
     );
     await client.query(
       `insert into request_activity (
-         id, request_id, agent_id, virtual_model_id, agent_key_prefix,
+         id, request_id, api_key_id, virtual_model_id, api_key_prefix,
          protocol, model, stream, status, http_status, latency_ms,
          started_at, completed_at,
-         agent_name_snapshot, virtual_model_name_snapshot
+         api_key_name_snapshot, virtual_model_name_snapshot
        )
        values (
          $1, 'gw_audit_other_request', $2, $3, 'llmi_audit_other',
          'chat_completions', 'audit-model', false, 'succeeded', 200, 800,
          now() - interval '3 days', now() - interval '3 days',
-         'audit-other-agent', 'audit-probe-vm'
+         'audit-other-apiKey', 'audit-probe-vm'
        )`,
-      [otherActivityId, otherAgentId, virtualModelId],
+      [otherActivityId, otherApiKeyId, virtualModelId],
     );
     await client.query(
       `insert into request_activity (
-         id, request_id, agent_id, virtual_model_id, agent_key_prefix,
+         id, request_id, api_key_id, virtual_model_id, api_key_prefix,
          protocol, model, stream, status, http_status, latency_ms,
          started_at, completed_at,
-         agent_name_snapshot, virtual_model_name_snapshot
+         api_key_name_snapshot, virtual_model_name_snapshot
        )
        select
          gen_random_uuid(),
@@ -86,29 +86,29 @@ async function seedAuditData(databaseUrl: string) {
          800,
          now() - interval '4 days' - page_number * interval '1 minute',
          now() - interval '4 days' - page_number * interval '1 minute',
-         'audit-other-agent',
+         'audit-other-apiKey',
          'audit-probe-vm'
        from generate_series(1, 19) as page_number`,
-      [otherAgentId, virtualModelId],
+      [otherApiKeyId, virtualModelId],
     );
     await client.query(
       `insert into request_usage (
-         id, request_activity_id, agent_id, virtual_model_id,
+         id, request_activity_id, api_key_id, virtual_model_id,
          input_tokens, output_tokens, total_tokens, token_source
        )
        values ($1, $2, $3, $4, 12000, 345, 12345, 'provider')`,
-      [randomUUID(), activityId, agentId, virtualModelId],
+      [randomUUID(), activityId, apiKeyId, virtualModelId],
     );
     await client.query(
       `insert into request_costs (
-         id, request_activity_id, agent_id, total_cost_usd, cost_source
+         id, request_activity_id, api_key_id, total_cost_usd, cost_source
        )
        values ($1, $2, $3, '0.42', 'provider')`,
-      [randomUUID(), activityId, agentId],
+      [randomUUID(), activityId, apiKeyId],
     );
   });
 
-  return { agentId };
+  return { apiKeyId };
 }
 
 async function seedProviderApiKeyInteractionData(databaseUrl: string) {
@@ -208,10 +208,10 @@ test("console audit fixes keep time windows honest and prevent activity timestam
         await page.goto(baseUrl, { waitUntil: "networkidle" });
         await expect(page.locator(".stat-card", { hasText: "Requests 24h" })).toContainText("0");
         await expect(page.locator(".chart-card", { hasText: "Recent requests" })).not.toContainText(
-          "audit-old-agent",
+          "audit-old-apiKey",
         );
         await expect(
-          page.locator(".chart-card", { hasText: "Top agents by cost" }),
+          page.locator(".chart-card", { hasText: "Top API keys by cost" }),
         ).not.toContainText("$0.42");
 
         await page.goto(`${baseUrl}/usage`, { waitUntil: "networkidle" });
@@ -223,7 +223,7 @@ test("console audit fixes keep time windows honest and prevent activity timestam
         expect(daySpan).toBe(6);
         await expect(page.locator(".stat-card", { hasText: "Total cost" })).toContainText("$0.42");
 
-        await page.goto(`${baseUrl}/agents`, { waitUntil: "networkidle" });
+        await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
         await expect(page.locator(".stat-card", { hasText: "Enabled" })).toContainText("2");
         await expect(page.locator(".stat-card", { hasText: "Cost 24h" })).toContainText("$0.00");
 
@@ -235,13 +235,13 @@ test("console audit fixes keep time windows honest and prevent activity timestam
         await expect(page.getByText("No Virtual Models match the selected filters.")).toBeVisible();
         await expect(page.getByText(/Add a Provider and refresh its models/)).toHaveCount(0);
 
-        await page.goto(`${baseUrl}/agents?agentDialog=new`, { waitUntil: "networkidle" });
-        await expect(page.locator("#agent-allowed-virtual-models")).toHaveCount(0);
+        await page.goto(`${baseUrl}/api-keys?apiKeyDialog=new`, { waitUntil: "networkidle" });
+        await expect(page.locator("#api-key-allowed-virtual-models")).toHaveCount(0);
         await expect(
           page.locator('input[name="allowedVirtualModelIds"][type="checkbox"]'),
         ).toHaveCount(1);
-        await expect(page.locator("#agent-type")).toHaveCount(0);
-        await page.getByLabel("Agent name").fill("audit-created-agent");
+        await expect(page.locator("#api-key-type")).toHaveCount(0);
+        await page.getByLabel("Name").fill("audit-created-apiKey");
         await expect(page.getByLabel("Default virtual model").locator("option")).toHaveCount(1);
         await page.getByRole("button", { name: "Create" }).click();
         await expect(page.getByText("Select at least one allowed Virtual Model.")).toBeVisible();
@@ -253,21 +253,23 @@ test("console audit fixes keep time windows honest and prevent activity timestam
         await page.getByLabel("audit-probe-vm").check();
         await page.getByLabel("Default virtual model").selectOption({ label: "audit-probe-vm" });
         await page.getByRole("button", { name: "Create" }).click();
-        const createdAgentDialog = page.getByRole("dialog", { name: "Agent created" });
-        await expect(createdAgentDialog).toBeVisible();
-        await expect(createdAgentDialog).toContainText("audit-probe-vm");
-        await expect(createdAgentDialog).not.toContainText("<Virtual Model Name>");
-        await expect(createdAgentDialog).not.toContainText("Agent API key prefix");
-        await createdAgentDialog.getByRole("link", { name: "Close" }).click();
-        const createdAgentRow = page.locator(".agents-table tbody tr", {
-          hasText: "audit-created-agent",
+        const createdApiKeyDialog = page.getByRole("dialog", { name: "API Key created" });
+        await expect(createdApiKeyDialog).toBeVisible();
+        await expect(createdApiKeyDialog).toContainText("audit-probe-vm");
+        await expect(createdApiKeyDialog).not.toContainText("<Virtual Model Name>");
+        await expect(createdApiKeyDialog).not.toContainText("API key prefix");
+        await createdApiKeyDialog.getByRole("link", { name: "Close" }).click();
+        const createdApiKeyRow = page.locator(".api-keys-table tbody tr", {
+          hasText: "audit-created-apiKey",
         });
-        await expect(createdAgentRow).toContainText("audit-probe-vm");
-        await expect(createdAgentRow).toContainText("True");
-        await createdAgentRow.getByRole("button", { name: "Disable audit-created-agent" }).click();
-        await expect(createdAgentRow).toContainText("False");
-        await createdAgentRow.getByRole("button", { name: "Enable audit-created-agent" }).click();
-        await expect(createdAgentRow).toContainText("True");
+        await expect(createdApiKeyRow).toContainText("audit-probe-vm");
+        await expect(createdApiKeyRow).toContainText("True");
+        await createdApiKeyRow
+          .getByRole("button", { name: "Disable audit-created-apiKey" })
+          .click();
+        await expect(createdApiKeyRow).toContainText("False");
+        await createdApiKeyRow.getByRole("button", { name: "Enable audit-created-apiKey" }).click();
+        await expect(createdApiKeyRow).toContainText("True");
 
         for (const viewport of [
           { width: 1280, height: 800 },
@@ -342,10 +344,10 @@ test("console audit fixes keep time windows honest and prevent activity timestam
         }
         expect(pageWidths).toEqual([1600, 1600, 1600, 1600]);
 
-        await page.goto(`${baseUrl}/activity?agentId=${seeded.agentId}`, {
+        await page.goto(`${baseUrl}/activity?apiKeyId=${seeded.apiKeyId}`, {
           waitUntil: "networkidle",
         });
-        await expect(page.locator("#activity-agent")).toHaveValue(seeded.agentId);
+        await expect(page.locator("#activity-api-key")).toHaveValue(seeded.apiKeyId);
         await expect(
           page.locator(".activity-table tbody tr", { hasText: "gw_audit_old_request" }),
         ).toBeVisible();

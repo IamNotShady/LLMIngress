@@ -138,7 +138,7 @@ describe("virtual model endpoint routing", () => {
 
   it("rejects Gateway requests made through a different endpoint than the saved route policy", async () => {
     const response = await executeGatewayOpenAIChatCompletion({
-      agentId: randomUUID(),
+      apiKeyId: randomUUID(),
       requestBody: {
         messages: [{ content: "hello", role: "user" }],
       },

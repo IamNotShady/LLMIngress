@@ -35,7 +35,7 @@ export type ConsoleUsageTrendPoint = {
 };
 
 export type ConsoleUsageSummary = {
-  agentBreakdowns: ConsoleUsageDimensionBreakdown[];
+  apiKeyBreakdowns: ConsoleUsageDimensionBreakdown[];
   avgLatencyMs: number | null;
   breakdowns: ConsoleUsageBreakdown[];
   failureCount: number;
@@ -107,7 +107,7 @@ export function parseConsoleUsageWindow(value: string | undefined): ConsoleUsage
 }
 
 export async function getConsoleUsageSummary(input: {
-  agentId?: string | null;
+  apiKeyId?: string | null;
   dateFrom?: Date | null;
   dateTo?: Date | null;
   databaseUrl?: string;
@@ -185,16 +185,16 @@ export async function getConsoleUsageSummary(input: {
         `,
       scope.values,
     );
-    const agentBreakdownResult = await client.query<UsageDimensionBreakdownRow>(
+    const apiKeyBreakdownResult = await client.query<UsageDimensionBreakdownRow>(
       `
-          select coalesce(request_activity.agent_id::text, 'unknown-agent') as id,
+          select coalesce(request_activity.api_key_id::text, 'unknown-api-key') as id,
                  coalesce(
                    (array_agg(
-                     request_activity.agent_name_snapshot
+                     request_activity.api_key_name_snapshot
                      order by request_activity.started_at desc
-                   ) filter (where request_activity.agent_name_snapshot is not null))[1],
-                   max(agents.name),
-                   'Unknown agent'
+                   ) filter (where request_activity.api_key_name_snapshot is not null))[1],
+                   max(api_keys.name),
+                   'Unknown apiKey'
                  )
                    as label,
                  count(request_activity.id)::integer as request_count,
@@ -207,11 +207,11 @@ export async function getConsoleUsageSummary(input: {
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                    as total_cost_usd
           from request_activity
-          left join agents on agents.id = request_activity.agent_id
+          left join api_keys on api_keys.id = request_activity.api_key_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
           where ${scope.whereSql}
-          group by request_activity.agent_id
+          group by request_activity.api_key_id
           order by min(request_activity.created_at),
                    label
         `,
@@ -375,7 +375,7 @@ export async function getConsoleUsageSummary(input: {
     const summaryRow = summaryResult.rows[0];
 
     return {
-      agentBreakdowns: agentBreakdownResult.rows.map(rowToConsoleUsageDimensionBreakdown),
+      apiKeyBreakdowns: apiKeyBreakdownResult.rows.map(rowToConsoleUsageDimensionBreakdown),
       avgLatencyMs: readOptionalNumber(summaryRow?.avg_latency_ms),
       breakdowns: breakdownResult.rows.map(rowToConsoleUsageBreakdown),
       failureCount: summaryRow?.failure_count ?? 0,
@@ -499,7 +499,7 @@ function resolveUsageRange(input: {
 
 function buildUsageScope(
   input: {
-    agentId?: string | null;
+    apiKeyId?: string | null;
     providerId?: string | null;
     virtualModelId?: string | null;
   },
@@ -508,9 +508,9 @@ function buildUsageScope(
   const values: unknown[] = [range.start.toISOString(), range.end.toISOString()];
   const clauses = ["request_activity.started_at >= $1", "request_activity.started_at < $2"];
 
-  if (input.agentId) {
-    values.push(input.agentId);
-    clauses.push(`request_activity.agent_id = $${values.length}::uuid`);
+  if (input.apiKeyId) {
+    values.push(input.apiKeyId);
+    clauses.push(`request_activity.api_key_id = $${values.length}::uuid`);
   }
   if (input.virtualModelId) {
     values.push(input.virtualModelId);

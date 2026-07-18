@@ -25,7 +25,7 @@ test("console api rejects unauthenticated API actions with 401", async () => {
     try {
       const baseUrl = `http://localhost:${consoleApp.port}`;
       await waitForConsole(baseUrl, consoleApp);
-      const response = await fetch(`${baseUrl}/api/agents`, {
+      const response = await fetch(`${baseUrl}/api/api-keys`, {
         body: new URLSearchParams({ action: "create" }),
         method: "POST",
       });
@@ -72,7 +72,7 @@ test("console api keeps validation errors as 400 with their message", async ({ b
       try {
         await waitForConsole(baseUrl, consoleApp);
         await signInFromFirstRun(page, baseUrl);
-        const response = await page.request.post(`${baseUrl}/api/agents`, {
+        const response = await page.request.post(`${baseUrl}/api/api-keys`, {
           form: { action: "create" },
           headers: { origin: baseUrl },
         });

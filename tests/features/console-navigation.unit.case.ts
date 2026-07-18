@@ -8,7 +8,7 @@ import { redirectToConsolePath } from "../../apps/console/src/app/api/_redirect"
 
 const expectedRoutes = [
   "/",
-  "/agents",
+  "/api-keys",
   "/providers",
   "/models",
   "/activity",
@@ -34,7 +34,7 @@ describe("console module navigation config", () => {
 
   test("findActiveNavItem resolves the longest matching href", () => {
     expect(findActiveNavItem("/")?.href).toBe("/");
-    expect(findActiveNavItem("/agents")?.href).toBe("/agents");
+    expect(findActiveNavItem("/api-keys")?.href).toBe("/api-keys");
     expect(findActiveNavItem("/providers?modelRefreshProviderId=abc")?.href).toBe("/providers");
     // A deeper path under a module still resolves to that module, not Overview.
     expect(findActiveNavItem("/limits/anything")?.href).toBe("/limits");

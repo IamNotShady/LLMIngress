@@ -11,20 +11,20 @@ import {
 } from "../support/gateway-process";
 import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
-const agentApiKey = "llmi_gateway_recording_resilience_key_094";
+const apiKey = "llmi_gateway_recording_resilience_key_094";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function postChatCompletion(input: { agentApiKey: string; baseUrl: string; model: string }) {
+async function postChatCompletion(input: { apiKey: string; baseUrl: string; model: string }) {
   return fetch(`${input.baseUrl}/v1/chat/completions`, {
     body: JSON.stringify({
       messages: [{ content: "ping", role: "user" }],
       model: input.model,
     }),
     headers: {
-      authorization: `Bearer ${input.agentApiKey}`,
+      authorization: `Bearer ${input.apiKey}`,
       "content-type": "application/json",
     },
     method: "POST",
@@ -32,7 +32,7 @@ async function postChatCompletion(input: { agentApiKey: string; baseUrl: string;
 }
 
 async function postStreamingChatCompletion(input: {
-  agentApiKey: string;
+  apiKey: string;
   baseUrl: string;
   model: string;
 }): Promise<Response> {
@@ -43,7 +43,7 @@ async function postStreamingChatCompletion(input: {
       stream: true,
     }),
     headers: {
-      authorization: `Bearer ${input.agentApiKey}`,
+      authorization: `Bearer ${input.apiKey}`,
       "content-type": "application/json",
     },
     method: "POST",
@@ -137,7 +137,7 @@ test("gateway still returns the LLM response when recording tables are unavailab
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedOpenAIGatewayRoute({
-      agentApiKey,
+      apiKey,
       fixture,
       providerBaseUrl: fakeProvider.url,
       virtualModelName: "vm-recording",
@@ -154,7 +154,7 @@ test("gateway still returns the LLM response when recording tables are unavailab
       await waitForGateway(baseUrl, gateway);
 
       const response = await postChatCompletion({
-        agentApiKey,
+        apiKey,
         baseUrl,
         model: "vm-recording",
       });
@@ -182,7 +182,7 @@ test("gateway returns non-streaming response before slow completed activity inse
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedOpenAIGatewayRoute({
-      agentApiKey,
+      apiKey,
       fixture,
       providerBaseUrl: fakeProvider.url,
       virtualModelName: "vm-recording-async",
@@ -200,7 +200,7 @@ test("gateway returns non-streaming response before slow completed activity inse
 
       const startedAt = Date.now();
       const response = await postChatCompletion({
-        agentApiKey,
+        apiKey,
         baseUrl,
         model: "vm-recording-async",
       });
@@ -232,7 +232,7 @@ test("gateway completes streaming response before slow completed activity insert
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedOpenAIGatewayRoute({
-      agentApiKey,
+      apiKey,
       fixture,
       providerBaseUrl: `${fakeProvider.url}?mode=stream&stream_end_ms=700`,
       virtualModelName: "vm-recording-stream-async",
@@ -250,7 +250,7 @@ test("gateway completes streaming response before slow completed activity insert
 
       const startedAt = Date.now();
       const response = await postStreamingChatCompletion({
-        agentApiKey,
+        apiKey,
         baseUrl,
         model: "vm-recording-stream-async",
       });
@@ -281,7 +281,7 @@ test("gateway returns non-streaming response before slow provider metadata write
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedOpenAIGatewayRoute({
-      agentApiKey,
+      apiKey,
       fixture,
       providerBaseUrl: fakeProvider.url,
       virtualModelName: "vm-metadata-async",
@@ -299,7 +299,7 @@ test("gateway returns non-streaming response before slow provider metadata write
 
       const startedAt = Date.now();
       const response = await postChatCompletion({
-        agentApiKey,
+        apiKey,
         baseUrl,
         model: "vm-metadata-async",
       });
@@ -330,7 +330,7 @@ test("gateway streams first chunk before slow provider metadata writes finish", 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedOpenAIGatewayRoute({
-      agentApiKey,
+      apiKey,
       fixture,
       providerBaseUrl: `${fakeProvider.url}?mode=stream&stream_end_ms=2500`,
       virtualModelName: "vm-stream-metadata",
@@ -348,7 +348,7 @@ test("gateway streams first chunk before slow provider metadata writes finish", 
 
       const startedAt = Date.now();
       const response = await postStreamingChatCompletion({
-        agentApiKey,
+        apiKey,
         baseUrl,
         model: "vm-stream-metadata",
       });
@@ -378,7 +378,7 @@ test("gateway persists failed and succeeded fallback events after a successful f
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     const seeded = await seedOpenAIGatewayRoute({
-      agentApiKey: `${agentApiKey}_fallback`,
+      apiKey: `${apiKey}_fallback`,
       fixture,
       providerBaseUrl: `${failingProvider.url}?mode=error`,
       virtualModelName: "vm-recording-fallback",
@@ -399,7 +399,7 @@ test("gateway persists failed and succeeded fallback events after a successful f
       await waitForGateway(baseUrl, gateway);
 
       const response = await postChatCompletion({
-        agentApiKey: `${agentApiKey}_fallback`,
+        apiKey: `${apiKey}_fallback`,
         baseUrl,
         model: "vm-recording-fallback",
       });

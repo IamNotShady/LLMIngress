@@ -32,7 +32,7 @@ export type GatewayUsageCostRecords = {
 
 type RecordGatewayUsageCostInput = {
   activityId: string;
-  agentId: string;
+  apiKeyId: string;
   usageCost: GatewayUsageCostDetails;
   virtualModelId: string;
 };
@@ -48,7 +48,7 @@ export async function insertGatewayUsageAndCost(
         insert into request_usage (
           id,
           request_activity_id,
-          agent_id,
+          api_key_id,
           virtual_model_id,
           provider_model_id,
           input_tokens,
@@ -63,7 +63,7 @@ export async function insertGatewayUsageAndCost(
     [
       randomUUID(),
       input.activityId,
-      input.agentId,
+      input.apiKeyId,
       input.virtualModelId,
       input.usageCost.providerModelId,
       records.requestUsage.inputTokens,
@@ -79,7 +79,7 @@ export async function insertGatewayUsageAndCost(
         insert into request_costs (
           id,
           request_activity_id,
-          agent_id,
+          api_key_id,
           provider_model_id,
           input_cost_usd,
           output_cost_usd,
@@ -93,7 +93,7 @@ export async function insertGatewayUsageAndCost(
     [
       randomUUID(),
       input.activityId,
-      input.agentId,
+      input.apiKeyId,
       input.usageCost.providerModelId,
       records.requestCost.inputCostUsd,
       records.requestCost.outputCostUsd,

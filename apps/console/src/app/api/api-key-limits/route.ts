@@ -1,8 +1,8 @@
 import {
-  deleteAgentLimitRules,
-  normalizeAgentLimitFormInput,
-  saveAgentLimitRules,
-} from "@llmingress/db/console-agent-limits";
+  deleteApiKeyLimitRules,
+  normalizeApiKeyLimitFormInput,
+  saveApiKeyLimitRules,
+} from "@llmingress/db/console-api-key-limits";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { consoleActionErrorResponse } from "../_errors";
@@ -14,22 +14,22 @@ export const POST = withConsoleAuth(async (request) => {
     const form = await request.formData();
     const action = readRequiredText(form, "action");
     if (action === "deleteLimitRules") {
-      await deleteAgentLimitRules({
-        agentId: readRequiredText(form, "agentId", "agentApiKeyId"),
+      await deleteApiKeyLimitRules({
+        apiKeyId: readRequiredText(form, "apiKeyId"),
       });
       return redirectToConsolePath("/limits");
     }
     if (action !== "saveLimitRules") {
       return NextResponse.json(
-        { error: "Unknown Agent limit action.", code: "agent_limit_action_unknown" },
+        { error: "Unknown API key limit action.", code: "api_key_limit_action_unknown" },
         { status: 400 },
       );
     }
 
-    const agentId = readRequiredText(form, "agentId", "agentApiKeyId");
-    await saveAgentLimitRules({
-      limits: normalizeAgentLimitFormInput({
-        agentId,
+    const apiKeyId = readRequiredText(form, "apiKeyId");
+    await saveApiKeyLimitRules({
+      limits: normalizeApiKeyLimitFormInput({
+        apiKeyId,
         budgetPeriod: readRequiredText(form, "budgetPeriod"),
         budgetUsd: readRequiredText(form, "budgetUsd"),
         concurrency: readText(form, "concurrency"),
@@ -38,8 +38,8 @@ export const POST = withConsoleAuth(async (request) => {
         tpm: readRequiredText(form, "tpm"),
       }),
     });
-    return redirectToConsolePath(`/limits?selected=${encodeURIComponent(agentId)}`);
+    return redirectToConsolePath(`/limits?selected=${encodeURIComponent(apiKeyId)}`);
   } catch (error) {
-    return consoleActionErrorResponse(error, "Agent limit action failed.");
+    return consoleActionErrorResponse(error, "API key limit action failed.");
   }
 });

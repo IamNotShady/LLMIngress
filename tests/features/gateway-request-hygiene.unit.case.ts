@@ -30,7 +30,7 @@ describe("gateway request hygiene", () => {
   it("filters only transport-owned request headers before provider forwarding", () => {
     expect(
       readGatewayProviderRequestHeaders({
-        authorization: "Bearer agent-key",
+        authorization: "Bearer api-key-key",
         "content-length": "999",
         "content-type": "text/plain",
         cookie: "session=secret",
@@ -46,7 +46,7 @@ describe("gateway request hygiene", () => {
         "sec-fetch-site": "same-site",
         "transfer-encoding": "chunked",
         "user-agent": "browser-user-agent",
-        "x-api-key": "agent-x-key",
+        "x-api-key": "api-key-x-key",
         "x-client-request-id": "client-req-1",
         "x-provider-feature": ["one", "two"],
       }),

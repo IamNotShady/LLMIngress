@@ -34,7 +34,7 @@ test("provider delete dialog shows real route-policy blockers and POST returns 4
       const dialog = page.getByRole("dialog", { name: "Delete provider?" });
       await expect(dialog).toBeVisible();
       await expect(dialog).toContainText("Dependency VM");
-      await expect(dialog).toContainText("Dependency Agent");
+      await expect(dialog).toContainText("Dependency ApiKey");
       await expect(dialog.getByRole("button", { name: "Delete provider" })).toHaveCount(0);
 
       const response = await page.request.post(`${baseUrl}/api/providers`, {
@@ -59,7 +59,7 @@ async function seedProviderDependency(fixture: {
   query: (text: string, values?: readonly unknown[]) => Promise<unknown>;
 }) {
   const ids = {
-    agentId: randomUUID(),
+    apiKeyId: randomUUID(),
     providerId: randomUUID(),
     providerModelId: randomUUID(),
     routePolicyId: randomUUID(),
@@ -88,10 +88,10 @@ async function seedProviderDependency(fixture: {
   );
   await fixture.query(
     `
-      insert into agents (id, name, key_prefix, key_hash, default_virtual_model_id)
-      values ($1, 'Dependency Agent', 'llmi_test', 'hash', $2)
+      insert into api_keys (id, name, key_prefix, key_hash, default_virtual_model_id)
+      values ($1, 'Dependency ApiKey', 'llmi_test', 'hash', $2)
     `,
-    [ids.agentId, ids.virtualModelId],
+    [ids.apiKeyId, ids.virtualModelId],
   );
   await fixture.query(
     `

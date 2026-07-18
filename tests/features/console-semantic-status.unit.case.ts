@@ -13,7 +13,7 @@ const sections = () =>
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
-    "agents-section.tsx",
+    "api-keys-section.tsx",
     "limits-section.tsx",
     "models-section.tsx",
     "providers-section.tsx",
@@ -90,14 +90,14 @@ describe("console semantic status static contract", () => {
   test("row-level destructive emphasis is limited to supported delete actions", () => {
     const stylesheet = css();
     expect(stylesheet).toMatch(
-      /\.agent-table-actions \.agent-action-delete\s*\{[^}]*background:\s*transparent/s,
+      /\.api-key-table-actions \.api-key-action-delete\s*\{[^}]*background:\s*transparent/s,
     );
     expect(stylesheet).not.toMatch(
-      /\.agent-table-actions \.agent-action-delete\s*\{[^}]*background:\s*var\(--danger\)/s,
+      /\.api-key-table-actions \.api-key-action-delete\s*\{[^}]*background:\s*var\(--danger\)/s,
     );
     expect(stylesheet).not.toContain(".limits-rule-delete-button");
     // The confirm dialog keeps the loud filled danger button.
-    expect(stylesheet).toMatch(/\.agent-delete-confirm\s*\{[^}]*var\(--danger\)/s);
+    expect(stylesheet).toMatch(/\.api-key-delete-confirm\s*\{[^}]*var\(--danger\)/s);
   });
 
   test("limits rows expose edit without a delete action", () => {

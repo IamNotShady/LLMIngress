@@ -60,7 +60,7 @@ type CreateGatewayAppOptions = {
 };
 
 type GatewayJsonEndpointExecutionInput = {
-  agentId: string;
+  apiKeyId: string;
   limitsEnabled: boolean;
   providerRequestHeaders: Record<string, string>;
   requestBody: unknown;
@@ -133,7 +133,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
-      agentId: auth.agentApiKey.id,
+      apiKeyId: auth.apiKey.id,
     });
 
     writeGatewayRequestIdHeader(reply, auth.requestId);
@@ -247,11 +247,11 @@ function registerGatewayJsonEndpoint(
     const providerRequestHeaders = readGatewayProviderRequestHeaders(request.headers);
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
-      agentId: auth.agentApiKey.id,
+      apiKeyId: auth.apiKey.id,
     });
     const virtualModelAccess = resolveGatewayVirtualModelRequest({
       allowedVirtualModels,
-      defaultVirtualModelId: auth.agentApiKey.defaultVirtualModelId,
+      defaultVirtualModelId: auth.apiKey.defaultVirtualModelId,
       requestedModelName: readRequestedModelName(request.body),
       requestId: auth.requestId,
     });
@@ -263,9 +263,9 @@ function registerGatewayJsonEndpoint(
       );
     }
 
-    logGatewayAgentRequest(request.log, {
-      agentId: auth.agentApiKey.agentId,
-      agentKeyPrefix: auth.agentApiKey.keyPrefix,
+    logGatewayApiKeyRequest(request.log, {
+      apiKeyId: auth.apiKey.apiKeyId,
+      apiKeyPrefix: auth.apiKey.keyPrefix,
       method: request.method,
       protocol: endpoint.protocol,
       requestId: auth.requestId,
@@ -278,12 +278,12 @@ function registerGatewayJsonEndpoint(
       return sendGatewayStreamingResponse(
         reply,
         await executeRecordedGatewayStreamingRequest({
-          agentId: auth.agentApiKey.id,
-          agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
+          apiKeyId: auth.apiKey.id,
+          apiKeyPrefix: auth.apiKey.keyPrefix,
           execute: () =>
             executeGatewayStreamingRequest({
-              agentId: auth.agentApiKey.id,
-              limitsEnabled: auth.agentApiKey.limitsEnabled,
+              apiKeyId: auth.apiKey.id,
+              limitsEnabled: auth.apiKey.limitsEnabled,
               protocol: streamingProtocol,
               providerRequestHeaders,
               requestBody: request.body,
@@ -302,12 +302,12 @@ function registerGatewayJsonEndpoint(
     }
 
     const response = await executeRecordedGatewayJsonRequest({
-      agentId: auth.agentApiKey.id,
-      agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
+      apiKeyId: auth.apiKey.id,
+      apiKeyPrefix: auth.apiKey.keyPrefix,
       execute: () =>
         endpoint.execute({
-          agentId: auth.agentApiKey.id,
-          limitsEnabled: auth.agentApiKey.limitsEnabled,
+          apiKeyId: auth.apiKey.id,
+          limitsEnabled: auth.apiKey.limitsEnabled,
           providerRequestHeaders,
           requestBody: request.body,
           requestId: auth.requestId,
@@ -398,9 +398,9 @@ function writeGatewayRequestMetadataDebugHeader(
   reply.header(gatewayRequestMetadataHeader, serializeGatewayRequestMetadata(metadata));
 }
 
-type GatewayAgentRequestLogInput = {
-  agentId: string;
-  agentKeyPrefix: string;
+type GatewayApiKeyRequestLogInput = {
+  apiKeyId: string;
+  apiKeyPrefix: string;
   method: string;
   protocol: GatewayRequestActivityProtocol;
   requestId: string;
@@ -408,10 +408,10 @@ type GatewayAgentRequestLogInput = {
   virtualModelName: string;
 };
 
-export function buildGatewayAgentRequestLog(input: GatewayAgentRequestLogInput) {
+export function buildGatewayApiKeyRequestLog(input: GatewayApiKeyRequestLogInput) {
   return {
-    agentId: input.agentId,
-    agentKeyPrefix: input.agentKeyPrefix,
+    apiKeyId: input.apiKeyId,
+    apiKeyPrefix: input.apiKeyPrefix,
     method: input.method,
     protocol: input.protocol,
     requestId: input.requestId,
@@ -420,9 +420,9 @@ export function buildGatewayAgentRequestLog(input: GatewayAgentRequestLogInput) 
   };
 }
 
-function logGatewayAgentRequest(logger: FastifyBaseLogger, input: GatewayAgentRequestLogInput) {
-  const payload = buildGatewayAgentRequestLog(input);
-  logger.info(payload, "gateway agent request");
+function logGatewayApiKeyRequest(logger: FastifyBaseLogger, input: GatewayApiKeyRequestLogInput) {
+  const payload = buildGatewayApiKeyRequestLog(input);
+  logger.info(payload, "gateway api key request");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -50,16 +50,16 @@ async function expectTableColumnsContained(page: Page, selectors: string[]) {
   }
 }
 
-// Seeds an agent, a virtual model, recent request activity (wide snapshots),
+// Seeds an apiKey, a virtual model, recent request activity (wide snapshots),
 // and a full set of limit rules — the data shapes that reproduced the
 // production layout breakages a fresh database hides.
 async function seedConsoleData(databaseUrl: string) {
-  const agentId = randomUUID();
+  const apiKeyId = randomUUID();
   const virtualModelId = randomUUID();
   const providerId = randomUUID();
   const providerModelId = randomUUID();
   const routePolicyId = randomUUID();
-  const agentName = "layout-probe-agent-with-a-name-that-must-not-overlap-adjacent-columns";
+  const apiKeyName = "layout-probe-api-key-with-a-name-that-must-not-overlap-adjacent-columns";
   const virtualModelName =
     "layout-probe-virtual-model-with-a-name-that-must-not-overlap-adjacent-columns";
   const providerName = "Layout Probe Provider With An Excessively Long Display Name";
@@ -100,25 +100,25 @@ async function seedConsoleData(databaseUrl: string) {
       [randomUUID(), routePolicyId, providerModelId],
     );
     await client.query(
-      `insert into agents (
+      `insert into api_keys (
          id, name, key_prefix, key_hash, default_virtual_model_id, enabled, limits_enabled
        ) values ($1, $2, 'llmi_layout_probe', 'test-hash', $3, true, true)`,
-      [agentId, agentName, virtualModelId],
+      [apiKeyId, apiKeyName, virtualModelId],
     );
     await client.query(
-      `insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)`,
-      [agentId, virtualModelId],
+      `insert into api_key_virtual_models (api_key_id, virtual_model_id) values ($1, $2)`,
+      [apiKeyId, virtualModelId],
     );
 
     for (let i = 0; i < 8; i++) {
       const activityId = randomUUID();
       await client.query(
         `insert into request_activity (
-           id, request_id, agent_id, virtual_model_id, route_policy_id,
-           provider_id, provider_model_id, agent_key_prefix,
+           id, request_id, api_key_id, virtual_model_id, route_policy_id,
+           provider_id, provider_model_id, api_key_prefix,
            protocol, model, stream, status, http_status, latency_ms,
            started_at, completed_at,
-           agent_name_snapshot, virtual_model_name_snapshot,
+           api_key_name_snapshot, virtual_model_name_snapshot,
            provider_display_name_snapshot, provider_model_display_name_snapshot
          )
          values (
@@ -130,7 +130,7 @@ async function seedConsoleData(databaseUrl: string) {
         [
           activityId,
           `playground_${Date.now()}_${randomUUID()}_request-id-with-extra-width`,
-          agentId,
+          apiKeyId,
           virtualModelId,
           routePolicyId,
           providerId,
@@ -139,7 +139,7 @@ async function seedConsoleData(databaseUrl: string) {
           i === 0 ? "failed" : "succeeded",
           i === 0 ? 502 : 200,
           i * 5,
-          agentName,
+          apiKeyName,
           virtualModelName,
           providerName,
           providerModelName,
@@ -147,16 +147,16 @@ async function seedConsoleData(databaseUrl: string) {
       );
       await client.query(
         `insert into request_usage (
-           id, request_activity_id, agent_id, virtual_model_id, provider_model_id,
+           id, request_activity_id, api_key_id, virtual_model_id, provider_model_id,
            input_tokens, output_tokens, total_tokens, token_source
          ) values ($1, $2, $3, $4, $5, 12000, 345, 12345, 'provider')`,
-        [randomUUID(), activityId, agentId, virtualModelId, providerModelId],
+        [randomUUID(), activityId, apiKeyId, virtualModelId, providerModelId],
       );
       await client.query(
         `insert into request_costs (
-           id, request_activity_id, agent_id, provider_model_id, total_cost_usd, cost_source
+           id, request_activity_id, api_key_id, provider_model_id, total_cost_usd, cost_source
          ) values ($1, $2, $3, $4, '0.42', 'provider')`,
-        [randomUUID(), activityId, agentId, providerModelId],
+        [randomUUID(), activityId, apiKeyId, providerModelId],
       );
     }
 
@@ -169,9 +169,9 @@ async function seedConsoleData(databaseUrl: string) {
     ] as const;
     for (const [limitType, period, limitValue, unit] of limitRules) {
       await client.query(
-        `insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit)
+        `insert into api_key_limits (id, api_key_id, limit_type, period, limit_value, unit)
          values ($1, $2, $3, $4, $5, $6)`,
-        [randomUUID(), agentId, limitType, period, limitValue, unit],
+        [randomUUID(), apiKeyId, limitType, period, limitValue, unit],
       );
     }
   });
@@ -222,7 +222,7 @@ test("console keeps layout integrity with real data: no overflow, visible limits
         const seeded = await seedConsoleData(fixture.databaseUrl);
 
         await page.goto(baseUrl);
-        await expect(page.getByText("layout-probe-agent").first()).toBeVisible();
+        await expect(page.getByText("layout-probe-api-key").first()).toBeVisible();
 
         // Trend window now has data: chart renders instead of the empty state.
         await expect(
@@ -233,8 +233,8 @@ test("console keeps layout integrity with real data: no overflow, visible limits
         // text instead of allowing it to paint across adjacent columns.
         await page.setViewportSize({ width: 1904, height: 1080 });
         await expectTableColumnsContained(page, [".overview-requests-table"]);
-        await page.goto(`${baseUrl}/agents`);
-        await expectTableColumnsContained(page, [".agents-table"]);
+        await page.goto(`${baseUrl}/api-keys`);
+        await expectTableColumnsContained(page, [".api-keys-table"]);
         await page.goto(`${baseUrl}/providers?selected=${seeded.providerId}`);
         await expectTableColumnsContained(page, [
           ".providers-table",
@@ -314,26 +314,26 @@ test("console keeps layout integrity with real data: no overflow, visible limits
         await page.goto(baseUrl);
         const sidebarNav = page.getByRole("navigation", { name: "Console sections" });
         const menuToggle = page.getByRole("button", { name: "Menu" });
-        const agentsLink = sidebarNav.getByRole("link", { name: "Agents", exact: true });
+        const apiKeysLink = sidebarNav.getByRole("link", { name: "API Keys", exact: true });
 
         await expect(menuToggle).toBeVisible();
         await expect(menuToggle).toHaveAttribute("aria-expanded", "false");
-        await expect(agentsLink).toBeHidden();
+        await expect(apiKeysLink).toBeHidden();
 
         await menuToggle.click();
         await expect(menuToggle).toHaveAttribute("aria-expanded", "true");
-        await expect(agentsLink).toBeVisible();
+        await expect(apiKeysLink).toBeVisible();
 
-        await agentsLink.click();
-        await page.waitForURL((url) => url.pathname === "/agents");
+        await apiKeysLink.click();
+        await page.waitForURL((url) => url.pathname === "/api-keys");
         await expect(menuToggle).toHaveAttribute("aria-expanded", "false");
-        await expect(agentsLink).toBeHidden();
+        await expect(apiKeysLink).toBeHidden();
         await expect.poll(() => pageOverflowPx(page)).toBeLessThanOrEqual(0);
 
         // Desktop keeps the always-visible sidebar and hides the toggle.
         await page.setViewportSize({ width: 1280, height: 800 });
         await expect(menuToggle).toBeHidden();
-        await expect(agentsLink).toBeVisible();
+        await expect(apiKeysLink).toBeVisible();
       } finally {
         await context.close();
       }

@@ -51,13 +51,13 @@ function VirtualModelViewDialog({
   return (
     <ConsoleDialog
       ariaLabelledby={`virtual-model-view-dialog-title-${virtualModel.id}`}
-      className="console-dialog agent-view-dialog vm-view-dialog"
+      className="console-dialog api-key-view-dialog vm-view-dialog"
       closeHref={closeHref}
       initialFocus="close"
       triggerId={`virtual-model-view-${virtualModel.id}-trigger`}
     >
       <div className="console-dialog-head">
-        <div className="agent-view-dialog-title">
+        <div className="api-key-view-dialog-title">
           <h2 id={`virtual-model-view-dialog-title-${virtualModel.id}`}>{virtualModel.name}</h2>
           {virtualModel.enabled ? (
             <span className="pill--ok pill">Enabled</span>
@@ -70,7 +70,7 @@ function VirtualModelViewDialog({
           <span>Close</span>
         </a>
       </div>
-      <dl className="agent-detail-fields">
+      <dl className="api-key-detail-fields">
         <div>
           <dt>Strategy</dt>
           <dd>{routePolicy ? formatRouteStrategyLabel(routePolicy.strategy) : MISSING_VALUE}</dd>
@@ -105,7 +105,7 @@ function VirtualModelViewDialog({
           </dd>
         </div>
       </dl>
-      <section className="agent-detail-section">
+      <section className="api-key-detail-section">
         <h3>Candidates</h3>
         {routePolicy?.candidates.length ? (
           <div className="vm-candidate-list">
@@ -133,7 +133,7 @@ function VirtualModelViewDialog({
         )}
       </section>
       {routePolicyWarnings.length > 0 ? (
-        <section className="agent-detail-section" aria-label="Route warnings">
+        <section className="api-key-detail-section" aria-label="Route warnings">
           <h3>Route warnings</h3>
           {routePolicyWarnings.map((warning) => (
             <p className="route-warning" key={warning}>
@@ -142,7 +142,7 @@ function VirtualModelViewDialog({
           ))}
         </section>
       ) : null}
-      <section className="agent-detail-section">
+      <section className="api-key-detail-section">
         <h3>Fallback overview</h3>
         {fallbackOverview.length > 0 ? (
           <DonutBreakdown
@@ -189,12 +189,12 @@ function VirtualModelDeleteDialog({
   closeHref: string;
   virtualModel: ConsoleVirtualModel;
 }) {
-  const hasBlockers = virtualModel.defaultAgentCount > 0 || virtualModel.allowedAgentCount > 0;
+  const hasBlockers = virtualModel.defaultApiKeyCount > 0 || virtualModel.allowedApiKeyCount > 0;
 
   return (
     <ConsoleDialog
       ariaLabelledby={`virtual-model-delete-dialog-title-${virtualModel.id}`}
-      className="console-dialog agent-delete-dialog"
+      className="console-dialog api-key-delete-dialog"
       closeHref={closeHref}
       initialFocus="cancel"
       triggerId={`virtual-model-delete-${virtualModel.id}-trigger`}
@@ -205,22 +205,22 @@ function VirtualModelDeleteDialog({
         </h2>
       </div>
       {hasBlockers ? (
-        <div className="agent-delete-warning">
+        <div className="api-key-delete-warning">
           <p>Remove these dependencies before deleting:</p>
           <ul>
-            {virtualModel.defaultAgentCount > 0 ? (
-              <li>{virtualModel.defaultAgentCount} Agent default</li>
+            {virtualModel.defaultApiKeyCount > 0 ? (
+              <li>{virtualModel.defaultApiKeyCount} API key default</li>
             ) : null}
-            {virtualModel.allowedAgentCount > 0 ? (
-              <li>{virtualModel.allowedAgentCount} Agent grant</li>
+            {virtualModel.allowedApiKeyCount > 0 ? (
+              <li>{virtualModel.allowedApiKeyCount} API key grant</li>
             ) : null}
           </ul>
         </div>
       ) : (
         <p>This removes the Virtual Model from routing configuration.</p>
       )}
-      <div className="agent-delete-actions">
-        <a className="agent-delete-cancel" href={closeHref}>
+      <div className="api-key-delete-actions">
+        <a className="api-key-delete-cancel" href={closeHref}>
           <FlatIcon name="cancel" />
           <span>Cancel</span>
         </a>
@@ -231,7 +231,7 @@ function VirtualModelDeleteDialog({
           >
             <input type="hidden" name="action" value="delete" />
             <input type="hidden" name="id" value={virtualModel.id} />
-            <button className="agent-delete-confirm" type="submit">
+            <button className="api-key-delete-confirm" type="submit">
               <FlatIcon name="delete" />
               <span>Delete</span>
             </button>
@@ -445,7 +445,7 @@ export async function VirtualModelsSection({
         </button>
       </form>
       <div className="vm-shell">
-        <div className="agents-main-column">
+        <div className="api-keys-main-column">
           <div className="chart-card">
             <h2 className="chart-card-title">Virtual Model list</h2>
             {visibleVirtualModels.length === 0 ? (
@@ -556,10 +556,10 @@ export async function VirtualModelsSection({
                             </a>
                           </td>
                           <td>
-                            <span className="agent-table-actions">
+                            <span className="api-key-table-actions">
                               <a
                                 aria-label={`Edit ${virtualModel.name}`}
-                                className="link-button agent-action-edit row-action-button"
+                                className="link-button api-key-action-edit row-action-button"
                                 href={buildQueryHref(searchParams, {
                                   virtualModelView: undefined,
                                   virtualModelDialog: virtualModel.id,
@@ -571,7 +571,7 @@ export async function VirtualModelsSection({
                               </a>
                               <a
                                 aria-label={`Delete ${virtualModel.name}`}
-                                className="link-button agent-action-delete row-action-button row-action-danger"
+                                className="link-button api-key-action-delete row-action-button row-action-danger"
                                 href={buildQueryHref(searchParams, {
                                   virtualModelDelete: virtualModel.id,
                                   virtualModelView: undefined,

@@ -33,13 +33,13 @@ test("native Console dialog traps focus, closes with Escape, and restores its tr
       try {
         await waitForConsole(baseUrl, consoleApp);
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/agents`, { waitUntil: "networkidle" });
-        const trigger = page.locator("#agent-create-dialog-trigger");
+        await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
+        const trigger = page.locator("#api-key-create-dialog-trigger");
         await trigger.click();
 
         const dialog = page.locator("dialog[open]");
         await expect(dialog).toBeVisible();
-        await expect(page.locator("#agent-name")).toBeFocused();
+        await expect(page.locator("#api-key-name")).toBeFocused();
         await page.keyboard.press("Tab");
         expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(
           true,
@@ -47,7 +47,7 @@ test("native Console dialog traps focus, closes with Escape, and restores its tr
 
         await page.keyboard.press("Escape");
         await expect(dialog).toHaveCount(0);
-        await expect(page).toHaveURL(/\/agents$/);
+        await expect(page).toHaveURL(/\/api-keys$/);
         await expect(trigger).toBeFocused();
 
         await trigger.click();
@@ -117,7 +117,7 @@ test("Playground omits blank optional numeric parameters from Gateway requests",
         await waitForConsole(baseUrl, consoleApp);
         await signInFromFirstRun(page, baseUrl);
         await page.goto(`${baseUrl}/playground`, { waitUntil: "networkidle" });
-        await page.locator("#playground-agent-api-key").fill("llmi_test");
+        await page.locator("#playground-api-key").fill("llmi_test");
         await expect(page.locator("#playground-model option[value='virtual-model']")).toHaveCount(
           1,
         );

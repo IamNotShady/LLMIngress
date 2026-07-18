@@ -10,7 +10,7 @@ import {
 } from "../support/gateway-process";
 import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
-const agentApiKey = "llmi_gateway_request_hygiene_key_094";
+const apiKey = "llmi_gateway_request_hygiene_key_094";
 
 test("gateway accepts large bodies and passes chat parameters through", async () => {
   const fixture = await createTestPostgresFixture({
@@ -20,23 +20,23 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    const responsesAgentApiKey = "llmi_resp_request_hygiene_key_094";
-    const messagesAgentApiKey = "llmi_msg_request_hygiene_key_094";
+    const responsesApiKey = "llmi_resp_request_hygiene_key_094";
+    const messagesApiKey = "llmi_msg_request_hygiene_key_094";
     await seedOpenAIGatewayRoute({
-      agentApiKey,
+      apiKey,
       fixture,
       providerBaseUrl: fakeProvider.url,
       virtualModelName: "vm-request-hygiene",
     });
     await seedOpenAIGatewayRoute({
-      agentApiKey: responsesAgentApiKey,
+      apiKey: responsesApiKey,
       endpointProtocol: "responses",
       fixture,
       providerBaseUrl: fakeProvider.url,
       virtualModelName: "vm-request-hygiene-responses",
     });
     const messagesSeed = await seedOpenAIGatewayRoute({
-      agentApiKey: messagesAgentApiKey,
+      apiKey: messagesApiKey,
       endpointProtocol: "messages",
       fixture,
       providerBaseUrl: fakeProvider.url,
@@ -67,8 +67,8 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
       await waitForGateway(baseUrl, gateway);
       const openAIHeaderProbe = {
         "openai-beta": "responses=v1",
-        "openai-organization": "org_agent_123",
-        "openai-project": "proj_agent_123",
+        "openai-organization": "org_api_key_123",
+        "openai-project": "proj_api_key_123",
       };
 
       const largeMessage = "x".repeat(2 * 1024 * 1024);
@@ -87,9 +87,9 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           top_p: 0.9,
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
-          cookie: "agent-session=secret",
+          cookie: "api-key-session=secret",
           ...openAIHeaderProbe,
           origin: "http://console.test",
           referer: "http://console.test/playground",
@@ -98,9 +98,9 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           "sec-fetch-mode": "cors",
           "sec-fetch-site": "cross-site",
           "user-agent": "browser-user-agent",
-          "x-api-key": "agent-x-key-should-not-leak",
+          "x-api-key": "api-key-x-key-should-not-leak",
           "x-client-request-id": "client-chat-1",
-          "x-request-id": "agent-chat-request",
+          "x-request-id": "api-key-chat-request",
         },
         method: "POST",
       });
@@ -110,7 +110,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
       expect(body).toMatchObject({
         choices: [{ message: { content: "fake provider response", role: "assistant" } }],
       });
-      expect(response.headers.get("x-llmingress-request-id")).toBe("agent-chat-request");
+      expect(response.headers.get("x-llmingress-request-id")).toBe("api-key-chat-request");
       expect(response.headers.get("x-request-id")).toBe("fake-provider-request");
       expect(response.headers.get("x-ratelimit-remaining-requests")).toBe("99");
       expect(fakeProvider.requests).toHaveLength(1);
@@ -151,7 +151,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           stream: true,
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
           ...openAIHeaderProbe,
           "x-client-request-id": "client-stream-chat-1",
@@ -209,7 +209,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           user: "end-user-123",
         }),
         headers: {
-          authorization: `Bearer ${responsesAgentApiKey}`,
+          authorization: `Bearer ${responsesApiKey}`,
           "content-type": "application/json",
           ...openAIHeaderProbe,
           "x-client-request-id": "client-responses-1",
@@ -261,7 +261,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           stream: true,
         }),
         headers: {
-          authorization: `Bearer ${responsesAgentApiKey}`,
+          authorization: `Bearer ${responsesApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -301,7 +301,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           stream: true,
         }),
         headers: {
-          authorization: `Bearer ${responsesAgentApiKey}`,
+          authorization: `Bearer ${responsesApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -324,7 +324,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           model: "vm-request-hygiene-responses",
         }),
         headers: {
-          authorization: `Bearer ${responsesAgentApiKey}`,
+          authorization: `Bearer ${responsesApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -350,7 +350,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
         headers: {
           "anthropic-beta": "context-1m-2025-08-07",
           "anthropic-version": "2024-01-01",
-          authorization: `Bearer ${messagesAgentApiKey}`,
+          authorization: `Bearer ${messagesApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -386,7 +386,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           system: { provider: "owned" },
         }),
         headers: {
-          authorization: `Bearer ${messagesAgentApiKey}`,
+          authorization: `Bearer ${messagesApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -409,7 +409,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           model: "vm-request-hygiene",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -435,8 +435,8 @@ function expectOpenAIProviderHeaders(
   headers: Record<string, string | string[] | undefined> | undefined,
 ): void {
   expect(readHeader(headers, "openai-beta")).toBe("responses=v1");
-  expect(readHeader(headers, "openai-organization")).toBe("org_agent_123");
-  expect(readHeader(headers, "openai-project")).toBe("proj_agent_123");
+  expect(readHeader(headers, "openai-organization")).toBe("org_api_key_123");
+  expect(readHeader(headers, "openai-project")).toBe("proj_api_key_123");
 }
 
 function readHeader(

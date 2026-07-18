@@ -148,22 +148,39 @@ describe("apiKey integration guidance", () => {
   it("removes the Integration Platform field from ApiKey UI and API surfaces", () => {
     const apiKeysUi = readFileSync("apps/console/src/app/_modules/api-keys-section.tsx", "utf8");
     const apiKeysRoute = readFileSync("apps/console/src/app/api/api-keys/route.ts", "utf8");
+    // The guide tabs and the Endpoints section now live in the panels module
+    // that both the created and the detail dialog render.
+    const detailPanels = readFileSync(
+      "apps/console/src/app/_modules/api-key-detail-panels.tsx",
+      "utf8",
+    );
 
-    expect(apiKeysUi).not.toContain('name="integrationPlatform"');
-    expect(apiKeysUi).not.toContain("apiKeyPlatform");
-    expect(apiKeysUi).not.toContain("<dt>Platform</dt>");
-    expect(apiKeysUi).not.toContain("api-key-filter-platform");
-    expect(apiKeysUi).toContain("IntegrationGuideTabs");
-    expect(apiKeysUi).toContain("<h3>Endpoints</h3>");
+    for (const [label, source] of [
+      ["api-keys-section", apiKeysUi],
+      ["api-key-detail-panels", detailPanels],
+    ] as const) {
+      expect(source, label).not.toContain('name="integrationPlatform"');
+      expect(source, label).not.toContain("apiKeyPlatform");
+      expect(source, label).not.toContain("<dt>Platform</dt>");
+      expect(source, label).not.toContain("api-key-filter-platform");
+    }
+    expect(detailPanels).toContain("IntegrationGuideTabs");
+    expect(detailPanels).toContain("<h3>Endpoints</h3>");
     expect(apiKeysRoute).not.toContain("integrationPlatform");
   });
 
   it("lists every platform guide on the one-time created page fallback", async () => {
     const response = renderOneTimeApiKeyResponse(
       {
+        createdAt: new Date("2026-07-18T00:00:00.000Z"),
+        defaultVirtualModelName: "guide-vm",
+        enabled: true,
         keyPrefix: "llmi_test_key",
+        limits: [],
+        name: "guide-apiKey",
         plaintext: "llmi_test_key_value",
         virtualModelName: "guide-vm",
+        virtualModels: [],
       },
       "html",
     );

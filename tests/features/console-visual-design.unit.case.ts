@@ -371,7 +371,7 @@ describe("console dark restyle static contract", () => {
     expect(sections).toContain("ApiKeyViewDialog");
     expect(sections).toContain('className="console-dialog api-key-view-dialog"');
     expect(stylesheet).toMatch(/\.api-keys-shell\s*\{[^}]*display:\s*block/s);
-    expect(stylesheet).toMatch(/\.api-key-view-dialog\s*\{[^}]*width:\s*min\(42rem/s);
+    expect(stylesheet).toMatch(/\.api-key-view-dialog\s*\{[^}]*width:\s*min\(72rem/s);
     expect(stylesheet).toMatch(
       /\.api-key-view-dialog \.api-key-detail-fields\s*\{[^}]*grid-template-columns:\s*1fr/s,
     );

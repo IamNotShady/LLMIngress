@@ -1,5 +1,7 @@
 "use client";
 
+import type { ConsoleApiKeyLimit } from "@llmingress/db/console-api-key-limits";
+import type { ApiKeyAllowedVirtualModel } from "@llmingress/db/console-api-keys";
 import { useRouter } from "next/navigation";
 import { type FormEvent, type ReactNode, useRef, useState } from "react";
 import { ConsoleDialog } from "../_components/console-dialog";
@@ -9,13 +11,19 @@ import {
 } from "../_components/console-mutation-failure";
 import { ConsoleMutationError } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
-import { IntegrationGuideTabs } from "./api-key-integration-guide-tabs";
+import { ApiKeyDetailPanels } from "./api-key-detail-panels";
 
 type CreatedApiKeyDetails = {
   apiKey: string;
+  createdAt: string;
+  defaultVirtualModelName: string | null;
+  enabled: boolean;
   gatewayBaseUrl: string;
   keyPrefix: string;
+  limits: ConsoleApiKeyLimit[];
+  name: string;
   virtualModelName: string;
+  virtualModels: ApiKeyAllowedVirtualModel[];
 };
 
 export function ApiKeyCreateDialogClient({
@@ -27,20 +35,6 @@ export function ApiKeyCreateDialogClient({
 }) {
   const router = useRouter();
   const [createdApiKey, setCreatedApiKey] = useState<CreatedApiKeyDetails | null>(null);
-  const [keyCopied, setKeyCopied] = useState(false);
-
-  async function copyApiKey() {
-    if (!createdApiKey) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(createdApiKey.apiKey);
-      setKeyCopied(true);
-      window.setTimeout(() => setKeyCopied(false), 2000);
-    } catch {
-      // Clipboard unavailable (e.g. insecure context); the input stays selectable.
-    }
-  }
   const formRef = useRef<HTMLFormElement>(null);
   const [failure, setFailure] = useState<ConsoleMutationFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -73,18 +67,28 @@ export function ApiKeyCreateDialogClient({
       }
       if (
         !payload.apiKey ||
+        !payload.createdAt ||
         !payload.gatewayBaseUrl ||
         !payload.keyPrefix ||
-        !payload.virtualModelName
+        !payload.name ||
+        !payload.virtualModelName ||
+        !Array.isArray(payload.limits) ||
+        !Array.isArray(payload.virtualModels)
       ) {
         setFailure({ message: "API key creation returned incomplete connection details." });
         return;
       }
       setCreatedApiKey({
         apiKey: payload.apiKey,
+        createdAt: payload.createdAt,
+        defaultVirtualModelName: payload.defaultVirtualModelName ?? null,
+        enabled: payload.enabled ?? true,
         gatewayBaseUrl: payload.gatewayBaseUrl,
         keyPrefix: payload.keyPrefix,
+        limits: payload.limits,
+        name: payload.name,
         virtualModelName: payload.virtualModelName,
+        virtualModels: payload.virtualModels,
       });
       router.refresh();
     } catch {
@@ -98,7 +102,7 @@ export function ApiKeyCreateDialogClient({
     return (
       <ConsoleDialog
         ariaLabelledby="api-key-created-dialog-title"
-        className="console-dialog api-key-created-dialog"
+        className="console-dialog api-key-view-dialog api-key-created-dialog"
         closeHref={closeHref}
         initialFocus="close"
         key="created"
@@ -111,44 +115,22 @@ export function ApiKeyCreateDialogClient({
             <span>Close</span>
           </a>
         </div>
-        <p>Copy this API key now. It will not be shown again.</p>
-        <dl className="api-key-detail-fields">
-          <div>
-            <dt>API key</dt>
-            <dd>
-              <span className="api-key-reveal-field">
-                <input
-                  aria-label="API key"
-                  className="mono"
-                  readOnly
-                  value={createdApiKey.apiKey}
-                />
-                <button
-                  aria-label="Copy API key"
-                  className="secondary-button row-action-button"
-                  onClick={copyApiKey}
-                  title={keyCopied ? "Copied" : "Copy API key"}
-                  type="button"
-                >
-                  <FlatIcon name={keyCopied ? "confirm" : "copy"} />
-                </button>
-              </span>
-            </dd>
-          </div>
-          <div>
-            <dt>Gateway URL</dt>
-            <dd>{createdApiKey.gatewayBaseUrl}</dd>
-          </div>
-        </dl>
-        <section className="api-key-created-guide">
-          <h3>Integration guide</h3>
-          <IntegrationGuideTabs
-            apiKey={createdApiKey.apiKey}
-            gatewayBaseUrl={createdApiKey.gatewayBaseUrl}
-            idPrefix="api-key-created"
-            model={createdApiKey.virtualModelName}
-          />
-        </section>
+        <ApiKeyDetailPanels
+          createdAt={createdApiKey.createdAt}
+          defaultVirtualModelName={createdApiKey.defaultVirtualModelName}
+          enabled={createdApiKey.enabled}
+          gatewayBaseUrl={createdApiKey.gatewayBaseUrl}
+          guideApiKey={createdApiKey.apiKey}
+          guideKeyPrefix={null}
+          guideModel={createdApiKey.virtualModelName}
+          idPrefix="api-key-created"
+          limits={createdApiKey.limits}
+          secretHideable={true}
+          secretLabel="API key"
+          secretNote="Copy this API key now. It will not be shown again."
+          secretValue={createdApiKey.apiKey}
+          virtualModels={createdApiKey.virtualModels}
+        />
       </ConsoleDialog>
     );
   }

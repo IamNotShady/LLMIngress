@@ -16,6 +16,7 @@ export type FlatIconName =
   | "edit"
   | "enable"
   | "filter"
+  | "hide"
   | "key"
   | "lock"
   | "probe"
@@ -56,6 +57,14 @@ const icons: Record<FlatIconName, ReactNode> = {
     </>
   ),
   filter: <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />,
+  hide: (
+    <>
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19" />
+      <path d="M6.61 6.61A18.9 18.9 0 0 0 2 11s3.5 7 10 7a9.7 9.7 0 0 0 5.39-1.61" />
+      <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+      <path d="m2 2 20 20" />
+    </>
+  ),
   key: (
     <>
       <circle cx="15.5" cy="8.5" r="5.5" />

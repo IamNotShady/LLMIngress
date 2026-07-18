@@ -37,6 +37,7 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 - Provider list expansion is driven only by the `selected` URL param: `/providers` defaults to fully collapsed, clicking the expanded row collapses it, and the Model library card renders only while a provider is selected.
 - Renamed secret env/config from `MASTER_KEY` / `MASTER_KEY_FILE` to `ENCRYPTION_KEY` / `ENCRYPTION_KEY_FILE`. Provider secret crypto remains AES-256-GCM.
 - `/v1/embeddings` remains retired; embedding model metadata remains supported.
+- The API key created and detail dialogs render one shared `ApiKeyDetailPanels` in the same `api-key-view-dialog` shell; only the key field differs (plaintext with a hide toggle after creation, stored prefix with copy only in the detail view). `createApiKeyWithSettings` reads saved limits back in-transaction so the created dialog can render Budget/RPM/TPM/Token.
 
 ## Blockers
 

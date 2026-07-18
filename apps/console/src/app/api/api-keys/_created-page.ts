@@ -1,4 +1,6 @@
 import { gatewayPublicBaseUrl } from "@llmingress/config";
+import type { ConsoleApiKeyLimit } from "@llmingress/db/console-api-key-limits";
+import type { ApiKeyAllowedVirtualModel } from "@llmingress/db/console-api-keys";
 import { NextResponse } from "next/server";
 import {
   buildIntegrationGuides,
@@ -7,9 +9,15 @@ import {
 
 export function renderOneTimeApiKeyResponse(
   input: {
+    createdAt: Date;
+    defaultVirtualModelName: string | null;
+    enabled: boolean;
     keyPrefix: string | null;
+    limits: readonly ConsoleApiKeyLimit[];
+    name: string;
     plaintext: string;
     virtualModelName: string | null;
+    virtualModels: readonly ApiKeyAllowedVirtualModel[];
   },
   format: "html" | "json" = "html",
 ): NextResponse {
@@ -24,7 +32,19 @@ export function renderOneTimeApiKeyResponse(
 
   if (format === "json") {
     return NextResponse.json(
-      { apiKey, gatewayBaseUrl, guides, keyPrefix, virtualModelName },
+      {
+        apiKey,
+        createdAt: input.createdAt.toISOString(),
+        defaultVirtualModelName: input.defaultVirtualModelName,
+        enabled: input.enabled,
+        gatewayBaseUrl,
+        guides,
+        keyPrefix,
+        limits: input.limits,
+        name: input.name,
+        virtualModelName,
+        virtualModels: input.virtualModels,
+      },
       { headers: { "cache-control": "no-store" } },
     );
   }

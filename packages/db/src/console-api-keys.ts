@@ -4,6 +4,8 @@ import { createConfigPublisher } from "@llmingress/db/config-versions";
 import type { RouteEndpointProtocol } from "@llmingress/domain";
 import {
   type ApiKeyLimitRuleInput,
+  type ConsoleApiKeyLimit,
+  readApiKeyLimitsWithClient,
   replaceApiKeyLimitRulesWithClient,
 } from "./console-api-key-limits.ts";
 import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
@@ -27,6 +29,7 @@ export type ConsoleApiKey = NormalizedApiKeyFormInput & {
 };
 
 export type ConsoleApiKeyCreateResult = ConsoleApiKey & {
+  limits: ConsoleApiKeyLimit[];
   plaintext: string;
   virtualModelAccess: ApiKeyVirtualModelAccess;
 };
@@ -290,6 +293,7 @@ export async function createApiKeyWithSettings(input: {
       }
       apiKey = {
         ...rowToConsoleApiKey(requireRow(result.rows[0])),
+        limits: await readApiKeyLimitsWithClient(client, apiKeyId),
         plaintext,
         virtualModelAccess: requireApiKeyVirtualModelAccess(
           await readApiKeyVirtualModelAccessById(client, apiKeyId),

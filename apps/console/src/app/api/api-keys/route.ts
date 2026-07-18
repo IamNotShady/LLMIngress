@@ -38,8 +38,15 @@ export const POST = withConsoleAuth(async (request) => {
       });
       return renderOneTimeApiKeyResponse(
         {
-          ...result,
+          createdAt: result.createdAt,
+          defaultVirtualModelName: result.virtualModelAccess.defaultVirtualModel?.name ?? null,
+          enabled: result.enabled,
+          keyPrefix: result.keyPrefix,
+          limits: result.limits,
+          name: result.name,
+          plaintext: result.plaintext,
           virtualModelName: readApiKeyConnectionVirtualModelName(result.virtualModelAccess),
+          virtualModels: result.virtualModelAccess.allowedVirtualModels,
         },
         request.headers.get("accept")?.includes("application/json") ? "json" : "html",
       );

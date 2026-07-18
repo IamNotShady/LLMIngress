@@ -183,7 +183,7 @@ export async function listApiKeyLimits(databaseUrl?: string): Promise<ConsoleApi
 }
 
 export async function listSavedApiKeyLimits(databaseUrl?: string): Promise<ConsoleApiKeyLimit[]> {
-  return withPooledPostgresClient(databaseUrl, (client) => readApiKeyLimits(client));
+  return withPooledPostgresClient(databaseUrl, (client) => readApiKeyLimitsWithClient(client));
 }
 
 export async function listApiKeyLimitRuntimeSnapshots(
@@ -250,7 +250,7 @@ export async function saveApiKeyLimitRules(input: {
       await assertApiKeyExists(client, input.limits.apiKeyId);
       await replaceApiKeyLimitRulesWithClient(client, input.limits.apiKeyId, input.limits.rules);
 
-      savedLimits = await readApiKeyLimits(client, input.limits.apiKeyId);
+      savedLimits = await readApiKeyLimitsWithClient(client, input.limits.apiKeyId);
     },
   });
 
@@ -327,7 +327,7 @@ async function assertApiKeyExists(client: ApiKeyLimitQueryClient, id: string): P
   }
 }
 
-async function readApiKeyLimits(
+export async function readApiKeyLimitsWithClient(
   client: ApiKeyLimitQueryClient,
   apiKeyId?: string,
 ): Promise<ConsoleApiKeyLimit[]> {

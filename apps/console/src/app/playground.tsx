@@ -2,6 +2,7 @@
 
 import { isRecord } from "@llmingress/util";
 import { useRef, useState } from "react";
+import { Spinner } from "./_components/spinner";
 import {
   buildPlaygroundChatRequest,
   buildPlaygroundMessagesRequest,
@@ -353,6 +354,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
 
             <div className="console-field playground-field">
               <label htmlFor="playground-model">3. Virtual Model</label>
+              {isLoadingModels ? <Spinner label="Loading models" /> : null}
               <select
                 id="playground-model"
                 value={selectedModel}
@@ -452,6 +454,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
                 <span>Clear</span>
               </button>
               <button type="submit" disabled={isSending}>
+                {isSending ? <Spinner label="Sending" /> : null}
                 <span>{isSending ? "Sending" : "Send"}</span>
               </button>
             </div>

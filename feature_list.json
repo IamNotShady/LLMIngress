@@ -98,6 +98,15 @@
       "dependencies": ["console-core"],
       "status": "passing",
       "evidence": "2026-07-18: TDD red-to-green. New shared EmptyState primitive (apps/console/src/app/_components/empty-state.tsx, server-safe, .empty-state tokens in globals.css) replaces ad-hoc empty markup in providers-client-section, models-section, overview-section, activity-section (colspan) and limits-section (3-branch, CTA via .empty-state-action action slot). Focused unit (3) + E2E (1: /providers empty view renders .empty-state 'No providers configured', no overflow at 1280/390) passed."
+    },
+    {
+      "id": "console-spinner",
+      "name": "Console Spinner",
+      "description": "A shared, accessible Spinner primitive (role=status, prefers-reduced-motion aware) marks client-side in-flight states in the Playground (model loading and send); the loading spinner is observable while the allowed-models request is pending and the page never overflows at 1280 or 390.",
+      "verification": "pnpm exec vitest run tests/features/console-spinner.unit.test.ts && pnpm test:e2e tests/e2e/console-spinner.e2e.spec.ts --workers=1",
+      "dependencies": ["console-core"],
+      "status": "passing",
+      "evidence": "2026-07-18: TDD red-to-green. New Spinner primitive (apps/console/src/app/_components/spinner.tsx, role=status + aria-label; .spinner CSS with spinner-rotate keyframes + prefers-reduced-motion guard). Wired into playground.tsx: model-loading spinner beside '3. Virtual Model' and send-button spinner. Focused unit (3) + E2E (1: page.route delays **/v1/models** 1.5s, focus model select surfaces role=status 'Loading models', no overflow at 1280/390) passed."
     }
   ]
 }

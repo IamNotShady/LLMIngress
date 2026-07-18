@@ -528,6 +528,33 @@ pre,
   margin-top: var(--space-xs);
 }
 
+/* ---- Spinner ---- */
+.spinner {
+  display: inline-flex;
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.15em;
+}
+.spinner-ring {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  animation: spinner-rotate 0.7s linear infinite;
+}
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner-ring {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
 .agents-dashboard {
   display: flex;
   flex-direction: column;

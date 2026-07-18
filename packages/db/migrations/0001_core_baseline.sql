@@ -21,12 +21,12 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- Name: agent_limits; Type: TABLE; Schema: public; Owner: -
+-- Name: api_key_limits; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.agent_limits (
+CREATE TABLE public.api_key_limits (
     id uuid NOT NULL,
-    agent_id uuid NOT NULL,
+    api_key_id uuid NOT NULL,
     limit_type text NOT NULL,
     period text NOT NULL,
     limit_value numeric(20,6) NOT NULL,
@@ -36,41 +36,40 @@ CREATE TABLE public.agent_limits (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     enforcement_policy text DEFAULT 'block'::text NOT NULL,
     manual_bypass boolean DEFAULT false NOT NULL,
-    CONSTRAINT agent_limits_concurrency_period_unit_check CHECK (((limit_type <> 'concurrency'::text) OR ((period = 'request'::text) AND (unit = 'requests'::text)))),
-    CONSTRAINT agent_limits_enforcement_policy_check CHECK ((enforcement_policy = ANY (ARRAY['block'::text, 'warn_only'::text]))),
-    CONSTRAINT agent_limits_limit_type_check CHECK ((limit_type = ANY (ARRAY['budget'::text, 'concurrency'::text, 'rpm'::text, 'tpm'::text, 'token'::text]))),
-    CONSTRAINT agent_limits_limit_value_check CHECK ((limit_value > (0)::numeric)),
-    CONSTRAINT agent_limits_period_check CHECK ((period = ANY (ARRAY['request'::text, 'minute'::text, 'hour'::text, 'day'::text, 'week'::text, 'month'::text]))),
-    CONSTRAINT agent_limits_unit_check CHECK ((unit = ANY (ARRAY['requests'::text, 'tokens'::text, 'usd'::text])))
+    CONSTRAINT api_key_limits_concurrency_period_unit_check CHECK (((limit_type <> 'concurrency'::text) OR ((period = 'request'::text) AND (unit = 'requests'::text)))),
+    CONSTRAINT api_key_limits_enforcement_policy_check CHECK ((enforcement_policy = ANY (ARRAY['block'::text, 'warn_only'::text]))),
+    CONSTRAINT api_key_limits_limit_type_check CHECK ((limit_type = ANY (ARRAY['budget'::text, 'concurrency'::text, 'rpm'::text, 'tpm'::text, 'token'::text]))),
+    CONSTRAINT api_key_limits_limit_value_check CHECK ((limit_value > (0)::numeric)),
+    CONSTRAINT api_key_limits_period_check CHECK ((period = ANY (ARRAY['request'::text, 'minute'::text, 'hour'::text, 'day'::text, 'week'::text, 'month'::text]))),
+    CONSTRAINT api_key_limits_unit_check CHECK ((unit = ANY (ARRAY['requests'::text, 'tokens'::text, 'usd'::text])))
 );
 
 
 --
--- Name: agent_virtual_models; Type: TABLE; Schema: public; Owner: -
+-- Name: api_key_virtual_models; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.agent_virtual_models (
-    agent_id uuid NOT NULL,
+CREATE TABLE public.api_key_virtual_models (
+    api_key_id uuid NOT NULL,
     virtual_model_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
 --
--- Name: agents; Type: TABLE; Schema: public; Owner: -
+-- Name: api_keys; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.agents (
+CREATE TABLE public.api_keys (
     id uuid NOT NULL,
     name text NOT NULL,
-    key_prefix text,
-    key_hash text,
+    key_prefix text NOT NULL,
+    key_hash text NOT NULL,
     default_virtual_model_id uuid,
     enabled boolean DEFAULT true NOT NULL,
     limits_enabled boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    integration_platform text DEFAULT 'other'::text NOT NULL,
     deleted_at timestamp with time zone
 );
 
@@ -81,7 +80,7 @@ CREATE TABLE public.agents (
 
 CREATE TABLE public.budget_periods (
     id uuid NOT NULL,
-    agent_id uuid NOT NULL,
+    api_key_id uuid NOT NULL,
     period_type text NOT NULL,
     period_start timestamp with time zone NOT NULL,
     period_end timestamp with time zone NOT NULL,
@@ -405,7 +404,7 @@ CREATE TABLE public.providers (
 
 CREATE TABLE public.rate_limit_windows (
     id uuid NOT NULL,
-    agent_id uuid NOT NULL,
+    api_key_id uuid NOT NULL,
     limit_type text NOT NULL,
     window_start timestamp with time zone NOT NULL,
     window_end timestamp with time zone NOT NULL,
@@ -429,12 +428,12 @@ CREATE TABLE public.rate_limit_windows (
 CREATE TABLE public.request_activity (
     id uuid NOT NULL,
     request_id text NOT NULL,
-    agent_id uuid NOT NULL,
+    api_key_id uuid NOT NULL,
     virtual_model_id uuid,
     route_policy_id uuid,
     provider_id uuid,
     provider_model_id uuid,
-    agent_key_prefix text NOT NULL,
+    api_key_prefix text NOT NULL,
     protocol text NOT NULL,
     model text,
     stream boolean DEFAULT false NOT NULL,
@@ -451,7 +450,7 @@ CREATE TABLE public.request_activity (
     provider_api_key_id uuid,
     provider_api_key_prefix text,
     response_metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
-    agent_name_snapshot text,
+    api_key_name_snapshot text,
     virtual_model_name_snapshot text,
     route_policy_strategy_snapshot text,
     provider_key_snapshot text,
@@ -473,7 +472,7 @@ CREATE TABLE public.request_activity (
 CREATE TABLE public.request_costs (
     id uuid NOT NULL,
     request_activity_id uuid NOT NULL,
-    agent_id uuid NOT NULL,
+    api_key_id uuid NOT NULL,
     provider_model_id uuid,
     input_cost_usd numeric(20,8),
     output_cost_usd numeric(20,8),
@@ -496,7 +495,7 @@ CREATE TABLE public.request_costs (
 CREATE TABLE public.request_usage (
     id uuid NOT NULL,
     request_activity_id uuid NOT NULL,
-    agent_id uuid NOT NULL,
+    api_key_id uuid NOT NULL,
     virtual_model_id uuid,
     provider_model_id uuid,
     input_tokens integer DEFAULT 0 NOT NULL,
@@ -527,8 +526,7 @@ CREATE TABLE public.route_policies (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     endpoint_protocol text NOT NULL,
     deleted_at timestamp with time zone,
-    CONSTRAINT route_policies_endpoint_protocol_check CHECK ((endpoint_protocol = ANY (ARRAY['chat_completions'::text, 'responses'::text, 'messages'::text]))),
-    CONSTRAINT route_policies_strategy_check CHECK ((strategy = ANY (ARRAY['fixed'::text, 'cost_first'::text, 'random'::text])))
+    CONSTRAINT route_policies_endpoint_protocol_check CHECK ((endpoint_protocol = ANY (ARRAY['chat_completions'::text, 'responses'::text, 'messages'::text])))
 );
 
 
@@ -569,59 +567,59 @@ ALTER TABLE ONLY public.config_versions ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
--- Name: agent_limits agent_limits_agent_id_limit_type_period_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: api_key_limits api_key_limits_api_key_id_limit_type_period_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.agent_limits
-    ADD CONSTRAINT agent_limits_agent_id_limit_type_period_key UNIQUE (agent_id, limit_type, period);
-
-
---
--- Name: agent_limits agent_limits_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.agent_limits
-    ADD CONSTRAINT agent_limits_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.api_key_limits
+    ADD CONSTRAINT api_key_limits_api_key_id_limit_type_period_key UNIQUE (api_key_id, limit_type, period);
 
 
 --
--- Name: agent_virtual_models agent_virtual_models_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: api_key_limits api_key_limits_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.agent_virtual_models
-    ADD CONSTRAINT agent_virtual_models_pkey PRIMARY KEY (agent_id, virtual_model_id);
-
-
---
--- Name: agents agents_key_hash_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.agents
-    ADD CONSTRAINT agents_key_hash_key UNIQUE (key_hash);
+ALTER TABLE ONLY public.api_key_limits
+    ADD CONSTRAINT api_key_limits_pkey PRIMARY KEY (id);
 
 
 --
--- Name: agents agents_key_prefix_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: api_key_virtual_models api_key_virtual_models_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.agents
-    ADD CONSTRAINT agents_key_prefix_key UNIQUE (key_prefix);
-
-
---
--- Name: agents agents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.agents
-    ADD CONSTRAINT agents_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.api_key_virtual_models
+    ADD CONSTRAINT api_key_virtual_models_pkey PRIMARY KEY (api_key_id, virtual_model_id);
 
 
 --
--- Name: budget_periods budget_periods_agent_id_period_type_period_start_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: api_keys api_keys_key_hash_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.api_keys
+    ADD CONSTRAINT api_keys_key_hash_key UNIQUE (key_hash);
+
+
+--
+-- Name: api_keys api_keys_key_prefix_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.api_keys
+    ADD CONSTRAINT api_keys_key_prefix_key UNIQUE (key_prefix);
+
+
+--
+-- Name: api_keys api_keys_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.api_keys
+    ADD CONSTRAINT api_keys_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: budget_periods budget_periods_api_key_id_period_type_period_start_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.budget_periods
-    ADD CONSTRAINT budget_periods_agent_id_period_type_period_start_key UNIQUE (agent_id, period_type, period_start);
+    ADD CONSTRAINT budget_periods_api_key_id_period_type_period_start_key UNIQUE (api_key_id, period_type, period_start);
 
 
 --
@@ -769,11 +767,11 @@ ALTER TABLE ONLY public.providers
 
 
 --
--- Name: rate_limit_windows rate_limit_windows_agent_id_limit_type_window_start_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: rate_limit_windows rate_limit_windows_api_key_id_limit_type_window_start_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.rate_limit_windows
-    ADD CONSTRAINT rate_limit_windows_agent_id_limit_type_window_start_key UNIQUE (agent_id, limit_type, window_start);
+    ADD CONSTRAINT rate_limit_windows_api_key_id_limit_type_window_start_key UNIQUE (api_key_id, limit_type, window_start);
 
 
 --
@@ -873,10 +871,10 @@ ALTER TABLE ONLY public.virtual_models
 
 
 --
--- Name: idx_budget_periods_agent_period; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_budget_periods_api_key_period; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_budget_periods_agent_period ON public.budget_periods USING btree (agent_id, period_type, period_start DESC);
+CREATE INDEX idx_budget_periods_api_key_period ON public.budget_periods USING btree (api_key_id, period_type, period_start DESC);
 
 
 --
@@ -971,24 +969,24 @@ CREATE INDEX idx_provider_health_summary_provider_status ON public.provider_heal
 
 
 --
--- Name: idx_rate_limit_windows_agent_window; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_rate_limit_windows_api_key_window; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_rate_limit_windows_agent_window ON public.rate_limit_windows USING btree (agent_id, limit_type, window_start DESC);
-
-
---
--- Name: idx_request_activity_agent_created_at; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_request_activity_agent_created_at ON public.request_activity USING btree (agent_id, created_at DESC);
+CREATE INDEX idx_rate_limit_windows_api_key_window ON public.rate_limit_windows USING btree (api_key_id, limit_type, window_start DESC);
 
 
 --
--- Name: idx_request_activity_agent_key_started_at; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_request_activity_api_key_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_request_activity_agent_key_started_at ON public.request_activity USING btree (agent_id, started_at DESC, id DESC);
+CREATE INDEX idx_request_activity_api_key_created_at ON public.request_activity USING btree (api_key_id, created_at DESC);
+
+
+--
+-- Name: idx_request_activity_api_key_started_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_request_activity_api_key_started_at ON public.request_activity USING btree (api_key_id, started_at DESC, id DESC);
 
 
 --
@@ -1055,17 +1053,17 @@ CREATE INDEX idx_request_activity_virtual_model_started_at ON public.request_act
 
 
 --
--- Name: idx_request_costs_agent_created_at; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_request_costs_api_key_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_request_costs_agent_created_at ON public.request_costs USING btree (agent_id, created_at DESC);
+CREATE INDEX idx_request_costs_api_key_created_at ON public.request_costs USING btree (api_key_id, created_at DESC);
 
 
 --
--- Name: idx_request_usage_agent_created_at; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_request_usage_api_key_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_request_usage_agent_created_at ON public.request_usage USING btree (agent_id, created_at DESC);
+CREATE INDEX idx_request_usage_api_key_created_at ON public.request_usage USING btree (api_key_id, created_at DESC);
 
 
 --

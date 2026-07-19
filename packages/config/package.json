@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./provider-registry": {
+      "types": "./src/provider-registry.ts",
+      "default": "./src/provider-registry.ts"
     }
   },
   "scripts": {

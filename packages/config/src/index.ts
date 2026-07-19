@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 
+export * from "./provider-registry.js";
+
 type BootstrapEnvironment = Record<string, string | undefined>;
 
 const bootstrapConfigFileSchema = z.object({

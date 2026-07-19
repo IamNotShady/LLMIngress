@@ -50,6 +50,7 @@ type VirtualModel = {
 
 const strategies: Strategy[] = ["fixed", "cost_first", "load_balance"];
 const endpointProtocols: EndpointProtocol[] = [...routeEndpointProtocols];
+const modelPickerPageSize = 10;
 
 export function VirtualModelRouteDialogClient({
   closeHref,
@@ -72,6 +73,7 @@ export function VirtualModelRouteDialogClient({
     routePolicy?.candidates ?? [],
   );
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerPage, setPickerPage] = useState(1);
   const [providerFilter, setProviderFilter] = useState("all");
   const [modelQuery, setModelQuery] = useState("");
 
@@ -111,6 +113,12 @@ export function VirtualModelRouteDialogClient({
       ? null
       : (providerFilters.find(([providerKey]) => providerKey === providerFilter)?.[1] ??
         providerFilter);
+  const pickerPageCount = Math.max(1, Math.ceil(visibleOptions.length / modelPickerPageSize));
+  const currentPickerPage = Math.min(pickerPage, pickerPageCount);
+  const pagedOptions = visibleOptions.slice(
+    (currentPickerPage - 1) * modelPickerPageSize,
+    currentPickerPage * modelPickerPageSize,
+  );
 
   function addModel(option: ProviderModelOption) {
     setSelectedCandidates((current) => [...current, { ...option, candidateOrder: current.length }]);
@@ -119,6 +127,7 @@ export function VirtualModelRouteDialogClient({
 
   function handleEndpointChange(nextEndpointProtocol: EndpointProtocol) {
     setEndpointProtocol(nextEndpointProtocol);
+    setPickerPage(1);
     setSelectedCandidates((current) =>
       current
         .filter((candidate) => candidate.supportedEndpoints.includes(nextEndpointProtocol))
@@ -332,7 +341,10 @@ export function VirtualModelRouteDialogClient({
                 className="secondary-button vm-add-model-button"
                 id="vm-model-picker-trigger"
                 type="button"
-                onClick={() => setPickerOpen(true)}
+                onClick={() => {
+                  setPickerPage(1);
+                  setPickerOpen(true);
+                }}
               >
                 <span>Add Model</span>
               </button>
@@ -370,7 +382,10 @@ export function VirtualModelRouteDialogClient({
               <select
                 id="vm-model-provider-filter"
                 value={providerFilter}
-                onChange={(event) => setProviderFilter(event.target.value)}
+                onChange={(event) => {
+                  setProviderFilter(event.target.value);
+                  setPickerPage(1);
+                }}
               >
                 <option value="all">All</option>
                 {providerFilters.map(([providerKey, providerDisplayName]) => (
@@ -386,7 +401,10 @@ export function VirtualModelRouteDialogClient({
                 id="vm-model-name-filter"
                 placeholder="Search model name"
                 value={modelQuery}
-                onChange={(event) => setModelQuery(event.target.value)}
+                onChange={(event) => {
+                  setModelQuery(event.target.value);
+                  setPickerPage(1);
+                }}
               />
             </div>
           </div>
@@ -418,7 +436,7 @@ export function VirtualModelRouteDialogClient({
                     </td>
                   </tr>
                 ) : (
-                  visibleOptions.map((option) => (
+                  pagedOptions.map((option) => (
                     <tr key={option.id}>
                       <td>{option.providerDisplayName}</td>
                       <td>
@@ -444,6 +462,43 @@ export function VirtualModelRouteDialogClient({
               </tbody>
             </table>
           </div>
+          {visibleOptions.length > modelPickerPageSize ? (
+            <nav aria-label="Model picker pages" className="list-pagination">
+              <p className="list-pagination-summary">
+                <strong>
+                  Page {currentPickerPage} of {pickerPageCount}
+                </strong>
+                <span className="list-pagination-range">
+                  {`${(currentPickerPage - 1) * modelPickerPageSize + 1}–${Math.min(
+                    visibleOptions.length,
+                    currentPickerPage * modelPickerPageSize,
+                  )} of ${visibleOptions.length} models`}
+                </span>
+              </p>
+              <div className="list-pagination-controls">
+                <button
+                  aria-label="Previous page"
+                  className="list-pagination-link"
+                  disabled={currentPickerPage <= 1}
+                  type="button"
+                  onClick={() => setPickerPage(currentPickerPage - 1)}
+                >
+                  <span aria-hidden="true">&larr;</span>
+                  <span>Previous</span>
+                </button>
+                <button
+                  aria-label="Next page"
+                  className="list-pagination-link"
+                  disabled={currentPickerPage >= pickerPageCount}
+                  type="button"
+                  onClick={() => setPickerPage(currentPickerPage + 1)}
+                >
+                  <span>Next</span>
+                  <span aria-hidden="true">&rarr;</span>
+                </button>
+              </div>
+            </nav>
+          ) : null}
         </ConsoleDialog>
       ) : null}
     </>

@@ -62,6 +62,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@llmingress/config": "workspace:*",
     "@llmingress/domain": "workspace:*",
     "@llmingress/util": "workspace:*"
   }

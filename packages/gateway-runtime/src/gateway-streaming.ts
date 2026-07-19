@@ -1,4 +1,5 @@
 import type { Readable } from "node:stream";
+import { defaultEndpointPathByProtocol } from "@llmingress/config";
 import { selectRouteAttempts } from "@llmingress/domain";
 import type { NormalizedAnthropicMessagesRequest } from "@llmingress/provider/anthropic";
 import {
@@ -585,7 +586,7 @@ function buildStreamingPayload(input: {
           "content-type": "application/json",
         }),
       ok: true,
-      pathSuffix: "chat/completions",
+      pathSuffix: defaultEndpointPathByProtocol.chat_completions,
       payload: buildOpenAIChatStreamingPayload(normalized.request),
       requestMetadata,
     };
@@ -612,7 +613,7 @@ function buildStreamingPayload(input: {
           "content-type": "application/json",
         }),
       ok: true,
-      pathSuffix: "responses",
+      pathSuffix: defaultEndpointPathByProtocol.responses,
       payload: buildOpenAIResponsesStreamingPayload(normalized.request),
       requestMetadata,
     };
@@ -640,7 +641,7 @@ function buildStreamingPayload(input: {
         "x-api-key": apiKey,
       }),
     ok: true,
-    pathSuffix: "messages",
+    pathSuffix: defaultEndpointPathByProtocol.messages,
     payload: buildAnthropicMessagesStreamingPayload(normalized.request),
     requestMetadata,
   };

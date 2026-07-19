@@ -1,3 +1,4 @@
+import { defaultEndpointPathByProtocol } from "@llmingress/config";
 import { isRecord, joinUrl, omitUndefined } from "@llmingress/util";
 import {
   fetchCredentialedProviderRequest,
@@ -144,7 +145,7 @@ export function buildAnthropicMessagesPayload(
 }
 
 export function buildAnthropicMessagesUrl(baseUrl: string): string {
-  return joinUrl(baseUrl, "messages");
+  return joinUrl(baseUrl, defaultEndpointPathByProtocol.messages);
 }
 
 function mapProviderError(

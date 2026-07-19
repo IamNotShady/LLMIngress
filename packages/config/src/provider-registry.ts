@@ -64,6 +64,15 @@ export type KnownProviderKey =
   | "xai"
   | "zai";
 
+/**
+ * Providers whose upstream credential comes from an OAuth subscription flow.
+ * The array is the runtime carrier for the type; a unit test pins it to the
+ * entries' `behavior.subscription` flags so the type and the registry data
+ * cannot drift apart.
+ */
+export const subscriptionProviderKeys = ["claude_code", "openai_codex"] as const;
+export type SubscriptionProviderKey = (typeof subscriptionProviderKeys)[number];
+
 export type ProviderRegistryEntry = {
   behavior: ProviderBehavior;
   creation:

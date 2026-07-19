@@ -12,6 +12,7 @@ import {
   providerSupportsRouteEndpointProtocol,
   resolveProviderRegistryEntry,
   routeEndpointProtocols,
+  subscriptionProviderKeys,
 } from "../../packages/config/src/provider-registry";
 
 // Endpoint literals copied from the donor files so the test is an independent
@@ -380,6 +381,13 @@ describe("provider metadata registry", () => {
 
   it("lists the subscription providers", () => {
     expect(listSubscriptionProviderKeys()).toEqual(["claude_code", "openai_codex"]);
+  });
+
+  it("pins the SubscriptionProviderKey type carrier to the registry's subscription flags", () => {
+    // subscriptionProviderKeys is the runtime carrier of the type; if a
+    // subscription provider is added to (or removed from) the registry without
+    // updating the carrier, these drift apart and this test goes red.
+    expect([...subscriptionProviderKeys]).toEqual(listSubscriptionProviderKeys());
   });
 
   it("lists the price-sync supported providers (everything except subscriptions)", () => {

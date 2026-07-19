@@ -1,9 +1,12 @@
-import { resolveProviderRegistryEntry } from "@llmingress/config/provider-registry";
+import {
+  resolveProviderRegistryEntry,
+  type SubscriptionProviderKey,
+} from "@llmingress/config/provider-registry";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import { isRecord } from "@llmingress/util";
 import type { AnthropicContentBlock } from "./adapters/anthropic.js";
 
-export type SubscriptionProviderKey = "claude_code" | "openai_codex";
+export type { SubscriptionProviderKey };
 
 export const claudeCodeSystemPrompt =
   "You are a Claude agent, built on Anthropic's Claude Agent SDK.";

@@ -92,6 +92,14 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
         await expect(picker).not.toContainText("Codex Responses");
         await expect(picker).not.toContainText("Embedding Only");
 
+        // A provider filter that can't serve the endpoint explains itself
+        // instead of pointing at the Providers page.
+        await page.locator("#vm-model-provider-filter").selectOption("openai");
+        await expect(picker).toContainText("OpenAI doesn't support the Messages endpoint.");
+        await expect(picker).toContainText("set the Provider filter to All");
+        await page.locator("#vm-model-provider-filter").selectOption("all");
+        await expect(picker).toContainText("Claude Messages");
+
         await picker.getByRole("button", { name: "Close" }).click();
         await endpointSelect.selectOption("responses");
         await page.getByRole("button", { name: "Add Model" }).click();

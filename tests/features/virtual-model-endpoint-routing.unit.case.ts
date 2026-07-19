@@ -76,31 +76,22 @@ describe("virtual model endpoint routing", () => {
     ).toThrow(/must be fixed, cost_first, or load_balance/i);
   });
 
-  it("derives route endpoint protocols from provider templates and direct providers", () => {
-    expect(
-      listProviderRouteEndpointProtocols({
-        providerKey: "openai",
-        providerTemplateId: null,
-      }),
-    ).toEqual(["chat_completions", "responses"]);
-    expect(
-      listProviderRouteEndpointProtocols({
-        providerKey: "anthropic",
-        providerTemplateId: null,
-      }),
-    ).toEqual(["messages"]);
-    expect(
-      listProviderRouteEndpointProtocols({
-        providerKey: "openrouter",
-        providerTemplateId: "openrouter",
-      }),
-    ).toEqual(["chat_completions", "messages", "responses"]);
-    expect(
-      listProviderRouteEndpointProtocols({
-        providerKey: "moonshot",
-        providerTemplateId: "moonshot",
-      }),
-    ).toEqual(["chat_completions"]);
+  it("derives route endpoint protocols from the provider registry, keyed by provider key", () => {
+    expect(listProviderRouteEndpointProtocols("openai")).toEqual(["chat_completions", "responses"]);
+    expect(listProviderRouteEndpointProtocols("anthropic")).toEqual(["messages"]);
+    expect(listProviderRouteEndpointProtocols("openrouter")).toEqual([
+      "chat_completions",
+      "messages",
+      "responses",
+    ]);
+    expect(listProviderRouteEndpointProtocols("moonshot")).toEqual(["chat_completions"]);
+    // Unknown provider keys stay permissive (all three routable protocols),
+    // a deliberate behavior fix from the previous empty-array default.
+    expect(listProviderRouteEndpointProtocols("my-vllm")).toEqual([
+      "chat_completions",
+      "responses",
+      "messages",
+    ]);
   });
 
   it("filters route policy candidate options by the selected endpoint", () => {

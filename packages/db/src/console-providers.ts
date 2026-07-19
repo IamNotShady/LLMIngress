@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { ProviderType } from "@llmingress/config";
 import { withPooledPostgresClient } from "@llmingress/db/client";
 import { type ConfigPublishClient, createConfigPublisher } from "@llmingress/db/config-versions";
 import { clearProviderConnectionHealthWithClient } from "@llmingress/db/provider-health";
@@ -14,7 +15,7 @@ import {
   type ProviderTemplateCreateInput,
 } from "./console-provider-templates.ts";
 
-export type ProviderType = "api_key" | "local" | "subscription";
+export type { ProviderType };
 
 export type ProviderFormInput = {
   baseUrl?: string | null;

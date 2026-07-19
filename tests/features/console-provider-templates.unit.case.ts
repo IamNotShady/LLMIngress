@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { listProviderTemplateEntries } from "../../packages/config/src/provider-registry";
 import {
   isKnownProviderTemplateKey,
   listOpenAICompatibleProviderTemplates,
@@ -30,6 +31,31 @@ describe("console provider template registry", () => {
       }
     }
     expect(isKnownProviderTemplateKey("future-provider")).toBe(false);
+  });
+
+  it("derives selector groups directly from the provider registry template entries", () => {
+    const groups = listProviderTemplateSelectorGroups();
+    const registryTemplateKeys = listProviderTemplateEntries().map((entry) => entry.providerKey);
+
+    // Every selector template is a registry template entry, and vice versa.
+    expect(
+      groups.flatMap((group) => group.templates.map((template) => template.id)).sort(),
+    ).toEqual([...registryTemplateKeys].sort());
+    for (const group of groups) {
+      for (const template of group.templates) {
+        const entry = listProviderTemplateEntries().find(
+          (candidate) => candidate.providerKey === template.id,
+        );
+        expect(entry).toBeDefined();
+        expect(template.displayName).toBe(entry?.displayName);
+        expect(template.providerType).toBe(entry?.providerType);
+        // The routable endpoints survive; the models catalog is folded back in.
+        for (const protocol of Object.keys(entry?.endpoints ?? {})) {
+          expect(template.endpoints).toHaveProperty(protocol);
+        }
+        expect(template.endpoints).toHaveProperty("models");
+      }
+    }
   });
 
   it("describes remote API key providers with editable default URLs and endpoints", () => {

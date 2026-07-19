@@ -3,6 +3,7 @@ import {
   type ModelTokenPrice,
   resolveEffectiveModelTokenPrice,
 } from "@llmingress/billing/price-registry";
+import { listProviderRouteEndpointProtocols as listRegistryRouteEndpointProtocols } from "@llmingress/config";
 import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import {
@@ -19,7 +20,6 @@ import {
   consoleValidationError,
 } from "./console-operation-error.ts";
 import { consoleVisibleProviderModelFilterSql } from "./console-provider-model-visibility.ts";
-import { listProviderTemplateEndpointProtocols } from "./console-provider-templates.ts";
 import { lockProvidersForProviderModels } from "./console-providers.ts";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
@@ -326,23 +326,8 @@ export function filterRoutePolicyEditorProviderModelOptions(
   });
 }
 
-export function listProviderRouteEndpointProtocols(input: {
-  providerKey: string;
-  providerTemplateId?: string | null;
-}): RouteEndpointProtocol[] {
-  if (input.providerTemplateId) {
-    return listProviderTemplateEndpointProtocols(input.providerTemplateId).filter(
-      isRouteEndpointProtocol,
-    );
-  }
-
-  if (input.providerKey === "openai") {
-    return ["chat_completions", "responses"];
-  }
-  if (input.providerKey === "anthropic") {
-    return ["messages"];
-  }
-  return [];
+export function listProviderRouteEndpointProtocols(providerKey: string): RouteEndpointProtocol[] {
+  return listRegistryRouteEndpointProtocols(providerKey);
 }
 
 export function formatProviderModelPriceStatusLabel(price: ModelTokenPrice): string {
@@ -1093,10 +1078,7 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
     providerId: row.provider_id,
     providerKey: row.provider_key,
     outputModalities: row.output_modalities ?? null,
-    supportedEndpoints: listProviderRouteEndpointProtocols({
-      providerKey: row.provider_key,
-      providerTemplateId: row.provider_template_id,
-    }),
+    supportedEndpoints: listProviderRouteEndpointProtocols(row.provider_key),
     supportsFunctionCalling: row.supports_function_calling ?? null,
     supportsReasoning: row.supports_reasoning ?? null,
     supportsStreaming: row.supports_streaming ?? false,

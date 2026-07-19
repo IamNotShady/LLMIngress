@@ -1,4 +1,4 @@
-import { resolveProviderRegistryEntry } from "@llmingress/config";
+import { resolveProviderRegistryEntry } from "@llmingress/config/provider-registry";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import { isRecord } from "@llmingress/util";
 import type { AnthropicContentBlock } from "./adapters/anthropic.js";

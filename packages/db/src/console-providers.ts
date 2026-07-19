@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ProviderType } from "@llmingress/config";
+import type { ProviderType } from "@llmingress/config/provider-registry";
 import { withPooledPostgresClient } from "@llmingress/db/client";
 import { type ConfigPublishClient, createConfigPublisher } from "@llmingress/db/config-versions";
 import { clearProviderConnectionHealthWithClient } from "@llmingress/db/provider-health";

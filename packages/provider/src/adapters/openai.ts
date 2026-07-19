@@ -1,4 +1,4 @@
-import { defaultEndpointPathByProtocol } from "@llmingress/config";
+import { defaultEndpointPathByProtocol } from "@llmingress/config/provider-registry";
 import { isRecord, joinUrl, omitUndefined } from "@llmingress/util";
 import {
   fetchCredentialedProviderRequest,

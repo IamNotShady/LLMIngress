@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import {
   createTestPostgresFixture,
   runMigrations,
@@ -14,6 +14,12 @@ import {
 } from "../support/console-app";
 
 const MODEL_COUNT = 60;
+
+async function overflowPx(page: Page): Promise<number> {
+  return page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+}
 
 // Seeds a provider with 60 models (the shape that rendered an 8500px page),
 // plus api_keys so the ApiKeys KPI cards carry real values on mobile.
@@ -187,6 +193,63 @@ test("providers page shows one provider representation with a searchable capped 
           waitUntil: "networkidle",
         });
         await expect(page.locator(".vm-dialog-actions button[type=submit]")).toHaveText("Create");
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("provider create dialog shows registry-derived supported endpoints", async ({ browser }) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_console_endpoints_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await signInFromFirstRun(page, baseUrl);
+        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
+
+        const dialog = page.getByRole("dialog", { name: "Add Provider" });
+        await expect(dialog).toBeVisible();
+
+        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
+        // OpenAI is the default direct choice: Chat Completions + Responses, never Messages.
+        await expect(endpointChips).toHaveText(["Chat Completions", "Responses"]);
+        await expect(endpointChips.filter({ hasText: "Messages" })).toHaveCount(0);
+
+        // Switch to the Claude Code subscription template: Messages only.
+        await dialog.getByRole("tab", { name: "Subscription" }).click();
+        await dialog
+          .getByLabel("Provider type", { exact: true })
+          .selectOption({ label: "Claude Code" });
+        await expect(endpointChips).toHaveText(["Messages"]);
+
+        for (const viewport of [
+          { width: 1280, height: 900 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
+        }
       } finally {
         await context.close();
       }

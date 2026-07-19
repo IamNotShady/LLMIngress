@@ -1,5 +1,5 @@
 import type { Readable } from "node:stream";
-import { defaultEndpointPathByProtocol } from "@llmingress/config";
+import { defaultEndpointPathByProtocol } from "@llmingress/config/provider-registry";
 import { selectRouteAttempts } from "@llmingress/domain";
 import type { NormalizedAnthropicMessagesRequest } from "@llmingress/provider/anthropic";
 import {

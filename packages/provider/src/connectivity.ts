@@ -6,7 +6,7 @@ export type ConnectivityCheckProvider = {
   providerKey: string;
 };
 
-import { defaultEndpointPathByProtocol } from "@llmingress/config";
+import { defaultEndpointPathByProtocol } from "@llmingress/config/provider-registry";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import { isRecord, joinUrl } from "@llmingress/util";
 import { buildAnthropicMessagesUrl, buildAnthropicProviderHeaders } from "./adapters/anthropic.js";

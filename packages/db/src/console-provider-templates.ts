@@ -2,7 +2,7 @@ import {
   listProviderTemplateEntries,
   type ProviderEndpoint,
   type ProviderRegistryEntry,
-} from "@llmingress/config";
+} from "@llmingress/config/provider-registry";
 import { omitUndefined } from "@llmingress/util";
 import { consoleValidationError } from "./console-operation-error.ts";
 import { normalizeProviderBaseUrl } from "./console-provider-base-url.ts";

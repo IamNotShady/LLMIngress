@@ -1,4 +1,4 @@
-import { defaultModelListPath } from "@llmingress/config";
+import { defaultModelListPath } from "@llmingress/config/provider-registry";
 import type { ModelInputModality, ModelOutputModality } from "@llmingress/domain";
 import { isRecord, joinUrl } from "@llmingress/util";
 

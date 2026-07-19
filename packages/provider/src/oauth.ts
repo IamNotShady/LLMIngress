@@ -1,4 +1,7 @@
-import { type ProviderOAuthConfig, resolveProviderRegistryEntry } from "@llmingress/config";
+import {
+  type ProviderOAuthConfig,
+  resolveProviderRegistryEntry,
+} from "@llmingress/config/provider-registry";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import { isRecord } from "@llmingress/util";
 import type { SubscriptionProviderKey } from "./subscription.js";

@@ -1,14 +1,19 @@
 "use client";
 
+import {
+  type RouteEndpointProtocol,
+  routeEndpointProtocols,
+} from "@llmingress/config/provider-registry";
 import Link from "next/link";
 import { type DragEvent, useMemo, useState } from "react";
 import { ConsoleDialog } from "../_components/console-dialog";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 import { formatModelContextTokens } from "./model-capability-format";
+import { formatRouteEndpointProtocolLabel } from "./sections";
 
 type Strategy = "fixed" | "cost_first" | "load_balance";
-type EndpointProtocol = "chat_completions" | "responses" | "messages";
+type EndpointProtocol = RouteEndpointProtocol;
 
 type ProviderModelOption = {
   availability: string;
@@ -44,7 +49,7 @@ type VirtualModel = {
 };
 
 const strategies: Strategy[] = ["fixed", "cost_first", "load_balance"];
-const endpointProtocols: EndpointProtocol[] = ["chat_completions", "responses", "messages"];
+const endpointProtocols: EndpointProtocol[] = [...routeEndpointProtocols];
 
 export function VirtualModelRouteDialogClient({
   closeHref,
@@ -197,7 +202,7 @@ export function VirtualModelRouteDialogClient({
                   >
                     {endpointProtocols.map((protocol) => (
                       <option key={protocol} value={protocol}>
-                        {formatEndpointProtocolLabel(protocol)}
+                        {formatRouteEndpointProtocolLabel(protocol)}
                       </option>
                     ))}
                   </select>
@@ -452,16 +457,6 @@ function readInitialEndpointProtocol(routePolicy: RoutePolicy | null): EndpointP
     routePolicy?.candidates[0]?.supportedEndpoints[0] ??
     "chat_completions"
   );
-}
-
-function formatEndpointProtocolLabel(protocol: EndpointProtocol): string {
-  if (protocol === "chat_completions") {
-    return "Chat Completions";
-  }
-  if (protocol === "responses") {
-    return "Responses";
-  }
-  return "Messages";
 }
 
 function formatRouteStrategyDescription(strategy: Strategy): string {

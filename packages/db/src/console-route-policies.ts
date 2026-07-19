@@ -3,7 +3,7 @@ import {
   type ModelTokenPrice,
   resolveEffectiveModelTokenPrice,
 } from "@llmingress/billing/price-registry";
-import { listProviderRouteEndpointProtocols as listRegistryRouteEndpointProtocols } from "@llmingress/config";
+import { listProviderRouteEndpointProtocols as listRegistryRouteEndpointProtocols } from "@llmingress/config/provider-registry";
 import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import {

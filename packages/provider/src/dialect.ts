@@ -1,7 +1,7 @@
 import {
   providerSupportsRouteEndpointProtocol,
   type RouteEndpointProtocol,
-} from "@llmingress/config";
+} from "@llmingress/config/provider-registry";
 import { joinUrl } from "@llmingress/util";
 import { openRouterAttributionHeaders } from "./adapters/openrouter.js";
 import { mergeHttpHeaders } from "./headers.js";

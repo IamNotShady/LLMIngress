@@ -1,3 +1,7 @@
+import {
+  listDirectCreateEntries,
+  listProviderRouteEndpointProtocols,
+} from "@llmingress/config/provider-registry";
 import { listConsoleProviderHealthSummaries } from "@llmingress/db/console-provider-health";
 import {
   listProviderApiKeyMetadata,
@@ -28,32 +32,28 @@ import {
 
 const providerTemplateGroups = listProviderTemplateSelectorGroups();
 
-const directProviderCreateChoices = [
-  {
-    action: "create",
-    baseUrlMode: "user_remote",
-    displayName: "OpenAI",
-    fixedBaseUrl: "https://api.openai.com/v1",
-    groupId: "remote_api_key",
-    groupLabel: "API Keys",
-    id: "openai",
-    providerKey: "openai",
-    providerType: "api_key",
-  },
-  {
-    action: "create",
-    baseUrlMode: "user_remote",
-    displayName: "Anthropic",
-    fixedBaseUrl: "https://api.anthropic.com/v1",
-    groupId: "remote_api_key",
-    groupLabel: "API Keys",
-    id: "anthropic",
-    providerKey: "anthropic",
-    providerType: "api_key",
-  },
-] as const;
+// Direct-create providers (OpenAI, Anthropic) are derived from the provider
+// registry, the single source for their base URLs and routable endpoints.
+const directProviderCreateChoices = listDirectCreateEntries().map((entry) => ({
+  action: "create",
+  baseUrlMode: "user_remote" as const,
+  displayName: entry.displayName,
+  fixedBaseUrl: entry.creation.mode === "direct" ? entry.creation.fixedBaseUrl : undefined,
+  groupId: "remote_api_key",
+  groupLabel: "API Keys",
+  id: entry.providerKey,
+  providerKey: entry.providerKey,
+  providerType: entry.providerType,
+  supportedEndpoints: listProviderRouteEndpointProtocols(entry.providerKey),
+}));
 
-const defaultProviderCreateChoice = directProviderCreateChoices[0];
+const defaultProviderCreateChoice = (() => {
+  const choice = directProviderCreateChoices[0];
+  if (!choice) {
+    throw new Error("Direct provider create choices are required.");
+  }
+  return choice;
+})();
 
 const providerCreateChoices = [
   ...directProviderCreateChoices,
@@ -69,6 +69,7 @@ const providerCreateChoices = [
       id: template.id,
       providerKey: template.providerKey,
       providerType: template.providerType,
+      supportedEndpoints: listProviderRouteEndpointProtocols(template.providerKey),
     })),
   ),
 ];

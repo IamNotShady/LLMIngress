@@ -134,6 +134,15 @@
       "dependencies": ["provider-model-management", "virtual-model-routing", "console-core"],
       "status": "passing",
       "evidence": "2026-07-19: TDD red-to-green. New packages/config/src/provider-registry.ts is the single source of truth for all 15 providers' behavior/creation/endpoints/OAuth (routable endpoints kept separate from the model-list catalog). packages/provider (descriptor/dialect/oauth/subscription paths + adapter/connectivity/model-list URLs), packages/db (templates, ProviderType, route protocols), the domain routeEndpointProtocols enum, gateway streaming path suffixes, and the Console create-dialog choices all derive from it; registry symbols are consumed from the @llmingress/config/provider-registry subpath (node:fs-free so the client dialog + domain can import it). Unit (provider-metadata-registry.unit.case: 10 tests, field-for-field vs donor, endpoints exclude models, unknown-key permissive policy, listSubscriptionProviderKeys order) + Console E2E (console-providers-ia-and-forms.e2e.case: create dialog shows OpenAI Chat Completions/Responses and never Messages, Claude Code template shows Messages, no overflow at 1280/390). Also added provider-dialect (deepseek rejects messages; unknown key permissive) and virtual-model-endpoint-routing (registry-keyed, unknown key -> three protocols) assertions. pnpm run verify (350 unit + build, coverage above thresholds) and verify:features (15/15, zero regression) passed. 2026-07-19 follow-up: SubscriptionProviderKey is now derived from the registry's subscriptionProviderKeys carrier array (re-exported by packages/provider subscription.ts) with a unit assertion pinning the carrier to the behavior.subscription flags; verify (351/351) and verify:features (15/15) re-passed."
+    },
+    {
+      "id": "provider-quota-probe",
+      "name": "Provider Quota Probe",
+      "description": "Worker probes each supported Provider connection on a schedule and stores upstream balance or usage-window utilization in provider_quota_summary, one row per (provider, connection), with entries normalized to a shared shape; unsupported Providers store an explicit error_code instead of an empty result, and probing is switchable per connection.",
+      "verification": "pnpm exec vitest run tests/features/provider-quota.unit.test.ts && pnpm test:e2e tests/e2e/provider-quota.e2e.spec.ts --workers=1",
+      "dependencies": ["provider-model-management", "worker-model-operations"],
+      "status": "failing",
+      "evidence": ""
     }
   ]
 }

@@ -61,7 +61,8 @@ Supported Console pages are Overview, API Keys, Providers, Virtual Models, Activ
 and Playground. Password setup, session authentication, stable operation errors, and secret
 encryption are required.
 
-Persistent Worker jobs are exactly `model_refresh`, `provider_connection_probe`, and `price_sync`.
+Persistent Worker jobs are exactly `model_refresh`, `provider_connection_probe`, `price_sync`, and
+`provider_quota_probe`.
 Retention and stale-concurrency repair run directly under PostgreSQL advisory locks and do not
 create jobs.
 

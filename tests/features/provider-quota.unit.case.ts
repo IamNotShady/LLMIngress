@@ -330,6 +330,19 @@ describe("provider quota probe transport", () => {
     expect(result.ok ? result.entries : []).toHaveLength(1);
   });
 
+  it("does not retry zai when the Bearer attempt failed for a reason other than auth", async () => {
+    const recorded: RecordedRequest[] = [];
+    const result = await probeFor("zai")({
+      baseUrl: baseUrls.zai,
+      credential: "secret-credential",
+      fetch: recordingFetch(recorded, () => jsonResponse({ message: "upstream down" }, 500)),
+    });
+
+    expect(recorded).toHaveLength(1);
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.errorCode).toBe("probe_failed");
+  });
+
   it("classifies 401 and 403 as unauthorized and other failures as probe_failed", async () => {
     for (const status of [401, 403]) {
       const result = await probeFor("deepseek")({

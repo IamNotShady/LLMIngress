@@ -75,10 +75,12 @@ export const quotaProbes: Record<string, QuotaProbe> = {
       headers: { ...bearer(input.credential), "accept-language": "en-US,en" },
       url,
     });
-    if (bearerResult.ok) {
+    if (bearerResult.ok || bearerResult.errorCode !== "unauthorized") {
       return bearerResult;
     }
-    // Implementations disagree on whether Zhipu wants a scheme; retry raw.
+    // Implementations disagree on whether Zhipu wants a scheme, so a rejected
+    // credential is retried raw. Only an auth rejection: retrying a timeout or a
+    // 500 would double the request and report the second attempt's error code.
     return parsed(input, parseZaiQuota, {
       headers: {
         accept: "application/json",

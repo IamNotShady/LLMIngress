@@ -57,7 +57,7 @@
     {
       "id": "worker-model-operations",
       "name": "Worker Model Operations",
-      "description": "Three durable model/connection jobs plus direct retention and concurrency maintenance.",
+      "description": "Four durable model/connection/quota jobs plus direct retention, concurrency, and quota-probe-enqueue maintenance.",
       "verification": "pnpm exec vitest run tests/features/worker-model-operations.unit.test.ts tests/features/worker-leases-maintenance.unit.test.ts && pnpm test:e2e tests/e2e/worker-model-operations.e2e.spec.ts tests/e2e/worker-leases-maintenance.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
@@ -141,8 +141,8 @@
       "description": "Worker probes each supported Provider connection on a schedule and stores upstream balance or usage-window utilization in provider_quota_summary, one row per (provider, connection), with entries normalized to a shared shape; unsupported Providers store an explicit error_code instead of an empty result, and probing is switchable per connection.",
       "verification": "pnpm exec vitest run tests/features/provider-quota.unit.test.ts && pnpm test:e2e tests/e2e/provider-quota.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "worker-model-operations"],
-      "status": "failing",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-07-20: TDD red-to-green for steps 1.6-1.10. packages/db/src/provider-jobs.ts gained a quota-specific connection enumeration (listDueProviderQuotaProbeConnections, predicate carries quota_probe_enabled = true) plus enqueueProviderQuotaProbeJob (advisory lock, pending/running dedupe, max_attempts 3, notifyJobCreated); packages/worker-runtime/src/worker-provider-quota-probe.ts is the handler (unsupported quotaSource and local providers write entries=[] with their reason and never call upstream; quota_probe_enabled=false returns canceled and writes no row; OAuth expiry refresh with ciphertext-guarded CAS; a probe that THROWS is recorded as probe_failed rather than failing the job, so a row always exists per spec 3.7; no success-deletes-row branch); a provider-quota-probe-enqueue core maintenance task (5 min) owns scheduling so a broken chain self-heals; apps/worker/src/main.ts registers provider_quota_probe. 10 E2E (api_key + OAuth happy paths, not_supported/requires_separate_credential with a throwing fetch, 403 -> unauthorized + 1h backoff, malformed base URL -> probe_failed row, disabled -> canceled + no row, expired-token refresh write-back, lost CAS race, upsert, maintenance enqueue dedupe) and 20 unit tests passed. Collateral repair: adding a third core maintenance task broke worker-maintenance.e2e.case.ts (executedTasks pinned at 2 -> 3) and made worker-model-operations' description stale (three -> four durable jobs). pnpm run verify (371 unit + build, EXIT=0) and verify:features (16/16, zero regression) passed."
     }
   ]
 }

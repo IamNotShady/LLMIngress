@@ -649,8 +649,13 @@ Add to `packages/db/package.json` `exports`:
 
 ## Step 1.6 — Enqueue
 
-Edit `packages/db/src/provider-jobs.ts`. Add `quota_probe_enabled = true` to the readiness predicate
-used when enumerating connections, and add an enqueue function modelled on
+Edit `packages/db/src/provider-jobs.ts`. Add a **quota-specific** connection enumeration whose
+predicate carries `quota_probe_enabled = true`. Do not add the flag to the existing `ready` predicate
+shared by `enqueueProviderConnectionProbesForProvider` and `providerCredentialsReady` — that one
+governs connection health probes and model refresh, and filtering it on the quota toggle would
+silently stop probing and refreshing a connection whose only opted-out feature is quota.
+
+Then add an enqueue function modelled on
 `enqueueProviderConnectionProbeJob`: `requireId` both ids, open a transaction, `pg_advisory_xact_lock`
 on `provider_quota_probe:${providerId}:${providerConnectionId}`, dedupe against a pending job with
 `for update`, insert with `job_type = 'provider_quota_probe'` and `max_attempts = 3`, then
@@ -694,6 +699,11 @@ Edit `packages/worker-runtime/src/worker-maintenance-scheduler.ts`. Add to
   run: async (signal) => { /* enqueue due connections */ },
 }
 ```
+
+Adding a third core maintenance task breaks two existing artifacts that pin the old shape, and both
+must be repaired in this step: `tests/e2e/worker-maintenance.e2e.case.ts` asserts
+`executedTasks === 2`, and the `worker-model-operations` entry in `feature_list.json` describes
+"Three durable model/connection jobs".
 
 `run` selects enabled, non-deleted connections joined to `provider_quota_summary` where
 `next_refresh_at is null or next_refresh_at <= now()` — a left join, so connections with no row yet

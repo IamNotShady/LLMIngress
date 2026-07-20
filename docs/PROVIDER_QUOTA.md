@@ -80,12 +80,12 @@ Raw shapes differ per Provider. Normalize before persisting.
 
 | Provider | Raw | Transform |
 | --- | --- | --- |
-| `claude_code` | `utilization` `0.0`–`1.0`; `extra_usage.used_credits` number | use utilization directly; emit `extra_usage` as a separate balance entry when `is_enabled` |
+| `claude_code` | `utilization` `0`–`100` (**percent** — a live account showed 24/53; the `anthropic-ratelimit-unified-*` response headers use a 0–1 fraction, do not conflate the two surfaces); `extra_usage.used_credits` number | divide by 100; emit `extra_usage` as a separate balance entry when `is_enabled` |
 | `openai_codex` | `used_percent` `0`–`100` | divide by 100; derive window name from `limit_window_seconds` |
 | `zai` | `percentage` `0`–`100`; `nextResetTime` epoch ms | divide by 100; ms to ISO 8601 |
 | `minimax` | `*_remaining_percent` (remaining) | `1 - x / 100` |
 | `deepseek` | `total_balance` string | use directly |
-| `moonshot` | `available_balance` number | render to decimal string |
+| `moonshot` | `available_balance` number | render to decimal string; currency from the host — `.cn` bills CNY, `.ai` bills USD |
 | `openai` | `total_available` number | render to decimal string |
 | `openrouter` | `limit_remaining` number or null | render to decimal string; null emits no entry |
 

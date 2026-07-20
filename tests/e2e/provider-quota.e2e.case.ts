@@ -106,8 +106,8 @@ test("an OAuth quota probe stores window entries alongside the overage balance",
             monthly_limit: 100,
             used_credits: 23.5,
           },
-          five_hour: { resets_at: "2026-07-20T12:00:00Z", utilization: 0.0741 },
-          seven_day: { resets_at: "2026-07-24T03:00:00Z", utilization: 0.5312 },
+          five_hour: { resets_at: "2026-07-20T12:00:00Z", utilization: 7.41 },
+          seven_day: { resets_at: "2026-07-24T03:00:00Z", utilization: 53.12 },
         });
       },
     });
@@ -336,7 +336,7 @@ test("an expired OAuth token is refreshed, written back, and used for the probe"
           });
         }
         probeAuthorization = new Headers(init?.headers).get("authorization");
-        return Response.json({ five_hour: { utilization: 0.25 } });
+        return Response.json({ five_hour: { utilization: 25 } });
       },
     });
 

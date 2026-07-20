@@ -44,7 +44,7 @@ export const quotaProbes: Record<string, QuotaProbe> = {
       url: joinUrl(input.baseUrl, "token_plan/remains"),
     }),
   moonshot: async (input) =>
-    parsed(input, parseMoonshotQuota, {
+    parsed(input, (body) => parseMoonshotQuota(body, moonshotQuotaCurrency(input.baseUrl)), {
       headers: bearer(input.credential),
       url: joinUrl(input.baseUrl, "users/me/balance"),
     }),
@@ -175,6 +175,10 @@ function readDecimal(value: unknown): string | null {
 /**
  * Structural, not allowlist-based: Anthropic adds windows over time
  * (seven_day_opus is absent from the response headers but present here).
+ *
+ * Scale: this endpoint reports utilization as 0-100 percent (a live account
+ * showed 24 / 53). The `anthropic-ratelimit-unified-*` response headers use a
+ * 0-1 fraction instead — do not conflate the two surfaces.
  */
 export function parseClaudeCodeQuota(body: unknown): QuotaEntry[] {
   if (!isRecord(body)) {
@@ -185,13 +189,13 @@ export function parseClaudeCodeQuota(body: unknown): QuotaEntry[] {
     if (key === "extra_usage" || !isRecord(value)) {
       continue;
     }
-    const utilization = readNumber(value.utilization);
-    if (utilization === null) {
+    const usedPercent = readNumber(value.utilization);
+    if (usedPercent === null) {
       continue;
     }
     entries.push({
       ...(typeof value.resets_at === "string" ? { resetsAt: value.resets_at } : {}),
-      utilization,
+      utilization: usedPercent / 100,
       window: key,
     });
   }
@@ -271,7 +275,16 @@ export function parseDeepseekQuota(body: unknown): QuotaEntry[] {
   return entries;
 }
 
-export function parseMoonshotQuota(body: unknown): QuotaEntry[] {
+/** api.moonshot.ai bills USD; the .cn deployment bills CNY on the same path. */
+export function moonshotQuotaCurrency(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).hostname.endsWith(".cn") ? "CNY" : "USD";
+  } catch {
+    return "USD";
+  }
+}
+
+export function parseMoonshotQuota(body: unknown, currency = "USD"): QuotaEntry[] {
   if (!isRecord(body) || !isRecord(body.data)) {
     return [];
   }
@@ -283,7 +296,7 @@ export function parseMoonshotQuota(body: unknown): QuotaEntry[] {
   const toppedUp = readDecimal(body.data.cash_balance);
   return [
     {
-      currency: "USD",
+      currency,
       ...(granted === null ? {} : { granted }),
       ...(toppedUp === null ? {} : { toppedUp }),
       total,

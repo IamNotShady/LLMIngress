@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { providerRegistry } from "../../packages/config/src/provider-registry";
 import { providerQuotaRefreshDelayMs } from "../../packages/db/src/provider-quota";
 import {
+  moonshotQuotaCurrency,
   parseClaudeCodeQuota,
   parseCodexQuota,
   parseDeepseekQuota,
@@ -59,26 +60,29 @@ function probeFor(providerKey: keyof typeof baseUrls) {
 
 describe("provider quota parsers", () => {
   it("parses claude_code windows structurally and the overage balance", () => {
+    // The oauth/usage endpoint reports utilization on a 0-100 percent scale
+    // (a live account showed 24 / 53), unlike the response headers' 0-1
+    // fraction. Reading it as a fraction rendered 2400%.
     const entries = parseClaudeCodeQuota({
       extra_usage: {
         currency: "USD",
         is_enabled: true,
         monthly_limit: 100,
         used_credits: 23.5,
-        utilization: 0.235,
+        utilization: 23.5,
       },
-      five_hour: { resets_at: "2026-07-20T12:00:00Z", utilization: 0.0741 },
-      seven_day: { resets_at: "2026-07-24T03:00:00Z", utilization: 0.5312 },
-      seven_day_opus: { resets_at: "2026-07-24T03:00:00Z", utilization: 0.1 },
-      seven_day_sonnet: { resets_at: "2026-07-24T03:00:00Z", utilization: 0.2 },
+      five_hour: { resets_at: "2026-07-20T12:00:00Z", utilization: 24 },
+      seven_day: { resets_at: "2026-07-24T03:00:00Z", utilization: 53.12 },
+      seven_day_opus: { resets_at: "2026-07-24T03:00:00Z", utilization: 10 },
+      seven_day_sonnet: { resets_at: "2026-07-24T03:00:00Z", utilization: 20 },
       // A window Anthropic has not shipped yet: a structural parser must absorb
       // it without a code change.
-      thirty_day_unreleased: { resets_at: "2026-08-16T00:00:00Z", utilization: 0.02 },
+      thirty_day_unreleased: { resets_at: "2026-08-16T00:00:00Z", utilization: 2 },
     });
 
     expect(entries).toContainEqual({
       resetsAt: "2026-07-20T12:00:00Z",
-      utilization: 0.0741,
+      utilization: 0.24,
       window: "five_hour",
     });
     expect(entries).toContainEqual({
@@ -106,7 +110,7 @@ describe("provider quota parsers", () => {
         used_credits: 0,
         utilization: 0,
       },
-      five_hour: { resets_at: "2026-07-20T12:00:00Z", utilization: 0.0741 },
+      five_hour: { resets_at: "2026-07-20T12:00:00Z", utilization: 7.41 },
     });
 
     expect(entries).toEqual([
@@ -220,6 +224,18 @@ describe("provider quota parsers", () => {
     expect(
       parseOpenAIQuota({ total_available: 76.5, total_granted: 120, total_used: 43.5 }),
     ).toEqual([{ currency: "USD", granted: "120", total: "76.5" }]);
+  });
+
+  it("labels the moonshot balance with the deployment's currency", () => {
+    // Same path and fields on both hosts; only the currency differs
+    // (api.moonshot.ai bills USD, api.moonshot.cn bills CNY).
+    expect(moonshotQuotaCurrency("https://api.moonshot.ai/v1")).toBe("USD");
+    expect(moonshotQuotaCurrency("https://api.moonshot.cn/v1")).toBe("CNY");
+    expect(moonshotQuotaCurrency("not-a-url")).toBe("USD");
+
+    expect(parseMoonshotQuota({ data: { available_balance: 12.34 } }, "CNY")).toEqual([
+      { currency: "CNY", total: "12.34" },
+    ]);
   });
 });
 

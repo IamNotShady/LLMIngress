@@ -134,10 +134,12 @@ CREATE UNIQUE INDEX uq_provider_quota_summary_connection
 `provider_health_events.status`. In PostgreSQL `text` and `varchar(n)` share one storage
 representation, so a length cap would save nothing.
 
-Worker is the only writer, so no write-ordering rule is needed between writers. The write path does
-guard against one race: a probe result arriving after its credential was deleted would resurrect the
-cleared row as a permanent orphan, so the upsert first locks the live credential row and skips the
-write when it is gone.
+Worker is the only writer, so no write-ordering rule is needed between writers. The write is
+update-first: a routine refresh is a single `update ... where` on the summary row and never touches
+the credential tables. A miss means either the connection's first observation or a deletion that
+cleared the row mid-probe — inserting blindly would resurrect the cleared row as a permanent orphan
+— so only the insert branch verifies the credential is still live, under a row lock so a concurrent
+soft-delete waits and its clear still wins.
 
 ### 3.2 Credential table changes
 

@@ -201,6 +201,9 @@ test("the Providers page renders each stored quota state and never overflows", a
         await expect(unsupportedCell.locator(".pill--danger")).toHaveCount(0);
         await expect(unsupportedCell.locator(".pill--warn")).toHaveCount(0);
         await expect(unsupportedCell.locator(".pill")).toHaveCount(1);
+        // The reason stands alone — no staleness line next to an error state,
+        // even though this row carries an observed_at.
+        await expect(unsupportedCell).not.toContainText("Updated");
 
         // Never probed is distinct from both a value and a reason.
         const unqueriedCell = quotaCell("alpha-unqueried");

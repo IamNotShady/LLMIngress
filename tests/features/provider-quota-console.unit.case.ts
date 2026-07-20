@@ -146,7 +146,9 @@ describe("quota observation state", () => {
       expect(view.reason).toBeTruthy();
       expect(view.balances).toEqual([]);
       expect(view.windows).toEqual([]);
-      expect(view.observedLabel).not.toBe(QUOTA_NOT_QUERIED_LABEL);
+      // The reason pill stands alone: staleness only matters for real quota
+      // numbers, so no "Updated X ago" next to an error state.
+      expect(view.observedLabel).toBeNull();
       // An expected state must not be styled or worded as a failure.
       expect(view.tone).toBe("expected");
       expect(view.reason?.toLowerCase()).not.toMatch(/error|fail/);
@@ -164,6 +166,7 @@ describe("quota observation state", () => {
       expect(view.reason).toBe(readQuotaErrorReason(errorCode));
       expect(view.balances).toEqual([]);
       expect(view.windows).toEqual([]);
+      expect(view.observedLabel).toBeNull();
     }
   });
 });

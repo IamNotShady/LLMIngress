@@ -159,10 +159,12 @@ export function buildProviderQuotaConnectionView({
 
   return {
     balances: shownBalances.map(formatQuotaBalance),
-    observedLabel: observedAt
-      ? `Updated ${formatRelativeDateTime(observedAt, referenceTimeMs)}`
-      : errorCode
-        ? null
+    // Staleness only matters for real quota numbers: an error state renders its
+    // reason pill alone, without a competing "Updated X ago" line.
+    observedLabel: errorCode
+      ? null
+      : observedAt
+        ? `Updated ${formatRelativeDateTime(observedAt, referenceTimeMs)}`
         : QUOTA_NOT_QUERIED_LABEL,
     reason: errorCode ? readQuotaErrorReason(errorCode) : null,
     sharedBalanceNote: hasSharedBalance ? QUOTA_SHARED_BALANCE_NOTE : null,

@@ -48,9 +48,14 @@ type AppliedMigrationRow = QueryResultRow & {
 
 export const shippedSqlMigrations: MigrationStatusMigration[] = [
   {
-    checksum: "1b0776bd69fc23613799f200b6040047cb2282cadba3c8cda32a0963d8d66990",
+    checksum: "904fd580d524804da8f6f8ae36133f7011617d9ef05621315ff8ae88456fdd1a",
     id: "0001",
     name: "core_baseline",
+  },
+  {
+    checksum: "c2b4ade7e25e6dc92161af879ba46fdd663cc857756ad6b6f9ad1c4c9434d132",
+    id: "0002",
+    name: "provider_quota",
   },
 ];
 

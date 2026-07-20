@@ -64,26 +64,26 @@ Add the subpath to `packages/domain/package.json` `exports`:
 
 ## Step 1.2 — Migration
 
-Edit `packages/db/migrations/0001_core_baseline.sql`. The file is pg_dump-style with three
-alphabetically ordered sections. Four edits:
+> **Corrected after execution.** The original step said to edit `0001_core_baseline.sql` inline.
+> That was wrong: the migration runner pins applied checksums, so editing the baseline forces every
+> existing database through a `Migration 0001 checksum mismatch` rebuild. The schema ships instead
+> as a new incremental migration, and the baseline stays byte-identical.
 
-**(a)** Add `quota_probe_enabled boolean DEFAULT true NOT NULL,` inline to `CREATE TABLE
-public.provider_api_keys` (after `priority`) and to `CREATE TABLE public.provider_oauth` (after
-`priority`). Do not use `ALTER TABLE` — the baseline is authoritative and databases are recreated.
-
-**(b)** Extend the jobs constraint:
-
-```sql
-CONSTRAINT jobs_job_type_check CHECK ((job_type = ANY (ARRAY['model_refresh'::text, 'provider_connection_probe'::text, 'price_sync'::text, 'provider_quota_probe'::text]))),
-```
-
-**(c)** Insert the table immediately before the `-- Name: providers; Type: TABLE` comment block
-(alphabetically `provider_models` < `provider_quota_summary` < `providers`):
+**New file `packages/db/migrations/0002_provider_quota.sql`** — the runner discovers it by directory
+scan and applies it after `0001`:
 
 ```sql
---
--- Name: provider_quota_summary; Type: TABLE; Schema: public; Owner: -
---
+ALTER TABLE public.provider_api_keys
+    ADD COLUMN quota_probe_enabled boolean DEFAULT true NOT NULL;
+
+ALTER TABLE public.provider_oauth
+    ADD COLUMN quota_probe_enabled boolean DEFAULT true NOT NULL;
+
+ALTER TABLE public.jobs
+    DROP CONSTRAINT jobs_job_type_check;
+
+ALTER TABLE public.jobs
+    ADD CONSTRAINT jobs_job_type_check CHECK ((job_type = ANY (ARRAY['model_refresh'::text, 'provider_connection_probe'::text, 'price_sync'::text, 'provider_quota_probe'::text])));
 
 CREATE TABLE public.provider_quota_summary (
     id uuid NOT NULL,
@@ -97,20 +97,21 @@ CREATE TABLE public.provider_quota_summary (
     CONSTRAINT provider_quota_summary_entries_check CHECK ((jsonb_typeof(entries) = 'array'::text)),
     CONSTRAINT provider_quota_summary_error_code_check CHECK (((error_code IS NULL) OR (error_code = ANY (ARRAY['not_supported'::text, 'requires_separate_credential'::text, 'probe_failed'::text, 'unauthorized'::text]))))
 );
-```
 
-**(d)** Add the primary key before `providers_pkey`, and the unique index at the end of the index
-section (after `uq_provider_models_provider_id_id`, before the `dump complete` comment):
-
-```sql
 ALTER TABLE ONLY public.provider_quota_summary
     ADD CONSTRAINT provider_quota_summary_pkey PRIMARY KEY (id);
 
 CREATE UNIQUE INDEX uq_provider_quota_summary_connection ON public.provider_quota_summary USING btree (provider_id, provider_connection_id);
 ```
 
-The unique index is not optional — the `on conflict (provider_id, provider_connection_id)` upsert in
-Step 1.5 will not run without it.
+The `jobs_job_type_check` swap must re-list every existing job type — a `CHECK` constraint cannot be
+altered in place. The unique index is not optional: the `on conflict (provider_id,
+provider_connection_id)` upsert in Step 1.5 will not run without it.
+
+Then register the new migration in `packages/db/src/migration-status.ts` (`shippedSqlMigrations`
+gains an `0002` entry whose checksum is `shasum -a 256` of the new file; `0001`'s pinned checksum
+does not change) and extend the migration-manifest pin in
+`tests/features/platform-foundation.unit.case.ts` to list `0002`.
 
 ## Step 1.3 — Registry
 

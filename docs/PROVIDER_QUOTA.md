@@ -101,10 +101,13 @@ present here — and a structural parser absorbs that without a code change.
 
 ### 3.1 New table
 
-The project is pre-release and `packages/db/migrations/0001_core_baseline.sql` is authoritative;
-databases from older chains are recreated rather than upgraded. Add the table to the baseline in the
-same pg_dump-style section order the file already uses: `CREATE TABLE`, then the primary key under
-the constraint section, then indexes under the index section.
+All schema changes ship as one incremental migration, `packages/db/migrations/0002_provider_quota.sql`.
+The baseline stays byte-identical: the migration runner verifies applied checksums, so editing
+`0001_core_baseline.sql` would force every existing database — developer machines and self-hosted
+deployments alike — through a rebuild for no benefit. An earlier revision of this document said to
+edit the baseline; that was a misreading of the recreate-rather-than-upgrade note in
+`docs/PRODUCT.md`, which is about pre-squash development chains, not a license to rewrite shipped
+migrations.
 
 ```sql
 CREATE TABLE public.provider_quota_summary (
@@ -138,26 +141,29 @@ Worker is the only writer, so no write-ordering rule is needed.
 Probing consumes upstream request quota, so it must be switchable per connection. This is
 configuration and therefore belongs on the credential tables, not on the observation table.
 
-The baseline is authoritative and databases are recreated rather than upgraded, so add the column
-inline to each `CREATE TABLE` rather than as an `ALTER`:
-
 ```sql
--- inside CREATE TABLE public.provider_api_keys and CREATE TABLE public.provider_oauth
-    quota_probe_enabled boolean DEFAULT true NOT NULL,
+-- 0002_provider_quota.sql
+ALTER TABLE public.provider_api_keys
+    ADD COLUMN quota_probe_enabled boolean DEFAULT true NOT NULL;
+
+ALTER TABLE public.provider_oauth
+    ADD COLUMN quota_probe_enabled boolean DEFAULT true NOT NULL;
 ```
 
 ### 3.3 Job type
 
 A new persistent Worker job is required.
 
+Postgres cannot alter a `CHECK` constraint in place, so `0002` swaps it, re-listing every existing
+job type:
+
 ```sql
--- packages/db/migrations/0001_core_baseline.sql, jobs_job_type_check
-CONSTRAINT jobs_job_type_check CHECK ((job_type = ANY (ARRAY[
-    'model_refresh'::text,
-    'provider_connection_probe'::text,
-    'price_sync'::text,
-    'provider_quota_probe'::text            -- added
-])))
+-- 0002_provider_quota.sql
+ALTER TABLE public.jobs
+    DROP CONSTRAINT jobs_job_type_check;
+
+ALTER TABLE public.jobs
+    ADD CONSTRAINT jobs_job_type_check CHECK ((job_type = ANY (ARRAY['model_refresh'::text, 'provider_connection_probe'::text, 'price_sync'::text, 'provider_quota_probe'::text])));
 ```
 
 ### 3.4 Field diff summary
@@ -272,7 +278,7 @@ Providers with no `quotaSource` — including any custom `providerKey` created t
 
 | File | Change |
 | --- | --- |
-| `packages/db/migrations/0001_core_baseline.sql` | Add `provider_quota_summary` table, primary key, unique index; add `quota_probe_enabled` to `provider_api_keys` and `provider_oauth`; extend `jobs_job_type_check` |
+| `packages/db/migrations/0002_provider_quota.sql` | New incremental migration: `provider_quota_summary` table, primary key, unique index; `quota_probe_enabled` on `provider_api_keys` and `provider_oauth`; `jobs_job_type_check` swap. The baseline stays untouched |
 | `packages/db/src/provider-quota.ts` | New. Read and upsert `provider_quota_summary`, mirroring `provider-health.ts` |
 | `packages/db/src/console-provider-quota.ts` | New. Console read model, mirroring `console-provider-health.ts` |
 | `packages/db/src/provider-jobs.ts` | Enqueue `provider_quota_probe`; add `quota_probe_enabled = true` to the connection-enumeration predicate |

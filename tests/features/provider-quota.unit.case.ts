@@ -459,26 +459,32 @@ describe("provider quota scheduling and schema", () => {
     }
   });
 
-  it("carries the quota schema in the authoritative baseline migration", () => {
-    const migration = readFileSync("packages/db/migrations/0001_core_baseline.sql", "utf8");
+  it("ships the quota schema as an incremental migration over an untouched baseline", () => {
+    const baseline = readFileSync("packages/db/migrations/0001_core_baseline.sql", "utf8");
+    const migration = readFileSync("packages/db/migrations/0002_provider_quota.sql", "utf8");
+
+    // 0001 stays byte-identical for already-migrated databases.
+    expect(baseline).not.toContain("provider_quota_summary");
+    expect(baseline).not.toContain("quota_probe_enabled");
+    expect(baseline).not.toContain("'provider_quota_probe'::text");
 
     expect(migration).toContain("CREATE TABLE public.provider_quota_summary");
     expect(migration).toContain("provider_quota_summary_pkey PRIMARY KEY (id)");
     expect(migration).toContain(
       "CREATE UNIQUE INDEX uq_provider_quota_summary_connection ON public.provider_quota_summary USING btree (provider_id, provider_connection_id)",
     );
-    expect(migration).toContain("'provider_quota_probe'::text");
-
-    const apiKeys = migration.slice(
-      migration.indexOf("CREATE TABLE public.provider_api_keys"),
-      migration.indexOf("CREATE TABLE public.provider_health_events"),
+    expect(migration).toContain(
+      "ALTER TABLE public.provider_api_keys\n    ADD COLUMN quota_probe_enabled boolean DEFAULT true NOT NULL",
     );
-    const oauth = migration.slice(
-      migration.indexOf("CREATE TABLE public.provider_oauth"),
-      migration.indexOf("CREATE TABLE public.provider_quota_summary"),
+    expect(migration).toContain(
+      "ALTER TABLE public.provider_oauth\n    ADD COLUMN quota_probe_enabled boolean DEFAULT true NOT NULL",
     );
-    expect(apiKeys).toContain("quota_probe_enabled boolean DEFAULT true NOT NULL");
-    expect(oauth).toContain("quota_probe_enabled boolean DEFAULT true NOT NULL");
+    // The constraint swap must re-list every existing job type or 0002 would
+    // reject the three job types the baseline already ships.
+    expect(migration).toContain("DROP CONSTRAINT jobs_job_type_check");
+    expect(migration).toContain(
+      "ARRAY['model_refresh'::text, 'provider_connection_probe'::text, 'price_sync'::text, 'provider_quota_probe'::text]",
+    );
   });
 
   it("clears the quota summary wherever a credential deletion clears health", () => {

@@ -8,25 +8,27 @@ account. Per-request cost is already covered by `usage-and-activity` and is out 
 Per-minute rate-limit headers (`x-ratelimit-*`, `anthropic-ratelimit-requests-*`) are flow-control
 state, not account state, and are also out of scope.
 
+Every Provider is read the same way: Worker calls a probe on a schedule. Nothing is collected from
+the Gateway response path. See section 7 for why.
+
 ## 1. Availability per Provider
 
 Twelve remote Provider choices exist today: 10 templates plus the two hardcoded direct choices
 (`openai`, `anthropic`) in `apps/console/src/app/_modules/providers-section.tsx`. Local Providers
 have no billing.
 
-Eight can expose balance or usage percentage with the credential the Provider already stores.
+Eight can be probed with the credential the Provider already stores.
 
-| Provider | Value | How | Field |
+| Provider | Value | Endpoint | Fields |
 | --- | --- | --- | --- |
-| `claude_code` | usage % | response header | `anthropic-ratelimit-unified-5h-utilization`, `-7d-utilization`, `-7d_sonnet-utilization` (each `0.0`–`1.0`), plus `-*-reset` (unix seconds) |
-| `claude_code` | usage % | active probe | `GET https://api.anthropic.com/api/oauth/usage` with `anthropic-beta: oauth-2025-04-20` → `five_hour.utilization`, `seven_day.utilization`, `seven_day_sonnet.utilization`, each with `resets_at` |
-| `openai_codex` | usage % | active probe | `GET https://chatgpt.com/backend-api/wham/usage` → `rate_limit.primary_window.used_percent`, `rate_limit.secondary_window.used_percent`, each with `reset_at` and `limit_window_seconds` |
-| `deepseek` | balance | active probe | `GET https://api.deepseek.com/user/balance` → `balance_infos[].total_balance`, `.granted_balance`, `.topped_up_balance`, `.currency`, plus `is_available` |
-| `moonshot` | balance | active probe | `GET https://api.moonshot.ai/v1/users/me/balance` → `data.available_balance`, `data.cash_balance`, `data.voucher_balance` |
-| `openai` | balance | active probe | `GET /v1/dashboard/billing/credit_grants` → `total_available`, `total_granted`, `total_used` |
-| `openrouter` | balance | active probe | `GET /api/v1/key` → `data.limit_remaining`, `data.limit` |
-| `zai` | usage % | active probe | `GET https://api.z.ai/api/monitor/usage/quota/limit` → `data.limits[].percentage` (`0`–`100`), `.nextResetTime` (epoch **milliseconds**) |
-| `minimax` | usage % | active probe | `GET https://api.minimax.io/v1/token_plan/remains` → `current_interval_remaining_percent`, `current_weekly_remaining_percent` |
+| `claude_code` | usage % + balance | `GET https://api.anthropic.com/api/oauth/usage`, `Authorization: Bearer <oauth token>`, `anthropic-beta: oauth-2025-04-20` | Top-level keys `five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet`, each `{utilization, resets_at}`. Plus `extra_usage` `{is_enabled, monthly_limit, used_credits, utilization, currency}` |
+| `openai_codex` | usage % | `GET https://chatgpt.com/backend-api/wham/usage`, `Authorization: Bearer <token>`, `User-Agent: codex-cli` | `rate_limit.primary_window.used_percent`, `rate_limit.secondary_window.used_percent`, each with `reset_at` and `limit_window_seconds` |
+| `deepseek` | balance | `GET https://api.deepseek.com/user/balance` | `balance_infos[].total_balance`, `.granted_balance`, `.topped_up_balance`, `.currency`, plus `is_available` |
+| `moonshot` | balance | `GET https://api.moonshot.ai/v1/users/me/balance` | `data.available_balance`, `data.cash_balance`, `data.voucher_balance` |
+| `openai` | balance | `GET /v1/dashboard/billing/credit_grants` | `total_available`, `total_granted`, `total_used` |
+| `openrouter` | balance | `GET /api/v1/key` | `data.limit_remaining`, `data.limit` |
+| `zai` | usage % | `GET https://api.z.ai/api/monitor/usage/quota/limit` | `data.limits[].percentage` (`0`–`100`), `.nextResetTime` (epoch **milliseconds**) |
+| `minimax` | usage % | `GET https://api.minimax.io/v1/token_plan/remains` | `current_interval_remaining_percent`, `current_weekly_remaining_percent` |
 
 Four cannot, with the stored credential:
 
@@ -39,16 +41,20 @@ Four cannot, with the stored credential:
 
 ### Caveats that affect correctness
 
-- **`openai` uses an undocumented legacy endpoint.** `/v1/dashboard/billing/credit_grants` is not in
-  the official API reference. Project-scoped keys and keys without billing access receive `403`.
-  Record `unauthorized` rather than treating this as a transport failure. The official
+- **Three endpoints are undocumented and carry no stability guarantee.** `claude_code`'s
+  `/api/oauth/usage` is the internal endpoint the Claude Code CLI calls with its OAuth token.
+  `zai`'s quota path appears in no official documentation. `openai`'s `credit_grants` is a legacy
+  path absent from the API reference. All three work today and all three can break without notice.
+  Probe failures against them must degrade to `probe_failed` and never affect routing.
+- **`openai` returns 403 for project-scoped keys** and for keys without billing access. Record
+  `unauthorized` rather than treating this as a transport failure. The official
   `GET /v1/organization/costs` requires an Admin key and reports spend, not remaining balance, so it
   is not a substitute.
-- **`zai` is entirely undocumented.** Two independent open-source implementations disagree on the
-  auth header: one sends `Authorization: Bearer <token>`, the other sends the raw token with no
-  scheme. Attempt `Bearer` first and fall back to raw. The `data.limits[].unit` field's meaning is
-  not documented anywhere; do not depend on it. The endpoint returns usable limits only for accounts
-  holding a GLM Coding Plan.
+- **`zai` auth header format is disputed.** Two independent open-source implementations disagree:
+  one sends `Authorization: Bearer <token>`, the other sends the raw token with no scheme. Attempt
+  `Bearer` first and fall back to raw. The `data.limits[].unit` field's meaning is not documented
+  anywhere; do not depend on it. The endpoint returns usable limits only for accounts holding a GLM
+  Coding Plan.
 - **`zai` path is not a suffix of the configured base URL.** The template base URL is
   `https://api.z.ai/api/paas/v4` while the quota path is `https://api.z.ai/api/monitor/usage/quota/limit`.
   Derive the origin, not a path join. Every other probe in the table is a suffix of its base URL.
@@ -64,6 +70,9 @@ Four cannot, with the stored credential:
   upstream account report the same balance. `openrouter`'s `limit_remaining` is a genuine per-key
   value. Storing per connection is correct for both, but Console must not present N identical
   balances as N independent pools.
+- **A subscription is consumed outside this gateway too.** A `claude_code` or `openai_codex` account
+  is also drawn down by the user's local CLI. Utilization therefore moves with zero gateway traffic,
+  and the probe interval is the upper bound on detection lag.
 
 ## 2. Normalization
 
@@ -71,8 +80,8 @@ Raw shapes differ per Provider. Normalize before persisting.
 
 | Provider | Raw | Transform |
 | --- | --- | --- |
-| `claude_code` | `utilization` `0.0`–`1.0` | use directly |
-| `openai_codex` | `used_percent` `0`–`100` | divide by 100 |
+| `claude_code` | `utilization` `0.0`–`1.0`; `extra_usage.used_credits` number | use utilization directly; emit `extra_usage` as a separate balance entry when `is_enabled` |
+| `openai_codex` | `used_percent` `0`–`100` | divide by 100; derive window name from `limit_window_seconds` |
 | `zai` | `percentage` `0`–`100`; `nextResetTime` epoch ms | divide by 100; ms to ISO 8601 |
 | `minimax` | `*_remaining_percent` (remaining) | `1 - x / 100` |
 | `deepseek` | `total_balance` string | use directly |
@@ -82,6 +91,11 @@ Raw shapes differ per Provider. Normalize before persisting.
 
 Monetary values are stored as decimal strings, never JSON numbers. DeepSeek already returns strings,
 and `jsonb` numbers are IEEE 754, which loses precision on currency.
+
+`claude_code` must be parsed structurally, not against a window-name allowlist: iterate the
+top-level keys, skip `extra_usage`, and treat any value shaped like `{utilization, resets_at}` as a
+window. Anthropic adds windows over time — `seven_day_opus` is absent from the response headers but
+present here — and a structural parser absorbs that without a code change.
 
 ## 3. Schema changes
 
@@ -116,6 +130,8 @@ CREATE UNIQUE INDEX uq_provider_quota_summary_connection
 `error_code` uses `text` with a `CHECK` constraint, matching `providers.provider_type` and
 `provider_health_events.status`. In PostgreSQL `text` and `varchar(n)` share one storage
 representation, so a length cap would save nothing.
+
+Worker is the only writer, so no write-ordering rule is needed.
 
 ### 3.2 Credential table changes
 
@@ -158,10 +174,11 @@ No column is removed or retyped.
 ### 3.5 Why not columns on the credential tables
 
 Balance and utilization are observed state, refreshed on a schedule. Writing them into
-`provider_api_keys` and `provider_oauth` would put high-frequency writes on configuration tables and
-blur the ownership line drawn in `docs/ARCHITECTURE.md`, where Console owns user-authored
-configuration. They are also not scalar: Claude reports three windows, Codex two, and DeepSeek one
-entry per currency. Finally, the two credential tables would each need a duplicate set of columns.
+`provider_api_keys` and `provider_oauth` would put recurring writes on configuration tables and blur
+the ownership line drawn in `docs/ARCHITECTURE.md`, where Console owns user-authored configuration.
+They are also not scalar: Claude reports four windows plus an overage balance, Codex two windows,
+and DeepSeek one entry per currency. Finally, the two credential tables would each need a duplicate
+set of columns.
 
 ### 3.6 Why no denormalized scalar columns
 
@@ -188,12 +205,12 @@ Console cannot distinguish "cannot be retrieved" from "not yet queried".
 
 ## 4. `entries` format
 
-Two entry shapes. `packages/provider/src/descriptor.ts` declares which shape a `providerKey`
-produces, so entries carry no discriminator field.
+Two entry shapes, distinguished by field presence rather than by a discriminator field. One array may
+hold both: `claude_code` emits window entries plus an overage balance entry.
 
 ```ts
 type WindowEntry = {
-  window: string;        // normalized window id, e.g. "5h" | "7d" | "7d_sonnet"
+  window: string;        // normalized window id, e.g. "5h" | "7d" | "7d_opus" | "7d_sonnet"
   utilization: number;   // 0..1, fraction consumed
   resetsAt?: string;     // ISO 8601
 };
@@ -208,13 +225,21 @@ type BalanceEntry = {
 type QuotaEntry = WindowEntry | BalanceEntry;
 ```
 
+A consumer discriminates on `"window" in entry` versus `"currency" in entry`. Console renders each
+entry according to its own shape, so no Provider-level type tag is required anywhere.
+
 ```jsonc
-// window utilization
+// windows only — openai_codex, zai, minimax
 [{"window":"5h","utilization":0.0741,"resetsAt":"2026-07-20T12:00:00Z"},
  {"window":"7d","utilization":0.5312,"resetsAt":"2026-07-24T03:00:00Z"}]
 
-// currency balance
+// balance only — deepseek, moonshot, openai, openrouter
 [{"currency":"CNY","total":"110.00","granted":"10.00","toppedUp":"100.00"}]
+
+// mixed — claude_code with overage enabled
+[{"window":"5h","utilization":0.0741,"resetsAt":"2026-07-20T12:00:00Z"},
+ {"window":"7d","utilization":0.5312,"resetsAt":"2026-07-24T03:00:00Z"},
+ {"currency":"USD","total":"76.50"}]
 
 // unavailable
 []
@@ -222,15 +247,15 @@ type QuotaEntry = WindowEntry | BalanceEntry;
 
 ## 5. Descriptor extension
 
-`packages/provider/src/descriptor.ts` gains one optional field. These are compile-time constants,
-not user input, so no expression evaluation or sandboxing is involved.
+`packages/provider/src/descriptor.ts` gains one optional field. It answers exactly one question:
+should Worker schedule a probe for this `providerKey`. It carries no endpoint, no field mapping, and
+no shape tag — endpoints and parsing live entirely in `quota-probe.ts`, matching how
+`modelListStyle` and `connectivityProbeStyle` already delegate to their implementing modules.
 
 ```ts
 export type ProviderQuotaSource =
-  | { kind: "window_utilization"; via: "response_header" }
-  | { kind: "window_utilization"; via: "active_probe"; path: string }
-  | { kind: "currency_balance"; via: "active_probe"; path: string }
-  | { kind: "unavailable"; reason: "requires_separate_credential" | "not_supported" };
+  | { supported: true }
+  | { supported: false; reason: "requires_separate_credential" | "not_supported" };
 
 export type ProviderDescriptor = {
   // ...existing fields
@@ -239,7 +264,7 @@ export type ProviderDescriptor = {
 ```
 
 Providers with no `quotaSource` — including any custom `providerKey` created through
-`action=create` — are treated as `not_supported`.
+`action=create` — are treated as `{ supported: false, reason: "not_supported" }`.
 
 ## 6. Change list
 
@@ -250,20 +275,37 @@ Providers with no `quotaSource` — including any custom `providerKey` created t
 | `packages/db/src/console-provider-quota.ts` | New. Console read model, mirroring `console-provider-health.ts` |
 | `packages/db/src/provider-jobs.ts` | Enqueue and claim `provider_quota_probe` |
 | `packages/provider/src/descriptor.ts` | Add `ProviderQuotaSource` type and `quotaSource` field; populate for the 12 remote `providerKey`s |
-| `packages/provider/src/quota-probe.ts` | New. Per-Provider probe execution and normalization to `QuotaEntry[]` |
+| `packages/provider/src/quota-probe.ts` | New. Holds each Provider's endpoint, request construction, response parsing, and normalization to `QuotaEntry[]`; exported as a lookup keyed by `providerKey` |
 | `packages/worker-runtime/src/worker-provider-quota-probe.ts` | New. Job handler; skips connections with `quota_probe_enabled = false`; sets `next_refresh_at` |
 | `packages/worker-runtime/src/worker-job-runner.ts` | Register the new job type |
-| `packages/gateway-runtime/src/gateway-usage-collector.ts` | Extract `anthropic-ratelimit-unified-*` from `claude_code` responses |
-| `packages/gateway-runtime/src/gateway-background-tasks.ts` | Persist header-derived quota off the response path |
 | `apps/console/src/app/_modules/providers-section.tsx` | Render quota per connection; show `observed_at` staleness; show `error_code` reason |
 | `docs/PRODUCT.md` | Add `provider_quota_probe` to the persistent Worker job list |
 | `feature_list.json` | New feature entry with unit and E2E verification |
 
-Header extraction must strip `authorization`, `x-api-key`, and `cookie` before anything is recorded,
-and must not widen the existing rule that response bodies, prompts, and tool content are never
-logged. Only the whitelisted `anthropic-ratelimit-unified-*` keys are read.
+No Gateway file changes. Probe requests must not log credentials, and probe responses must not be
+logged as bodies, consistent with the existing rule that outbound bodies and credentials stay out of
+logs.
 
-## 7. Out of scope
+## 7. Considered and rejected: collecting from the response path
+
+`claude_code` responses carry `anthropic-ratelimit-unified-*` headers with the same window
+utilization the probe returns, and reading them in Gateway would cost no upstream requests. It was
+rejected for V1.
+
+The saving is one request per connection per interval. The cost is a header reader in Gateway, a
+hook in `gateway-background-tasks.ts` with shutdown tracking, in-memory write throttling (the headers
+arrive on every response, so unthrottled writes would make the table a write hotspot), a
+write-ordering rule between two writers, and a per-Provider source list in the descriptor. Throttling
+writes to the minute scale also discards most of the freshness advantage that motivated the approach.
+
+`claude_code` is also the only candidate. `openai_codex`'s `codex.rate_limits` SSE event carries only
+booleans, not percentages, and `openrouter`'s in-body `usage.cost` is per-request cost, which is out
+of scope. One candidate does not justify a second collection mechanism.
+
+This becomes worth revisiting if quota-aware routing is ever adopted, since down-weighting a
+near-exhausted connection wants sub-second freshness that polling cannot provide.
+
+## 8. Out of scope
 
 - Per-request cost attribution. Already handled by `usage-and-activity`.
 - Rate-limit headers as a data product. `x-ratelimit-*` and `anthropic-ratelimit-requests-*` describe
@@ -276,7 +318,7 @@ logged. Only the whitelisted `anthropic-ratelimit-unified-*` keys are read.
 - Balance for `anthropic`, `xai`, `google`, and `qwen`. Each would require a second credential type
   on the Provider, which is a larger change to the credential model.
 
-## 8. Prior art
+## 9. Prior art
 
 cc-switch (`farion1231/cc-switch`) solves the same problem for a desktop client and made opposite
 storage choices, for reasons that do not transfer.
@@ -292,8 +334,8 @@ storage choices, for reasons that do not transfer.
 
 cc-switch stores configuration because its users author the query themselves, and skips persistence
 because a single desktop process can re-query cheaply on restart. Here the vendor semantics are fully
-determined by `providerKey` so nothing needs storing, while Gateway, Worker, and Console are separate
-processes that must share observed state, so persistence is required. The two decisions invert.
+determined by `providerKey` so nothing needs storing, while Worker writes and Console reads are
+separate processes, so persistence is required. The two decisions invert.
 
 cc-switch also permits user-authored JavaScript for unsupported vendors. That is safe in a
 single-user desktop application and is not safe in a self-hosted server, so it is not adopted.

@@ -8,6 +8,7 @@ import {
 import { formatRelativeDateTime } from "./provider-relative-time";
 
 export const QUOTA_NOT_QUERIED_LABEL = "Not yet queried";
+export const QUOTA_PROBING_PAUSED_LABEL = "Probing paused";
 export const QUOTA_SHARED_BALANCE_NOTE = "Shared account balance";
 
 export type ProviderQuotaWindowView = {
@@ -19,6 +20,7 @@ export type ProviderQuotaWindowView = {
 export type ProviderQuotaConnectionView = {
   balances: string[];
   observedLabel: string | null;
+  pausedLabel: string | null;
   reason: string | null;
   sharedBalanceNote: string | null;
   // "expected" covers the states a Provider is documented not to report; they
@@ -114,6 +116,11 @@ export function findSharedProviderBalances(
 ): SharedProviderBalance[] {
   const connectionIdsByKey = new Map<string, { entry: BalanceEntry; ids: Set<string> }>();
   for (const summary of summaries) {
+    // A paused connection's entries are stale and never rendered; letting them
+    // anchor a shared pool would resurrect them at the Provider level.
+    if (!summary.probingEnabled) {
+      continue;
+    }
     for (const entry of summary.entries) {
       if (!isBalanceEntry(entry)) {
         continue;
@@ -143,6 +150,20 @@ export function buildProviderQuotaConnectionView({
   sharedBalanceKeys: ReadonlySet<string>;
   summary: ConsoleProviderQuotaSummary | undefined;
 }): ProviderQuotaConnectionView {
+  // The enqueue scan skips a disabled or probing-off connection, so whatever
+  // its row holds only ages; stale numbers and last-attempt reasons would
+  // mislead, and the cell reports the pause instead.
+  if (summary && !summary.probingEnabled) {
+    return {
+      balances: [],
+      observedLabel: null,
+      pausedLabel: QUOTA_PROBING_PAUSED_LABEL,
+      reason: null,
+      sharedBalanceNote: null,
+      tone: "neutral",
+      windows: [],
+    };
+  }
   const entries = summary?.entries ?? [];
   const errorCode = summary?.errorCode ?? null;
   const windows = entries.filter(isWindowEntry).map((entry) => ({
@@ -166,6 +187,7 @@ export function buildProviderQuotaConnectionView({
       : observedAt
         ? `Updated ${formatRelativeDateTime(observedAt, referenceTimeMs)}`
         : QUOTA_NOT_QUERIED_LABEL,
+    pausedLabel: null,
     reason: errorCode ? readQuotaErrorReason(errorCode) : null,
     sharedBalanceNote: hasSharedBalance ? QUOTA_SHARED_BALANCE_NOTE : null,
     tone: errorCode ? (isExpectedQuotaState(errorCode) ? "expected" : "warn") : "neutral",

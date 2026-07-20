@@ -18,6 +18,7 @@ const sharedBalance = [{ currency: "USD", total: "76.50" }];
 
 type SeededQuota = {
   alphaBalanceId: string;
+  alphaDisabledId: string;
   alphaId: string;
   alphaUnqueriedId: string;
   alphaUnsupportedId: string;
@@ -30,6 +31,7 @@ type SeededQuota = {
 async function seedQuotaData(databaseUrl: string): Promise<SeededQuota> {
   const seeded: SeededQuota = {
     alphaBalanceId: randomUUID(),
+    alphaDisabledId: randomUUID(),
     alphaId: randomUUID(),
     alphaUnqueriedId: randomUUID(),
     alphaUnsupportedId: randomUUID(),
@@ -60,6 +62,7 @@ async function seedQuotaData(databaseUrl: string): Promise<SeededQuota> {
       [seeded.alphaBalanceId, seeded.alphaId, "alpha-balance"],
       [seeded.alphaUnsupportedId, seeded.alphaId, "alpha-unsupported"],
       [seeded.alphaUnqueriedId, seeded.alphaId, "alpha-unqueried"],
+      [seeded.alphaDisabledId, seeded.alphaId, "alpha-disabled"],
       [seeded.betaOneId, seeded.betaId, "beta-one"],
       [seeded.betaTwoId, seeded.betaId, "beta-two"],
     ];
@@ -70,6 +73,9 @@ async function seedQuotaData(databaseUrl: string): Promise<SeededQuota> {
         [id, providerId, label],
       );
     }
+    await client.query("update provider_api_keys set enabled = false where id = $1", [
+      seeded.alphaDisabledId,
+    ]);
     const summaries: Array<[string, string, unknown, string | null, Date]> = [
       [
         seeded.windowConnectionId,
@@ -86,6 +92,13 @@ async function seedQuotaData(databaseUrl: string): Promise<SeededQuota> {
         new Date(nowMs - 3 * 60_000),
       ],
       [seeded.alphaUnsupportedId, seeded.alphaId, [], "not_supported", new Date(nowMs - 60_000)],
+      [
+        seeded.alphaDisabledId,
+        seeded.alphaId,
+        [{ utilization: 0.24, window: "five_hour" }],
+        null,
+        new Date(nowMs - 21 * 86_400_000),
+      ],
       [seeded.betaOneId, seeded.betaId, sharedBalance, null, new Date(nowMs - 3 * 60_000)],
       [seeded.betaTwoId, seeded.betaId, sharedBalance, null, new Date(nowMs - 3 * 60_000)],
     ];
@@ -115,8 +128,8 @@ test("the quota read model returns one row per connection and null state when ne
       databaseUrl: fixture.databaseUrl,
     });
 
-    // Six connections were seeded; five carry a summary row and one never has.
-    expect(summaries).toHaveLength(6);
+    // Seven connections were seeded; six carry a summary row and one never has.
+    expect(summaries).toHaveLength(7);
     const byId = new Map(summaries.map((summary) => [summary.id, summary]));
 
     const unqueried = byId.get(seeded.alphaUnqueriedId);
@@ -144,6 +157,12 @@ test("the quota read model returns one row per connection and null state when ne
     expect(windows?.observedAt).toBeInstanceOf(Date);
 
     expect(byId.get(seeded.betaOneId)?.entries).toEqual(sharedBalance);
+    expect(byId.get(seeded.betaOneId)?.probingEnabled).toBe(true);
+
+    // A disabled connection keeps its stale row but reports probing stopped.
+    const disabled = byId.get(seeded.alphaDisabledId);
+    expect(disabled?.probingEnabled).toBe(false);
+    expect(disabled?.entries).toEqual([{ utilization: 0.24, window: "five_hour" }]);
   } finally {
     await fixture.dispose();
   }
@@ -209,6 +228,13 @@ test("the Providers page renders each stored quota state and never overflows", a
         const unqueriedCell = quotaCell("alpha-unqueried");
         await expect(unqueriedCell).toContainText("Not yet queried");
         await expect(unqueriedCell).not.toContainText("Not reported");
+
+        // A disabled connection is skipped by the probe scan, so its stored
+        // numbers only age; the cell says paused instead of showing them.
+        const disabledCell = quotaCell("alpha-disabled");
+        await expect(disabledCell).toContainText("Probing paused");
+        await expect(disabledCell).not.toContainText("%");
+        await expect(disabledCell).not.toContainText("Updated");
 
         // An identical balance across connections is one account pool, not two.
         await page.goto(`${baseUrl}/providers?selected=${seeded.betaId}`, {

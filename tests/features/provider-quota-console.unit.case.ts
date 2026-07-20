@@ -8,6 +8,7 @@ import {
   formatQuotaUtilization,
   formatQuotaWindowLabel,
   QUOTA_NOT_QUERIED_LABEL,
+  QUOTA_PROBING_PAUSED_LABEL,
   quotaBalanceKey,
   readQuotaErrorReason,
 } from "../../apps/console/src/app/_lib/provider-quota-format";
@@ -35,6 +36,7 @@ function summaryOf(
     errorCode: null,
     id: "connection-1",
     observedAt: new Date(referenceTimeMs - 3 * 60_000),
+    probingEnabled: true,
     providerDisplayName: "Quota Provider",
     providerId: "provider-1",
     providerKey: "deepseek",
@@ -168,6 +170,44 @@ describe("quota observation state", () => {
       expect(view.windows).toEqual([]);
       expect(view.observedLabel).toBeNull();
     }
+  });
+
+  it("shows paused instead of ever-aging stale numbers once probing stops", () => {
+    // A disabled connection (or quota_probe_enabled = false) is skipped by the
+    // enqueue scan, so whatever the row holds only gets older. Rendering those
+    // numbers as if they were live is misleading; the cell says paused instead.
+    const view = buildProviderQuotaConnectionView({
+      referenceTimeMs,
+      sharedBalanceKeys: new Set<string>(),
+      summary: summaryOf({
+        entries: [{ resetsAt: "2026-07-20T12:00:00Z", utilization: 0.24, window: "five_hour" }],
+        probingEnabled: false,
+      }),
+    });
+
+    expect(view.pausedLabel).toBe(QUOTA_PROBING_PAUSED_LABEL);
+    expect(view.windows).toEqual([]);
+    expect(view.balances).toEqual([]);
+    expect(view.observedLabel).toBeNull();
+    expect(view.tone).toBe("neutral");
+
+    // Paused also beats a recorded error: the reason describes the last
+    // attempt, which no longer runs.
+    const pausedError = buildProviderQuotaConnectionView({
+      referenceTimeMs,
+      sharedBalanceKeys: new Set<string>(),
+      summary: summaryOf({ errorCode: "unauthorized", probingEnabled: false }),
+    });
+    expect(pausedError.pausedLabel).toBe(QUOTA_PROBING_PAUSED_LABEL);
+    expect(pausedError.reason).toBeNull();
+
+    // An active connection never renders the paused label.
+    const active = buildProviderQuotaConnectionView({
+      referenceTimeMs,
+      sharedBalanceKeys: new Set<string>(),
+      summary: summaryOf({ entries: [{ currency: "USD", total: "5.00" }] }),
+    });
+    expect(active.pausedLabel).toBeNull();
   });
 });
 

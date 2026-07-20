@@ -73,6 +73,52 @@ test("an api key quota probe stores the normalized balance entries", async () =>
   }
 });
 
+test("a probe racing a credential deletion does not resurrect the cleared row", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_quota_delete_race_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const providerId = randomUUID();
+  const providerConnectionId = randomUUID();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await seedApiKeyProvider(fixture, {
+      baseUrl: "https://api.deepseek.com",
+      providerConnectionId,
+      providerId,
+      providerKey: "deepseek",
+    });
+    const handler = createProviderQuotaProbeJobHandler({
+      databaseUrl: fixture.databaseUrl,
+      encryptionKeySource,
+      // The credential read has already passed when the upstream call is in
+      // flight; the deletion commits underneath it, exactly like a Console
+      // delete racing the Worker.
+      fetch: async () => {
+        await fixture.query(
+          "update provider_api_keys set deleted_at = now(), updated_at = now() where id = $1",
+          [providerConnectionId],
+        );
+        await fixture.query(
+          "delete from provider_quota_summary where provider_connection_id = $1",
+          [providerConnectionId],
+        );
+        return Response.json({
+          balance_infos: [{ currency: "CNY", total_balance: "110.00" }],
+          is_available: true,
+        });
+      },
+    });
+
+    await handler(quotaJob({ providerConnectionId, providerId }));
+
+    const summary = await readQuotaSummary(fixture);
+    expect(summary).toBeUndefined();
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 test("an OAuth quota probe stores window entries alongside the overage balance", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_quota_oauth_${randomUUID().replaceAll("-", "_")}`,

@@ -134,7 +134,10 @@ CREATE UNIQUE INDEX uq_provider_quota_summary_connection
 `provider_health_events.status`. In PostgreSQL `text` and `varchar(n)` share one storage
 representation, so a length cap would save nothing.
 
-Worker is the only writer, so no write-ordering rule is needed.
+Worker is the only writer, so no write-ordering rule is needed between writers. The write path does
+guard against one race: a probe result arriving after its credential was deleted would resurrect the
+cleared row as a permanent orphan, so the upsert first locks the live credential row and skips the
+write when it is gone.
 
 ### 3.2 Credential table changes
 
@@ -290,7 +293,7 @@ Providers with no `quotaSource` — including any custom `providerKey` created t
 | `packages/worker-runtime/src/worker-provider-quota-probe.ts` | New. Job handler; skips connections with `quota_probe_enabled = false`; resolves and refreshes credentials; writes the summary row |
 | `packages/worker-runtime/src/worker-maintenance-scheduler.ts` | Add a `provider-quota-probe-enqueue` task that enqueues jobs for connections whose `next_refresh_at` has passed or which have no row yet |
 | `apps/worker/src/main.ts` | Register `provider_quota_probe` in the `handlers` map. The job runner derives claimable types from the map keys, so there is no separate registry to edit |
-| `apps/console/src/app/_modules/providers-section.tsx` | Render quota per connection; show `observed_at` staleness; show `error_code` reason |
+| `apps/console/src/app/_modules/providers-section.tsx` | Render quota per connection; show `observed_at` staleness; show `error_code` reason; a disabled or probing-off connection renders "Probing paused" instead of its ever-aging stored numbers |
 | `docs/PRODUCT.md` | Add `provider_quota_probe` to the persistent Worker job list |
 | `feature_list.json` | Two new entries, `provider-quota-probe` and `provider-quota-console` |
 

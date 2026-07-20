@@ -30,6 +30,13 @@ export async function recordProviderQuotaWithClient(
   await client.query("select pg_advisory_xact_lock(hashtext($1))", [
     `provider_quota:${input.providerId}:${input.providerConnectionId}`,
   ]);
+  // A probe result can arrive after the credential it belongs to was deleted;
+  // deletion clears the summary row, so writing here would resurrect it as a
+  // permanent orphan the enqueue scan never revisits. The row lock also makes
+  // a concurrent soft-delete wait, so its clear runs after this write.
+  if (!(await lockLiveConnectionRow(client, input))) {
+    return;
+  }
   const observedAt = input.observedAt ?? new Date();
   const previous = await client.query<{ id: string }>(
     `
@@ -72,6 +79,52 @@ export async function recordProviderQuotaWithClient(
       input.errorCode ?? null,
     ],
   );
+}
+
+async function lockLiveConnectionRow(
+  client: PostgresQueryClient,
+  input: { providerConnectionId: string; providerId: string },
+): Promise<boolean> {
+  const apiKey = await client.query(
+    `
+      select id
+      from provider_api_keys
+      where id = $2
+        and provider_id = $1
+        and deleted_at is null
+      for update
+    `,
+    [input.providerId, input.providerConnectionId],
+  );
+  if (apiKey.rows.length > 0) {
+    return true;
+  }
+  const oauth = await client.query(
+    `
+      select id
+      from provider_oauth
+      where id = $2
+        and provider_id = $1
+        and deleted_at is null
+      for update
+    `,
+    [input.providerId, input.providerConnectionId],
+  );
+  if (oauth.rows.length > 0) {
+    return true;
+  }
+  const local = await client.query(
+    `
+      select id
+      from providers
+      where id = $1
+        and id = $2
+        and deleted_at is null
+      for update
+    `,
+    [input.providerId, input.providerConnectionId],
+  );
+  return local.rows.length > 0;
 }
 
 export async function clearProviderQuotaWithClient(

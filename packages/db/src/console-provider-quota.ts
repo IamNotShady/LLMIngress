@@ -8,6 +8,9 @@ export type ConsoleProviderQuotaSummary = {
   errorCode: ProviderQuotaErrorCode | null;
   id: string;
   observedAt: Date | null;
+  // False when the connection or its Provider is disabled, or quota probing is
+  // switched off — the enqueue scan skips it, so any stored row only ages.
+  probingEnabled: boolean;
   providerDisplayName: string;
   providerId: string;
   providerKey: string;
@@ -24,6 +27,7 @@ type ProviderConnectionQuotaRow = {
   error_code: ProviderQuotaErrorCode | null;
   id: string;
   observed_at: Date | null;
+  probing_enabled: boolean;
   provider_display_name: string;
   provider_id: string;
   provider_key: string;
@@ -41,7 +45,8 @@ export async function listConsoleProviderQuotaSummaries(
                  providers.provider_key,
                  providers.display_name as provider_display_name,
                  'local'::text as connection_kind,
-                 'Local connection'::text as connection_label
+                 'Local connection'::text as connection_label,
+                 providers.enabled as probing_enabled
           from providers
           where providers.provider_type = 'local'
             and providers.deleted_at is null
@@ -53,7 +58,10 @@ export async function listConsoleProviderQuotaSummaries(
                  providers.provider_key,
                  providers.display_name as provider_display_name,
                  'api_key'::text as connection_kind,
-                 coalesce(provider_api_keys.label, provider_api_keys.key_prefix) as connection_label
+                 coalesce(provider_api_keys.label, provider_api_keys.key_prefix) as connection_label,
+                 (providers.enabled
+                   and provider_api_keys.enabled
+                   and provider_api_keys.quota_probe_enabled) as probing_enabled
           from provider_api_keys
           join providers on providers.id = provider_api_keys.provider_id
           where provider_api_keys.deleted_at is null
@@ -66,7 +74,10 @@ export async function listConsoleProviderQuotaSummaries(
                  providers.provider_key,
                  providers.display_name as provider_display_name,
                  'oauth'::text as connection_kind,
-                 coalesce(provider_oauth.label, 'OAuth connection') as connection_label
+                 coalesce(provider_oauth.label, 'OAuth connection') as connection_label,
+                 (providers.enabled
+                   and provider_oauth.enabled
+                   and provider_oauth.quota_probe_enabled) as probing_enabled
           from provider_oauth
           join providers on providers.id = provider_oauth.provider_id
           where provider_oauth.deleted_at is null
@@ -80,6 +91,7 @@ export async function listConsoleProviderQuotaSummaries(
                provider_connections.provider_display_name,
                provider_connections.connection_kind,
                provider_connections.connection_label,
+               provider_connections.probing_enabled,
                provider_quota_summary.entries,
                provider_quota_summary.error_code,
                provider_quota_summary.observed_at
@@ -102,6 +114,7 @@ export async function listConsoleProviderQuotaSummaries(
       errorCode: row.error_code,
       id: row.id,
       observedAt: row.observed_at ? new Date(row.observed_at) : null,
+      probingEnabled: row.probing_enabled,
       providerDisplayName: row.provider_display_name,
       providerId: row.provider_id,
       providerKey: row.provider_key,

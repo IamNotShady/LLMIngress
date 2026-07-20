@@ -548,6 +548,7 @@ function ProviderQuotaCell({ view }: { view: ProviderQuotaConnectionView }) {
       {view.reason ? (
         <span className={view.tone === "warn" ? "pill--warn pill" : "pill"}>{view.reason}</span>
       ) : null}
+      {view.pausedLabel ? <small>{view.pausedLabel}</small> : null}
       {view.sharedBalanceNote ? <small>{view.sharedBalanceNote}</small> : null}
       {view.observedLabel ? <small>{view.observedLabel}</small> : null}
     </span>

@@ -138,12 +138,12 @@ Worker is the only writer, so no write-ordering rule is needed.
 Probing consumes upstream request quota, so it must be switchable per connection. This is
 configuration and therefore belongs on the credential tables, not on the observation table.
 
-```sql
-ALTER TABLE public.provider_api_keys
-    ADD COLUMN quota_probe_enabled boolean DEFAULT true NOT NULL;
+The baseline is authoritative and databases are recreated rather than upgraded, so add the column
+inline to each `CREATE TABLE` rather than as an `ALTER`:
 
-ALTER TABLE public.provider_oauth
-    ADD COLUMN quota_probe_enabled boolean DEFAULT true NOT NULL;
+```sql
+-- inside CREATE TABLE public.provider_api_keys and CREATE TABLE public.provider_oauth
+    quota_probe_enabled boolean DEFAULT true NOT NULL,
 ```
 
 ### 3.3 Job type
@@ -247,10 +247,12 @@ entry according to its own shape, so no Provider-level type tag is required anyw
 
 ## 5. Descriptor extension
 
-`packages/provider/src/descriptor.ts` gains one optional field. It answers exactly one question:
-should Worker schedule a probe for this `providerKey`. It carries no endpoint, no field mapping, and
-no shape tag — endpoints and parsing live entirely in `quota-probe.ts`, matching how
-`modelListStyle` and `connectivityProbeStyle` already delegate to their implementing modules.
+`ProviderBehavior` in `packages/config/src/provider-registry.ts` gains one optional field, and
+`packages/provider/src/descriptor.ts` — a thin re-export shim since the provider-registry refactor —
+adds the type to its `export type { ... }` block. The field answers exactly one question: should
+Worker schedule a probe for this `providerKey`. It carries no endpoint, no field mapping, and no
+shape tag — endpoints and parsing live entirely in `quota-probe.ts`, matching how `modelListStyle`
+and `connectivityProbeStyle` already delegate to their implementing modules.
 
 ```ts
 export type ProviderQuotaSource =
@@ -273,14 +275,18 @@ Providers with no `quotaSource` — including any custom `providerKey` created t
 | `packages/db/migrations/0001_core_baseline.sql` | Add `provider_quota_summary` table, primary key, unique index; add `quota_probe_enabled` to `provider_api_keys` and `provider_oauth`; extend `jobs_job_type_check` |
 | `packages/db/src/provider-quota.ts` | New. Read and upsert `provider_quota_summary`, mirroring `provider-health.ts` |
 | `packages/db/src/console-provider-quota.ts` | New. Console read model, mirroring `console-provider-health.ts` |
-| `packages/db/src/provider-jobs.ts` | Enqueue and claim `provider_quota_probe` |
-| `packages/provider/src/descriptor.ts` | Add `ProviderQuotaSource` type and `quotaSource` field; populate for the 12 remote `providerKey`s |
-| `packages/provider/src/quota-probe.ts` | New. Holds each Provider's endpoint, request construction, response parsing, and normalization to `QuotaEntry[]`; exported as a lookup keyed by `providerKey` |
-| `packages/worker-runtime/src/worker-provider-quota-probe.ts` | New. Job handler; skips connections with `quota_probe_enabled = false`; sets `next_refresh_at` |
-| `packages/worker-runtime/src/worker-job-runner.ts` | Register the new job type |
+| `packages/db/src/provider-jobs.ts` | Enqueue `provider_quota_probe`; add `quota_probe_enabled = true` to the connection-enumeration predicate |
+| `packages/db/package.json` | Add `./provider-quota` and `./console-provider-quota` export subpaths — without them the imports do not resolve |
+| `packages/config/src/provider-registry.ts` | Define `ProviderQuotaSource`; add `quotaSource?` to `ProviderBehavior`; populate `behavior.quotaSource` on the 12 remote entries |
+| `packages/provider/src/descriptor.ts` | Re-export `ProviderQuotaSource` from the registry |
+| `packages/provider/src/quota-probe.ts` | New. Holds each Provider's endpoint, request construction, response parsing, and normalization to `QuotaEntry[]`; exported as a lookup keyed by `providerKey`. Credential-agnostic: takes an already-resolved key or access token |
+| `packages/provider/package.json` | Add the `./quota-probe` export subpath |
+| `packages/worker-runtime/src/worker-provider-quota-probe.ts` | New. Job handler; skips connections with `quota_probe_enabled = false`; resolves and refreshes credentials; writes the summary row |
+| `packages/worker-runtime/src/worker-maintenance-scheduler.ts` | Add a `provider-quota-probe-enqueue` task that enqueues jobs for connections whose `next_refresh_at` has passed or which have no row yet |
+| `apps/worker/src/main.ts` | Register `provider_quota_probe` in the `handlers` map. The job runner derives claimable types from the map keys, so there is no separate registry to edit |
 | `apps/console/src/app/_modules/providers-section.tsx` | Render quota per connection; show `observed_at` staleness; show `error_code` reason |
 | `docs/PRODUCT.md` | Add `provider_quota_probe` to the persistent Worker job list |
-| `feature_list.json` | New feature entry with unit and E2E verification |
+| `feature_list.json` | Two new entries, `provider-quota-probe` and `provider-quota-console` |
 
 No Gateway file changes. Probe requests must not log credentials, and probe responses must not be
 logged as bodies, consistent with the existing rule that outbound bodies and credentials stay out of

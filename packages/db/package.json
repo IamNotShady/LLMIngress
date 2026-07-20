@@ -72,6 +72,10 @@
       "types": "./src/console-provider-health.ts",
       "default": "./src/console-provider-health.ts"
     },
+    "./console-provider-quota": {
+      "types": "./src/console-provider-quota.ts",
+      "default": "./src/console-provider-quota.ts"
+    },
     "./console-provider-keys": {
       "types": "./src/console-provider-keys.ts",
       "default": "./src/console-provider-keys.ts"

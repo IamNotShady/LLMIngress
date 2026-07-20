@@ -11,11 +11,7 @@ import {
   quotaBalanceKey,
   readQuotaErrorReason,
 } from "../../apps/console/src/app/_lib/provider-quota-format";
-import {
-  isBalanceEntry,
-  isWindowEntry,
-  type QuotaEntry,
-} from "../../packages/domain/src/quota";
+import { isBalanceEntry, isWindowEntry, type QuotaEntry } from "../../packages/domain/src/quota";
 
 const referenceTimeMs = Date.parse("2026-07-20T10:00:00Z");
 
@@ -28,7 +24,9 @@ const mixedEntries: QuotaEntry[] = [
 ];
 
 function summaryOf(
-  overrides: Partial<Parameters<typeof buildProviderQuotaConnectionView>[0]["summary"] & object> = {},
+  overrides: Partial<
+    Parameters<typeof buildProviderQuotaConnectionView>[0]["summary"] & object
+  > = {},
 ) {
   return {
     connectionKind: "api_key" as const,
@@ -177,7 +175,11 @@ describe("account-scoped balances", () => {
   it("collapses an identical balance across connections into one account-level pool", () => {
     const shared = findSharedProviderBalances([identical("a"), identical("b"), identical("c")]);
     expect(shared).toEqual([
-      { connectionCount: 3, key: quotaBalanceKey({ currency: "USD", total: "76.50" }), label: "76.50 USD" },
+      {
+        connectionCount: 3,
+        key: quotaBalanceKey({ currency: "USD", total: "76.50" }),
+        label: "76.50 USD",
+      },
     ]);
   });
 

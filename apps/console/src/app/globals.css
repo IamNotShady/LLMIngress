@@ -1956,6 +1956,22 @@ body:has(.console-dialog[open]) {
   min-width: 520px;
   font-size: var(--text-xs);
 }
+.provider-quota-shared {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+.quota-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  align-items: flex-start;
+}
+.quota-window {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+}
 .model-library-table {
   min-width: 1040px;
   font-size: var(--text-xs);
@@ -3934,18 +3950,21 @@ button.table-row-link {
 }
 
 .provider-key-table {
-  min-width: 42rem;
+  min-width: 54rem;
 }
 .provider-key-table :is(th, td):nth-child(1),
-.provider-key-table :is(th, td):nth-child(4),
-.provider-key-table :is(th, td):nth-child(5) {
-  width: 25%;
+.provider-key-table :is(th, td):nth-child(4) {
+  width: 21%;
 }
 .provider-key-table :is(th, td):nth-child(2) {
-  width: 10%;
+  width: 8%;
 }
 .provider-key-table :is(th, td):nth-child(3) {
-  width: 15%;
+  width: 13%;
+}
+.provider-key-table :is(th, td):nth-child(5),
+.provider-key-table :is(th, td):nth-child(6) {
+  width: 18.5%;
 }
 
 .model-library-table {

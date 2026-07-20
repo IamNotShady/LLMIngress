@@ -8,6 +8,7 @@ import {
   type ProviderApiKeyMetadata,
 } from "@llmingress/db/console-provider-keys";
 import { listConsoleProviderOAuthConnections } from "@llmingress/db/console-provider-oauth";
+import { listConsoleProviderQuotaSummaries } from "@llmingress/db/console-provider-quota";
 import { listProviderTemplateSelectorGroups } from "@llmingress/db/console-provider-templates";
 import {
   type ConsoleProvider,
@@ -475,13 +476,19 @@ function orderProvidersForConsole(providers: ConsoleProvider[]): ConsoleProvider
 }
 export async function ProvidersSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const renderedAtMs = Date.now();
-  const [providerRows, providerHealthSummaries, providerKeys, providerOAuthConnections] =
-    await Promise.all([
-      listProviders(),
-      listConsoleProviderHealthSummaries(),
-      listProviderApiKeyMetadata(),
-      listConsoleProviderOAuthConnections(),
-    ]);
+  const [
+    providerRows,
+    providerHealthSummaries,
+    providerQuotaSummaries,
+    providerKeys,
+    providerOAuthConnections,
+  ] = await Promise.all([
+    listProviders(),
+    listConsoleProviderHealthSummaries(),
+    listConsoleProviderQuotaSummaries(),
+    listProviderApiKeyMetadata(),
+    listConsoleProviderOAuthConnections(),
+  ]);
   const providers = orderProvidersForConsole(providerRows);
   const providerKeysByProviderId = groupProviderKeysByProviderId(providerKeys);
   const providerDialog = readSingleSearchParam(searchParams.providerDialog);
@@ -562,6 +569,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
         providerKeys={providerKeys}
         providerModelPage={providerModelPage}
         providerOAuthConnections={providerOAuthConnections}
+        providerQuotaSummaries={providerQuotaSummaries}
         providers={providers}
         renderedAtMs={renderedAtMs}
         modelQuery={modelQuery}

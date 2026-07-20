@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import { clearProviderConnectionHealthWithClient } from "@llmingress/db/provider-health";
+import { clearProviderQuotaWithClient } from "@llmingress/db/provider-quota";
 import type { EncryptionKeySource } from "@llmingress/security/encryption-key";
 import {
   createSecretEncryption,
@@ -292,6 +293,10 @@ export async function deleteProviderApiKey(input: {
       providerId = result.rows[0]?.provider_id;
       if (providerId) {
         await clearProviderConnectionHealthWithClient(client, {
+          providerConnectionId: input.providerApiKeyId,
+          providerId,
+        });
+        await clearProviderQuotaWithClient(client, {
           providerConnectionId: input.providerApiKeyId,
           providerId,
         });

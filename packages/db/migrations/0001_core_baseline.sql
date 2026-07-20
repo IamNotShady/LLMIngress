@@ -223,7 +223,7 @@ CREATE TABLE public.jobs (
     completed_at timestamp with time zone,
     CONSTRAINT jobs_attempt_count_check CHECK ((attempt_count >= 0)),
     CONSTRAINT jobs_check CHECK (((lease_owner IS NULL) = (lease_expires_at IS NULL))),
-    CONSTRAINT jobs_job_type_check CHECK ((job_type = ANY (ARRAY['model_refresh'::text, 'provider_connection_probe'::text, 'price_sync'::text]))),
+    CONSTRAINT jobs_job_type_check CHECK ((job_type = ANY (ARRAY['model_refresh'::text, 'provider_connection_probe'::text, 'price_sync'::text, 'provider_quota_probe'::text]))),
     CONSTRAINT jobs_max_attempts_check CHECK ((max_attempts > 0)),
     CONSTRAINT jobs_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'running'::text, 'succeeded'::text, 'failed'::text, 'canceled'::text]))),
     CONSTRAINT jobs_trigger_check CHECK ((trigger = ANY (ARRAY['manual'::text, 'scheduled'::text, 'system'::text])))
@@ -246,6 +246,7 @@ CREATE TABLE public.provider_api_keys (
     label text,
     enabled boolean DEFAULT true NOT NULL,
     priority integer DEFAULT 100 NOT NULL,
+    quota_probe_enabled boolean DEFAULT true NOT NULL,
     last_used_at timestamp with time zone,
     deleted_at timestamp with time zone,
     CONSTRAINT provider_api_keys_check CHECK (((rotated_at IS NULL) OR (rotated_at >= created_at))),
@@ -360,6 +361,7 @@ CREATE TABLE public.provider_oauth (
     provider_id uuid NOT NULL,
     label text,
     priority integer DEFAULT 100 NOT NULL,
+    quota_probe_enabled boolean DEFAULT true NOT NULL,
     enabled boolean DEFAULT true NOT NULL,
     pending_state text,
     pending_code_verifier text,
@@ -376,6 +378,24 @@ CREATE TABLE public.provider_oauth (
     CONSTRAINT provider_oauth_encrypted_token_check CHECK (((encrypted_token IS NULL) OR (jsonb_typeof(encrypted_token) = 'object'::text))),
     CONSTRAINT provider_oauth_label_check CHECK (((label IS NULL) OR (char_length(label) <= 100))),
     CONSTRAINT provider_oauth_priority_check CHECK (((priority >= 0) AND (priority <= 100)))
+);
+
+
+--
+-- Name: provider_quota_summary; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.provider_quota_summary (
+    id uuid NOT NULL,
+    provider_id uuid NOT NULL,
+    provider_connection_id uuid NOT NULL,
+    entries jsonb DEFAULT '[]'::jsonb NOT NULL,
+    observed_at timestamp with time zone DEFAULT now() NOT NULL,
+    next_refresh_at timestamp with time zone,
+    error_code text,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT provider_quota_summary_entries_check CHECK ((jsonb_typeof(entries) = 'array'::text)),
+    CONSTRAINT provider_quota_summary_error_code_check CHECK (((error_code IS NULL) OR (error_code = ANY (ARRAY['not_supported'::text, 'requires_separate_credential'::text, 'probe_failed'::text, 'unauthorized'::text]))))
 );
 
 
@@ -759,6 +779,14 @@ ALTER TABLE ONLY public.provider_oauth
 
 
 --
+-- Name: provider_quota_summary provider_quota_summary_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.provider_quota_summary
+    ADD CONSTRAINT provider_quota_summary_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: providers providers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1120,6 +1148,13 @@ CREATE UNIQUE INDEX uq_provider_health_summary_connection ON public.provider_hea
 --
 
 CREATE UNIQUE INDEX uq_provider_models_provider_id_id ON public.provider_models USING btree (provider_id, id);
+
+
+--
+-- Name: uq_provider_quota_summary_connection; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_provider_quota_summary_connection ON public.provider_quota_summary USING btree (provider_id, provider_connection_id);
 
 
 --

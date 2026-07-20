@@ -32,6 +32,15 @@ export type ProviderModelListStyle =
 export type ProviderConnectivityProbeStyle = "anthropic" | "claude_code" | "codex";
 export type ProviderSubscriptionAdapter = "claude_code" | "codex";
 
+/**
+ * Whether Worker should schedule an upstream quota probe for this provider.
+ * Carries no endpoint, field mapping, or shape tag — those live entirely in
+ * `packages/provider/src/quota-probe.ts`. Absent means not supported.
+ */
+export type ProviderQuotaSource =
+  | { supported: true }
+  | { reason: "not_supported" | "requires_separate_credential"; supported: false };
+
 /** Runtime behavior flags. Formerly `ProviderDescriptor` in @llmingress/provider. */
 export type ProviderBehavior = {
   connectivityProbeStyle?: ProviderConnectivityProbeStyle;
@@ -42,6 +51,7 @@ export type ProviderBehavior = {
   oauthStateFromCodeVerifier?: boolean;
   openRouterAttribution?: boolean;
   priceSyncSupported?: boolean;
+  quotaSource?: ProviderQuotaSource;
   reasoningAwareProbe?: boolean;
   subscription?: boolean;
   subscriptionAdapter?: ProviderSubscriptionAdapter;
@@ -108,6 +118,7 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
       fixedApiKeyBaseUrl: "https://api.anthropic.com/v1",
       modelListStyle: "anthropic",
       priceSyncSupported: true,
+      quotaSource: { reason: "requires_separate_credential", supported: false },
     },
     creation: {
       mode: "direct",
@@ -126,6 +137,7 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
       metadataKey: "anthropic",
       modelListStyle: "claude_code",
       oauthStateFromCodeVerifier: true,
+      quotaSource: { supported: true },
       subscription: true,
       subscriptionAdapter: "claude_code",
     },
@@ -155,7 +167,7 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "subscription",
   },
   deepseek: {
-    behavior: { priceSyncSupported: true },
+    behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -169,7 +181,10 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "api_key",
   },
   google: {
-    behavior: { priceSyncSupported: true },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -217,7 +232,7 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "local",
   },
   minimax: {
-    behavior: { priceSyncSupported: true },
+    behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -234,7 +249,7 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "api_key",
   },
   moonshot: {
-    behavior: { priceSyncSupported: true },
+    behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -268,6 +283,7 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     behavior: {
       fixedApiKeyBaseUrl: "https://api.openai.com/v1",
       priceSyncSupported: true,
+      quotaSource: { supported: true },
       reasoningAwareProbe: true,
     },
     creation: {
@@ -289,6 +305,7 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
       connectivityProbeStyle: "codex",
       metadataKey: "openai",
       modelListStyle: "codex",
+      quotaSource: { supported: true },
       subscription: true,
       subscriptionAdapter: "codex",
     },
@@ -325,6 +342,7 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
       modelListStyle: "openrouter",
       openRouterAttribution: true,
       priceSyncSupported: true,
+      quotaSource: { supported: true },
     },
     creation: {
       mode: "template",
@@ -343,7 +361,10 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "api_key",
   },
   qwen: {
-    behavior: { priceSyncSupported: true },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -360,7 +381,10 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "api_key",
   },
   xai: {
-    behavior: { priceSyncSupported: true },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "requires_separate_credential", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -377,7 +401,7 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "api_key",
   },
   zai: {
-    behavior: { priceSyncSupported: true },
+    behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",

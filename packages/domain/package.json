@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./quota": {
+      "types": "./src/quota.ts",
+      "default": "./src/quota.ts"
     }
   },
   "scripts": {

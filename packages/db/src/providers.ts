@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { withPooledPostgresClient, withPostgresTransaction } from "@llmingress/db/client";
 import { clearProviderConnectionHealthWithClient } from "@llmingress/db/provider-health";
+import { clearProviderQuotaWithClient } from "@llmingress/db/provider-quota";
 
 export type {
   PostgresQueryClient,
@@ -290,6 +291,10 @@ export async function deleteProviderOAuthConnection(input: {
       throw new Error("Provider OAuth connection was not found.");
     }
     await clearProviderConnectionHealthWithClient(client, {
+      providerConnectionId: input.providerOAuthId,
+      providerId,
+    });
+    await clearProviderQuotaWithClient(client, {
       providerConnectionId: input.providerOAuthId,
       providerId,
     });

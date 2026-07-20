@@ -217,9 +217,9 @@ describe("provider quota parsers", () => {
       }),
     ).toEqual([{ currency: "USD", granted: "2", toppedUp: "10.34", total: "12.34" }]);
 
-    expect(parseOpenAIQuota({ total_available: 76.5, total_granted: 120, total_used: 43.5 })).toEqual(
-      [{ currency: "USD", granted: "120", total: "76.5" }],
-    );
+    expect(
+      parseOpenAIQuota({ total_available: 76.5, total_granted: 120, total_used: 43.5 }),
+    ).toEqual([{ currency: "USD", granted: "120", total: "76.5" }]);
   });
 });
 

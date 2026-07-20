@@ -493,6 +493,7 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
       );
       await client.query("delete from provider_health_summary where provider_id = $1", [input.id]);
       await client.query("delete from provider_health_events where provider_id = $1", [input.id]);
+      await client.query("delete from provider_quota_summary where provider_id = $1", [input.id]);
       await client.query(
         `
           update provider_models

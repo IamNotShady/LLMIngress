@@ -32,6 +32,10 @@
       "types": "./src/provider-jobs.ts",
       "default": "./src/provider-jobs.ts"
     },
+    "./provider-quota": {
+      "types": "./src/provider-quota.ts",
+      "default": "./src/provider-quota.ts"
+    },
     "./migration-status": {
       "types": "./src/migration-status.ts",
       "default": "./src/migration-status.ts"

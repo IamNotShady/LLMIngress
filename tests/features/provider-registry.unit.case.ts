@@ -36,6 +36,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
       fixedApiKeyBaseUrl: "https://api.anthropic.com/v1",
       modelListStyle: "anthropic",
       priceSyncSupported: true,
+      quotaSource: { reason: "requires_separate_credential", supported: false },
     },
     creation: {
       mode: "direct",
@@ -54,6 +55,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
       metadataKey: "anthropic",
       modelListStyle: "claude_code",
       oauthStateFromCodeVerifier: true,
+      quotaSource: { supported: true },
       subscription: true,
       subscriptionAdapter: "claude_code",
     },
@@ -83,7 +85,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "subscription",
   },
   deepseek: {
-    behavior: { priceSyncSupported: true },
+    behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -97,7 +99,10 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "api_key",
   },
   google: {
-    behavior: { priceSyncSupported: true },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -145,7 +150,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "local",
   },
   minimax: {
-    behavior: { priceSyncSupported: true },
+    behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -162,7 +167,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "api_key",
   },
   moonshot: {
-    behavior: { priceSyncSupported: true },
+    behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -196,6 +201,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     behavior: {
       fixedApiKeyBaseUrl: "https://api.openai.com/v1",
       priceSyncSupported: true,
+      quotaSource: { supported: true },
       reasoningAwareProbe: true,
     },
     creation: {
@@ -217,6 +223,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
       connectivityProbeStyle: "codex",
       metadataKey: "openai",
       modelListStyle: "codex",
+      quotaSource: { supported: true },
       subscription: true,
       subscriptionAdapter: "codex",
     },
@@ -253,6 +260,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
       modelListStyle: "openrouter",
       openRouterAttribution: true,
       priceSyncSupported: true,
+      quotaSource: { supported: true },
     },
     creation: {
       mode: "template",
@@ -271,7 +279,10 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "api_key",
   },
   qwen: {
-    behavior: { priceSyncSupported: true },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -288,7 +299,10 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "api_key",
   },
   xai: {
-    behavior: { priceSyncSupported: true },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "requires_separate_credential", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -305,7 +319,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "api_key",
   },
   zai: {
-    behavior: { priceSyncSupported: true },
+    behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",

@@ -1,3 +1,7 @@
+import {
+  type ProviderOAuthConfig,
+  resolveProviderRegistryEntry,
+} from "@llmingress/config/provider-registry";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import { isRecord } from "@llmingress/util";
 import type { SubscriptionProviderKey } from "./subscription.js";
@@ -13,18 +17,6 @@ export type ProviderOAuthTokenBlob = {
 export type ProviderOAuthCallbackInput = {
   code: string;
   state: string | null;
-};
-
-type ProviderOAuthConfig = {
-  authorizeUrl: string;
-  clientId: string;
-  defaultParams?: Record<string, string>;
-  redirectUri: string;
-  revokeUrl?: string;
-  scope: string;
-  tokenEncoding: "form" | "json";
-  tokenHeaders?: Record<string, string>;
-  tokenUrl: string;
 };
 
 type BuildProviderOAuthAuthorizeUrlInput = {
@@ -54,38 +46,6 @@ type RevokeProviderOAuthTokenInput = {
   providerKey: SubscriptionProviderKey;
 };
 
-const providerOAuthConfigs: Record<SubscriptionProviderKey, ProviderOAuthConfig> = {
-  claude_code: {
-    authorizeUrl: "https://claude.ai/oauth/authorize",
-    clientId: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
-    defaultParams: { code: "true", prompt: "login" },
-    redirectUri: "https://console.anthropic.com/oauth/code/callback",
-    scope: "org:create_api_key user:profile user:inference",
-    tokenEncoding: "json",
-    tokenHeaders: {
-      accept: "application/json",
-      "content-type": "application/json",
-      "user-agent": "anthropic",
-    },
-    tokenUrl: "https://api.anthropic.com/v1/oauth/token",
-  },
-  openai_codex: {
-    authorizeUrl: "https://auth.openai.com/oauth/authorize",
-    clientId: "app_EMoamEEZ73f0CkXaXp7hrann",
-    defaultParams: {
-      codex_cli_simplified_flow: "true",
-      id_token_add_organizations: "true",
-      originator: "codex_cli_rs",
-      prompt: "login",
-    },
-    redirectUri: "http://localhost:1455/auth/callback",
-    scope: "openid profile email offline_access",
-    revokeUrl: "https://auth.openai.com/oauth/revoke",
-    tokenEncoding: "form",
-    tokenHeaders: { accept: "application/json" },
-    tokenUrl: "https://auth.openai.com/oauth/token",
-  },
-};
 const providerOAuthRequestTimeoutMs = 30_000;
 
 export function buildProviderOAuthAuthorizeUrl(input: BuildProviderOAuthAuthorizeUrlInput): string {
@@ -272,5 +232,9 @@ async function readJsonBody(response: Response): Promise<unknown> {
 }
 
 function readOAuthConfig(providerKey: SubscriptionProviderKey): ProviderOAuthConfig {
-  return providerOAuthConfigs[providerKey];
+  const oauth = resolveProviderRegistryEntry(providerKey)?.oauth;
+  if (!oauth) {
+    throw new Error(`Missing OAuth config for ${providerKey}.`);
+  }
+  return oauth;
 }

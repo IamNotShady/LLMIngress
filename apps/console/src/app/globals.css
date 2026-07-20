@@ -628,6 +628,15 @@ pre,
   justify-self: end;
   min-width: 6rem;
 }
+.provider-supported-endpoints {
+  display: grid;
+  gap: var(--space-2xs);
+}
+.provider-supported-endpoints-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+}
 .field-error {
   display: none;
   margin: calc(-1 * var(--space-2xs)) 0 0;

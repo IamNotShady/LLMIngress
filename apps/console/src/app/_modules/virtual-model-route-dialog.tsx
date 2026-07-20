@@ -1,14 +1,19 @@
 "use client";
 
+import {
+  type RouteEndpointProtocol,
+  routeEndpointProtocols,
+} from "@llmingress/config/provider-registry";
 import Link from "next/link";
 import { type DragEvent, useMemo, useState } from "react";
 import { ConsoleDialog } from "../_components/console-dialog";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 import { formatModelContextTokens } from "./model-capability-format";
+import { formatRouteEndpointProtocolLabel } from "./sections";
 
 type Strategy = "fixed" | "cost_first" | "load_balance";
-type EndpointProtocol = "chat_completions" | "responses" | "messages";
+type EndpointProtocol = RouteEndpointProtocol;
 
 type ProviderModelOption = {
   availability: string;
@@ -44,7 +49,8 @@ type VirtualModel = {
 };
 
 const strategies: Strategy[] = ["fixed", "cost_first", "load_balance"];
-const endpointProtocols: EndpointProtocol[] = ["chat_completions", "responses", "messages"];
+const endpointProtocols: EndpointProtocol[] = [...routeEndpointProtocols];
+const modelPickerPageSize = 10;
 
 export function VirtualModelRouteDialogClient({
   closeHref,
@@ -67,6 +73,7 @@ export function VirtualModelRouteDialogClient({
     routePolicy?.candidates ?? [],
   );
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerPage, setPickerPage] = useState(1);
   const [providerFilter, setProviderFilter] = useState("all");
   const [modelQuery, setModelQuery] = useState("");
 
@@ -82,16 +89,17 @@ export function VirtualModelRouteDialogClient({
     () => new Set(selectedCandidates.map((candidate) => candidate.id)),
     [selectedCandidates],
   );
-  const visibleOptions = providerModelOptions.filter((option) => {
-    if (selectedIds.has(option.id)) {
-      return false;
-    }
-    if (!option.supportedEndpoints.includes(endpointProtocol)) {
-      return false;
-    }
-    if (providerFilter !== "all" && option.providerKey !== providerFilter) {
-      return false;
-    }
+  // Staged filters: each stage's count tells the empty state why the picker is
+  // empty (provider lacks the endpoint vs. search miss vs. everything selected).
+  const unselectedOptions = providerModelOptions.filter((option) => !selectedIds.has(option.id));
+  const providerScopedOptions =
+    providerFilter === "all"
+      ? unselectedOptions
+      : unselectedOptions.filter((option) => option.providerKey === providerFilter);
+  const endpointCompatibleOptions = providerScopedOptions.filter((option) =>
+    option.supportedEndpoints.includes(endpointProtocol),
+  );
+  const visibleOptions = endpointCompatibleOptions.filter((option) => {
     const query = modelQuery.trim().toLowerCase();
     if (!query) {
       return true;
@@ -100,6 +108,17 @@ export function VirtualModelRouteDialogClient({
       .toLowerCase()
       .includes(query);
   });
+  const providerFilterLabel =
+    providerFilter === "all"
+      ? null
+      : (providerFilters.find(([providerKey]) => providerKey === providerFilter)?.[1] ??
+        providerFilter);
+  const pickerPageCount = Math.max(1, Math.ceil(visibleOptions.length / modelPickerPageSize));
+  const currentPickerPage = Math.min(pickerPage, pickerPageCount);
+  const pagedOptions = visibleOptions.slice(
+    (currentPickerPage - 1) * modelPickerPageSize,
+    currentPickerPage * modelPickerPageSize,
+  );
 
   function addModel(option: ProviderModelOption) {
     setSelectedCandidates((current) => [...current, { ...option, candidateOrder: current.length }]);
@@ -108,6 +127,7 @@ export function VirtualModelRouteDialogClient({
 
   function handleEndpointChange(nextEndpointProtocol: EndpointProtocol) {
     setEndpointProtocol(nextEndpointProtocol);
+    setPickerPage(1);
     setSelectedCandidates((current) =>
       current
         .filter((candidate) => candidate.supportedEndpoints.includes(nextEndpointProtocol))
@@ -197,7 +217,7 @@ export function VirtualModelRouteDialogClient({
                   >
                     {endpointProtocols.map((protocol) => (
                       <option key={protocol} value={protocol}>
-                        {formatEndpointProtocolLabel(protocol)}
+                        {formatRouteEndpointProtocolLabel(protocol)}
                       </option>
                     ))}
                   </select>
@@ -321,7 +341,10 @@ export function VirtualModelRouteDialogClient({
                 className="secondary-button vm-add-model-button"
                 id="vm-model-picker-trigger"
                 type="button"
-                onClick={() => setPickerOpen(true)}
+                onClick={() => {
+                  setPickerPage(1);
+                  setPickerOpen(true);
+                }}
               >
                 <span>Add Model</span>
               </button>
@@ -359,7 +382,10 @@ export function VirtualModelRouteDialogClient({
               <select
                 id="vm-model-provider-filter"
                 value={providerFilter}
-                onChange={(event) => setProviderFilter(event.target.value)}
+                onChange={(event) => {
+                  setProviderFilter(event.target.value);
+                  setPickerPage(1);
+                }}
               >
                 <option value="all">All</option>
                 {providerFilters.map(([providerKey, providerDisplayName]) => (
@@ -375,7 +401,10 @@ export function VirtualModelRouteDialogClient({
                 id="vm-model-name-filter"
                 placeholder="Search model name"
                 value={modelQuery}
-                onChange={(event) => setModelQuery(event.target.value)}
+                onChange={(event) => {
+                  setModelQuery(event.target.value);
+                  setPickerPage(1);
+                }}
               />
             </div>
           </div>
@@ -396,15 +425,18 @@ export function VirtualModelRouteDialogClient({
                 {visibleOptions.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
-                      <p>No compatible models available for this endpoint.</p>
-                      <Link className="empty-state-action" href="/providers">
-                        Open Providers
-                      </Link>{" "}
-                      to add or refresh Provider Models.
+                      <ModelPickerEmptyState
+                        compatibleCount={endpointCompatibleOptions.length}
+                        endpointLabel={formatRouteEndpointProtocolLabel(endpointProtocol)}
+                        hasAnyModels={providerModelOptions.length > 0}
+                        hasUnselectedInScope={providerScopedOptions.length > 0}
+                        modelQuery={modelQuery.trim()}
+                        providerFilterLabel={providerFilterLabel}
+                      />
                     </td>
                   </tr>
                 ) : (
-                  visibleOptions.map((option) => (
+                  pagedOptions.map((option) => (
                     <tr key={option.id}>
                       <td>{option.providerDisplayName}</td>
                       <td>
@@ -430,6 +462,43 @@ export function VirtualModelRouteDialogClient({
               </tbody>
             </table>
           </div>
+          {visibleOptions.length > modelPickerPageSize ? (
+            <nav aria-label="Model picker pages" className="list-pagination">
+              <p className="list-pagination-summary">
+                <strong>
+                  Page {currentPickerPage} of {pickerPageCount}
+                </strong>
+                <span className="list-pagination-range">
+                  {`${(currentPickerPage - 1) * modelPickerPageSize + 1}–${Math.min(
+                    visibleOptions.length,
+                    currentPickerPage * modelPickerPageSize,
+                  )} of ${visibleOptions.length} models`}
+                </span>
+              </p>
+              <div className="list-pagination-controls">
+                <button
+                  aria-label="Previous page"
+                  className="list-pagination-link"
+                  disabled={currentPickerPage <= 1}
+                  type="button"
+                  onClick={() => setPickerPage(currentPickerPage - 1)}
+                >
+                  <span aria-hidden="true">&larr;</span>
+                  <span>Previous</span>
+                </button>
+                <button
+                  aria-label="Next page"
+                  className="list-pagination-link"
+                  disabled={currentPickerPage >= pickerPageCount}
+                  type="button"
+                  onClick={() => setPickerPage(currentPickerPage + 1)}
+                >
+                  <span>Next</span>
+                  <span aria-hidden="true">&rarr;</span>
+                </button>
+              </div>
+            </nav>
+          ) : null}
         </ConsoleDialog>
       ) : null}
     </>
@@ -446,22 +515,70 @@ function formatRouteStrategyLabel(strategy: Strategy): string {
   return strategy.charAt(0).toUpperCase() + strategy.slice(1);
 }
 
+function ModelPickerEmptyState({
+  compatibleCount,
+  endpointLabel,
+  hasAnyModels,
+  hasUnselectedInScope,
+  modelQuery,
+  providerFilterLabel,
+}: {
+  compatibleCount: number;
+  endpointLabel: string;
+  hasAnyModels: boolean;
+  hasUnselectedInScope: boolean;
+  modelQuery: string;
+  providerFilterLabel: string | null;
+}) {
+  if (!hasAnyModels) {
+    return (
+      <>
+        <p>No Provider Models found.</p>
+        <Link className="empty-state-action" href="/providers">
+          Open Providers
+        </Link>{" "}
+        to add or refresh Provider Models.
+      </>
+    );
+  }
+  if (!hasUnselectedInScope) {
+    return <p>All compatible models are already selected as candidates.</p>;
+  }
+  if (compatibleCount === 0) {
+    if (providerFilterLabel) {
+      return (
+        <>
+          <p>{`${providerFilterLabel} doesn't support the ${endpointLabel} endpoint.`}</p>
+          Switch the endpoint above, or set the Provider filter to All.
+        </>
+      );
+    }
+    return (
+      <>
+        <p>{`None of your providers support the ${endpointLabel} endpoint.`}</p>
+        <Link className="empty-state-action" href="/providers">
+          Open Providers
+        </Link>{" "}
+        {`to connect a provider that serves ${endpointLabel}.`}
+      </>
+    );
+  }
+  return (
+    <>
+      <p>{`No models match "${modelQuery}".`}</p>
+      {`Clear the search to see ${compatibleCount} compatible ${
+        compatibleCount === 1 ? "model" : "models"
+      }.`}
+    </>
+  );
+}
+
 function readInitialEndpointProtocol(routePolicy: RoutePolicy | null): EndpointProtocol {
   return (
     routePolicy?.endpointProtocol ??
     routePolicy?.candidates[0]?.supportedEndpoints[0] ??
     "chat_completions"
   );
-}
-
-function formatEndpointProtocolLabel(protocol: EndpointProtocol): string {
-  if (protocol === "chat_completions") {
-    return "Chat Completions";
-  }
-  if (protocol === "responses") {
-    return "Responses";
-  }
-  return "Messages";
 }
 
 function formatRouteStrategyDescription(strategy: Strategy): string {

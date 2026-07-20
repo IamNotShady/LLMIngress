@@ -1,9 +1,11 @@
 import type { ModelTokenPrice, PricedModelTokenPrice } from "@llmingress/billing/price-registry";
+import {
+  type RouteEndpointProtocol,
+  routeEndpointProtocols,
+} from "@llmingress/config/provider-registry";
 import { omitUndefined } from "@llmingress/util";
 
-export const routeEndpointProtocols = ["chat_completions", "responses", "messages"] as const;
-
-export type RouteEndpointProtocol = (typeof routeEndpointProtocols)[number];
+export { type RouteEndpointProtocol, routeEndpointProtocols };
 export type RoutePolicyStrategy = "fixed" | "cost_first" | "load_balance";
 
 export const modelInputModalities = ["text", "image", "audio", "video", "document"] as const;

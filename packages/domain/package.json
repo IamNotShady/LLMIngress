@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@llmingress/billing": "workspace:*",
+    "@llmingress/config": "workspace:*",
     "@llmingress/util": "workspace:*"
   }
 }

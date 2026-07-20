@@ -58,9 +58,7 @@ test("fresh Console guides users through only the retained core workflow", async
       await expect(page.getByText(/Add a Provider and refresh its models/)).toBeVisible();
       await page.getByRole("link", { name: "Create Virtual Model" }).click();
       await page.getByRole("button", { name: "Add Model" }).click();
-      await expect(
-        page.getByText("No compatible models available for this endpoint."),
-      ).toBeVisible();
+      await expect(page.getByText("No Provider Models found.")).toBeVisible();
       await expect(page.getByRole("link", { name: "Open Providers" })).toBeVisible();
 
       let detailAttempts = 0;

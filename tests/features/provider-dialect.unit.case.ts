@@ -52,6 +52,20 @@ describe("provider streaming dialects", () => {
     });
   });
 
+  it("tightens supported path suffixes from the provider registry endpoint face", () => {
+    const deepseek = resolveProviderStreamingDialect("deepseek");
+    expect(deepseek.supportsPathSuffix("chat/completions")).toBe(true);
+    expect(deepseek.supportsPathSuffix("messages")).toBe(false);
+    expect(deepseek.supportsPathSuffix("responses")).toBe(false);
+  });
+
+  it("keeps unknown providers permissive across every path suffix", () => {
+    const dialect = resolveProviderStreamingDialect("my-vllm");
+    expect(dialect.supportsPathSuffix("chat/completions")).toBe(true);
+    expect(dialect.supportsPathSuffix("responses")).toBe(true);
+    expect(dialect.supportsPathSuffix("messages")).toBe(true);
+  });
+
   it("does not define usage-request body mutations for OpenAI-compatible dialects", () => {
     for (const providerKey of ["google", "lmstudio", "openai"]) {
       const dialect = resolveProviderStreamingDialect(providerKey);

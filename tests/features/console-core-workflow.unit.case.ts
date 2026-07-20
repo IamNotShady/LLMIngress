@@ -28,8 +28,9 @@ describe("Console core workflow", () => {
     expect(api_keys).toContain("Create an API Key");
     expect(limits).toContain("Create an API Key and enable limits");
     expect(virtualModels).toContain("Add a Provider and refresh its models");
-    expect(routeDialog).toContain("No compatible models available for this endpoint");
+    expect(routeDialog).toContain("No Provider Models found");
     expect(routeDialog).toContain("Open Providers");
+    expect(routeDialog).toContain("doesn't support the ");
     expect(routeDialog).toContain("disabled={selectedCandidates.length === 0}");
     const css = read("apps/console/src/app/globals.css");
     expect(css).toContain(".vm-model-picker-table th:nth-child(6)");

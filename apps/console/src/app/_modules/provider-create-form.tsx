@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon, type FlatIconName } from "../_components/flat-icon";
+import { formatRouteEndpointProtocolLabel } from "./sections";
 
 export type ProviderCreateChoice = {
   action: string;
@@ -15,6 +16,7 @@ export type ProviderCreateChoice = {
   id: string;
   providerKey: string;
   providerType: string;
+  supportedEndpoints: string[];
 };
 
 export function ProviderCreateForm({
@@ -157,6 +159,18 @@ export function ProviderCreateForm({
       >
         {baseUrlError}
       </p>
+      {choice.supportedEndpoints.length > 0 ? (
+        <div className="provider-supported-endpoints">
+          <span className="provider-supported-endpoints-label">Supported endpoints</span>
+          <div className="tag-row">
+            {choice.supportedEndpoints.map((protocol) => (
+              <span className="tag-chip" key={protocol}>
+                {formatRouteEndpointProtocolLabel(protocol)}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <button type="submit">
         <span>Create</span>
       </button>

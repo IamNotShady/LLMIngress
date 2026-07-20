@@ -6,8 +6,9 @@ export type ConnectivityCheckProvider = {
   providerKey: string;
 };
 
+import { defaultEndpointPathByProtocol } from "@llmingress/config/provider-registry";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
-import { isRecord } from "@llmingress/util";
+import { isRecord, joinUrl } from "@llmingress/util";
 import { buildAnthropicMessagesUrl, buildAnthropicProviderHeaders } from "./adapters/anthropic.js";
 import {
   fetchCredentialedProviderRequest,
@@ -449,10 +450,7 @@ async function fetchWithTimeout(
 }
 
 function buildChatCompletionsUrl(baseUrl: string): string {
-  const url = new URL(baseUrl);
-  const path = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
-  url.pathname = `${path}/chat/completions`.replaceAll(/\/{2,}/g, "/");
-  return url.toString();
+  return joinUrl(baseUrl, defaultEndpointPathByProtocol.chat_completions);
 }
 
 async function readResponseBody(response: Response): Promise<unknown> {

@@ -1,3 +1,8 @@
+import {
+  listProviderTemplateEntries,
+  type ProviderEndpoint,
+  type ProviderRegistryEntry,
+} from "@llmingress/config/provider-registry";
 import { omitUndefined } from "@llmingress/util";
 import { consoleValidationError } from "./console-operation-error.ts";
 import { normalizeProviderBaseUrl } from "./console-provider-base-url.ts";
@@ -23,10 +28,7 @@ export type ProviderTemplateId =
   | LocalProviderTemplateId;
 export type ProviderTemplateSelectorGroupId = "local" | "remote_api_key" | "subscription";
 export type ProviderEndpointProtocol = "chat_completions" | "messages" | "models" | "responses";
-export type ProviderEndpoint = {
-  method: "GET" | "POST";
-  path: string;
-};
+export type { ProviderEndpoint };
 export type ProviderEndpoints = Partial<Record<ProviderEndpointProtocol, ProviderEndpoint>>;
 export type ProviderTemplateAuthBehavior = {
   header: string;
@@ -111,149 +113,30 @@ export type ProviderTemplateSelectorGroup = {
   templates: ProviderTemplateSelectorItem[];
 };
 
-const remoteTemplateAuth: ProviderTemplateAuthBehavior = {
-  header: "Authorization",
-  scheme: "Bearer",
-};
+// Provider templates are derived from the single-source provider registry. The
+// registry keeps the routable endpoints separate from the model catalog; here
+// they are recombined into the historical four-key `endpoints` shape (with the
+// `models` catalog folded back in) that the Console selector consumes.
+function toProviderInfo(entry: ProviderRegistryEntry): ProviderInfo {
+  const endpoints: ProviderEndpoints = { ...entry.endpoints };
+  if (entry.modelListEndpoint) {
+    endpoints.models = entry.modelListEndpoint;
+  }
+  const creation = entry.creation;
+  return {
+    auth: creation.mode === "template" ? creation.auth : undefined,
+    baseUrl: creation.mode === "template" ? creation.baseUrl : undefined,
+    baseUrlPlaceholder: creation.mode === "template" ? creation.baseUrlPlaceholder : undefined,
+    displayName: entry.displayName,
+    endpoints,
+    providerKey: entry.providerKey,
+    providerType: entry.providerType,
+  };
+}
 
-const chatCompletionsEndpoint: ProviderEndpoint = {
-  method: "POST",
-  path: "chat/completions",
-};
-const messagesEndpoint: ProviderEndpoint = {
-  method: "POST",
-  path: "messages",
-};
-const modelsEndpoint: ProviderEndpoint = {
-  method: "GET",
-  path: "models",
-};
-const responsesEndpoint: ProviderEndpoint = {
-  method: "POST",
-  path: "responses",
-};
-
-const openAICompatibleEndpoints: ProviderEndpoints = {
-  chat_completions: chatCompletionsEndpoint,
-  models: modelsEndpoint,
-};
-const openAICompatibleWithResponsesEndpoints: ProviderEndpoints = {
-  ...openAICompatibleEndpoints,
-  responses: responsesEndpoint,
-};
-const fullTextProviderEndpoints: ProviderEndpoints = {
-  ...openAICompatibleEndpoints,
-  messages: messagesEndpoint,
-  responses: responsesEndpoint,
-};
-
-const providerTemplates: Record<ProviderTemplateId, ProviderInfo> = {
-  openai_codex: {
-    baseUrl: "https://chatgpt.com/backend-api",
-    displayName: "OpenAI Codex",
-    endpoints: {
-      models: { method: "GET", path: "codex/models" },
-      responses: { ...responsesEndpoint, path: "codex/responses" },
-    },
-    providerKey: "openai_codex",
-    providerType: "subscription",
-  },
-  claude_code: {
-    baseUrl: "https://api.anthropic.com",
-    displayName: "Claude Code",
-    endpoints: {
-      messages: { ...messagesEndpoint, path: "v1/messages" },
-      models: { ...modelsEndpoint, path: "v1/models" },
-    },
-    providerKey: "claude_code",
-    providerType: "subscription",
-  },
-  google: {
-    auth: remoteTemplateAuth,
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-    displayName: "Google Gemini",
-    endpoints: openAICompatibleEndpoints,
-    providerKey: "google",
-    providerType: "api_key",
-  },
-  openrouter: {
-    auth: remoteTemplateAuth,
-    baseUrl: "https://openrouter.ai/api/v1",
-    displayName: "OpenRouter",
-    endpoints: fullTextProviderEndpoints,
-    providerKey: "openrouter",
-    providerType: "api_key",
-  },
-  deepseek: {
-    auth: remoteTemplateAuth,
-    baseUrl: "https://api.deepseek.com",
-    displayName: "DeepSeek",
-    endpoints: openAICompatibleEndpoints,
-    providerKey: "deepseek",
-    providerType: "api_key",
-  },
-  xai: {
-    auth: remoteTemplateAuth,
-    baseUrl: "https://api.x.ai/v1",
-    displayName: "xAI",
-    endpoints: openAICompatibleWithResponsesEndpoints,
-    providerKey: "xai",
-    providerType: "api_key",
-  },
-  qwen: {
-    auth: remoteTemplateAuth,
-    baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-    displayName: "Qwen",
-    endpoints: openAICompatibleWithResponsesEndpoints,
-    providerKey: "qwen",
-    providerType: "api_key",
-  },
-  moonshot: {
-    auth: remoteTemplateAuth,
-    baseUrl: "https://api.moonshot.ai/v1",
-    displayName: "Moonshot/Kimi",
-    endpoints: openAICompatibleEndpoints,
-    providerKey: "moonshot",
-    providerType: "api_key",
-  },
-  minimax: {
-    auth: remoteTemplateAuth,
-    baseUrl: "https://api.minimax.io/v1",
-    displayName: "MiniMax",
-    endpoints: openAICompatibleWithResponsesEndpoints,
-    providerKey: "minimax",
-    providerType: "api_key",
-  },
-  zai: {
-    auth: remoteTemplateAuth,
-    baseUrl: "https://api.z.ai/api/paas/v4",
-    displayName: "Z.ai",
-    endpoints: openAICompatibleEndpoints,
-    providerKey: "zai",
-    providerType: "api_key",
-  },
-  ollama: {
-    baseUrlPlaceholder: "http://127.0.0.1:11434/v1",
-    displayName: "Ollama",
-    endpoints: fullTextProviderEndpoints,
-    providerKey: "ollama",
-    providerType: "local",
-  },
-  lmstudio: {
-    baseUrlPlaceholder: "http://127.0.0.1:1234/v1",
-    displayName: "LM Studio",
-    endpoints: fullTextProviderEndpoints,
-    providerKey: "lmstudio",
-    providerType: "local",
-  },
-  llama_cpp: {
-    baseUrlPlaceholder: "http://127.0.0.1:8080/v1",
-    displayName: "llama.cpp",
-    endpoints: fullTextProviderEndpoints,
-    providerKey: "llama_cpp",
-    providerType: "local",
-  },
-};
+const providerTemplates = Object.fromEntries(
+  listProviderTemplateEntries().map((entry) => [entry.providerKey, toProviderInfo(entry)]),
+) as Record<ProviderTemplateId, ProviderInfo>;
 
 const openAICompatibleProviderTemplateIds = [
   "deepseek",
@@ -264,38 +147,25 @@ const openAICompatibleProviderTemplateIds = [
   "zai",
 ] as const satisfies readonly OpenAICompatibleProviderTemplateId[];
 
-const localProviderTemplateIds = [
-  "ollama",
-  "lmstudio",
-  "llama_cpp",
-] as const satisfies readonly LocalProviderTemplateId[];
+const providerTemplateGroupOrder = [
+  "subscription",
+  "remote_api_key",
+  "local",
+] as const satisfies readonly ProviderTemplateSelectorGroupId[];
 
-const subscriptionProviderTemplateIds = [
-  "openai_codex",
-  "claude_code",
-] as const satisfies readonly SubscriptionProviderTemplateId[];
+const providerTemplateGroupLabels: Record<ProviderTemplateSelectorGroupId, string> = {
+  local: "Local",
+  remote_api_key: "API Keys",
+  subscription: "Subscription",
+};
 
-const providerTemplateSelectorGroups = [
-  {
-    id: "subscription",
-    label: "Subscription",
-    templateIds: subscriptionProviderTemplateIds,
-  },
-  {
-    id: "remote_api_key",
-    label: "API Keys",
-    templateIds: ["google", "openrouter", ...openAICompatibleProviderTemplateIds],
-  },
-  {
-    id: "local",
-    label: "Local",
-    templateIds: localProviderTemplateIds,
-  },
-] as const satisfies readonly {
-  id: ProviderTemplateSelectorGroupId;
-  label: string;
-  templateIds: readonly ProviderTemplateId[];
-}[];
+const providerTemplateSelectorGroups = providerTemplateGroupOrder.map((id) => ({
+  id,
+  label: providerTemplateGroupLabels[id],
+  templateIds: listProviderTemplateEntries()
+    .filter((entry) => entry.creation.mode === "template" && entry.creation.selectorGroup === id)
+    .map((entry) => entry.providerKey as ProviderTemplateId),
+}));
 
 export function listOpenAICompatibleProviderTemplates(): OpenAICompatibleProviderTemplate[] {
   return openAICompatibleProviderTemplateIds.map(
@@ -350,15 +220,6 @@ export function normalizeProviderTemplateFormInput(
 
 export function isKnownProviderTemplateKey(providerKey: string): boolean {
   return isProviderTemplateId(providerKey);
-}
-
-export function listProviderTemplateEndpointProtocols(
-  templateId: string | null | undefined,
-): ProviderEndpointProtocol[] {
-  if (!isProviderTemplateId(templateId)) {
-    return [];
-  }
-  return Object.keys(readProviderTemplate(templateId).endpoints) as ProviderEndpointProtocol[];
 }
 
 function readProviderTemplate(id: ProviderTemplateId): ProviderTemplate {

@@ -54,22 +54,26 @@ test("circuit breaker trips to the fallback provider and recovers through half-o
       const send = () =>
         postChatCompletion({ apiKey: `${apiKey}_trip`, baseUrl, model: "vm-circuit-breaker" });
 
+      // Phase 1: three transient failures fall back and trip the breaker on the 3rd.
       for (let index = 0; index < 3; index += 1) {
         expect((await send()).status).toBe(200);
       }
       expect(flakyProvider.requests).toHaveLength(3);
       expect(fallbackProvider.requests).toHaveLength(3);
 
+      // Phase 2: circuit open — the flaky connection is filtered in memory, no call reaches it.
       expect((await send()).status).toBe(200);
       expect(flakyProvider.requests).toHaveLength(3);
       expect(fallbackProvider.requests).toHaveLength(4);
 
+      // Phase 3: past halfOpenAfter, the half-open trial routes back to the recovered provider.
       await new Promise((resolve) => setTimeout(resolve, 1_600));
 
       expect((await send()).status).toBe(200);
       expect(flakyProvider.requests).toHaveLength(4);
       expect(fallbackProvider.requests).toHaveLength(4);
 
+      // Phase 4: trial success closed the circuit; traffic stays on the primary.
       expect((await send()).status).toBe(200);
       expect(flakyProvider.requests).toHaveLength(5);
       expect(fallbackProvider.requests).toHaveLength(4);

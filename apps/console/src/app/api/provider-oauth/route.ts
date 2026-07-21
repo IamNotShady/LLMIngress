@@ -3,6 +3,7 @@ import {
   completeProviderOAuthAuthorization,
   revokeProviderOAuthConnection,
   setProviderOAuthConnectionEnabled,
+  setProviderOAuthQuotaProbeEnabled,
   startProviderOAuthConnection,
 } from "@llmingress/db/console-provider-oauth";
 import {
@@ -47,6 +48,14 @@ export const POST = withConsoleAuth(async (request) => {
       const result = await revokeProviderOAuthConnection({
         encryptionKeySource: readConsoleEncryptionKeySource(),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
+      });
+      return redirectToProvider(result.providerId);
+    }
+
+    if (action === "quota-probe-enable" || action === "quota-probe-disable") {
+      const result = await setProviderOAuthQuotaProbeEnabled({
+        providerOAuthId: readRequiredText(form, "providerOAuthId"),
+        quotaProbeEnabled: action === "quota-probe-enable",
       });
       return redirectToProvider(result.providerId);
     }

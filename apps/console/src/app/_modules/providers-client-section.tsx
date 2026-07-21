@@ -530,7 +530,13 @@ function ProviderQuotaSharedBalances({ balances }: { balances: SharedProviderBal
   );
 }
 
-function ProviderQuotaCell({ view }: { view: ProviderQuotaConnectionView }) {
+function ProviderQuotaCell({
+  children,
+  view,
+}: {
+  children?: React.ReactNode;
+  view: ProviderQuotaConnectionView;
+}) {
   return (
     <span className="quota-cell">
       {view.windows.map((window) => (
@@ -548,9 +554,11 @@ function ProviderQuotaCell({ view }: { view: ProviderQuotaConnectionView }) {
       {view.reason ? (
         <span className={view.tone === "warn" ? "pill--warn pill" : "pill"}>{view.reason}</span>
       ) : null}
+      {view.emptyLabel ? <small>{view.emptyLabel}</small> : null}
       {view.pausedLabel ? <small>{view.pausedLabel}</small> : null}
       {view.sharedBalanceNote ? <small>{view.sharedBalanceNote}</small> : null}
       {view.observedLabel ? <small>{view.observedLabel}</small> : null}
+      {children}
     </span>
   );
 }
@@ -650,7 +658,51 @@ function ProviderConnectionTable({
                         sharedBalanceKeys,
                         summary: quotaByConnectionId.get(connection.id),
                       })}
-                    />
+                    >
+                      {connection.kind !== "local" &&
+                      connection.enabled &&
+                      quotaByConnectionId.has(connection.id) ? (
+                        <ConsoleMutationForm
+                          action={
+                            connection.kind === "oauth"
+                              ? "/api/provider-oauth"
+                              : "/api/provider-keys"
+                          }
+                          errorPresentation="toast"
+                          fallbackError="Quota probing update failed."
+                        >
+                          <input
+                            type="hidden"
+                            name="action"
+                            value={
+                              quotaByConnectionId.get(connection.id)?.quotaProbeEnabled
+                                ? "quota-probe-disable"
+                                : "quota-probe-enable"
+                            }
+                          />
+                          <input
+                            type="hidden"
+                            name={
+                              connection.kind === "oauth" ? "providerOAuthId" : "providerApiKeyId"
+                            }
+                            value={connection.id}
+                          />
+                          <button
+                            aria-label={
+                              quotaByConnectionId.get(connection.id)?.quotaProbeEnabled
+                                ? "Pause quota probing"
+                                : "Resume quota probing"
+                            }
+                            className="quota-toggle-button"
+                            type="submit"
+                          >
+                            {quotaByConnectionId.get(connection.id)?.quotaProbeEnabled
+                              ? "Pause"
+                              : "Resume"}
+                          </button>
+                        </ConsoleMutationForm>
+                      ) : null}
+                    </ProviderQuotaCell>
                   </td>
                   <td>{formatConnectionLastProbe(health, renderedAtMs)}</td>
                   <td>

@@ -1,7 +1,8 @@
 # Provider Quota And Balance
 
 Design document for observing upstream account balance and usage-window utilization per Provider
-connection. This document describes intended changes only; no code implements it yet.
+connection. Implemented as the `provider-quota-probe` and `provider-quota-console` entries in
+`feature_list.json`; the sections below are the reference for how and why.
 
 Scope is deliberately narrow: **remaining balance** and **usage percentage** of the upstream
 account. Per-request cost is already covered by `usage-and-activity` and is out of scope here.
@@ -143,8 +144,9 @@ soft-delete waits and its clear still wins.
 
 ### 3.2 Credential table changes
 
-Probing consumes upstream request quota, so it must be switchable per connection. This is
-configuration and therefore belongs on the credential tables, not on the observation table.
+Probing consumes upstream request quota, so it must be switchable per connection — the Console
+quota cell carries a Pause/Resume control per credential. This is configuration and therefore
+belongs on the credential tables, not on the observation table.
 
 ```sql
 -- 0002_provider_quota.sql

@@ -249,10 +249,24 @@ test("the Providers page renders each stored quota state and never overflows", a
         await expect(disabledCell).toContainText("Probing paused");
         await expect(disabledCell).not.toContainText("%");
         await expect(disabledCell).not.toContainText("Updated");
+        // Connection-level disable is not the quota switch: no Resume here.
+        await expect(disabledCell.getByRole("button")).toHaveCount(0);
+
+        // The quota switch is operable from the cell: pause an active
+        // connection, confirm the paused state, then resume it. The form
+        // triggers router.refresh() on success, so the cell re-renders in
+        // place — locator assertions poll until it does.
+        await windowCell.getByRole("button", { name: "Pause quota probing" }).click();
+        await expect(windowCell).toContainText("Probing paused", { timeout: 30_000 });
+        await expect(windowCell).not.toContainText("%");
+        await windowCell.getByRole("button", { name: "Resume quota probing" }).click();
+        await expect(windowCell).toContainText("7%", { timeout: 30_000 });
 
         // An identical balance across connections is one account pool, not two.
+        // networkidle would never settle here: the toggle interactions above
+        // leave router.refresh() RSC connections open on the dev server.
         await page.goto(`${baseUrl}/providers?selected=${seeded.betaId}`, {
-          waitUntil: "networkidle",
+          waitUntil: "domcontentloaded",
         });
         await expect(page.locator(".provider-quota-shared")).toHaveCount(1);
         await expect(page.locator(".provider-quota-shared")).toContainText("76.50 USD");

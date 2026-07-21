@@ -7,6 +7,7 @@ import {
 } from "@llmingress/domain/quota";
 import { formatRelativeDateTime } from "./provider-relative-time";
 
+export const QUOTA_NO_LIMITS_LABEL = "No quota limits reported";
 export const QUOTA_NOT_QUERIED_LABEL = "Not yet queried";
 export const QUOTA_PROBING_PAUSED_LABEL = "Probing paused";
 export const QUOTA_SHARED_BALANCE_NOTE = "Shared account balance";
@@ -19,6 +20,9 @@ export type ProviderQuotaWindowView = {
 
 export type ProviderQuotaConnectionView = {
   balances: string[];
+  // Set when a probe succeeded but reported nothing (openrouter with no
+  // spending limit configured is the main case), so the cell is never blank.
+  emptyLabel: string | null;
   observedLabel: string | null;
   pausedLabel: string | null;
   reason: string | null;
@@ -157,6 +161,7 @@ export function buildProviderQuotaConnectionView({
   if (summary?.connectionKind === "local") {
     return {
       balances: [],
+      emptyLabel: null,
       observedLabel: null,
       pausedLabel: null,
       reason: readQuotaErrorReason("not_supported"),
@@ -171,6 +176,7 @@ export function buildProviderQuotaConnectionView({
   if (summary && !summary.probingEnabled) {
     return {
       balances: [],
+      emptyLabel: null,
       observedLabel: null,
       pausedLabel: QUOTA_PROBING_PAUSED_LABEL,
       reason: null,
@@ -195,6 +201,7 @@ export function buildProviderQuotaConnectionView({
 
   return {
     balances: shownBalances.map(formatQuotaBalance),
+    emptyLabel: entries.length === 0 && !errorCode && observedAt ? QUOTA_NO_LIMITS_LABEL : null,
     // Staleness only matters for real quota numbers: an error state renders its
     // reason pill alone, without a competing "Updated X ago" line.
     observedLabel: errorCode

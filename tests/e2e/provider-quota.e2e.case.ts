@@ -3,6 +3,7 @@ import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { createCoreMaintenanceTasks } from "@llmingress/worker-runtime/worker-maintenance-scheduler";
 import { createProviderQuotaProbeJobHandler } from "@llmingress/worker-runtime/worker-provider-quota-probe";
 import { expect, test } from "@playwright/test";
+import { setProviderApiKeyQuotaProbeEnabled } from "../../packages/db/src/console-provider-keys";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 const encryptionKeySource = {
@@ -119,6 +120,58 @@ test("a disabled connection on an unsupported provider is canceled before any wr
 
     const summary = await readQuotaSummary(fixture);
     expect(summary).toBeUndefined();
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("the per-connection quota switch is writable and re-enabling nudges the next refresh", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_quota_switch_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const providerId = randomUUID();
+  const providerConnectionId = randomUUID();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await seedApiKeyProvider(fixture, {
+      baseUrl: "https://api.deepseek.com",
+      providerConnectionId,
+      providerId,
+      providerKey: "deepseek",
+    });
+    // A stored row whose refresh is far out, as after a healthy probe.
+    await fixture.query(
+      `insert into provider_quota_summary (id, provider_id, provider_connection_id, entries, next_refresh_at)
+       values ($1, $2, $3, '[]'::jsonb, now() + interval '20 minutes')`,
+      [randomUUID(), providerId, providerConnectionId],
+    );
+
+    const disabled = await setProviderApiKeyQuotaProbeEnabled({
+      databaseUrl: fixture.databaseUrl,
+      providerApiKeyId: providerConnectionId,
+      quotaProbeEnabled: false,
+    });
+    expect(disabled.quotaProbeEnabled).toBe(false);
+    const offRow = await fixture.query<{ quota_probe_enabled: boolean }>(
+      "select quota_probe_enabled from provider_api_keys where id = $1",
+      [providerConnectionId],
+    );
+    expect(offRow.rows[0]?.quota_probe_enabled).toBe(false);
+
+    const enabled = await setProviderApiKeyQuotaProbeEnabled({
+      databaseUrl: fixture.databaseUrl,
+      providerApiKeyId: providerConnectionId,
+      quotaProbeEnabled: true,
+    });
+    expect(enabled.quotaProbeEnabled).toBe(true);
+    // Re-enabling pulls next_refresh_at up so the 5-minute scan probes promptly
+    // instead of waiting out the previous schedule.
+    const nudged = await fixture.query<{ due: boolean }>(
+      "select next_refresh_at <= now() as due from provider_quota_summary where provider_connection_id = $1",
+      [providerConnectionId],
+    );
+    expect(nudged.rows[0]?.due).toBe(true);
   } finally {
     await fixture.dispose();
   }

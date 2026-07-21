@@ -7,6 +7,7 @@ import {
   formatQuotaReset,
   formatQuotaUtilization,
   formatQuotaWindowLabel,
+  QUOTA_NO_LIMITS_LABEL,
   QUOTA_NOT_QUERIED_LABEL,
   QUOTA_PROBING_PAUSED_LABEL,
   quotaBalanceKey,
@@ -38,6 +39,7 @@ function summaryOf(
     observedAt: new Date(referenceTimeMs - 3 * 60_000),
     probingEnabled: true,
     providerDisplayName: "Quota Provider",
+    quotaProbeEnabled: true,
     providerId: "provider-1",
     providerKey: "deepseek",
     ...overrides,
@@ -207,6 +209,38 @@ describe("quota observation state", () => {
     });
     expect(disabledLocal.reason).toBe(readQuotaErrorReason("not_supported"));
     expect(disabledLocal.pausedLabel).toBeNull();
+  });
+
+  it("labels a successful probe that reported nothing, so the cell is never blank", () => {
+    // openrouter with no spending limit configured is the main case: the probe
+    // succeeds, emits no entry, and without a label only "Updated ..." remains.
+    const empty = buildProviderQuotaConnectionView({
+      referenceTimeMs,
+      sharedBalanceKeys: new Set<string>(),
+      summary: summaryOf({ entries: [], providerKey: "openrouter" }),
+    });
+    expect(empty.emptyLabel).toBe(QUOTA_NO_LIMITS_LABEL);
+
+    const withData = buildProviderQuotaConnectionView({
+      referenceTimeMs,
+      sharedBalanceKeys: new Set<string>(),
+      summary: summaryOf({ entries: [{ currency: "USD", total: "5.00" }] }),
+    });
+    expect(withData.emptyLabel).toBeNull();
+
+    const neverProbed = buildProviderQuotaConnectionView({
+      referenceTimeMs,
+      sharedBalanceKeys: new Set<string>(),
+      summary: summaryOf({ observedAt: null }),
+    });
+    expect(neverProbed.emptyLabel).toBeNull();
+
+    const errored = buildProviderQuotaConnectionView({
+      referenceTimeMs,
+      sharedBalanceKeys: new Set<string>(),
+      summary: summaryOf({ errorCode: "probe_failed" }),
+    });
+    expect(errored.emptyLabel).toBeNull();
   });
 
   it("shows paused instead of ever-aging stale numbers once probing stops", () => {

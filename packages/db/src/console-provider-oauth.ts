@@ -8,6 +8,7 @@ import {
   readProviderOAuthPendingConnection,
   readProviderOAuthRuntimeConnection,
   setProviderOAuthConnectionEnabled,
+  setProviderOAuthQuotaProbeEnabled,
 } from "@llmingress/db/providers";
 import {
   buildProviderOAuthAuthorizeUrl,
@@ -193,7 +194,11 @@ export async function revokeProviderOAuthConnection(
   return deleteProviderOAuthConnection(input);
 }
 
-export { deleteProviderOAuthConnection, setProviderOAuthConnectionEnabled };
+export {
+  deleteProviderOAuthConnection,
+  setProviderOAuthConnectionEnabled,
+  setProviderOAuthQuotaProbeEnabled,
+};
 
 function encryptProviderOAuthToken(input: {
   encryptionKeySource: EncryptionKeySource;

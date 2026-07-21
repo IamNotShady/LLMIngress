@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { withPooledPostgresClient, withPostgresTransaction } from "@llmingress/db/client";
 import { clearProviderConnectionHealthWithClient } from "@llmingress/db/provider-health";
+import { clearProviderQuotaWithClient } from "@llmingress/db/provider-quota";
+import { consoleNotFoundError } from "./console-operation-error.ts";
 
 export type {
   PostgresQueryClient,
@@ -261,6 +263,57 @@ export async function setProviderOAuthConnectionEnabled(input: {
   });
 }
 
+export async function setProviderOAuthQuotaProbeEnabled(input: {
+  databaseUrl?: string;
+  providerOAuthId: string;
+  quotaProbeEnabled: boolean;
+}): Promise<{ id: string; providerId: string; quotaProbeEnabled: boolean }> {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
+    const result = await client.query<{
+      id: string;
+      provider_id: string;
+      quota_probe_enabled: boolean;
+    }>(
+      `
+        update provider_oauth
+        set quota_probe_enabled = $2,
+            updated_at = now()
+        where id = $1
+          and deleted_at is null
+        returning id::text, provider_id::text, quota_probe_enabled
+      `,
+      [input.providerOAuthId, input.quotaProbeEnabled],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw consoleNotFoundError(
+        "Provider OAuth connection was not found.",
+        "provider_oauth_not_found",
+        { providerOAuthId: input.providerOAuthId },
+      );
+    }
+    if (input.quotaProbeEnabled) {
+      // Pull the stored schedule up so the 5-minute scan probes promptly
+      // instead of waiting out the previous next_refresh_at.
+      await client.query(
+        `
+          update provider_quota_summary
+          set next_refresh_at = now(),
+              updated_at = now()
+          where provider_id = $1
+            and provider_connection_id = $2
+        `,
+        [row.provider_id, row.id],
+      );
+    }
+    return {
+      id: row.id,
+      providerId: row.provider_id,
+      quotaProbeEnabled: row.quota_probe_enabled,
+    };
+  });
+}
+
 export async function deleteProviderOAuthConnection(input: {
   databaseUrl?: string;
   providerOAuthId: string;
@@ -290,6 +343,10 @@ export async function deleteProviderOAuthConnection(input: {
       throw new Error("Provider OAuth connection was not found.");
     }
     await clearProviderConnectionHealthWithClient(client, {
+      providerConnectionId: input.providerOAuthId,
+      providerId,
+    });
+    await clearProviderQuotaWithClient(client, {
       providerConnectionId: input.providerOAuthId,
       providerId,
     });

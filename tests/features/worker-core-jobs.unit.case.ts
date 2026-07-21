@@ -7,6 +7,7 @@ describe("core Worker operations", () => {
     expect(workerMain).toContain("createModelRefreshJobHandler");
     expect(workerMain).toContain("createProviderConnectionProbeJobHandler");
     expect(workerMain).toContain("createPriceSyncJobHandler");
+    expect(workerMain).toContain("createProviderQuotaProbeJobHandler");
 
     const runner = readFileSync("packages/worker-runtime/src/worker-job-runner.ts", "utf8");
     expect(runner).toContain("and run_after <= $4::timestamptz");

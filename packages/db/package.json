@@ -32,6 +32,10 @@
       "types": "./src/provider-jobs.ts",
       "default": "./src/provider-jobs.ts"
     },
+    "./provider-quota": {
+      "types": "./src/provider-quota.ts",
+      "default": "./src/provider-quota.ts"
+    },
     "./migration-status": {
       "types": "./src/migration-status.ts",
       "default": "./src/migration-status.ts"
@@ -67,6 +71,10 @@
     "./console-provider-health": {
       "types": "./src/console-provider-health.ts",
       "default": "./src/console-provider-health.ts"
+    },
+    "./console-provider-quota": {
+      "types": "./src/console-provider-quota.ts",
+      "default": "./src/console-provider-quota.ts"
     },
     "./console-provider-keys": {
       "types": "./src/console-provider-keys.ts",

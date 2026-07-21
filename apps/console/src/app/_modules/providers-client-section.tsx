@@ -3,6 +3,7 @@
 import type { ConsoleProviderHealthSummary } from "@llmingress/db/console-provider-health";
 import type { ProviderApiKeyMetadata } from "@llmingress/db/console-provider-keys";
 import type { ConsoleProviderOAuthConnection } from "@llmingress/db/console-provider-oauth";
+import type { ConsoleProviderQuotaSummary } from "@llmingress/db/console-provider-quota";
 import type { ConsoleProvider } from "@llmingress/db/console-providers";
 import type { ConsoleProviderModelPage } from "@llmingress/db/console-route-policies";
 import { useRouter } from "next/navigation";
@@ -14,6 +15,12 @@ import { FlatIcon } from "../_components/flat-icon";
 import { Pagination } from "../_components/pagination";
 import { buildQueryHref, type ConsoleSearchParams } from "../_lib/pagination";
 import { aggregateProviderConnectionHealthStatus } from "../_lib/provider-health";
+import {
+  buildProviderQuotaConnectionView,
+  findSharedProviderBalances,
+  type ProviderQuotaConnectionView,
+  type SharedProviderBalance,
+} from "../_lib/provider-quota-format";
 import { formatRelativeDateTime } from "../_lib/provider-relative-time";
 
 export function ProvidersClientSection({
@@ -23,6 +30,7 @@ export function ProvidersClientSection({
   providerKeys,
   providerModelPage,
   providerOAuthConnections,
+  providerQuotaSummaries,
   providers,
   renderedAtMs,
   searchParams,
@@ -33,6 +41,7 @@ export function ProvidersClientSection({
   providerKeys: ProviderApiKeyMetadata[];
   providerModelPage: ConsoleProviderModelPage;
   providerOAuthConnections: ConsoleProviderOAuthConnection[];
+  providerQuotaSummaries: ConsoleProviderQuotaSummary[];
   providers: ConsoleProvider[];
   renderedAtMs: number;
   searchParams: ConsoleSearchParams;
@@ -50,6 +59,10 @@ export function ProvidersClientSection({
   const providerHealthByProviderId = useMemo(
     () => groupProviderHealthByProviderId(providerHealthSummaries),
     [providerHealthSummaries],
+  );
+  const providerQuotaByProviderId = useMemo(
+    () => groupProviderQuotaByProviderId(providerQuotaSummaries),
+    [providerQuotaSummaries],
   );
   const providerKeysByProviderId = useMemo(
     () => groupProviderKeysByProviderId(providerKeys),
@@ -383,11 +396,19 @@ export function ProvidersClientSection({
                                         </a>
                                       )}
                                     </div>
+                                    <ProviderQuotaSharedBalances
+                                      balances={findSharedProviderBalances(
+                                        providerQuotaByProviderId.get(provider.id) ?? [],
+                                      )}
+                                    />
                                     <ProviderConnectionTable
                                       connectionHealthByKey={connectionHealthByKey}
                                       oauthConnections={selectedProviderOAuthConnections}
                                       provider={provider}
                                       providerKeys={selectedProviderKeys}
+                                      providerQuotaSummaries={
+                                        providerQuotaByProviderId.get(provider.id) ?? []
+                                      }
                                       renderedAtMs={renderedAtMs}
                                       searchParams={searchParams}
                                     />
@@ -495,11 +516,52 @@ function ProviderHealthDetailPill({ status }: { status: string }) {
   return <ProviderStatusPill label={formatProviderHealthStatusLabel(status)} status={status} />;
 }
 
+function ProviderQuotaSharedBalances({ balances }: { balances: SharedProviderBalance[] }) {
+  if (balances.length === 0) {
+    return null;
+  }
+  return (
+    <p className="provider-quota-shared">
+      {/* One account-scoped pool, not one per credential. */}
+      {balances
+        .map((balance) => `${balance.label} shared across ${balance.connectionCount} connections`)
+        .join(" · ")}
+    </p>
+  );
+}
+
+function ProviderQuotaCell({ view }: { view: ProviderQuotaConnectionView }) {
+  return (
+    <span className="quota-cell">
+      {view.windows.map((window) => (
+        <span className="quota-window" key={window.label}>
+          <strong>{window.percent}</strong>
+          <small>
+            {window.label}
+            {window.resetLabel ? ` · ${window.resetLabel}` : ""}
+          </small>
+        </span>
+      ))}
+      {view.balances.map((balance) => (
+        <strong key={balance}>{balance}</strong>
+      ))}
+      {view.reason ? (
+        <span className={view.tone === "warn" ? "pill--warn pill" : "pill"}>{view.reason}</span>
+      ) : null}
+      {view.emptyLabel ? <small>{view.emptyLabel}</small> : null}
+      {view.pausedLabel ? <small>{view.pausedLabel}</small> : null}
+      {view.sharedBalanceNote ? <small>{view.sharedBalanceNote}</small> : null}
+      {view.observedLabel ? <small>{view.observedLabel}</small> : null}
+    </span>
+  );
+}
+
 function ProviderConnectionTable({
   connectionHealthByKey,
   oauthConnections,
   provider,
   providerKeys,
+  providerQuotaSummaries,
   renderedAtMs,
   searchParams,
 }: {
@@ -507,9 +569,16 @@ function ProviderConnectionTable({
   oauthConnections: ConsoleProviderOAuthConnection[];
   provider: ConsoleProvider;
   providerKeys: ProviderApiKeyMetadata[];
+  providerQuotaSummaries: ConsoleProviderQuotaSummary[];
   renderedAtMs: number;
   searchParams: ConsoleSearchParams;
 }) {
+  const quotaByConnectionId = new Map(
+    providerQuotaSummaries.map((summary) => [summary.id, summary]),
+  );
+  const sharedBalanceKeys = new Set(
+    findSharedProviderBalances(providerQuotaSummaries).map((balance) => balance.key),
+  );
   const connections =
     provider.providerType === "local"
       ? [
@@ -545,6 +614,7 @@ function ProviderConnectionTable({
             <th>Connection</th>
             <th>Priority</th>
             <th>Status</th>
+            <th>Quota</th>
             <th>Last probed</th>
             <th>Actions</th>
           </tr>
@@ -552,7 +622,7 @@ function ProviderConnectionTable({
         <tbody>
           {connections.length === 0 ? (
             <tr>
-              <td colSpan={5}>No provider connection stored.</td>
+              <td colSpan={6}>No provider connection stored.</td>
             </tr>
           ) : (
             connections.map((connection) => {
@@ -573,6 +643,15 @@ function ProviderConnectionTable({
                   <td title={health?.reasonMessage ?? undefined}>
                     <ProviderHealthDetailPill status={status} />
                     {health?.reasonMessage ? <small>{health.reasonMessage}</small> : null}
+                  </td>
+                  <td>
+                    <ProviderQuotaCell
+                      view={buildProviderQuotaConnectionView({
+                        referenceTimeMs: renderedAtMs,
+                        sharedBalanceKeys,
+                        summary: quotaByConnectionId.get(connection.id),
+                      })}
+                    />
                   </td>
                   <td>{formatConnectionLastProbe(health, renderedAtMs)}</td>
                   <td>
@@ -596,6 +675,58 @@ function ProviderConnectionTable({
                           <FlatIcon name="probe" />
                         </button>
                       </ConsoleMutationForm>
+                      {connection.kind !== "local" &&
+                      connection.enabled &&
+                      quotaByConnectionId.has(connection.id) ? (
+                        <ConsoleMutationForm
+                          action={
+                            connection.kind === "oauth"
+                              ? "/api/provider-oauth"
+                              : "/api/provider-keys"
+                          }
+                          errorPresentation="toast"
+                          fallbackError="Quota probing update failed."
+                        >
+                          <input
+                            type="hidden"
+                            name="action"
+                            value={
+                              quotaByConnectionId.get(connection.id)?.quotaProbeEnabled
+                                ? "quota-probe-disable"
+                                : "quota-probe-enable"
+                            }
+                          />
+                          <input
+                            type="hidden"
+                            name={
+                              connection.kind === "oauth" ? "providerOAuthId" : "providerApiKeyId"
+                            }
+                            value={connection.id}
+                          />
+                          <button
+                            aria-label={
+                              quotaByConnectionId.get(connection.id)?.quotaProbeEnabled
+                                ? "Pause quota probing"
+                                : "Resume quota probing"
+                            }
+                            className="provider-action-button row-action-button"
+                            title={
+                              quotaByConnectionId.get(connection.id)?.quotaProbeEnabled
+                                ? "Pause quota probing"
+                                : "Resume quota probing"
+                            }
+                            type="submit"
+                          >
+                            <FlatIcon
+                              name={
+                                quotaByConnectionId.get(connection.id)?.quotaProbeEnabled
+                                  ? "pause"
+                                  : "resume"
+                              }
+                            />
+                          </button>
+                        </ConsoleMutationForm>
+                      ) : null}
                       {connection.kind === "oauth" ? (
                         <>
                           <ConsoleMutationForm
@@ -767,6 +898,18 @@ function groupProviderOAuthByProviderId(
     const connections = grouped.get(connection.providerId) ?? [];
     connections.push(connection);
     grouped.set(connection.providerId, connections);
+  }
+  return grouped;
+}
+
+function groupProviderQuotaByProviderId(
+  summaries: ConsoleProviderQuotaSummary[],
+): Map<string, ConsoleProviderQuotaSummary[]> {
+  const grouped = new Map<string, ConsoleProviderQuotaSummary[]>();
+  for (const summary of summaries) {
+    const providerQuota = grouped.get(summary.providerId) ?? [];
+    providerQuota.push(summary);
+    grouped.set(summary.providerId, providerQuota);
   }
   return grouped;
 }

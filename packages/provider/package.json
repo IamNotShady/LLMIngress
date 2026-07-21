@@ -52,6 +52,10 @@
       "types": "./src/price-source.ts",
       "default": "./src/price-source.ts"
     },
+    "./quota-probe": {
+      "types": "./src/quota-probe.ts",
+      "default": "./src/quota-probe.ts"
+    },
     "./subscription": {
       "types": "./src/subscription.ts",
       "default": "./src/subscription.ts"

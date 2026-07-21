@@ -22,7 +22,7 @@ test("direct Worker maintenance is locked, deletes expired data, and creates no 
       tasks: createCoreMaintenanceTasks({ databaseUrl: fixture.databaseUrl, now: () => now }),
     });
     const result = await first.runOnce();
-    expect(result.executedTasks).toBe(2);
+    expect(result.executedTasks).toBe(3);
 
     const counts = await fixture.query<{
       attempts: number;

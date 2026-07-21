@@ -7,6 +7,7 @@ import {
 export type {
   ProviderConnectivityProbeStyle,
   ProviderModelListStyle,
+  ProviderQuotaSource,
   ProviderSubscriptionAdapter,
 } from "@llmingress/config/provider-registry";
 

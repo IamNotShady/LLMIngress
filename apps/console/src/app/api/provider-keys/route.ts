@@ -3,6 +3,7 @@ import {
   readConsoleEncryptionKeySource,
   saveProviderApiKey,
   setProviderApiKeyEnabled,
+  setProviderApiKeyQuotaProbeEnabled,
 } from "@llmingress/db/console-provider-keys";
 import {
   enqueueProviderConnectionProbeJob,
@@ -21,6 +22,14 @@ export const POST = withConsoleAuth(async (request) => {
     if (action === "delete") {
       const providerApiKeyId = readRequiredText(form, "providerApiKeyId");
       const result = await deleteProviderApiKey({ providerApiKeyId });
+      return providerApiKeyMutationResponse(request, result.providerId);
+    }
+
+    if (action === "quota-probe-enable" || action === "quota-probe-disable") {
+      const result = await setProviderApiKeyQuotaProbeEnabled({
+        providerApiKeyId: readRequiredText(form, "providerApiKeyId"),
+        quotaProbeEnabled: action === "quota-probe-enable",
+      });
       return providerApiKeyMutationResponse(request, result.providerId);
     }
 

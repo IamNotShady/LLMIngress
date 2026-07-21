@@ -82,6 +82,8 @@ export function createGatewayCircuitBreakerRegistry(
     ...readGatewayCircuitBreakerConfig(),
     ...options.config,
   };
+  // `now` only shifts shouldSkipConnection's advisory gate; cockatiel's own
+  // Open→HalfOpen timing is hard-wired to Date.now, so injected clocks must track it.
   const now = options.now ?? Date.now;
 
   if (!config.enabled) {
@@ -129,7 +131,9 @@ export function createGatewayCircuitBreakerRegistry(
                     maxDelay: 2_000,
                   }),
                   // cockatiel's maxAttempts counts retries after the initial call,
-                  // so total calls = retries + 1.
+                  // so total calls = retries + 1. Each retry attempt is a separate
+                  // breaker sample, so one transiently-failing request can contribute
+                  // up to retries + 1 failures toward minRequests.
                   maxAttempts: config.retries,
                 },
               ),

@@ -8,6 +8,10 @@ import {
   type GatewayRequestRecorder,
 } from "../../apps/gateway/src/request-recording";
 import {
+  createGatewayCircuitBreakerRegistry,
+  type GatewayCircuitBreakerRegistry,
+} from "../../packages/gateway-runtime/src/gateway-circuit-breaker";
+import {
   executeProviderFallbackAttempts,
   type FallbackChainCandidate,
 } from "../../packages/gateway-runtime/src/gateway-fallback-chain";
@@ -74,6 +78,13 @@ function recorder(overrides: Partial<GatewayRequestRecorder> = {}): GatewayReque
     recordActivity: vi.fn(async () => undefined),
     ...overrides,
   };
+}
+
+// These fallback-chain recording tests predate the circuit breaker; a disabled
+// registry keeps them on the pure fallback path (one call per attempt, no
+// breaker/retry state) so their assertions stay at the chain-logic altitude.
+function passthroughBreaker(): GatewayCircuitBreakerRegistry {
+  return createGatewayCircuitBreakerRegistry({ config: { enabled: false } });
 }
 
 function deferred<T = void>() {
@@ -283,6 +294,7 @@ describe("gateway recording resilience", () => {
     const result = await executeProviderFallbackAttempts({
       callProvider: vi.fn(async () => ({ body: { ok: true }, ok: true, statusCode: 200 })),
       candidates: [fallbackCandidate()],
+      circuitBreakerRegistry: passthroughBreaker(),
       fallbackAttempts,
       requestId: "req-1",
     });
@@ -310,6 +322,7 @@ describe("gateway recording resilience", () => {
         fallbackCandidate({ providerModelId: "provider-model-1" }),
         fallbackCandidate({ providerModelId: "provider-model-2" }),
       ],
+      circuitBreakerRegistry: passthroughBreaker(),
       fallbackAttempts,
       recordHealthEvent: vi.fn(),
       requestId: "req-1",

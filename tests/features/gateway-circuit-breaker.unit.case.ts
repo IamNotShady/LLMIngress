@@ -1,10 +1,12 @@
 import { BrokenCircuitError } from "cockatiel";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { gatewayBackgroundTasks } from "../../packages/gateway-runtime/src/gateway-background-tasks";
 import {
   createGatewayCircuitBreakerRegistry,
   type GatewayCircuitBreakerConfig,
   type GatewayCircuitBreakerRegistry,
 } from "../../packages/gateway-runtime/src/gateway-circuit-breaker";
+import type { GatewayRouteCandidateSnapshot } from "../../packages/gateway-runtime/src/gateway-config-reload";
 import {
   gatewayBreakerEnabled,
   gatewayBreakerErrorThresholdPercent,
@@ -17,6 +19,12 @@ import {
   gatewayProviderRetryInitialDelayMs,
   gatewayStreamConnectTimeoutMs,
 } from "../../packages/gateway-runtime/src/gateway-env";
+import {
+  executeProviderFallbackAttempts,
+  type FallbackChainCandidate,
+  type FallbackFailedAttempt,
+  type FallbackProviderApiKey,
+} from "../../packages/gateway-runtime/src/gateway-fallback-chain";
 
 describe("gateway circuit breaker env", () => {
   it("reads breaker and retry configuration with defaults and overrides", () => {
@@ -209,4 +217,132 @@ async function tripBreaker(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+describe("gateway circuit breaker fallback integration", () => {
+  it("converts an open circuit into a provider_circuit_open attempt and tries the next credential", async () => {
+    const registry = createGatewayCircuitBreakerRegistry({ config: breakerTestConfig() });
+    await tripBreaker(registry, "open-connection");
+
+    const calls: string[] = [];
+    const fallbackAttempts: FallbackFailedAttempt[] = [];
+    const enqueueConnectionProbe = vi.fn(async () => ({
+      jobId: "probe-job",
+      queued: true as const,
+      reused: false,
+    }));
+
+    const result = await executeProviderFallbackAttempts({
+      callProvider: vi.fn(async ({ providerApiKey }) => {
+        calls.push(providerApiKey.keyPrefix ?? "missing");
+        return { body: { ok: true }, ok: true, statusCode: 200 };
+      }),
+      candidates: [
+        breakerFallbackCandidate({
+          providerApiKeys: [
+            breakerProviderKey({ keyPrefix: "open-key", providerConnectionId: "open-connection" }),
+            breakerProviderKey({ keyPrefix: "good-key", providerConnectionId: "good-connection" }),
+          ],
+        }),
+      ],
+      circuitBreakerRegistry: registry,
+      enqueueConnectionProbe,
+      fallbackAttempts,
+    });
+    await gatewayBackgroundTasks.drain({ timeoutMs: 1_000 });
+
+    expect(calls).toEqual(["good-key"]);
+    expect(result?.candidate.providerApiKeyPrefix).toBe("good-key");
+    expect(fallbackAttempts).toMatchObject([
+      {
+        attemptOrder: 1,
+        errorCode: "provider_circuit_open",
+        failedBeforeFirstByte: true,
+        providerConnectionId: "open-connection",
+        statusCode: null,
+      },
+    ]);
+    expect(enqueueConnectionProbe).not.toHaveBeenCalled();
+  });
+
+  it("keeps feeding real failures to the breaker while preserving the credential probe enqueue", async () => {
+    const registry = createGatewayCircuitBreakerRegistry({
+      config: breakerTestConfig({ minRequests: 100 }),
+    });
+    const fallbackAttempts: FallbackFailedAttempt[] = [];
+    const enqueueConnectionProbe = vi.fn(async () => ({
+      jobId: "probe-job",
+      queued: true as const,
+      reused: false,
+    }));
+
+    const result = await executeProviderFallbackAttempts({
+      callProvider: vi.fn(async ({ providerApiKey }) => {
+        if (providerApiKey.keyPrefix === "bad-auth") {
+          return {
+            errorCode: "invalid_api_key",
+            errorMessage: "Invalid API key",
+            ok: false,
+            statusCode: 401,
+          };
+        }
+        return { body: { ok: true }, ok: true, statusCode: 200 };
+      }),
+      candidates: [
+        breakerFallbackCandidate({
+          providerApiKeys: [
+            breakerProviderKey({ keyPrefix: "bad-auth", providerConnectionId: "bad-connection" }),
+            breakerProviderKey({ keyPrefix: "good-auth", providerConnectionId: "good-connection" }),
+          ],
+        }),
+      ],
+      circuitBreakerRegistry: registry,
+      enqueueConnectionProbe,
+      fallbackAttempts,
+    });
+    await gatewayBackgroundTasks.drain({ timeoutMs: 1_000 });
+
+    expect(result?.candidate.providerApiKeyPrefix).toBe("good-auth");
+    expect(enqueueConnectionProbe).toHaveBeenCalledOnce();
+    expect(enqueueConnectionProbe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerConnectionId: "bad-connection",
+        source: "gateway_credential_error",
+      }),
+    );
+  });
+});
+
+function breakerFallbackCandidate(
+  overrides: Partial<GatewayRouteCandidateSnapshot & FallbackChainCandidate> = {},
+): FallbackChainCandidate {
+  return {
+    apiKey: "fallback-key",
+    baseUrl: "http://provider.test/v1",
+    candidateOrder: 1,
+    displayName: "Breaker Model",
+    modelId: "fake-model",
+    price: {
+      modelId: "fake-model",
+      priceVersion: "test",
+      providerKey: "openai",
+      reason: "no_current_price",
+      status: "unknown_price",
+    },
+    providerId: "provider-breaker-1",
+    providerKey: "openai",
+    providerModelId: "pm-breaker-1",
+    ...overrides,
+  };
+}
+
+function breakerProviderKey(
+  overrides: Partial<FallbackProviderApiKey> = {},
+): FallbackProviderApiKey {
+  return {
+    apiKey: "fake-provider-key",
+    keyPrefix: "fake-key",
+    providerConnectionId: "connection-1",
+    ...overrides,
+  };
 }

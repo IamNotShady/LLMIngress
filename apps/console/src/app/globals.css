@@ -1972,19 +1972,6 @@ body:has(.console-dialog[open]) {
   align-items: baseline;
   gap: var(--space-2xs);
 }
-.quota-toggle-button {
-  background: none;
-  border: none;
-  padding: 0;
-  margin-top: var(--space-2xs);
-  color: var(--color-text-muted, #667085);
-  font-size: var(--text-xs);
-  text-decoration: underline;
-  cursor: pointer;
-}
-.quota-toggle-button:hover {
-  color: var(--color-text, inherit);
-}
 .model-library-table {
   min-width: 1040px;
   font-size: var(--text-xs);

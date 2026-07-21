@@ -530,13 +530,7 @@ function ProviderQuotaSharedBalances({ balances }: { balances: SharedProviderBal
   );
 }
 
-function ProviderQuotaCell({
-  children,
-  view,
-}: {
-  children?: React.ReactNode;
-  view: ProviderQuotaConnectionView;
-}) {
+function ProviderQuotaCell({ view }: { view: ProviderQuotaConnectionView }) {
   return (
     <span className="quota-cell">
       {view.windows.map((window) => (
@@ -558,7 +552,6 @@ function ProviderQuotaCell({
       {view.pausedLabel ? <small>{view.pausedLabel}</small> : null}
       {view.sharedBalanceNote ? <small>{view.sharedBalanceNote}</small> : null}
       {view.observedLabel ? <small>{view.observedLabel}</small> : null}
-      {children}
     </span>
   );
 }
@@ -658,7 +651,30 @@ function ProviderConnectionTable({
                         sharedBalanceKeys,
                         summary: quotaByConnectionId.get(connection.id),
                       })}
-                    >
+                    />
+                  </td>
+                  <td>{formatConnectionLastProbe(health, renderedAtMs)}</td>
+                  <td>
+                    <span className="provider-table-actions">
+                      <ConsoleMutationForm
+                        action="/api/provider-health-probes"
+                        errorPresentation="toast"
+                        fallbackError="Provider connection probe failed."
+                        successMessage="Connection probe queued — refreshing shortly."
+                        successRefreshDelayMs={2500}
+                      >
+                        <input type="hidden" name="providerId" value={provider.id} />
+                        <input type="hidden" name="providerConnectionId" value={connection.id} />
+                        <button
+                          aria-label={`Probe ${connection.label}`}
+                          className="provider-refresh-button row-action-button"
+                          disabled={!probeEnabled || status === "checking"}
+                          title="Probe connection"
+                          type="submit"
+                        >
+                          <FlatIcon name="probe" />
+                        </button>
+                      </ConsoleMutationForm>
                       {connection.kind !== "local" &&
                       connection.enabled &&
                       quotaByConnectionId.has(connection.id) ? (
@@ -693,39 +709,24 @@ function ProviderConnectionTable({
                                 ? "Pause quota probing"
                                 : "Resume quota probing"
                             }
-                            className="quota-toggle-button"
+                            className="provider-action-button row-action-button"
+                            title={
+                              quotaByConnectionId.get(connection.id)?.quotaProbeEnabled
+                                ? "Pause quota probing"
+                                : "Resume quota probing"
+                            }
                             type="submit"
                           >
-                            {quotaByConnectionId.get(connection.id)?.quotaProbeEnabled
-                              ? "Pause"
-                              : "Resume"}
+                            <FlatIcon
+                              name={
+                                quotaByConnectionId.get(connection.id)?.quotaProbeEnabled
+                                  ? "pause"
+                                  : "resume"
+                              }
+                            />
                           </button>
                         </ConsoleMutationForm>
                       ) : null}
-                    </ProviderQuotaCell>
-                  </td>
-                  <td>{formatConnectionLastProbe(health, renderedAtMs)}</td>
-                  <td>
-                    <span className="provider-table-actions">
-                      <ConsoleMutationForm
-                        action="/api/provider-health-probes"
-                        errorPresentation="toast"
-                        fallbackError="Provider connection probe failed."
-                        successMessage="Connection probe queued — refreshing shortly."
-                        successRefreshDelayMs={2500}
-                      >
-                        <input type="hidden" name="providerId" value={provider.id} />
-                        <input type="hidden" name="providerConnectionId" value={connection.id} />
-                        <button
-                          aria-label={`Probe ${connection.label}`}
-                          className="provider-refresh-button row-action-button"
-                          disabled={!probeEnabled || status === "checking"}
-                          title="Probe connection"
-                          type="submit"
-                        >
-                          <FlatIcon name="probe" />
-                        </button>
-                      </ConsoleMutationForm>
                       {connection.kind === "oauth" ? (
                         <>
                           <ConsoleMutationForm

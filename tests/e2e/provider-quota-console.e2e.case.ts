@@ -250,16 +250,22 @@ test("the Providers page renders each stored quota state and never overflows", a
         await expect(disabledCell).not.toContainText("%");
         await expect(disabledCell).not.toContainText("Updated");
         // Connection-level disable is not the quota switch: no Resume here.
-        await expect(disabledCell.getByRole("button")).toHaveCount(0);
+        const disabledRow = page.locator(".provider-key-table tbody tr", {
+          hasText: "alpha-disabled",
+        });
+        await expect(disabledRow.getByRole("button", { name: /quota probing/ })).toHaveCount(0);
 
-        // The quota switch is operable from the cell: pause an active
+        // The quota switch lives with the other row actions: pause an active
         // connection, confirm the paused state, then resume it. The form
-        // triggers router.refresh() on success, so the cell re-renders in
+        // triggers router.refresh() on success, so the row re-renders in
         // place — locator assertions poll until it does.
-        await windowCell.getByRole("button", { name: "Pause quota probing" }).click();
+        const windowRow = page.locator(".provider-key-table tbody tr", {
+          hasText: "alpha-window",
+        });
+        await windowRow.getByRole("button", { name: "Pause quota probing" }).click();
         await expect(windowCell).toContainText("Probing paused", { timeout: 30_000 });
         await expect(windowCell).not.toContainText("%");
-        await windowCell.getByRole("button", { name: "Resume quota probing" }).click();
+        await windowRow.getByRole("button", { name: "Resume quota probing" }).click();
         await expect(windowCell).toContainText("7%", { timeout: 30_000 });
 
         // An identical balance across connections is one account pool, not two.

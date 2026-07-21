@@ -19,8 +19,10 @@ export type FlatIconName =
   | "hide"
   | "key"
   | "lock"
+  | "pause"
   | "probe"
   | "refresh"
+  | "resume"
   | "save"
   | "settings"
   | "unlock"
@@ -77,6 +79,7 @@ const icons: Record<FlatIconName, ReactNode> = {
       <path d="M7.5 11V7a4.5 4.5 0 0 1 9 0v4" />
     </>
   ),
+  pause: <path d="M10 4H7v16h3zM17 4h-3v16h3z" />,
   probe: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
   refresh: (
     <>
@@ -84,6 +87,7 @@ const icons: Record<FlatIconName, ReactNode> = {
       <path d="M21 12a9 9 0 0 1-15.3 6.4L3 16M3 21v-5h5" />
     </>
   ),
+  resume: <path d="m7 4 13 8-13 8z" />,
   save: (
     <>
       <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />

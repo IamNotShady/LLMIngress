@@ -172,6 +172,43 @@ describe("quota observation state", () => {
     }
   });
 
+  it("renders local connections as not reported rather than forever not-yet-queried", () => {
+    // Local Providers have no billing and the enqueue scan never enumerates
+    // them, so "Not yet queried" would be a promise that never resolves.
+    const local = buildProviderQuotaConnectionView({
+      referenceTimeMs,
+      sharedBalanceKeys: new Set<string>(),
+      summary: summaryOf({
+        connectionKind: "local",
+        connectionLabel: "Local connection",
+        observedAt: null,
+        providerKey: "ollama",
+      }),
+    });
+
+    expect(local.reason).toBe(readQuotaErrorReason("not_supported"));
+    expect(local.tone).toBe("expected");
+    expect(local.observedLabel).toBeNull();
+    expect(local.pausedLabel).toBeNull();
+    expect(local.windows).toEqual([]);
+    expect(local.balances).toEqual([]);
+
+    // A disabled local provider is still simply "not reported" — pausing is
+    // about probing, which never applies to local.
+    const disabledLocal = buildProviderQuotaConnectionView({
+      referenceTimeMs,
+      sharedBalanceKeys: new Set<string>(),
+      summary: summaryOf({
+        connectionKind: "local",
+        observedAt: null,
+        probingEnabled: false,
+        providerKey: "ollama",
+      }),
+    });
+    expect(disabledLocal.reason).toBe(readQuotaErrorReason("not_supported"));
+    expect(disabledLocal.pausedLabel).toBeNull();
+  });
+
   it("shows paused instead of ever-aging stale numbers once probing stops", () => {
     // A disabled connection (or quota_probe_enabled = false) is skipped by the
     // enqueue scan, so whatever the row holds only gets older. Rendering those

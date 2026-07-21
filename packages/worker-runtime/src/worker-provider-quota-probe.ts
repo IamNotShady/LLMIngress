@@ -62,18 +62,43 @@ export function createProviderQuotaProbeJobHandler(
       });
 
     const unsupportedReason = readUnsupportedReason(provider);
+
+    // A local Provider has no credential row; its provider-level state was
+    // already validated by the snapshot read, and it never reports quota.
+    if (provider.providerType === "local") {
+      return persist({ entries: [], errorCode: unsupportedReason ?? "not_supported" });
+    }
+
+    // Connection state wins over the unsupported shortcut: a disabled or
+    // probing-off connection cancels with no write, even on a Provider that
+    // would otherwise persist a not_supported reason.
+    let stored: StoredQuotaCredential;
+    try {
+      stored = await readStoredQuotaCredential({
+        databaseUrl: options.databaseUrl,
+        provider,
+        providerConnectionId: payload.providerConnectionId,
+      });
+    } catch (error) {
+      if (error instanceof QuotaProbeCanceledError) {
+        return { canceled: true, reason: error.message };
+      }
+      return persist({ entries: [], errorCode: "probe_failed" });
+    }
+
     if (unsupportedReason) {
       return persist({ entries: [], errorCode: unsupportedReason });
     }
 
     let credential: string;
     try {
-      credential = await readQuotaProbeCredential({
+      credential = await resolveQuotaCredentialSecret({
         databaseUrl: options.databaseUrl,
         encryptionKeySource: options.encryptionKeySource,
         fetch: options.fetch ?? globalThis.fetch,
         provider,
         providerConnectionId: payload.providerConnectionId,
+        stored,
       });
     } catch (error) {
       if (error instanceof QuotaProbeCanceledError) {
@@ -189,18 +214,19 @@ async function readProviderSnapshot(
   });
 }
 
-async function readQuotaProbeCredential(input: {
+type StoredQuotaCredential = { encryptedSecret: unknown; kind: "api_key" | "oauth" };
+
+/**
+ * Reads and validates the credential row without decrypting it, so the
+ * handler can honor disabled / probing-off state before deciding anything
+ * else — including the unsupported shortcut.
+ */
+async function readStoredQuotaCredential(input: {
   databaseUrl?: string;
-  encryptionKeySource?: EncryptionKeySource;
-  fetch: typeof globalThis.fetch;
   provider: ProviderSnapshot;
   providerConnectionId: string;
-}): Promise<string> {
-  const encryptionKeySource =
-    input.encryptionKeySource ??
-    readWorkerEncryptionKeySource(process.env, "provider quota probes");
-
-  const stored = await withPostgresTransaction(input.databaseUrl, async (client) => {
+}): Promise<StoredQuotaCredential> {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
     if (input.provider.providerType === "api_key") {
       const result = await client.query<{
         enabled: boolean;
@@ -250,6 +276,20 @@ async function readQuotaProbeCredential(input: {
     }
     return { encryptedSecret: row.encrypted_token, kind: "oauth" as const };
   });
+}
+
+async function resolveQuotaCredentialSecret(input: {
+  databaseUrl?: string;
+  encryptionKeySource?: EncryptionKeySource;
+  fetch: typeof globalThis.fetch;
+  provider: ProviderSnapshot;
+  providerConnectionId: string;
+  stored: StoredQuotaCredential;
+}): Promise<string> {
+  const encryptionKeySource =
+    input.encryptionKeySource ??
+    readWorkerEncryptionKeySource(process.env, "provider quota probes");
+  const stored = input.stored;
 
   const encryption = createSecretEncryption(encryptionKeySource);
   if (stored.kind === "api_key") {

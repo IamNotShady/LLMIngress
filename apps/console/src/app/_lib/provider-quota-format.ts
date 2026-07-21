@@ -150,6 +150,21 @@ export function buildProviderQuotaConnectionView({
   sharedBalanceKeys: ReadonlySet<string>;
   summary: ConsoleProviderQuotaSummary | undefined;
 }): ProviderQuotaConnectionView {
+  // Local Providers have no billing and the enqueue scan never enumerates
+  // them, so "Not yet queried" would be a promise that never resolves; the
+  // cell states the fact instead. This also outranks the paused branch —
+  // pausing is about probing, which never applies to local.
+  if (summary?.connectionKind === "local") {
+    return {
+      balances: [],
+      observedLabel: null,
+      pausedLabel: null,
+      reason: readQuotaErrorReason("not_supported"),
+      sharedBalanceNote: null,
+      tone: "expected",
+      windows: [],
+    };
+  }
   // The enqueue scan skips a disabled or probing-off connection, so whatever
   // its row holds only ages; stale numbers and last-attempt reasons would
   // mislead, and the cell reports the pause instead.

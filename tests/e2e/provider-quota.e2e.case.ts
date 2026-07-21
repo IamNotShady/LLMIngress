@@ -73,6 +73,57 @@ test("an api key quota probe stores the normalized balance entries", async () =>
   }
 });
 
+test("a disabled connection on an unsupported provider is canceled before any write", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_quota_unsupported_disabled_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const providerId = randomUUID();
+  const disabledId = randomUUID();
+  const probeOffId = randomUUID();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await seedApiKeyProvider(fixture, {
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+      providerConnectionId: disabledId,
+      providerId,
+      providerKey: "google",
+    });
+    await fixture.query(
+      `insert into provider_api_keys (id, provider_id, key_prefix, encrypted_key, key_id, quota_probe_enabled)
+       select $1, provider_id, 'probe-off', encrypted_key, 'probe-off-key', false
+       from provider_api_keys where id = $2`,
+      [probeOffId, disabledId],
+    );
+    await fixture.query("update provider_api_keys set enabled = false where id = $1", [disabledId]);
+    const handler = createProviderQuotaProbeJobHandler({
+      databaseUrl: fixture.databaseUrl,
+      encryptionKeySource,
+      fetch: async () => {
+        throw new Error("A canceled quota probe must not call upstream.");
+      },
+    });
+
+    // The connection state must win over the unsupported shortcut: a disabled
+    // (or probing-off) connection cancels with no row, even on a Provider that
+    // would otherwise persist a not_supported reason.
+    await expect(
+      handler(quotaJob({ providerConnectionId: disabledId, providerId })),
+    ).resolves.toMatchObject({
+      canceled: true,
+      reason: "provider_connection_disabled_or_missing",
+    });
+    await expect(
+      handler(quotaJob({ providerConnectionId: probeOffId, providerId })),
+    ).resolves.toMatchObject({ canceled: true, reason: "quota_probe_disabled" });
+
+    const summary = await readQuotaSummary(fixture);
+    expect(summary).toBeUndefined();
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 test("a probe racing a credential deletion does not resurrect the cleared row", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_quota_delete_race_${randomUUID().replaceAll("-", "_")}`,

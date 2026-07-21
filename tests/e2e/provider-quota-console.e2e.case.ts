@@ -18,6 +18,7 @@ const sharedBalance = [{ currency: "USD", total: "76.50" }];
 
 type SeededQuota = {
   alphaBalanceId: string;
+  localId: string;
   alphaDisabledId: string;
   alphaId: string;
   alphaUnqueriedId: string;
@@ -31,6 +32,7 @@ type SeededQuota = {
 async function seedQuotaData(databaseUrl: string): Promise<SeededQuota> {
   const seeded: SeededQuota = {
     alphaBalanceId: randomUUID(),
+    localId: randomUUID(),
     alphaDisabledId: randomUUID(),
     alphaId: randomUUID(),
     alphaUnqueriedId: randomUUID(),
@@ -54,8 +56,9 @@ async function seedQuotaData(databaseUrl: string): Promise<SeededQuota> {
     await client.query(
       `insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
        values ($1, 'api_key', 'deepseek', 'Quota Alpha', 'https://alpha.test/v1', true),
-              ($2, 'api_key', 'moonshot', 'Quota Beta', 'https://beta.test/v1', true)`,
-      [seeded.alphaId, seeded.betaId],
+              ($2, 'api_key', 'moonshot', 'Quota Beta', 'https://beta.test/v1', true),
+              ($3, 'local', 'ollama', 'Quota Local', 'http://127.0.0.1:11434/v1', true)`,
+      [seeded.alphaId, seeded.betaId, seeded.localId],
     );
     const connections: Array<[string, string, string]> = [
       [seeded.windowConnectionId, seeded.alphaId, "alpha-window"],
@@ -128,8 +131,8 @@ test("the quota read model returns one row per connection and null state when ne
       databaseUrl: fixture.databaseUrl,
     });
 
-    // Seven connections were seeded; six carry a summary row and one never has.
-    expect(summaries).toHaveLength(7);
+    // Eight connections were seeded (one local); six carry a summary row.
+    expect(summaries).toHaveLength(8);
     const byId = new Map(summaries.map((summary) => [summary.id, summary]));
 
     const unqueried = byId.get(seeded.alphaUnqueriedId);
@@ -158,6 +161,17 @@ test("the quota read model returns one row per connection and null state when ne
 
     expect(byId.get(seeded.betaOneId)?.entries).toEqual(sharedBalance);
     expect(byId.get(seeded.betaOneId)?.probingEnabled).toBe(true);
+
+    // A local provider appears as a connection that will never be enqueued.
+    const local = byId.get(seeded.localId);
+    expect(local).toMatchObject({
+      connectionKind: "local",
+      entries: [],
+      errorCode: null,
+      observedAt: null,
+      probingEnabled: true,
+      providerKey: "ollama",
+    });
 
     // A disabled connection keeps its stale row but reports probing stopped.
     const disabled = byId.get(seeded.alphaDisabledId);

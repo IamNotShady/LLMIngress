@@ -54,6 +54,8 @@ describe("gateway circuit breaker env", () => {
     ).toBe(20);
     expect(gatewayBreakerWindowMs({})).toBe(60_000);
     expect(gatewayBreakerWindowMs({ GATEWAY_BREAKER_WINDOW_MS: "1000" })).toBe(1_000);
+    expect(gatewayBreakerWindowMs({ GATEWAY_BREAKER_WINDOW_MS: "500" })).toBe(1_000);
+    expect(gatewayBreakerWindowMs({ GATEWAY_BREAKER_WINDOW_MS: "1500" })).toBe(1_500);
     expect(gatewayBreakerMinRequests({})).toBe(5);
     expect(gatewayBreakerMinRequests({ GATEWAY_BREAKER_MIN_REQUESTS: "3" })).toBe(3);
     expect(gatewayBreakerHalfOpenAfterMs({})).toBe(30_000);
@@ -199,6 +201,68 @@ describe("gateway circuit breaker registry", () => {
     }
     expect(registry.shouldSkipConnection("conn-off")).toBe(false);
   });
+
+  it("stays closed while the failure percentage is at or below the threshold", async () => {
+    const registry = createGatewayCircuitBreakerRegistry({ config: breakerTestConfig() });
+    // SamplingBreaker re-checks `failures > threshold × total` on EVERY failure (not
+    // just at the end), so the ratio must stay at/below 50% at each failure. Interleaved
+    // S,F,S,F,S,F the failures land at 1/2, 2/4, 3/6 — each exactly at 0.5 × total, and
+    // the strict-> comparison keeps the circuit closed at the equality boundary.
+    const outcomes: boolean[] = [true, false, true, false, true, false];
+    for (const ok of outcomes) {
+      await registry.executeProviderCall("conn-ratio", async () =>
+        ok ? { ok: true as const, statusCode: 200 } : { ok: false as const, statusCode: 503 },
+      );
+    }
+    expect(registry.shouldSkipConnection("conn-ratio")).toBe(false);
+    await registry.executeProviderCall("conn-ratio", async () => ({
+      ok: false as const,
+      statusCode: 503,
+    }));
+    // 4 failures of 7 total: 4 > 0.5 × 7 = 3.5 — the ratio finally clears the bar and opens.
+    expect(registry.shouldSkipConnection("conn-ratio")).toBe(true);
+  });
+
+  it("admits only one half-open trial at a time and queues excess calls behind it", async () => {
+    const registry = createGatewayCircuitBreakerRegistry({
+      config: breakerTestConfig({ halfOpenAfterMs: 50, halfOpenCalls: 1 }),
+    });
+    await tripBreaker(registry, "conn-half-open-race");
+    await sleep(80);
+
+    let releaseTrial: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseTrial = resolve;
+    });
+    let trialStarted = 0;
+    const trialPromise = registry.executeProviderCall("conn-half-open-race", async () => {
+      trialStarted += 1;
+      await gate;
+      return { ok: true as const, statusCode: 200 };
+    });
+    await sleep(10);
+
+    // With halfOpenCalls=1 only one trial may run; a concurrent call is admitted to the
+    // half-open state but held behind the single in-flight trial — its provider callback
+    // must not run until the trial resolves.
+    let excessStarted = false;
+    const excessPromise = registry.executeProviderCall("conn-half-open-race", async () => {
+      excessStarted = true;
+      return { ok: true as const, statusCode: 200 };
+    });
+    await sleep(10);
+    expect(trialStarted).toBe(1);
+    expect(excessStarted).toBe(false);
+
+    releaseTrial();
+    const trial = await trialPromise;
+    const excess = await excessPromise;
+    expect(trial.ok).toBe(true);
+    // The trial's success closed the circuit, so the queued call then runs in Closed state.
+    expect(excessStarted).toBe(true);
+    expect(excess.ok).toBe(true);
+    expect(registry.shouldSkipConnection("conn-half-open-race")).toBe(false);
+  });
 });
 
 function breakerTestConfig(
@@ -329,6 +393,71 @@ describe("gateway circuit breaker fallback integration", () => {
       }),
     );
   });
+
+  it("interleaves a real failure, an open circuit, and a success across one candidate's keys", async () => {
+    const registry = createGatewayCircuitBreakerRegistry({ config: breakerTestConfig() });
+    await tripBreaker(registry, "interleave-open");
+
+    const calls: string[] = [];
+    const fallbackAttempts: FallbackFailedAttempt[] = [];
+    const enqueueConnectionProbe = vi.fn(async () => ({
+      jobId: "probe-job",
+      queued: true as const,
+      reused: false,
+    }));
+
+    const result = await executeProviderFallbackAttempts({
+      callProvider: vi.fn(async ({ providerApiKey }) => {
+        calls.push(providerApiKey.keyPrefix ?? "missing");
+        if (providerApiKey.keyPrefix === "first-429") {
+          return {
+            errorCode: "provider_rate_limited",
+            errorMessage: "Provider rate limited",
+            ok: false,
+            statusCode: 429,
+          };
+        }
+        return { body: { ok: true }, ok: true, statusCode: 200 };
+      }),
+      candidates: [
+        breakerFallbackCandidate({
+          providerApiKeys: [
+            breakerProviderKey({ keyPrefix: "first-429", providerConnectionId: "interleave-429" }),
+            breakerProviderKey({
+              keyPrefix: "second-open",
+              providerConnectionId: "interleave-open",
+            }),
+            breakerProviderKey({ keyPrefix: "third-ok", providerConnectionId: "interleave-ok" }),
+          ],
+        }),
+      ],
+      circuitBreakerRegistry: registry,
+      enqueueConnectionProbe,
+      fallbackAttempts,
+    });
+    await gatewayBackgroundTasks.drain({ timeoutMs: 1_000 });
+
+    // A 429 is credential-class (tryNextCredential), so the chain advances within the
+    // candidate: real 429 → open circuit (synthetic provider_circuit_open) → success.
+    expect(calls).toEqual(["first-429", "third-ok"]);
+    expect(result?.candidate.providerApiKeyPrefix).toBe("third-ok");
+    expect(fallbackAttempts).toMatchObject([
+      { attemptOrder: 1, providerConnectionId: "interleave-429", statusCode: 429 },
+      {
+        attemptOrder: 2,
+        errorCode: "provider_circuit_open",
+        providerConnectionId: "interleave-open",
+        statusCode: null,
+      },
+    ]);
+    expect(enqueueConnectionProbe).toHaveBeenCalledOnce();
+    expect(enqueueConnectionProbe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerConnectionId: "interleave-429",
+        source: "gateway_credential_error",
+      }),
+    );
+  });
 });
 
 function breakerFallbackCandidate(
@@ -425,6 +554,249 @@ describe("gateway circuit breaker credential filtering", () => {
         expect(third[0]?.providerApiKeys?.map((key) => key.providerConnectionId)).toEqual([
           seeded.keyOneId,
           seeded.keyTwoId,
+        ]);
+      } finally {
+        vi.unstubAllEnvs();
+        resetGatewayHealthSummaryCacheForTests();
+      }
+    });
+  });
+
+  it("bypasses the cache when the TTL is zero", async () => {
+    await withBreakerFixture(async (fixture) => {
+      vi.stubEnv("GATEWAY_HEALTH_SUMMARY_CACHE_TTL_MS", "0");
+      try {
+        resetGatewayHealthSummaryCacheForTests();
+        const seeded = await seedBreakerProviderWithTwoKeys(fixture);
+        const registry = createGatewayCircuitBreakerRegistry({ config: breakerTestConfig() });
+        await recordProviderConnectionProbeResult({
+          databaseUrl: fixture.databaseUrl,
+          providerConnectionId: seeded.keyTwoId,
+          providerId: seeded.providerId,
+          status: "unhealthy",
+          trigger: "worker_probe",
+        });
+        const attach = () =>
+          attachGatewayProviderCredentialsLeniently({
+            candidates: [breakerCredentialCandidate(seeded.providerId)],
+            circuitBreakerRegistry: registry,
+            databaseUrl: fixture.databaseUrl,
+            encryptionKeySource: { kind: "inline", value: "test-master-key" },
+          });
+        const filtered = await attach();
+        expect(filtered[0]?.providerApiKeys?.map((key) => key.providerConnectionId)).toEqual([
+          seeded.keyOneId,
+        ]);
+        await fixture.query("delete from provider_health_summary");
+        const fresh = await attach();
+        expect(fresh[0]?.providerApiKeys?.map((key) => key.providerConnectionId)).toEqual([
+          seeded.keyOneId,
+          seeded.keyTwoId,
+        ]);
+      } finally {
+        vi.unstubAllEnvs();
+        resetGatewayHealthSummaryCacheForTests();
+      }
+    });
+  });
+
+  it("refreshes the unhealthy set from the database after the ttl expires", async () => {
+    await withBreakerFixture(async (fixture) => {
+      vi.stubEnv("GATEWAY_HEALTH_SUMMARY_CACHE_TTL_MS", "50");
+      try {
+        resetGatewayHealthSummaryCacheForTests();
+        const seeded = await seedBreakerProviderWithTwoKeys(fixture);
+        const registry = createGatewayCircuitBreakerRegistry({ config: breakerTestConfig() });
+        await recordProviderConnectionProbeResult({
+          databaseUrl: fixture.databaseUrl,
+          providerConnectionId: seeded.keyTwoId,
+          providerId: seeded.providerId,
+          status: "unhealthy",
+          trigger: "worker_probe",
+        });
+        const attach = () =>
+          attachGatewayProviderCredentialsLeniently({
+            candidates: [breakerCredentialCandidate(seeded.providerId)],
+            circuitBreakerRegistry: registry,
+            databaseUrl: fixture.databaseUrl,
+            encryptionKeySource: { kind: "inline", value: "test-master-key" },
+          });
+        const filtered = await attach();
+        expect(filtered[0]?.providerApiKeys?.map((key) => key.providerConnectionId)).toEqual([
+          seeded.keyOneId,
+        ]);
+        await fixture.query("delete from provider_health_summary");
+        await sleep(80);
+        const fresh = await attach();
+        expect(fresh[0]?.providerApiKeys?.map((key) => key.providerConnectionId)).toEqual([
+          seeded.keyOneId,
+          seeded.keyTwoId,
+        ]);
+      } finally {
+        vi.unstubAllEnvs();
+        resetGatewayHealthSummaryCacheForTests();
+      }
+    });
+  });
+
+  it("keys the unhealthy cache by database url so fixtures stay isolated", async () => {
+    await withBreakerFixture(async (fixtureA) => {
+      vi.stubEnv("GATEWAY_HEALTH_SUMMARY_CACHE_TTL_MS", "60000");
+      const fixtureB = await createTestPostgresFixture({
+        databaseNamePrefix: `llmingress_gateway_breaker_${randomUUID().replaceAll("-", "_")}`,
+      });
+      try {
+        await runMigrations({ databaseUrl: fixtureB.databaseUrl });
+        resetGatewayHealthSummaryCacheForTests();
+        const seededA = await seedBreakerProviderWithTwoKeys(fixtureA);
+        const seededB = await seedBreakerProviderWithTwoKeys(fixtureB);
+        const registry = createGatewayCircuitBreakerRegistry({ config: breakerTestConfig() });
+        await recordProviderConnectionProbeResult({
+          databaseUrl: fixtureA.databaseUrl,
+          providerConnectionId: seededA.keyTwoId,
+          providerId: seededA.providerId,
+          status: "unhealthy",
+          trigger: "worker_probe",
+        });
+
+        const attachA = () =>
+          attachGatewayProviderCredentialsLeniently({
+            candidates: [breakerCredentialCandidate(seededA.providerId)],
+            circuitBreakerRegistry: registry,
+            databaseUrl: fixtureA.databaseUrl,
+            encryptionKeySource: { kind: "inline", value: "test-master-key" },
+          });
+        const attachB = () =>
+          attachGatewayProviderCredentialsLeniently({
+            candidates: [breakerCredentialCandidate(seededB.providerId)],
+            circuitBreakerRegistry: registry,
+            databaseUrl: fixtureB.databaseUrl,
+            encryptionKeySource: { kind: "inline", value: "test-master-key" },
+          });
+
+        expect(
+          (await attachA())[0]?.providerApiKeys?.map((key) => key.providerConnectionId),
+        ).toEqual([seededA.keyOneId]);
+        expect(
+          (await attachB())[0]?.providerApiKeys?.map((key) => key.providerConnectionId),
+        ).toEqual([seededB.keyOneId, seededB.keyTwoId]);
+
+        await fixtureA.query("delete from provider_health_summary");
+        expect(
+          (await attachA())[0]?.providerApiKeys?.map((key) => key.providerConnectionId),
+        ).toEqual([seededA.keyOneId]);
+        expect(
+          (await attachB())[0]?.providerApiKeys?.map((key) => key.providerConnectionId),
+        ).toEqual([seededB.keyOneId, seededB.keyTwoId]);
+      } finally {
+        vi.unstubAllEnvs();
+        resetGatewayHealthSummaryCacheForTests();
+        await fixtureB.dispose();
+      }
+    });
+  });
+
+  it("drops a local provider connection once its breaker is open", async () => {
+    await withBreakerFixture(async (fixture) => {
+      vi.stubEnv("GATEWAY_HEALTH_SUMMARY_CACHE_TTL_MS", "0");
+      try {
+        resetGatewayHealthSummaryCacheForTests();
+        const providerId = randomUUID();
+        await fixture.query(
+          `
+            insert into providers (id, provider_type, provider_key, provider_template_id, display_name, base_url, enabled)
+            values ($1, 'local', 'ollama', null, 'Local Breaker', 'http://provider.test', true)
+          `,
+          [providerId],
+        );
+        const registry = createGatewayCircuitBreakerRegistry({ config: breakerTestConfig() });
+        const attach = () =>
+          attachGatewayProviderCredentialsLeniently({
+            candidates: [breakerCredentialCandidate(providerId)],
+            circuitBreakerRegistry: registry,
+            databaseUrl: fixture.databaseUrl,
+            encryptionKeySource: { kind: "inline", value: "test-master-key" },
+          });
+
+        const healthy = await attach();
+        expect(healthy).toHaveLength(1);
+        expect(healthy[0]?.providerApiKeys).toEqual([
+          { apiKey: "", providerConnectionId: providerId },
+        ]);
+
+        await tripBreaker(registry, providerId);
+        // The only candidate's sole local connection is filtered in memory, so the
+        // lenient attach surfaces the drop as an unavailable-connection error.
+        await expect(attach()).rejects.toMatchObject({
+          code: "provider_connection_unavailable",
+        });
+      } finally {
+        vi.unstubAllEnvs();
+        resetGatewayHealthSummaryCacheForTests();
+      }
+    });
+  });
+
+  it("filters an open-breaker oauth connection while keeping the healthy subscription key", async () => {
+    await withBreakerFixture(async (fixture) => {
+      vi.stubEnv("GATEWAY_HEALTH_SUMMARY_CACHE_TTL_MS", "0");
+      try {
+        resetGatewayHealthSummaryCacheForTests();
+        const providerId = randomUUID();
+        const connectionOneId = randomUUID();
+        const connectionTwoId = randomUUID();
+        const encryption = createSecretEncryption({ kind: "inline", value: "test-master-key" });
+        await fixture.query(
+          `
+            insert into providers (id, provider_type, provider_key, provider_template_id, display_name, base_url, enabled)
+            values ($1, 'subscription', 'claude_code', null, 'Claude Code Breaker', 'https://api.anthropic.com', true)
+          `,
+          [providerId],
+        );
+        for (const [connectionId, accessToken, priority] of [
+          [connectionOneId, "oauth-token-one", 1],
+          [connectionTwoId, "oauth-token-two", 2],
+        ] as const) {
+          const encrypted = encryption.encrypt(
+            JSON.stringify({
+              accessToken,
+              expiresAt: null,
+              refreshToken: null,
+              scopes: [],
+              tokenType: "Bearer",
+            }),
+          );
+          await fixture.query(
+            `
+              insert into provider_oauth (id, provider_id, priority, enabled, encrypted_token, token_expires_at, completed_at)
+              values ($1, $2, $3, true, $4::jsonb, null, now())
+            `,
+            [connectionId, providerId, priority, JSON.stringify(encrypted)],
+          );
+        }
+        const registry = createGatewayCircuitBreakerRegistry({ config: breakerTestConfig() });
+        const attach = () =>
+          attachGatewayProviderCredentialsLeniently({
+            candidates: [breakerCredentialCandidate(providerId)],
+            circuitBreakerRegistry: registry,
+            databaseUrl: fixture.databaseUrl,
+            encryptionKeySource: { kind: "inline", value: "test-master-key" },
+          });
+
+        const healthy = await attach();
+        expect(healthy[0]?.providerApiKeys?.map((key) => key.providerConnectionId)).toEqual([
+          connectionOneId,
+          connectionTwoId,
+        ]);
+        expect(healthy[0]?.providerApiKeys?.map((key) => key.credentialKind)).toEqual([
+          "oauth",
+          "oauth",
+        ]);
+
+        await tripBreaker(registry, connectionOneId);
+        const filtered = await attach();
+        expect(filtered[0]?.providerApiKeys?.map((key) => key.providerConnectionId)).toEqual([
+          connectionTwoId,
         ]);
       } finally {
         vi.unstubAllEnvs();

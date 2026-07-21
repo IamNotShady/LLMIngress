@@ -55,7 +55,9 @@ export function gatewayBreakerErrorThresholdPercent(env: GatewayEnvironment = pr
 }
 
 export function gatewayBreakerWindowMs(env: GatewayEnvironment = process.env): number {
-  return parsePositiveInt(env.GATEWAY_BREAKER_WINDOW_MS, 60_000);
+  // Sub-second windows make SamplingBreaker's bucket size round to zero and void
+  // the volume gate, so the window is floored at one second.
+  return Math.max(1_000, parsePositiveInt(env.GATEWAY_BREAKER_WINDOW_MS, 60_000));
 }
 
 export function gatewayBreakerMinRequests(env: GatewayEnvironment = process.env): number {

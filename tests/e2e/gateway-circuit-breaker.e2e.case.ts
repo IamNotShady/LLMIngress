@@ -156,6 +156,89 @@ test("transient provider errors retry the same connection before falling back", 
   }
 });
 
+test("streaming requests trip the breaker and are memory-filtered to the fallback", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_gateway_breaker_stream_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const flakyProvider = await createFakeProviderServer();
+  const fallbackProvider = await createFakeProviderServer();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const seeded = await seedOpenAIGatewayRoute({
+      apiKey: `${apiKey}_stream`,
+      fixture,
+      providerBaseUrl: `${flakyProvider.url}?mode=first-byte-failure`,
+      virtualModelName: "vm-circuit-breaker-stream",
+    });
+    await seedFallbackProviderCandidate({
+      fixture,
+      providerBaseUrl: `${fallbackProvider.url}?mode=stream&stream_end_ms=20`,
+      routePolicyId: seeded.routePolicyId,
+    });
+
+    const gateway = startGatewayProcess({
+      databaseUrl: fixture.databaseUrl,
+      env: {
+        GATEWAY_BREAKER_ERROR_THRESHOLD_PERCENT: "50",
+        GATEWAY_BREAKER_HALF_OPEN_AFTER_MS: "60000",
+        GATEWAY_BREAKER_MIN_REQUESTS: "3",
+        GATEWAY_BREAKER_WINDOW_MS: "60000",
+        GATEWAY_HEALTH_SUMMARY_CACHE_TTL_MS: "0",
+        GATEWAY_PROVIDER_RETRIES: "0",
+      },
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${gateway.port}`;
+      await waitForGateway(baseUrl, gateway);
+      const send = () =>
+        postChatCompletion({
+          apiKey: `${apiKey}_stream`,
+          baseUrl,
+          model: "vm-circuit-breaker-stream",
+          stream: true,
+        });
+
+      // Phase 1: three streaming requests fail before first byte and fall back to the
+      // streaming provider, tripping the breaker on the 3rd (min requests reached, 3/3).
+      for (let index = 0; index < 3; index += 1) {
+        const response = await send();
+        expect(response.status).toBe(200);
+        expect(await response.text()).toContain("fake");
+      }
+      expect(flakyProvider.requests).toHaveLength(3);
+      expect(fallbackProvider.requests).toHaveLength(3);
+
+      // Phase 2: circuit open — the failing connection is filtered in memory before the
+      // streaming call is dispatched, so no request reaches it and the fallback serves it.
+      const fourth = await send();
+      expect(fourth.status).toBe(200);
+      expect(await fourth.text()).toContain("fake");
+      expect(flakyProvider.requests).toHaveLength(3);
+      expect(fallbackProvider.requests).toHaveLength(4);
+
+      const probeJobs = await fixture.query<{ count: string }>(
+        `
+          select count(*)::text as count
+          from jobs
+          where job_type = 'provider_connection_probe'
+            and payload->>'providerId' = $1
+        `,
+        [seeded.providerId],
+      );
+      expect(Number(probeJobs.rows[0]?.count ?? 0)).toBe(0);
+    } finally {
+      await stopGatewayProcess(gateway);
+    }
+  } finally {
+    await fallbackProvider.close();
+    await flakyProvider.close();
+    await fixture.dispose();
+  }
+});
+
 async function seedFallbackProviderCandidate(input: {
   fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>;
   providerBaseUrl: string;
@@ -227,12 +310,13 @@ async function postChatCompletion(input: {
   apiKey: string;
   baseUrl: string;
   model: string;
+  stream?: boolean;
 }): Promise<Response> {
   return fetch(`${input.baseUrl}/v1/chat/completions`, {
     body: JSON.stringify({
       messages: [{ content: "ping", role: "user" }],
       model: input.model,
-      stream: false,
+      stream: input.stream ?? false,
     }),
     headers: {
       authorization: `Bearer ${input.apiKey}`,

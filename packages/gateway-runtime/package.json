@@ -21,6 +21,7 @@
     "@llmingress/logging": "workspace:*",
     "@llmingress/provider": "workspace:*",
     "@llmingress/security": "workspace:*",
-    "@llmingress/util": "workspace:*"
+    "@llmingress/util": "workspace:*",
+    "cockatiel": "4.0.0"
   }
 }

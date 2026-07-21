@@ -1,5 +1,6 @@
 import {
   getPostgresPool,
+  type PostgresQueryClient,
   withPooledPostgresClient,
   withPostgresTransaction,
 } from "@llmingress/db/client";
@@ -20,7 +21,12 @@ import {
 } from "@llmingress/security/secret-encryption";
 import { isRecord } from "@llmingress/util";
 import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
+import {
+  type GatewayCircuitBreakerRegistry,
+  getGatewayCircuitBreakerRegistry,
+} from "./gateway-circuit-breaker.ts";
 import type { GatewayRouteCandidateSnapshot } from "./gateway-config-reload.ts";
+import { gatewayHealthSummaryCacheTtlMs } from "./gateway-env.ts";
 import { GatewayPipelineError } from "./gateway-errors.ts";
 import type { FallbackChainCandidate, FallbackProviderApiKey } from "./gateway-fallback-chain.ts";
 
@@ -58,14 +64,27 @@ type UnhealthyProviderConnectionRow = {
   provider_id: string;
 };
 
+type UnhealthySummaryCacheEntry = {
+  expiresAtMs: number;
+  keys: Set<string>;
+};
+
+const unhealthySummaryCache = new Map<string, UnhealthySummaryCacheEntry>();
+
+export function resetGatewayHealthSummaryCacheForTests(): void {
+  unhealthySummaryCache.clear();
+}
+
 export async function attachGatewayProviderCredentials(input: {
   candidates: readonly GatewayRouteCandidateSnapshot[];
+  circuitBreakerRegistry?: GatewayCircuitBreakerRegistry;
   databaseUrl?: string;
   encryptionKeySource: EncryptionKeySource;
   refreshProviderOAuthToken?: ProviderOAuthTokenRefresh;
 }): Promise<FallbackChainCandidate[]> {
   const providerIds = [...new Set(input.candidates.map((candidate) => candidate.providerId))];
   const credentials = await readProviderCredentials({
+    circuitBreakerRegistry: input.circuitBreakerRegistry,
     databaseUrl: input.databaseUrl,
     encryptionKeySource: input.encryptionKeySource,
     providerIds,
@@ -102,6 +121,7 @@ export async function attachGatewayProviderCredentials(input: {
 
 export async function attachGatewayProviderCredentialsLeniently(input: {
   candidates: readonly GatewayRouteCandidateSnapshot[];
+  circuitBreakerRegistry?: GatewayCircuitBreakerRegistry;
   databaseUrl?: string;
   encryptionKeySource: EncryptionKeySource;
   refreshProviderOAuthToken?: ProviderOAuthTokenRefresh;
@@ -145,6 +165,7 @@ export function readGatewayEncryptionKeySource(
 }
 
 async function readProviderCredentials(input: {
+  circuitBreakerRegistry?: GatewayCircuitBreakerRegistry;
   databaseUrl?: string;
   encryptionKeySource: EncryptionKeySource;
   providerIds: string[];
@@ -154,6 +175,7 @@ async function readProviderCredentials(input: {
     return new Map();
   }
 
+  const breakerRegistry = input.circuitBreakerRegistry ?? getGatewayCircuitBreakerRegistry();
   const encryption = createSecretEncryption(input.encryptionKeySource);
   const { apiKeyRows, providerRows, unhealthyConnectionIds } = await withPooledPostgresClient(
     input.databaseUrl,
@@ -195,24 +217,12 @@ async function readProviderCredentials(input: {
         [input.providerIds],
       );
 
-      const unhealthyResult = await client.query<UnhealthyProviderConnectionRow>(
-        `
-          select provider_id::text,
-                 provider_connection_id::text
-          from provider_health_summary
-          where provider_id = any($1::uuid[])
-        `,
-        [input.providerIds],
-      );
+      const unhealthyConnectionIds = await readUnhealthyConnectionKeys(client, input.databaseUrl);
 
       return {
         apiKeyRows: apiKeyResult.rows,
         providerRows: providerResult.rows,
-        unhealthyConnectionIds: new Set(
-          unhealthyResult.rows.map((row) =>
-            providerConnectionHealthKey(row.provider_id, row.provider_connection_id),
-          ),
-        ),
+        unhealthyConnectionIds,
       };
     },
   );
@@ -226,6 +236,7 @@ async function readProviderCredentials(input: {
       baseUrl: row.base_url,
       keys:
         row.provider_type === "local" &&
+        !breakerRegistry.shouldSkipConnection(row.provider_id) &&
         !unhealthyConnectionIds.has(providerConnectionHealthKey(row.provider_id, row.provider_id))
           ? [{ apiKey: "", providerConnectionId: row.provider_id }]
           : [],
@@ -234,6 +245,7 @@ async function readProviderCredentials(input: {
 
   for (const row of apiKeyRows) {
     if (
+      breakerRegistry.shouldSkipConnection(row.provider_api_key_id) ||
       unhealthyConnectionIds.has(
         providerConnectionHealthKey(row.provider_id, row.provider_api_key_id),
       )
@@ -279,6 +291,7 @@ async function readProviderCredentials(input: {
     });
     for (const connection of connections) {
       if (
+        breakerRegistry.shouldSkipConnection(connection.id) ||
         unhealthyConnectionIds.has(providerConnectionHealthKey(provider.provider_id, connection.id))
       ) {
         continue;
@@ -482,4 +495,38 @@ function isProviderOAuthTokenExpired(token: ProviderOAuthTokenBlob): boolean {
 
 function providerConnectionHealthKey(providerId: string, providerConnectionId: string): string {
   return `${providerId}:${providerConnectionId}`;
+}
+
+async function readUnhealthyConnectionKeys(
+  client: PostgresQueryClient,
+  databaseUrl: string | undefined,
+): Promise<Set<string>> {
+  const ttlMs = gatewayHealthSummaryCacheTtlMs();
+  const cacheKey = databaseUrl ?? "default";
+  if (ttlMs > 0) {
+    const cached = unhealthySummaryCache.get(cacheKey);
+    if (cached && cached.expiresAtMs > Date.now()) {
+      return cached.keys;
+    }
+  }
+  // The summary table only ever holds unhealthy connections (rows are deleted on a
+  // successful probe), so the full set is tiny and route-independent — no provider
+  // filter needed. A fresh Set is built and swapped in on every refresh; the stored
+  // Set is never mutated after publication.
+  const result = await client.query<UnhealthyProviderConnectionRow>(
+    `
+      select provider_id::text,
+             provider_connection_id::text
+      from provider_health_summary
+    `,
+  );
+  const keys = new Set(
+    result.rows.map((row) =>
+      providerConnectionHealthKey(row.provider_id, row.provider_connection_id),
+    ),
+  );
+  if (ttlMs > 0) {
+    unhealthySummaryCache.set(cacheKey, { expiresAtMs: Date.now() + ttlMs, keys });
+  }
+  return keys;
 }

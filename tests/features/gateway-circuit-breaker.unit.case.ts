@@ -1,5 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { BrokenCircuitError } from "cockatiel";
 import { describe, expect, it, vi } from "vitest";
+import {
+  createTestPostgresFixture,
+  runMigrations,
+  type TestPostgresFixture,
+} from "../../packages/db/src/index";
+import { recordProviderConnectionProbeResult } from "../../packages/db/src/provider-health";
 import { gatewayBackgroundTasks } from "../../packages/gateway-runtime/src/gateway-background-tasks";
 import {
   createGatewayCircuitBreakerRegistry,
@@ -25,6 +32,11 @@ import {
   type FallbackFailedAttempt,
   type FallbackProviderApiKey,
 } from "../../packages/gateway-runtime/src/gateway-fallback-chain";
+import {
+  attachGatewayProviderCredentialsLeniently,
+  resetGatewayHealthSummaryCacheForTests,
+} from "../../packages/gateway-runtime/src/gateway-provider-credentials";
+import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 
 describe("gateway circuit breaker env", () => {
   it("reads breaker and retry configuration with defaults and overrides", () => {
@@ -344,5 +356,139 @@ function breakerProviderKey(
     keyPrefix: "fake-key",
     providerConnectionId: "connection-1",
     ...overrides,
+  };
+}
+
+describe("gateway circuit breaker credential filtering", () => {
+  it("filters open-breaker connections in memory before consulting provider health summary", async () => {
+    await withBreakerFixture(async (fixture) => {
+      const seeded = await seedBreakerProviderWithTwoKeys(fixture);
+      const registry = createGatewayCircuitBreakerRegistry({ config: breakerTestConfig() });
+      await tripBreaker(registry, seeded.keyOneId);
+
+      const candidates = await attachGatewayProviderCredentialsLeniently({
+        candidates: [breakerCredentialCandidate(seeded.providerId)],
+        circuitBreakerRegistry: registry,
+        databaseUrl: fixture.databaseUrl,
+        encryptionKeySource: { kind: "inline", value: "test-master-key" },
+      });
+
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0]?.providerApiKeys?.map((key) => key.providerConnectionId)).toEqual([
+        seeded.keyTwoId,
+      ]);
+    });
+  });
+
+  it("serves the unhealthy connection set from the TTL cache", async () => {
+    await withBreakerFixture(async (fixture) => {
+      vi.stubEnv("GATEWAY_HEALTH_SUMMARY_CACHE_TTL_MS", "60000");
+      try {
+        resetGatewayHealthSummaryCacheForTests();
+        const seeded = await seedBreakerProviderWithTwoKeys(fixture);
+        const registry = createGatewayCircuitBreakerRegistry({ config: breakerTestConfig() });
+        await recordProviderConnectionProbeResult({
+          databaseUrl: fixture.databaseUrl,
+          providerConnectionId: seeded.keyTwoId,
+          providerId: seeded.providerId,
+          status: "unhealthy",
+          trigger: "worker_probe",
+        });
+
+        const attach = () =>
+          attachGatewayProviderCredentialsLeniently({
+            candidates: [breakerCredentialCandidate(seeded.providerId)],
+            circuitBreakerRegistry: registry,
+            databaseUrl: fixture.databaseUrl,
+            encryptionKeySource: { kind: "inline", value: "test-master-key" },
+          });
+
+        const first = await attach();
+        expect(first[0]?.providerApiKeys?.map((key) => key.providerConnectionId)).toEqual([
+          seeded.keyOneId,
+        ]);
+
+        await fixture.query("delete from provider_health_summary");
+        const second = await attach();
+        expect(second[0]?.providerApiKeys?.map((key) => key.providerConnectionId)).toEqual([
+          seeded.keyOneId,
+        ]);
+
+        resetGatewayHealthSummaryCacheForTests();
+        const third = await attach();
+        expect(third[0]?.providerApiKeys?.map((key) => key.providerConnectionId)).toEqual([
+          seeded.keyOneId,
+          seeded.keyTwoId,
+        ]);
+      } finally {
+        vi.unstubAllEnvs();
+        resetGatewayHealthSummaryCacheForTests();
+      }
+    });
+  });
+});
+
+async function withBreakerFixture(
+  run: (fixture: TestPostgresFixture) => Promise<void>,
+): Promise<void> {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_gateway_breaker_${randomUUID().replaceAll("-", "_")}`,
+  });
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await run(fixture);
+  } finally {
+    await fixture.dispose();
+  }
+}
+
+async function seedBreakerProviderWithTwoKeys(fixture: TestPostgresFixture): Promise<{
+  keyOneId: string;
+  keyTwoId: string;
+  providerId: string;
+}> {
+  const providerId = randomUUID();
+  const keyOneId = randomUUID();
+  const keyTwoId = randomUUID();
+  const encryption = createSecretEncryption({ kind: "inline", value: "test-master-key" });
+
+  await fixture.query(
+    `
+      insert into providers (id, provider_type, provider_key, provider_template_id, display_name, base_url, enabled)
+      values ($1, 'api_key', 'openai', null, 'Breaker Provider', 'http://provider.test/v1', true)
+    `,
+    [providerId],
+  );
+  for (const [id, prefix, priority] of [
+    [keyOneId, "breaker-one", 1],
+    [keyTwoId, "breaker-two", 2],
+  ] as const) {
+    const encrypted = encryption.encrypt(`provider-key-${prefix}`);
+    await fixture.query(
+      `
+        insert into provider_api_keys (id, provider_id, key_prefix, encrypted_key, key_id, priority)
+        values ($1, $2, $3, $4, $5, $6)
+      `,
+      [id, providerId, prefix, JSON.stringify(encrypted), encrypted.keyId, priority],
+    );
+  }
+  return { keyOneId, keyTwoId, providerId };
+}
+
+function breakerCredentialCandidate(providerId: string): GatewayRouteCandidateSnapshot {
+  return {
+    candidateOrder: 1,
+    displayName: "Breaker Model",
+    modelId: "fake-model",
+    price: {
+      modelId: "fake-model",
+      priceVersion: "test",
+      providerKey: "openai",
+      reason: "no_current_price",
+      status: "unknown_price",
+    },
+    providerId,
+    providerKey: "openai",
+    providerModelId: "pm-breaker-cred",
   };
 }

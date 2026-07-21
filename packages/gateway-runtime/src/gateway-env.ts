@@ -49,7 +49,9 @@ export function gatewayBreakerEnabled(env: GatewayEnvironment = process.env): bo
 }
 
 export function gatewayBreakerErrorThresholdPercent(env: GatewayEnvironment = process.env): number {
-  return parsePositiveInt(env.GATEWAY_BREAKER_ERROR_THRESHOLD_PERCENT, 50);
+  // cockatiel's SamplingBreaker requires threshold ∈ (0, 1) exclusive, so the
+  // percent must stay within 1..99 or breaker construction throws a RangeError.
+  return Math.min(99, parsePositiveInt(env.GATEWAY_BREAKER_ERROR_THRESHOLD_PERCENT, 50));
 }
 
 export function gatewayBreakerWindowMs(env: GatewayEnvironment = process.env): number {

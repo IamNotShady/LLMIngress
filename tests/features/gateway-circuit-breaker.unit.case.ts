@@ -44,6 +44,12 @@ describe("gateway circuit breaker env", () => {
     expect(gatewayBreakerEnabled({ GATEWAY_BREAKER_ENABLED: "false" })).toBe(false);
     expect(gatewayBreakerErrorThresholdPercent({})).toBe(50);
     expect(
+      gatewayBreakerErrorThresholdPercent({ GATEWAY_BREAKER_ERROR_THRESHOLD_PERCENT: "100" }),
+    ).toBe(99);
+    expect(
+      gatewayBreakerErrorThresholdPercent({ GATEWAY_BREAKER_ERROR_THRESHOLD_PERCENT: "250" }),
+    ).toBe(99);
+    expect(
       gatewayBreakerErrorThresholdPercent({ GATEWAY_BREAKER_ERROR_THRESHOLD_PERCENT: "20" }),
     ).toBe(20);
     expect(gatewayBreakerWindowMs({})).toBe(60_000);

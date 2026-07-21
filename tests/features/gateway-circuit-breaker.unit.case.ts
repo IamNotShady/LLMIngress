@@ -23,11 +23,19 @@ describe("gateway circuit breaker env", () => {
     expect(gatewayBreakerWindowMs({})).toBe(60_000);
     expect(gatewayBreakerWindowMs({ GATEWAY_BREAKER_WINDOW_MS: "1000" })).toBe(1_000);
     expect(gatewayBreakerMinRequests({})).toBe(5);
+    expect(gatewayBreakerMinRequests({ GATEWAY_BREAKER_MIN_REQUESTS: "3" })).toBe(3);
     expect(gatewayBreakerHalfOpenAfterMs({})).toBe(30_000);
+    expect(gatewayBreakerHalfOpenAfterMs({ GATEWAY_BREAKER_HALF_OPEN_AFTER_MS: "1500" })).toBe(
+      1_500,
+    );
     expect(gatewayBreakerHalfOpenCalls({})).toBe(3);
+    expect(gatewayBreakerHalfOpenCalls({ GATEWAY_BREAKER_HALF_OPEN_CALLS: "1" })).toBe(1);
     expect(gatewayProviderRetries({})).toBe(2);
     expect(gatewayProviderRetries({ GATEWAY_PROVIDER_RETRIES: "0" })).toBe(0);
     expect(gatewayProviderRetryInitialDelayMs({})).toBe(200);
+    expect(
+      gatewayProviderRetryInitialDelayMs({ GATEWAY_PROVIDER_RETRY_INITIAL_DELAY_MS: "10" }),
+    ).toBe(10);
     expect(gatewayHealthSummaryCacheTtlMs({})).toBe(5_000);
     expect(gatewayHealthSummaryCacheTtlMs({ GATEWAY_HEALTH_SUMMARY_CACHE_TTL_MS: "0" })).toBe(0);
   });

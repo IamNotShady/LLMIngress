@@ -18,7 +18,8 @@ export type FakeProviderMode =
   | "first-byte-failure"
   | "midstream-error"
   | "openrouter-error"
-  | "cached-usage";
+  | "cached-usage"
+  | "flaky";
 
 export type CapturedFakeProviderRequest = {
   method: string;
@@ -54,6 +55,7 @@ export async function createFakeProviderServer(
 ): Promise<FakeProviderServer> {
   const requests: CapturedFakeProviderRequest[] = [];
   const closedRequests: CapturedFakeProviderRequest[] = [];
+  const flakyState = { calls: 0 };
   let models = options.models ?? [{ id: "fake-model" }];
   const timeoutMs = options.timeoutMs ?? 30_000;
 
@@ -63,6 +65,7 @@ export async function createFakeProviderServer(
       response,
       { closedRequests, requests },
       {
+        flakyState,
         getModels: () => models,
         requiredModelListAuthorization: options.requiredModelListAuthorization,
         timeoutMs,
@@ -108,6 +111,7 @@ async function handleRequest(
     requests: CapturedFakeProviderRequest[];
   },
   options: {
+    flakyState: { calls: number };
     getModels: () => FakeProviderModel[];
     requiredModelListAuthorization?: string;
     timeoutMs: number;
@@ -233,6 +237,26 @@ async function handleRequest(
           },
           total_tokens: 1200,
         },
+      });
+      return;
+    }
+
+    if (mode === "flaky") {
+      const failTimes = readPositiveIntegerQuery(url, "fail_times", 1);
+      options.flakyState.calls += 1;
+      if (options.flakyState.calls <= failTimes) {
+        writeJson(response, 503, {
+          error: {
+            code: "fake_provider_error",
+            message: "Fake provider flaky error",
+          },
+        });
+        return;
+      }
+      writeJson(response, 200, {
+        id: "fake-provider-response",
+        object: "chat.completion",
+        choices: [{ index: 0, message: { role: "assistant", content: "fake provider response" } }],
       });
       return;
     }
@@ -387,7 +411,8 @@ function readMode(url: URL): FakeProviderMode {
     mode === "first-byte-failure" ||
     mode === "midstream-error" ||
     mode === "openrouter-error" ||
-    mode === "cached-usage"
+    mode === "cached-usage" ||
+    mode === "flaky"
   ) {
     return mode;
   }

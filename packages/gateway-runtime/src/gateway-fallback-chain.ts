@@ -1,7 +1,12 @@
 import { enqueueProviderConnectionProbeJob } from "@llmingress/db/provider-jobs";
 import { createLogger } from "@llmingress/logging";
 import { isProviderCredentialFailure } from "@llmingress/provider/connectivity";
+import { BrokenCircuitError } from "cockatiel";
 import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
+import {
+  type GatewayCircuitBreakerRegistry,
+  getGatewayCircuitBreakerRegistry,
+} from "./gateway-circuit-breaker.ts";
 import type { GatewayRouteCandidateSnapshot } from "./gateway-config-reload.ts";
 import { GatewayPipelineError, truncateProviderMessage } from "./gateway-errors.ts";
 
@@ -68,6 +73,7 @@ export type ExecuteProviderFallbackAttemptsInput<TSuccess extends ProviderFallba
     fallbackAttempts: FallbackFailedAttempt[];
     recordFailedAttempt?: (attempt: FallbackFailedAttempt) => Promise<void> | void;
     enqueueConnectionProbe?: typeof enqueueProviderConnectionProbeJob;
+    circuitBreakerRegistry?: GatewayCircuitBreakerRegistry;
     requestId?: string;
   };
 
@@ -124,7 +130,24 @@ export async function executeProviderFallbackAttempts<
     let stopChain = false;
     for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
       attemptOrder += 1;
-      const result = await input.callProvider({ candidate, providerApiKey });
+      const registry = input.circuitBreakerRegistry ?? getGatewayCircuitBreakerRegistry();
+      let result: ProviderFallbackAttemptResult<TSuccess>;
+      try {
+        result = await registry.executeProviderCall(providerApiKey.providerConnectionId, () =>
+          input.callProvider({ candidate, providerApiKey }),
+        );
+      } catch (error) {
+        if (!(error instanceof BrokenCircuitError)) {
+          throw error;
+        }
+        result = {
+          errorCode: "provider_circuit_open",
+          errorMessage: `Circuit breaker is open for provider connection ${providerApiKey.providerConnectionId}.`,
+          failedBeforeFirstByte: true,
+          ok: false,
+          statusCode: null,
+        };
+      }
 
       if (result.ok) {
         return {
@@ -239,6 +262,10 @@ export function buildFallbackFailedAttempt(input: {
 function classifyFallbackFailure(result: FallbackAttemptErrorLike): FallbackFailureDecision {
   if (result.errorCode === "provider_redirect_rejected") {
     return { stopChain: true, tryNextCredential: false };
+  }
+
+  if (result.errorCode === "provider_circuit_open") {
+    return { stopChain: false, tryNextCredential: true };
   }
 
   const { statusCode } = result;

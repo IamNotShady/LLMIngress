@@ -108,7 +108,8 @@ test("Streaming fallback does not record connection health for a provider 5xx be
 
       expect(response.status).toBe(200);
       expect(await response.text()).toContain("fake");
-      expect(failingProvider.requests).toHaveLength(1);
+      // 1 initial call + GATEWAY_PROVIDER_RETRIES (default 2) same-connection retries for a transient 5xx.
+      expect(failingProvider.requests).toHaveLength(3);
       expect(succeedingProvider.requests).toHaveLength(1);
 
       await expect.poll(async () => countProviderHealthEvents(fixture, seeded.providerId)).toBe(0);

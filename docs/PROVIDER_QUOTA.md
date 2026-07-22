@@ -18,7 +18,7 @@ Twelve remote Provider choices exist today: 10 templates plus the two hardcoded 
 (`openai`, `anthropic`) in `apps/console/src/app/_modules/providers-section.tsx`. Local Providers
 have no billing.
 
-Eight can be probed with the credential the Provider already stores.
+Ten can be probed with the credential the Provider already stores.
 
 | Provider | Value | Endpoint | Fields |
 | --- | --- | --- | --- |
@@ -30,8 +30,10 @@ Eight can be probed with the credential the Provider already stores.
 | `openrouter` | balance | `GET /api/v1/key` | `data.limit_remaining`, `data.limit` |
 | `zai` | usage % | `GET https://api.z.ai/api/monitor/usage/quota/limit` | `data.limits[].percentage` (`0`–`100`), `.nextResetTime` (epoch **milliseconds**) |
 | `minimax` | usage % | `GET https://api.minimax.io/v1/token_plan/remains` | `current_interval_remaining_percent`, `current_weekly_remaining_percent` |
+| `glm_coding` | usage % | `GET https://api.z.ai/api/monitor/usage/quota/limit` (origin-derived; reuses the exact `zai` probe function — same URL, base path discarded) | `data.limits[].percentage`, `.nextResetTime` — identical to `zai` |
+| `kimi_coding` | usage % | `GET https://api.kimi.com/coding/v1/usages`, `Authorization: Bearer <api key>`, `Accept: application/json` (Bearer here, unlike the `x-api-key` used for messages egress) | first `limits[].detail.{limit,remaining,resetTime}` → `five_hour`; `usage.{limit,remaining,resetTime}` → `weekly_limit` |
 
-Four cannot, with the stored credential:
+Five cannot, with the stored credential:
 
 | Provider | Reason | `error_code` |
 | --- | --- | --- |
@@ -39,6 +41,7 @@ Four cannot, with the stored credential:
 | `xai` | Balance lives on `management-api.x.ai` and requires a separately provisioned Management Key plus `team_id` | `requires_separate_credential` |
 | `google` | No endpoint exists on the OpenAI-compatible surface; balance is visible only in AI Studio. Programmatic quota needs a GCP project with OAuth/service-account credentials and IAM | `not_supported` |
 | `qwen` | The international deployment has no working path. The console RPC requires a `login_aliyunid_ticket` cookie that only China accounts receive | `not_supported` |
+| `qwen_token_plan` | Same as `qwen`: no programmatic quota endpoint on the token-plan deployment; cc-switch's `detect_provider` covers neither Qwen variant | `not_supported` |
 
 ### Caveats that affect correctness
 
@@ -89,6 +92,8 @@ Raw shapes differ per Provider. Normalize before persisting.
 | `moonshot` | `available_balance` number | render to decimal string; currency from the host — `.cn` bills CNY, `.ai` bills USD |
 | `openai` | `total_available` number | render to decimal string |
 | `openrouter` | `limit_remaining` number or null | render to decimal string; null emits no entry |
+| `glm_coding` | shares `zai`'s transform: `percentage` `0`–`100`; `nextResetTime` epoch ms | divide by 100; ms to ISO 8601 |
+| `kimi_coding` | `limits[].detail.{limit,remaining}`, `usage.{limit,remaining}`; `resetTime` epoch number or date string | `(limit - remaining) / limit` (0–1 fraction, **not** ×100); `resetTime` → ISO `resetsAt`; only the first detail-bearing `limits[]` row is used |
 
 Monetary values are stored as decimal strings, never JSON numbers. DeepSeek already returns strings,
 and `jsonb` numbers are IEEE 754, which loses precision on currency.
@@ -242,7 +247,7 @@ A consumer discriminates on `"window" in entry` versus `"currency" in entry`. Co
 entry according to its own shape, so no Provider-level type tag is required anywhere.
 
 ```jsonc
-// windows only — openai_codex, zai, minimax
+// windows only — openai_codex, zai, glm_coding, minimax, kimi_coding
 [{"window":"5h","utilization":0.0741,"resetsAt":"2026-07-20T12:00:00Z"},
  {"window":"7d","utilization":0.5312,"resetsAt":"2026-07-24T03:00:00Z"}]
 

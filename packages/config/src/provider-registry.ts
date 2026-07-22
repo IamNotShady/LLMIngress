@@ -61,7 +61,9 @@ export type KnownProviderKey =
   | "anthropic"
   | "claude_code"
   | "deepseek"
+  | "glm_coding"
   | "google"
+  | "kimi_coding"
   | "llama_cpp"
   | "lmstudio"
   | "minimax"
@@ -71,6 +73,7 @@ export type KnownProviderKey =
   | "openai_codex"
   | "openrouter"
   | "qwen"
+  | "qwen_token_plan"
   | "xai"
   | "zai";
 
@@ -110,6 +113,9 @@ const messagesEndpoint: ProviderEndpoint = { method: "POST", path: "messages" };
 const responsesEndpoint: ProviderEndpoint = { method: "POST", path: "responses" };
 const modelsEndpoint: ProviderEndpoint = { method: "GET", path: "models" };
 const remoteTemplateAuth: ProviderAuthBehavior = { header: "Authorization", scheme: "Bearer" };
+// Anthropic-protocol templates authenticate with a bare x-api-key (no scheme);
+// egress hardcodes this, but the field keeps the template data type-complete.
+const anthropicTemplateAuth: ProviderAuthBehavior = { header: "x-api-key", scheme: "" };
 
 export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> = {
   anthropic: {
@@ -195,6 +201,42 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     endpoints: { chat_completions: chatCompletionsEndpoint },
     modelListEndpoint: modelsEndpoint,
     providerKey: "google",
+    providerType: "api_key",
+  },
+  glm_coding: {
+    behavior: {
+      metadataKey: "zai",
+      quotaSource: { supported: true },
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.z.ai/api/coding/paas/v4",
+    },
+    displayName: "GLM Coding Plan",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "glm_coding",
+    providerType: "api_key",
+  },
+  kimi_coding: {
+    behavior: {
+      connectivityProbeStyle: "anthropic",
+      metadataKey: "moonshot",
+      modelListStyle: "anthropic",
+      quotaSource: { supported: true },
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: anthropicTemplateAuth,
+      baseUrl: "https://api.kimi.com/coding/v1",
+    },
+    displayName: "Kimi Coding Plan",
+    endpoints: { messages: messagesEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "kimi_coding",
     providerType: "api_key",
   },
   llama_cpp: {
@@ -380,6 +422,23 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerKey: "qwen",
     providerType: "api_key",
   },
+  qwen_token_plan: {
+    behavior: {
+      metadataKey: "qwen",
+      quotaSource: { reason: "not_supported", supported: false },
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+    },
+    displayName: "Qwen Token Plan",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "qwen_token_plan",
+    providerType: "api_key",
+  },
   xai: {
     behavior: {
       priceSyncSupported: true,
@@ -429,7 +488,9 @@ const knownProviderKeys: KnownProviderKey[] = [
   "anthropic",
   "claude_code",
   "deepseek",
+  "glm_coding",
   "google",
+  "kimi_coding",
   "llama_cpp",
   "lmstudio",
   "minimax",
@@ -439,6 +500,7 @@ const knownProviderKeys: KnownProviderKey[] = [
   "openai_codex",
   "openrouter",
   "qwen",
+  "qwen_token_plan",
   "xai",
   "zai",
 ];
@@ -453,9 +515,12 @@ const providerTemplateSelectorOrder: KnownProviderKey[] = [
   "deepseek",
   "xai",
   "qwen",
+  "qwen_token_plan",
   "moonshot",
+  "kimi_coding",
   "minimax",
   "zai",
+  "glm_coding",
   "ollama",
   "lmstudio",
   "llama_cpp",

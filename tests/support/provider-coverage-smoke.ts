@@ -3,6 +3,7 @@ import { listOpenAICompatibleProviderTemplates } from "@llmingress/db/console-pr
 export type ProviderCoverageScenarioId =
   | "anthropic"
   | "google"
+  | "kimi_coding"
   | "lmstudio"
   | "llama_cpp"
   | "ollama"
@@ -90,6 +91,26 @@ export function buildProviderCoverageSmokePlan(
         requestId: "req_v1_provider_anthropic_094",
         virtualModelDisplayName: "Provider Smoke Anthropic",
         virtualModelName: "coverage-smoke-anthropic",
+      },
+      {
+        // Kimi Coding Plan: Anthropic messages protocol + x-api-key (W1 category),
+        // mirroring the anthropic scenario but as a paste-key template provider.
+        baseUrl: `${baseUrl}/kimi/coding/v1`,
+        displayName: "Kimi Coding Plan",
+        endpoint: "messages",
+        expectedAuthHeader: "x-api-key",
+        expectedAuthValue: "sk-coverage-kimi-coding-smoke-094",
+        expectedProviderPath: "/kimi/coding/v1/messages",
+        id: "kimi_coding",
+        modelDisplayName: "Kimi For Coding",
+        modelId: "kimi-for-coding",
+        providerApiKey: "sk-coverage-kimi-coding-smoke-094",
+        providerKey: "kimi_coding",
+        providerTemplateId: "kimi_coding",
+        providerType: "api_key",
+        requestId: "req_v1_provider_kimi_coding_094",
+        virtualModelDisplayName: "Provider Smoke Kimi",
+        virtualModelName: "coverage-smoke-kimi",
       },
       {
         baseUrl: `${baseUrl}/google/v1beta/openai`,

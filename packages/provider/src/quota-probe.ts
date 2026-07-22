@@ -1,4 +1,4 @@
-import type { QuotaEntry } from "@llmingress/domain/quota";
+import type { QuotaEntry, WindowEntry } from "@llmingress/domain/quota";
 import { isRecord, joinUrl } from "@llmingress/util";
 import { fetchCredentialedProviderRequestWithTimeout } from "./authenticated-http.js";
 
@@ -20,6 +20,34 @@ export type QuotaProbe = (input: QuotaProbeInput) => Promise<QuotaProbeResult>;
 const defaultTimeoutMs = 10_000;
 
 /**
+ * Z.ai quota probe. The quota path shares only the origin with the configured
+ * base URL (base is /api/paas/v4 or /api/coding/paas/v4, quota is
+ * /api/monitor/...), so joinUrl is wrong here. glm_coding reuses this exact
+ * function: its api.z.ai origin makes the probe URL identical to zai's.
+ */
+const zaiQuotaProbe: QuotaProbe = async (input) => {
+  const url = new URL("/api/monitor/usage/quota/limit", new URL(input.baseUrl).origin).toString();
+  const bearerResult = await parsed(input, parseZaiQuota, {
+    headers: { ...bearer(input.credential), "accept-language": "en-US,en" },
+    url,
+  });
+  if (bearerResult.ok || bearerResult.errorCode !== "unauthorized") {
+    return bearerResult;
+  }
+  // Implementations disagree on whether Zhipu wants a scheme, so a rejected
+  // credential is retried raw. Only an auth rejection: retrying a timeout or a
+  // 500 would double the request and report the second attempt's error code.
+  return parsed(input, parseZaiQuota, {
+    headers: {
+      accept: "application/json",
+      "accept-language": "en-US,en",
+      authorization: input.credential,
+    },
+    url,
+  });
+};
+
+/**
  * This module is the implementing module for quota probing, so keying the
  * lookup by providerKey is the dispatch itself, not a leaked string compare.
  */
@@ -37,6 +65,15 @@ export const quotaProbes: Record<string, QuotaProbe> = {
     parsed(input, parseDeepseekQuota, {
       headers: bearer(input.credential),
       url: joinUrl(input.baseUrl, "user/balance"),
+    }),
+  // glm_coding shares the api.z.ai origin, so it reuses the exact zai probe.
+  glm_coding: zaiQuotaProbe,
+  kimi_coding: async (input) =>
+    parsed(input, parseKimiQuota, {
+      // Bearer to /coding/v1/usages — a different endpoint and auth than the
+      // messages egress, which uses x-api-key.
+      headers: bearer(input.credential),
+      url: joinUrl(input.baseUrl, "usages"),
     }),
   minimax: async (input) =>
     parsed(input, parseMinimaxQuota, {
@@ -67,29 +104,7 @@ export const quotaProbes: Record<string, QuotaProbe> = {
       headers: bearer(input.credential),
       url: joinUrl(input.baseUrl, "key"),
     }),
-  zai: async (input) => {
-    // The quota path shares only the origin with the configured base URL
-    // (base is /api/paas/v4, quota is /api/monitor/...), so joinUrl is wrong here.
-    const url = new URL("/api/monitor/usage/quota/limit", new URL(input.baseUrl).origin).toString();
-    const bearerResult = await parsed(input, parseZaiQuota, {
-      headers: { ...bearer(input.credential), "accept-language": "en-US,en" },
-      url,
-    });
-    if (bearerResult.ok || bearerResult.errorCode !== "unauthorized") {
-      return bearerResult;
-    }
-    // Implementations disagree on whether Zhipu wants a scheme, so a rejected
-    // credential is retried raw. Only an auth rejection: retrying a timeout or a
-    // 500 would double the request and report the second attempt's error code.
-    return parsed(input, parseZaiQuota, {
-      headers: {
-        accept: "application/json",
-        "accept-language": "en-US,en",
-        authorization: input.credential,
-      },
-      url,
-    });
-  },
+  zai: zaiQuotaProbe,
 };
 
 export function resolveQuotaProbe(providerKey: string | null | undefined): QuotaProbe | null {
@@ -386,4 +401,65 @@ export function parseMinimaxQuota(body: unknown): QuotaEntry[] {
     entries.push({ utilization: 1 - remaining / 100, window });
   }
   return entries;
+}
+
+/**
+ * Kimi coding-plan usage (`GET /coding/v1/usages`). Two windows: the first
+ * detail-bearing `limits[]` entry is the 5-hour window (extra `limits[]` rows
+ * are ignored to avoid duplicate Console rows), and `usage` is the weekly
+ * window. utilization is a 0-1 fraction `(limit - remaining) / limit` — the
+ * cc-switch reference multiplies by 100; do not copy that. `resetTime` is
+ * tolerantly parsed (epoch number or a parseable date string) into an ISO
+ * `resetsAt`, matching the repo convention.
+ */
+export function parseKimiQuota(body: unknown): QuotaEntry[] {
+  if (!isRecord(body)) {
+    return [];
+  }
+  const entries: QuotaEntry[] = [];
+  const firstDetailLimit = Array.isArray(body.limits)
+    ? body.limits.find((limit) => isRecord(limit) && isRecord(limit.detail))
+    : undefined;
+  if (isRecord(firstDetailLimit) && isRecord(firstDetailLimit.detail)) {
+    const entry = kimiWindow("five_hour", firstDetailLimit.detail);
+    if (entry) {
+      entries.push(entry);
+    }
+  }
+  if (isRecord(body.usage)) {
+    const entry = kimiWindow("weekly_limit", body.usage);
+    if (entry) {
+      entries.push(entry);
+    }
+  }
+  return entries;
+}
+
+function kimiWindow(window: string, detail: Record<string, unknown>): WindowEntry | null {
+  const limit = readNumber(detail.limit);
+  const remaining = readNumber(detail.remaining);
+  if (limit === null || remaining === null || limit <= 0) {
+    return null;
+  }
+  const resetsAt = readKimiResetTime(detail.resetTime);
+  return {
+    ...(resetsAt === null ? {} : { resetsAt }),
+    utilization: (limit - remaining) / limit,
+    window,
+  };
+}
+
+function readKimiResetTime(value: unknown): string | null {
+  const epoch = readNumber(value);
+  if (epoch !== null) {
+    // Kimi may report epoch seconds or milliseconds; normalize both to ms.
+    const ms = epoch < 1e12 ? epoch * 1000 : epoch;
+    const date = new Date(ms);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
+  }
+  return null;
 }

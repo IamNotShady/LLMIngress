@@ -223,7 +223,7 @@ function buildChatCompletionsPayload(
   }) as OpenAIChatCompletionsPayload;
 }
 
-function buildChatCompletionsUrl(baseUrl: string): string {
+export function buildChatCompletionsUrl(baseUrl: string): string {
   return joinUrl(baseUrl, defaultEndpointPathByProtocol.chat_completions);
 }
 

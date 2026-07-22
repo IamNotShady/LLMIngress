@@ -69,6 +69,7 @@ The durable Job Runner accepts exactly:
 - `model_refresh`
 - `provider_connection_probe`
 - `price_sync`
+- `provider_quota_probe`
 
 Jobs use `FOR UPDATE SKIP LOCKED`, leases, heartbeat renewal, attempt fencing, bounded retries, and
 `AbortSignal`. A Worker that loses its lease cannot overwrite a newer attempt.

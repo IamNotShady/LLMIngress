@@ -261,6 +261,95 @@ test("provider create dialog shows registry-derived supported endpoints", async 
   }
 });
 
+test("Add Provider API Keys group carries the Batch 1 GLM, Qwen, and Kimi paste-key templates", async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_console_batch1_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await signInFromFirstRun(page, baseUrl);
+        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
+
+        const dialog = page.getByRole("dialog", { name: "Add Provider" });
+        await expect(dialog).toBeVisible();
+
+        // Both new providers live in the API Keys template group (remote_api_key),
+        // which uses the editable paste-key base URL, never the local-private mode.
+        await dialog.getByRole("tab", { name: "API Keys" }).click();
+        const providerType = dialog.getByLabel("Provider type", { exact: true });
+        const baseUrlField = dialog.getByLabel("Provider base URL", { exact: true });
+        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
+
+        // GLM Coding Plan: /api/coding/paas/v4 base, OpenAI chat_completions only.
+        await providerType.selectOption({ label: "GLM Coding Plan" });
+        await expect(baseUrlField).toHaveValue("https://api.z.ai/api/coding/paas/v4");
+        await expect(endpointChips).toHaveText(["Chat Completions"]);
+
+        // Qwen Token Plan: token-plan base, chat_completions only (no Responses).
+        await providerType.selectOption({ label: "Qwen Token Plan" });
+        await expect(baseUrlField).toHaveValue(
+          "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+        );
+        await expect(endpointChips).toHaveText(["Chat Completions"]);
+
+        // Kimi Coding Plan: /coding/v1 base (Anthropic protocol), Messages only.
+        await providerType.selectOption({ label: "Kimi Coding Plan" });
+        await expect(baseUrlField).toHaveValue("https://api.kimi.com/coding/v1");
+        await expect(endpointChips).toHaveText(["Messages"]);
+
+        for (const viewport of [
+          { width: 1280, height: 900 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
+        }
+
+        // Creating one of the templates must land on a provider whose
+        // credential section is the api_key paste branch — the "Add API key"
+        // link whose dialog flow is exercised elsewhere in this suite.
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await providerType.selectOption({ label: "Kimi Coding Plan" });
+        await dialog
+          .getByLabel("Provider display name", { exact: true })
+          .fill("Kimi Coding Plan E2E");
+        await dialog.locator("button[type=submit]").click();
+        await expect(page.getByRole("dialog", { name: "Add Provider" })).toHaveCount(0);
+        // Create redirects to the bare /providers list (rows collapsed);
+        // expanding the new row reveals the api_key credential section.
+        await page
+          .locator(".providers-table a.table-row-link", { hasText: "Kimi Coding Plan E2E" })
+          .first()
+          .click();
+        await expect(page.getByRole("link", { name: "Add API key" })).toHaveCount(1);
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 async function addProviderDeleteRaceBlocker(databaseUrl: string, providerId: string) {
   await withDedicatedPostgresClient(databaseUrl, async (client) => {
     const providerModel = await client.query<{ id: string }>(

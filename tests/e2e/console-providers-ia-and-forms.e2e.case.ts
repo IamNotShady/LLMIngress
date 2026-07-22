@@ -40,7 +40,9 @@ async function seedIaData(databaseUrl: string) {
           randomUUID(),
           providerId,
           i === 0 ? "ia-needle-model" : `ia-model-${String(i).padStart(3, "0")}`,
-          i === 0 ? "IA Needle Model" : `IA Model ${i}`,
+          // Row 1 mirrors real catalogs where the display name IS the model id,
+          // pinning the single-line rendering of the model-id cell.
+          i === 0 ? "IA Needle Model" : i === 1 ? "ia-model-001" : `IA Model ${i}`,
         ],
       );
     }
@@ -129,6 +131,24 @@ test("providers page shows one provider representation with a searchable capped 
         await expect(libraryRows.first()).toContainText("ia-needle-model");
         expect(new URL(page.url()).searchParams.get("modelQuery")).toBe("ia-needle");
         expect(hydrationErrors).toEqual([]);
+
+        // The mono id line renders only when it differs from the display name:
+        // ia-model-001's display name IS its id, so its cell is a single line.
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-model-001`, {
+          waitUntil: "networkidle",
+        });
+        await expect(libraryRows).toHaveCount(1);
+        const sameNameCell = libraryRows.first().locator(".model-id-cell");
+        await expect(sameNameCell.locator("strong")).toHaveText("ia-model-001");
+        await expect(sameNameCell.locator("small")).toHaveCount(0);
+        // A distinct display name keeps the mono id line.
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-model-002`, {
+          waitUntil: "networkidle",
+        });
+        await expect(libraryRows).toHaveCount(1);
+        await expect(libraryRows.first().locator(".model-id-cell small")).toHaveText(
+          "ia-model-002",
+        );
 
         // The page no longer balloons to thousands of pixels.
         const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);

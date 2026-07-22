@@ -41,6 +41,11 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(activity).toContain("Math.ceil(total / ACTIVITY_PAGE_SIZE)");
   });
 
+  test("the model library id line renders only when it differs from the display name", () => {
+    const providers = sectionSource("providers-client-section.tsx");
+    expect(providers).toContain("model.modelId !== model.modelDisplayName");
+  });
+
   test("all paginated Console lists use one shared Pagination component", () => {
     const activity = sectionSource("activity-section.tsx");
     const providers = sectionSource("providers-client-section.tsx");

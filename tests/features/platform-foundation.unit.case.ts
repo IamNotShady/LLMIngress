@@ -92,6 +92,7 @@ describe("platform foundation", () => {
     expect(loadSqlMigrations().map(({ id, name }) => ({ id, name }))).toEqual([
       { id: "0001", name: "core_baseline" },
       { id: "0002", name: "provider_quota" },
+      { id: "0003", name: "provider_oauth_device" },
     ]);
     expect(shippedSqlMigrations).toEqual(
       loadSqlMigrations().map(({ checksum, id, name }) => ({ checksum, id, name })),

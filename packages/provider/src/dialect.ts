@@ -10,6 +10,7 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
+  buildMiniMaxSubscriptionHeaders,
   withClaudeCodeSystemPrompt,
 } from "./subscription.js";
 
@@ -55,6 +56,18 @@ const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
       buildCodexSubscriptionHeaders(apiKey, protocolHeaders(apiKey)),
     buildUrl: (baseUrl, pathSuffix) =>
       pathSuffix === "responses" ? buildCodexResponsesUrl(baseUrl) : joinUrl(baseUrl, pathSuffix),
+  },
+  minimax_coding: {
+    // Bearer + anthropic-version only (strip x-api-key); no stainless/beta/UA
+    // impersonation. buildUrl stays the default joinUrl since the base already
+    // carries /anthropic/v1. transformBody injects the same identity system
+    // block the non-streaming adapter does.
+    buildHeaders: (apiKey, protocolHeaders) =>
+      buildMiniMaxSubscriptionHeaders(apiKey, protocolHeaders(apiKey)),
+    transformBody: (body, pathSuffix) =>
+      pathSuffix === "messages"
+        ? { ...body, system: withClaudeCodeSystemPrompt(body.system) }
+        : body,
   },
   openrouter: {
     buildHeaders: (apiKey, protocolHeaders) =>

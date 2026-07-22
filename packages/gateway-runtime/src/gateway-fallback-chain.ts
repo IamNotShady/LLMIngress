@@ -23,6 +23,9 @@ export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {
 
 export type FallbackProviderApiKey = {
   apiKey: string;
+  // Per-token egress base (MiniMax subscription resource_url). When present it
+  // overrides the provider-level baseUrl so a rotated key carries its own base.
+  baseUrl?: string;
   credentialKind?: "api_key" | "oauth";
   keyPrefix?: string;
   providerConnectionId: string;

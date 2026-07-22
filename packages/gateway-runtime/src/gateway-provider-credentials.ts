@@ -110,7 +110,9 @@ export async function attachGatewayProviderCredentials(input: {
     return {
       ...candidate,
       apiKey: primaryKey.apiKey,
-      baseUrl: credential.baseUrl,
+      // A per-token resource_url (MiniMax subscription) rides on the primary key
+      // and outranks the provider-level base; fallback rotation swaps it per key.
+      baseUrl: primaryKey.baseUrl ?? credential.baseUrl,
       providerConnectionId: primaryKey.providerConnectionId,
       providerApiKeyId: primaryKey.providerApiKeyId,
       providerApiKeyPrefix: primaryKey.keyPrefix,
@@ -314,6 +316,9 @@ async function readProviderCredentials(input: {
         }
         providerCredentials.keys.push({
           apiKey: token.accessToken,
+          // MiniMax returns a per-token resource_url; carry it so egress targets
+          // the token's base rather than the registry base.
+          ...(token.resourceUrl ? { baseUrl: token.resourceUrl } : {}),
           credentialKind: "oauth",
           providerConnectionId: connection.id,
           providerOAuthId: connection.id,

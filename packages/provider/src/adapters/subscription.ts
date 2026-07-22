@@ -1,4 +1,4 @@
-import { isRecord } from "@llmingress/util";
+import { isRecord, joinUrl } from "@llmingress/util";
 import {
   fetchCredentialedProviderRequest,
   isProviderRedirectRejectedError,
@@ -9,6 +9,7 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
+  buildMiniMaxSubscriptionHeaders,
   withClaudeCodeSystemPrompt,
 } from "../subscription.js";
 import {
@@ -104,6 +105,55 @@ export function createClaudeCodeProviderAdapter(
         if (!response.ok) {
           const mapped = mapOpenAIProviderError(response.status, body, responseHeaders);
           return mapped;
+        }
+        return {
+          body,
+          headers: responseHeaders,
+          ok: true,
+          providerRequestId: readProviderRequestId(body),
+          statusCode: response.status,
+        };
+      } catch (error) {
+        return requestFailed(error, timeoutMs);
+      }
+    },
+  };
+}
+
+export function createMiniMaxProviderAdapter(
+  options: CreateSubscriptionAdapterOptions = {},
+): AnthropicProviderAdapter {
+  const fetchImpl = options.fetch ?? globalThis.fetch;
+  const timeoutMs = options.timeoutMs ?? providerRequestTimeoutMs();
+
+  return {
+    messages: async ({ headers, request, target }): Promise<AnthropicAdapterResult> => {
+      try {
+        const payload = buildAnthropicMessagesPayload(request, target);
+        const response = await fetchCredentialedProviderRequest(
+          fetchImpl,
+          // target.baseUrl is already resolved to the token's resource_url
+          // (or the registry base); both already carry /anthropic/v1, so a
+          // plain joinUrl is correct here — do not reuse claude_code's
+          // appendV1Path, which would double the /v1 segment.
+          joinUrl(target.baseUrl, "messages"),
+          {
+            body: JSON.stringify({
+              ...payload,
+              // MiniMax follows Manifest: inject the subscription identity block
+              // (verbatim withClaudeCodeSystemPrompt), but no HTTP-header
+              // impersonation.
+              system: withClaudeCodeSystemPrompt(payload.system),
+            }),
+            headers: buildMiniMaxSubscriptionHeaders(target.apiKey ?? "", headers),
+            method: "POST",
+            signal: AbortSignal.timeout(timeoutMs),
+          },
+        );
+        const body = await readResponseBody(response);
+        const responseHeaders = readProviderResponseHeaders(response.headers);
+        if (!response.ok) {
+          return mapOpenAIProviderError(response.status, body, responseHeaders);
         }
         return {
           body,

@@ -5,7 +5,10 @@ import {
   createAnthropicProviderAdapter,
 } from "../../packages/provider/src/adapters/anthropic";
 import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
-import { createClaudeCodeProviderAdapter } from "../../packages/provider/src/adapters/subscription";
+import {
+  createClaudeCodeProviderAdapter,
+  createMiniMaxProviderAdapter,
+} from "../../packages/provider/src/adapters/subscription";
 import {
   checkProviderConnectivity,
   selectProviderProbeModel,
@@ -149,6 +152,47 @@ describe("provider streaming dialects", () => {
     expect(headers["x-api-key"]).toBeUndefined();
     expect(headers.authorization).toBe("Bearer claude-oauth-token");
   });
+
+  it("maps MiniMax Coding Plan to a clean Bearer messages dialect without header impersonation", () => {
+    const dialect = resolveProviderStreamingDialect("minimax_coding");
+
+    expect(dialect.supportsPathSuffix("messages")).toBe(true);
+    expect(dialect.supportsPathSuffix("responses")).toBe(false);
+    expect(dialect.supportsPathSuffix("chat/completions")).toBe(false);
+
+    // buildUrl is the default joinUrl: the base already carries /anthropic/v1,
+    // so no claude_code-style /v1 re-append.
+    expect(dialect.buildUrl("https://api.minimax.io/anthropic/v1", "messages")).toBe(
+      "https://api.minimax.io/anthropic/v1/messages",
+    );
+
+    // The generic Anthropic streaming path injects x-api-key: <token>; MiniMax
+    // must drop it, place a Bearer, and never carry stainless/beta/UA headers.
+    const headers = dialect.buildHeaders("minimax-oauth-token", (apiKey) => ({
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+    }));
+    expect(headers).toEqual({
+      "anthropic-version": "2023-06-01",
+      authorization: "Bearer minimax-oauth-token",
+      "content-type": "application/json",
+    });
+    expect(headers["x-api-key"]).toBeUndefined();
+    expect(headers["anthropic-beta"]).toBeUndefined();
+    expect(headers["user-agent"]).toBeUndefined();
+    expect(Object.keys(headers).some((name) => name.startsWith("x-stainless"))).toBe(false);
+
+    // transformBody injects the same identity system block as the adapter.
+    expect(dialect.transformBody({ system: "Use terse replies." }, "messages")).toEqual({
+      system: [
+        { text: claudeCodeSystemPrompt, type: "text" },
+        { text: "Use terse replies.", type: "text" },
+      ],
+    });
+    // Non-messages suffixes are left untouched.
+    expect(dialect.transformBody({ stream: true }, "chat/completions")).toEqual({ stream: true });
+  });
 });
 
 describe("provider adapter headers", () => {
@@ -287,6 +331,64 @@ describe("provider adapter headers", () => {
     }
     expect(new Set(betas).size).toBe(betas.length);
     expect(upstreamBody.system).toEqual([{ text: claudeCodeSystemPrompt, type: "text" }]);
+  });
+
+  it("sends MiniMax messages egress with a Bearer, the identity block, and no impersonation headers", async () => {
+    let upstreamUrl = "";
+    let upstreamHeaders = new Headers();
+    let upstreamBody: Record<string, unknown> = {};
+    const adapter = createMiniMaxProviderAdapter({
+      fetch: async (url, init) => {
+        upstreamUrl = String(url);
+        upstreamHeaders = new Headers(init?.headers);
+        upstreamBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(JSON.stringify({ id: "msg_123", type: "message" }), {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        });
+      },
+      timeoutMs: 200,
+    });
+
+    const result = await adapter.messages({
+      headers: {
+        "anthropic-version": "2023-06-01",
+        // The generic Anthropic path forwards x-api-key; MiniMax must drop it.
+        "x-api-key": "generic-anthropic-key",
+      },
+      request: {
+        maxOutputTokens: 128,
+        messages: [{ content: "hi", role: "user" }],
+        payload: {
+          max_tokens: 128,
+          messages: [{ content: "hi", role: "user" }],
+          system: "Use terse replies.",
+        },
+        system: "Use terse replies.",
+      },
+      target: {
+        // resource_url base already carries /anthropic/v1; joinUrl appends
+        // /messages with no /v1 re-append.
+        apiKey: "minimax-oauth-token",
+        baseUrl: "https://api.minimax.io/anthropic/v1",
+        modelId: "MiniMax-M2",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(upstreamUrl).toBe("https://api.minimax.io/anthropic/v1/messages");
+    expect(upstreamHeaders.get("authorization")).toBe("Bearer minimax-oauth-token");
+    expect(upstreamHeaders.get("anthropic-version")).toBe("2023-06-01");
+    expect(upstreamHeaders.get("x-api-key")).toBeNull();
+    expect(upstreamHeaders.get("anthropic-beta")).toBeNull();
+    expect(upstreamHeaders.get("user-agent")).toBeNull();
+    expect(upstreamHeaders.get("x-stainless-lang")).toBeNull();
+    // The identity system block is injected verbatim ahead of the caller prompt.
+    expect(upstreamBody.system).toEqual([
+      { text: claudeCodeSystemPrompt, type: "text" },
+      { text: "Use terse replies.", type: "text" },
+    ]);
+    expect(upstreamBody.model).toBe("MiniMax-M2");
   });
 });
 

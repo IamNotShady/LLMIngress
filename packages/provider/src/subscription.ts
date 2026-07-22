@@ -88,6 +88,23 @@ export function buildClaudeCodeSubscriptionHeaders(
   });
 }
 
+export function buildMiniMaxSubscriptionHeaders(
+  accessToken: string,
+  requestHeaders?: Record<string, string>,
+): Record<string, string> {
+  // MiniMax Coding Plan authenticates with a plain OAuth Bearer and Anthropic
+  // version only: no claude-cli user-agent, no x-stainless-*, no anthropic-beta
+  // impersonation. The subscription Bearer owns auth, so drop any forwarded
+  // x-api-key (the streaming path injects `x-api-key: <credential>` for generic
+  // Anthropic) rather than send it alongside the Bearer.
+  const forwarded = stripHeader(requestHeaders, "x-api-key");
+  return mergeHttpHeaders(forwarded, {
+    "anthropic-version": readHttpHeader(forwarded, "anthropic-version") ?? "2023-06-01",
+    authorization: `Bearer ${accessToken}`,
+    "content-type": "application/json",
+  });
+}
+
 export function buildCodexModelListUrl(baseUrl: string): string {
   const url = appendPath(baseUrl, subscriptionModelListPath("openai_codex"));
   url.searchParams.set("client_version", codexClientVersion);

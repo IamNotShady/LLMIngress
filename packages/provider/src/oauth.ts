@@ -440,13 +440,16 @@ function normalizeTokenBody(
 
 // Normalizes a poll interval that may be seconds or milliseconds (the MiniMax
 // device-flow helper heuristic): >= 1000 is treated as milliseconds, anything
-// smaller as seconds. Falls back to the provider's configured default.
+// smaller as seconds. Falls back to the provider's configured default. The
+// normalized value is clamped to [1, 60] seconds so an extreme upstream number
+// (e.g. 1200 misread as 1.2s, or a huge interval that would stall polling)
+// cannot escape a sane range.
 function normalizePollIntervalSeconds(value: unknown, fallbackSeconds: number): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     return fallbackSeconds;
   }
   const seconds = value >= 1000 ? value / 1000 : value;
-  return Math.max(1, Math.round(seconds));
+  return Math.min(60, Math.max(1, Math.round(seconds)));
 }
 
 // The upstream verification URI points at a host that 307-redirects to the

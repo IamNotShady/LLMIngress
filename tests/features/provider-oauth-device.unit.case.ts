@@ -7,6 +7,7 @@ import {
 } from "@llmingress/db/console-provider-oauth";
 import { deleteProvider } from "@llmingress/db/console-providers";
 import {
+  completeProviderOAuthConnection,
   createProviderOAuthDevicePendingConnection,
   deleteProviderOAuthConnection,
   readProviderOAuthPendingConnection,
@@ -19,7 +20,10 @@ import {
   requestProviderOAuthUserCode,
 } from "../../packages/provider/src/oauth";
 import type { EncryptionKeySource } from "../../packages/security/src/encryption-key";
-import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
+import {
+  createSecretEncryption,
+  type EncryptedSecret,
+} from "../../packages/security/src/secret-encryption";
 
 const CLIENT_ID = "78257093-7e40-4613-99e0-527b14b39113";
 const encryptionKeySource: EncryptionKeySource = { kind: "inline", value: "test-master-key" };
@@ -126,6 +130,38 @@ describe("provider oauth device-code engine", () => {
     expect(result.intervalSeconds).toBe(2);
     // A non-/oauth-authorize path is left untouched.
     expect(result.verificationUri).toBe("https://x.test/other");
+  });
+
+  it("clamps a normalized poll interval into the [1, 60] second range", async () => {
+    // A huge millisecond interval (900000 -> 900s) is capped at 60; an interval
+    // that normalizes below one second (1200 -> 1.2s) floors at 1.
+    const huge = recordingFetch(() => ({
+      body: { interval: 900000, user_code: "X", verification_uri: "https://x.test/other" },
+    }));
+    expect(
+      (
+        await requestProviderOAuthUserCode({
+          codeChallenge: "c",
+          fetch: huge.fetch,
+          providerKey: "minimax_coding",
+          state: "s",
+        })
+      ).intervalSeconds,
+    ).toBe(60);
+
+    const tiny = recordingFetch(() => ({
+      body: { interval: 1200, user_code: "X", verification_uri: "https://x.test/other" },
+    }));
+    expect(
+      (
+        await requestProviderOAuthUserCode({
+          codeChallenge: "c",
+          fetch: tiny.fetch,
+          providerKey: "minimax_coding",
+          state: "s",
+        })
+      ).intervalSeconds,
+    ).toBe(1);
   });
 
   it("polls with the user-code grant and judges pending/error/success from the body status", async () => {
@@ -557,7 +593,125 @@ describe("provider oauth device-code storage", () => {
       await fixture.dispose();
     }
   });
+
+  it("completes only while pending so a second complete cannot overwrite the stored token", async () => {
+    const fixture = await createDeviceFixture();
+    try {
+      const providerId = await seedSubscriptionProvider(fixture);
+      const connection = await createProviderOAuthDevicePendingConnection({
+        databaseUrl: fixture.databaseUrl,
+        intervalSeconds: 2,
+        pendingCodeChallenge: "challenge",
+        pendingCodeVerifier: "verifier",
+        pendingExpiresAt: new Date(Date.now() + 600_000),
+        pendingState: randomUUID(),
+        providerId,
+        userCode: "RACE-0001",
+        verificationUri: "https://platform.minimax.io/oauth-authorize",
+      });
+      const encryption = createSecretEncryption(encryptionKeySource);
+
+      const first = await completeProviderOAuthConnection({
+        databaseUrl: fixture.databaseUrl,
+        encryptedToken: encryption.encrypt(deviceTokenPlaintext("first-token")),
+        onlyIfPending: true,
+        providerOAuthId: connection.id,
+      });
+      // The row is already completed; a second complete-while-pending is a no-op
+      // that returns the same connection and never overwrites the stored token.
+      const second = await completeProviderOAuthConnection({
+        databaseUrl: fixture.databaseUrl,
+        encryptedToken: encryption.encrypt(deviceTokenPlaintext("second-token")),
+        onlyIfPending: true,
+        providerOAuthId: connection.id,
+      });
+
+      expect(second.id).toBe(first.id);
+      expect(second.providerId).toBe(first.providerId);
+      expect(await readStoredAccessToken(fixture, connection.id)).toBe("first-token");
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it("does not overwrite the token when a concurrent poll completes the connection mid-flight", async () => {
+    const fixture = await createDeviceFixture();
+    try {
+      const providerId = await seedSubscriptionProvider(fixture);
+      const connection = await createProviderOAuthDevicePendingConnection({
+        databaseUrl: fixture.databaseUrl,
+        intervalSeconds: 2,
+        pendingCodeChallenge: "challenge",
+        pendingCodeVerifier: "verifier",
+        pendingExpiresAt: new Date(Date.now() + 600_000),
+        pendingState: randomUUID(),
+        providerId,
+        userCode: "RACE-0002",
+        verificationUri: "https://platform.minimax.io/oauth-authorize",
+      });
+      const encryption = createSecretEncryption(encryptionKeySource);
+
+      // The mock upstream simulates the other tab winning the race: it completes
+      // the connection with the winner's token before this poll receives its own.
+      const fetch = (async () => {
+        await completeProviderOAuthConnection({
+          databaseUrl: fixture.databaseUrl,
+          encryptedToken: encryption.encrypt(deviceTokenPlaintext("winner-token")),
+          onlyIfPending: true,
+          providerOAuthId: connection.id,
+        });
+        return new Response(
+          JSON.stringify({
+            access_token: "loser-token",
+            expired_in: 3600,
+            resource_url: "https://api.minimax.io/anthropic/v1",
+            status: "success",
+          }),
+          { headers: { "content-type": "application/json" }, status: 200 },
+        );
+      }) as typeof globalThis.fetch;
+
+      const result = await pollProviderOAuthDeviceAuthorization({
+        databaseUrl: fixture.databaseUrl,
+        encryptionKeySource,
+        fetch,
+        providerOAuthId: connection.id,
+      });
+
+      // The loser's complete is a guarded no-op; the winner's token stands.
+      expect(result.status).toBe("complete");
+      expect(await readStoredAccessToken(fixture, connection.id)).toBe("winner-token");
+    } finally {
+      await fixture.dispose();
+    }
+  });
 });
+
+function deviceTokenPlaintext(accessToken: string): string {
+  return JSON.stringify({
+    accessToken,
+    expiresAt: null,
+    refreshToken: null,
+    scopes: [],
+    tokenType: "Bearer",
+  });
+}
+
+async function readStoredAccessToken(
+  fixture: Awaited<ReturnType<typeof createDeviceFixture>>,
+  providerOAuthId: string,
+): Promise<string> {
+  const stored = await fixture.query<{ encrypted_token: EncryptedSecret }>(
+    "select encrypted_token from provider_oauth where id = $1",
+    [providerOAuthId],
+  );
+  const secret = stored.rows[0]?.encrypted_token as EncryptedSecret;
+  return (
+    JSON.parse(createSecretEncryption(encryptionKeySource).decrypt(secret)) as {
+      accessToken: string;
+    }
+  ).accessToken;
+}
 
 async function expectDevicePendingColumnsCleared(
   fixture: Awaited<ReturnType<typeof createDeviceFixture>>,

@@ -265,6 +265,13 @@ export async function completeProviderOAuthConnection(input: {
   databaseUrl?: string;
   encryptedToken: Record<string, unknown>;
   label?: string | null;
+  // When true the write only lands while the row is still pending
+  // (completed_at IS NULL); an already-completed row is an idempotent no-op that
+  // returns the existing connection without overwriting its token. The device
+  // poll uses this to close the concurrent double-complete race without holding
+  // a row lock across the upstream HTTP call. The authorization_code path leaves
+  // it unset, keeping its behavior unchanged.
+  onlyIfPending?: boolean;
   priority?: number;
   providerOAuthId: string;
   tokenExpiresAt?: Date | null;
@@ -291,6 +298,7 @@ export async function completeProviderOAuthConnection(input: {
             updated_at = now()
         where id = $1
           and deleted_at is null
+          and (not $8::boolean or completed_at is null)
         returning id::text,
                   provider_id::text,
                   label,
@@ -309,14 +317,46 @@ export async function completeProviderOAuthConnection(input: {
         shouldUpdateLabel ? normalizeProviderOAuthLabel(input.label) : null,
         shouldUpdatePriority,
         shouldUpdatePriority ? normalizeProviderOAuthPriority(input.priority) : null,
+        input.onlyIfPending === true,
       ],
     );
-    const row = requireProviderOAuthRow(result.rows[0]);
-    await clearProviderConnectionHealthWithClient(client, {
-      providerConnectionId: row.id,
-      providerId: row.provider_id,
-    });
-    return toProviderOAuthMetadata(row);
+    const updated = result.rows[0];
+    if (updated) {
+      await clearProviderConnectionHealthWithClient(client, {
+        providerConnectionId: updated.id,
+        providerId: updated.provider_id,
+      });
+      return toProviderOAuthMetadata(updated);
+    }
+    // onlyIfPending guard: the row was already completed by a concurrent writer
+    // (device double-complete race). Idempotent success — return the existing
+    // row without overwriting the stored token or re-clearing health.
+    if (input.onlyIfPending) {
+      const existing = await client.query<ProviderOAuthRow>(
+        `
+          select id::text,
+                 provider_id::text,
+                 label,
+                 priority,
+                 enabled,
+                 token_expires_at,
+                 created_at,
+                 updated_at,
+                 completed_at
+          from provider_oauth
+          where id = $1
+            and deleted_at is null
+            and completed_at is not null
+        `,
+        [input.providerOAuthId],
+      );
+      const existingRow = existing.rows[0];
+      if (existingRow) {
+        return toProviderOAuthMetadata(existingRow);
+      }
+    }
+    // Genuine miss (missing row, or not yet completed) — preserve the original error.
+    return toProviderOAuthMetadata(requireProviderOAuthRow(result.rows[0]));
   });
 }
 

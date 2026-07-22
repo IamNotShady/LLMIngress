@@ -248,6 +248,10 @@ export async function pollProviderOAuthDeviceAuthorization(input: {
   const completed = await completeProviderOAuthConnection({
     databaseUrl: input.databaseUrl,
     encryptedToken,
+    // Two concurrent polls (e.g. two tabs) can both read completed_at IS NULL and
+    // each poll upstream; the conditional write ensures the second is a no-op
+    // rather than overwriting the first token, without locking across the poll.
+    onlyIfPending: true,
     providerOAuthId: pending.id,
     tokenExpiresAt: poll.token.expiresAt === null ? null : new Date(poll.token.expiresAt),
   });

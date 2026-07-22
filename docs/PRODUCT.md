@@ -20,17 +20,20 @@ the selected Provider model and does not log prompts, successful responses, or t
 
 Supported Provider types are API Key, Subscription OAuth, and Local. Current templates are:
 
-- Subscription: OpenAI Codex, Claude Code
+- Subscription: OpenAI Codex, Claude Code, MiniMax Coding Plan
 - API Key: Google Gemini, OpenRouter, DeepSeek, xAI, Qwen, Moonshot/Kimi, MiniMax, Z.ai, GLM Coding Plan, Qwen Token Plan, Kimi Coding Plan
 - Local: Ollama, LM Studio, llama.cpp
 
-The three coding-plan templates are paste-key (`api_key`) providers that connect the same
-way as any API key, but they are distinct from the similarly named base templates by base
-path and/or protocol, so do not confuse them in Console:
+Coding-plan templates come in two shapes. GLM/Qwen/Kimi are paste-key (`api_key`) providers
+that connect the same way as any API key; MiniMax Coding Plan is the one **subscription-type**
+coding plan, authorized through a device/user-code OAuth flow rather than a pasted key — do not
+confuse it with the paste-key coding plans. All of them are distinct from the similarly named
+base templates by base path and/or protocol:
 
 - GLM Coding Plan (`glm_coding`) — OpenAI Chat Completions at `https://api.z.ai/api/coding/paas/v4`, versus Z.ai (`zai`) at `https://api.z.ai/api/paas/v4` (`/coding/` segment differs). Upstream quota is reported (it reuses Z.ai's monitor endpoint).
 - Qwen Token Plan (`qwen_token_plan`) — OpenAI Chat Completions at `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`, versus Qwen (`qwen`) at `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` (different host). No Chat Completions Responses endpoint; upstream quota is not reported.
 - Kimi Coding Plan (`kimi_coding`) — Anthropic Messages protocol with `x-api-key` at `https://api.kimi.com/coding/v1`, versus Moonshot/Kimi (`moonshot`) which is OpenAI Chat Completions at `https://api.moonshot.ai/v1`. Upstream quota is reported from a separate `Bearer`-authenticated usage endpoint.
+- MiniMax Coding Plan (`minimax_coding`) — the subscription-type exception: Anthropic Messages at `https://api.minimax.io/anthropic/v1`, authorized by a device/user-code OAuth flow (show a code, open the verification page, poll to completion). It is distinct from the API Key MiniMax (`minimax`), which is an OpenAI Chat Completions paste-key provider at `https://api.minimax.io/v1` with a `token_plan` quota endpoint; the coding plan uses OAuth and a `coding_plan` quota endpoint.
 
 Console supports Provider lifecycle, multiple API keys, OAuth, model refresh, dependency-protected
 deletion, and connection checks. Model metadata may be merged from Provider APIs, models.dev,

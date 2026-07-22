@@ -10,6 +10,7 @@ import {
   readProviderOAuthPendingConnection,
   readProviderOAuthRuntimeConnection,
 } from "@llmingress/db/providers";
+import { describe, expect, it } from "vitest";
 import {
   pollProviderOAuthUserCodeToken,
   refreshProviderOAuthToken,
@@ -17,16 +18,16 @@ import {
 } from "../../packages/provider/src/oauth";
 import type { EncryptionKeySource } from "../../packages/security/src/encryption-key";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
-import { describe, expect, it } from "vitest";
 
 const CLIENT_ID = "78257093-7e40-4613-99e0-527b14b39113";
 const encryptionKeySource: EncryptionKeySource = { kind: "inline", value: "test-master-key" };
 
 type RecordedRequest = { body: string; url: string };
 
-function recordingFetch(
-  responder: (call: number) => { body: unknown; status?: number },
-): { calls: RecordedRequest[]; fetch: typeof globalThis.fetch } {
+function recordingFetch(responder: (call: number) => { body: unknown; status?: number }): {
+  calls: RecordedRequest[];
+  fetch: typeof globalThis.fetch;
+} {
   const calls: RecordedRequest[] = [];
   const fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     const rawBody = init?.body;
@@ -321,9 +322,7 @@ describe("provider oauth device-code storage", () => {
         providerOAuthId: second.connection.id,
       });
       const decrypted = JSON.parse(
-        createSecretEncryption(encryptionKeySource).decrypt(
-          runtime.encryptedToken as never,
-        ),
+        createSecretEncryption(encryptionKeySource).decrypt(runtime.encryptedToken as never),
       ) as { accessToken: string; resourceUrl?: string };
       expect(decrypted.accessToken).toBe("device-access");
       expect(decrypted.resourceUrl).toBe("https://api.minimax.io/anthropic/v1");

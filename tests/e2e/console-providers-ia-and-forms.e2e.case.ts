@@ -409,7 +409,7 @@ test("device-code provider shows the user code and polls to a completed connecti
 
         const dialog = page.getByRole("dialog", { name: "Connect MiniMax Coding Plan" });
         await expect(dialog).toBeVisible();
-        await expect(dialog.getByLabel("Device authorization code")).toHaveText("WDJB-MJHT");
+        await expect(dialog.getByLabel("Your code")).toHaveText("WDJB-MJHT");
         await expect(dialog.getByRole("link", { name: "Open verification page" })).toHaveAttribute(
           "href",
           "https://platform.minimax.io/oauth-authorize",

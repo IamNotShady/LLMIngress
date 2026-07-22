@@ -16,9 +16,9 @@ import {
 import {
   buildProviderOAuthAuthorizeUrl,
   exchangeProviderOAuthCode,
-  pollProviderOAuthUserCodeToken,
   type ProviderOAuthTokenBlob,
   parseProviderOAuthCallbackInput,
+  pollProviderOAuthUserCodeToken,
   requestProviderOAuthUserCode,
   revokeProviderOAuthToken,
 } from "@llmingress/provider/oauth";

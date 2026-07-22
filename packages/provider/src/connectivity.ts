@@ -188,7 +188,7 @@ export async function checkProviderConnectivity(
   }
 }
 
-function buildProviderConnectivityRequest(input: {
+export function buildProviderConnectivityRequest(input: {
   apiKey?: string | null;
   provider: ConnectivityCheckProvider;
 }): { init: RequestInit; url: string } {

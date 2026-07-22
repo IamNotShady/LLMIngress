@@ -321,6 +321,24 @@ test("Add Provider API Keys group carries the Batch 1 GLM, Qwen, and Kimi paste-
           await page.setViewportSize(viewport);
           expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
         }
+
+        // Creating one of the templates must land on a provider whose
+        // credential section is the api_key paste branch — the "Add API key"
+        // link whose dialog flow is exercised elsewhere in this suite.
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await providerType.selectOption({ label: "Kimi Coding Plan" });
+        await dialog
+          .getByLabel("Provider display name", { exact: true })
+          .fill("Kimi Coding Plan E2E");
+        await dialog.locator("button[type=submit]").click();
+        await expect(page.getByRole("dialog", { name: "Add Provider" })).toHaveCount(0);
+        // Create redirects to the bare /providers list (rows collapsed);
+        // expanding the new row reveals the api_key credential section.
+        await page
+          .locator(".providers-table a.table-row-link", { hasText: "Kimi Coding Plan E2E" })
+          .first()
+          .click();
+        await expect(page.getByRole("link", { name: "Add API key" })).toHaveCount(1);
       } finally {
         await context.close();
       }

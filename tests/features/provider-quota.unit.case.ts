@@ -203,6 +203,35 @@ describe("provider quota parsers", () => {
     expect(parseKimiQuota({ limits: "nope" })).toEqual([]);
   });
 
+  it("covers kimi edge shapes: ms epochs, single-window bodies, and unusable limits", () => {
+    // A millisecond epoch (>= 1e12) is not re-multiplied by 1000.
+    expect(
+      parseKimiQuota({
+        limits: [{ detail: { limit: 100, remaining: 76, resetTime: 1_784_000_000_000 } }],
+      }),
+    ).toEqual([
+      {
+        resetsAt: new Date(1_784_000_000_000).toISOString(),
+        utilization: 0.24,
+        window: "five_hour",
+      },
+    ]);
+
+    // usage-only and limits-only bodies each yield just their own window, and
+    // a missing resetTime omits resetsAt rather than fabricating one.
+    expect(parseKimiQuota({ usage: { limit: 10, remaining: 4 } })).toEqual([
+      { utilization: 0.6, window: "weekly_limit" },
+    ]);
+    expect(parseKimiQuota({ limits: [{ detail: { limit: 10, remaining: 4 } }] })).toEqual([
+      { utilization: 0.6, window: "five_hour" },
+    ]);
+
+    // A non-positive limit or a missing remaining drops the window entirely.
+    expect(
+      parseKimiQuota({ limits: [{ detail: { limit: 0, remaining: 0 } }], usage: { limit: 10 } }),
+    ).toEqual([]);
+  });
+
   it("inverts minimax remaining percentages into utilization", () => {
     const entries = parseMinimaxQuota({
       current_interval_remaining_percent: 61,

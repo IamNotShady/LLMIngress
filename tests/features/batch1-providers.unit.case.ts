@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  defaultEndpointPathByProtocol,
-  providerRegistry,
-} from "../../packages/config/src/provider-registry";
+import { providerRegistry } from "../../packages/config/src/provider-registry";
 import {
   getAnthropicCompatibleProviderTemplate,
   getOpenAICompatibleProviderTemplate,
@@ -12,8 +9,10 @@ import {
   listProviderTemplateSelectorGroups,
 } from "../../packages/db/src/console-provider-templates";
 import { buildAnthropicMessagesUrl } from "../../packages/provider/src/adapters/anthropic";
+import { buildChatCompletionsUrl } from "../../packages/provider/src/adapters/openai";
+import { buildProviderConnectivityRequest } from "../../packages/provider/src/connectivity";
+import { buildProviderModelListRequest } from "../../packages/provider/src/model-list";
 import { quotaProbes, resolveQuotaProbe } from "../../packages/provider/src/quota-probe";
-import { joinUrl } from "../../packages/util/src/index";
 
 // Batch 1 Feature A: GLM Coding Plan (glm_coding) + Qwen Token Plan
 // (qwen_token_plan). Both are OpenAI chat_completions api_key providers that
@@ -66,24 +65,18 @@ describe("batch 1 glm/qwen providers", () => {
   });
 
   it("routes chat_completions egress to base + /chat/completions for both providers", () => {
-    // This mirrors adapters/openai.ts::buildChatCompletionsUrl exactly.
-    const glmUrl = joinUrl(
-      providerRegistry.glm_coding.creation.mode === "template"
-        ? (providerRegistry.glm_coding.creation.baseUrl ?? "")
-        : "",
-      defaultEndpointPathByProtocol.chat_completions,
-    );
-    expect(glmUrl).toBe("https://api.z.ai/api/coding/paas/v4/chat/completions");
-
-    const qwenUrl = joinUrl(
-      providerRegistry.qwen_token_plan.creation.mode === "template"
-        ? (providerRegistry.qwen_token_plan.creation.baseUrl ?? "")
-        : "",
-      defaultEndpointPathByProtocol.chat_completions,
-    );
-    expect(qwenUrl).toBe(
-      "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions",
-    );
+    // Exercises the real adapter URL builder (adapters/openai.ts).
+    for (const [key, expected] of [
+      ["glm_coding", "https://api.z.ai/api/coding/paas/v4/chat/completions"],
+      [
+        "qwen_token_plan",
+        "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions",
+      ],
+    ] as const) {
+      const entry = providerRegistry[key];
+      const baseUrl = entry.creation.mode === "template" ? (entry.creation.baseUrl ?? "") : "";
+      expect(buildChatCompletionsUrl(baseUrl)).toBe(expected);
+    }
   });
 
   it("gives glm_coding a supported quota probe reusing the zai origin probe and none to qwen_token_plan", () => {
@@ -160,6 +153,31 @@ describe("batch 1 kimi coding provider", () => {
         ? (providerRegistry.kimi_coding.creation.baseUrl ?? "")
         : "";
     expect(buildAnthropicMessagesUrl(baseUrl)).toBe("https://api.kimi.com/coding/v1/messages");
+  });
+
+  it("drives model-list and connectivity through the anthropic style end to end", () => {
+    // Composition guard: the registry style fields dispatch the shared
+    // builders into the anthropic shape (x-api-key), not the Bearer default.
+    const modelList = buildProviderModelListRequest({
+      apiKey: "sk-kimi-secret",
+      baseUrl: "https://api.kimi.com/coding/v1",
+      providerKey: "kimi_coding",
+    });
+    expect(modelList.url).toBe("https://api.kimi.com/coding/v1/models");
+    expect(modelList.init.headers).toMatchObject({ "x-api-key": "sk-kimi-secret" });
+
+    const probe = buildProviderConnectivityRequest({
+      apiKey: "sk-kimi-secret",
+      provider: {
+        baseUrl: "https://api.kimi.com/coding/v1",
+        displayName: "Kimi Coding Plan",
+        id: "kimi-connectivity-probe",
+        modelId: "kimi-for-coding",
+        providerKey: "kimi_coding",
+      },
+    });
+    expect(probe.url).toBe("https://api.kimi.com/coding/v1/messages");
+    expect(probe.init.headers).toMatchObject({ "x-api-key": "sk-kimi-secret" });
   });
 
   it("exposes kimi_coding through the whitelisted anthropic-compatible template category (W1)", () => {

@@ -137,7 +137,7 @@ export async function refreshProviderOAuthToken(
   const config = readOAuthConfig(input.providerKey);
   const token = await requestOAuthToken({
     body: {
-      client_id: config.clientId,
+      client_id: resolveOAuthClientId(config),
       grant_type: "refresh_token",
       refresh_token: input.refreshToken,
     },
@@ -182,7 +182,7 @@ export async function requestProviderOAuthUserCode(
   const config = requireDeviceCodeOAuthConfig(input.providerKey);
   const response = await (input.fetch ?? globalThis.fetch)(config.deviceCodeUrl, {
     body: new URLSearchParams({
-      client_id: config.clientId,
+      client_id: resolveOAuthClientId(config),
       code_challenge: input.codeChallenge,
       code_challenge_method: "S256",
       response_type: "code",
@@ -233,7 +233,7 @@ export async function pollProviderOAuthUserCodeToken(
   try {
     response = await (input.fetch ?? globalThis.fetch)(config.tokenUrl, {
       body: new URLSearchParams({
-        client_id: config.clientId,
+        client_id: resolveOAuthClientId(config),
         code_verifier: input.codeVerifier,
         grant_type: "urn:ietf:params:oauth:grant-type:user_code",
         user_code: input.userCode,
@@ -255,8 +255,13 @@ export async function pollProviderOAuthUserCodeToken(
     return { message: readDeviceAuthorizationError(body), status: "error" };
   }
   if (!response.ok) {
+    // Invalid/expired codes come back as a non-2xx with a real OAuth error body
+    // (e.g. 400 invalid_grant); surface that message rather than a bare status.
+    const upstreamMessage = readDeviceAuthorizationErrorMessage(body);
     return {
-      message: `OAuth device authorization failed with status ${response.status}.`,
+      message: upstreamMessage
+        ? `${upstreamMessage} (status ${response.status})`
+        : `OAuth device authorization failed with status ${response.status}.`,
       status: "error",
     };
   }
@@ -272,7 +277,7 @@ export async function pollProviderOAuthUserCodeToken(
   };
 }
 
-function readDeviceAuthorizationError(body: unknown): string {
+function readDeviceAuthorizationErrorMessage(body: unknown): string | null {
   if (isRecord(body)) {
     for (const key of ["error_description", "error", "message"]) {
       const value = body[key];
@@ -281,7 +286,11 @@ function readDeviceAuthorizationError(body: unknown): string {
       }
     }
   }
-  return "OAuth device authorization was rejected.";
+  return null;
+}
+
+function readDeviceAuthorizationError(body: unknown): string {
+  return readDeviceAuthorizationErrorMessage(body) ?? "OAuth device authorization was rejected.";
 }
 
 function parseCallbackUrl(input: string): ProviderOAuthCallbackInput | null {
@@ -417,6 +426,16 @@ function normalizeTokenBody(
       : typeof body.expired_in === "number"
         ? body.expired_in
         : null;
+  // The upstream sends `expired_in` as an absolute epoch-ms deadline, not a
+  // relative lifetime: a value past the absolute/relative threshold (1e10,
+  // matching the device-flow expiry heuristic) is used directly, while a small
+  // value stays a relative-seconds duration.
+  const expiresAt =
+    expiresIn === null || !Number.isFinite(expiresIn) || expiresIn <= 0
+      ? null
+      : expiresIn > 1e10
+        ? Math.floor(expiresIn)
+        : nowMs() + Math.floor(expiresIn * 1000);
   const refreshToken =
     typeof body.refresh_token === "string" && body.refresh_token.trim()
       ? body.refresh_token
@@ -426,10 +445,7 @@ function normalizeTokenBody(
 
   return {
     accessToken: body.access_token,
-    expiresAt:
-      expiresIn === null || !Number.isFinite(expiresIn) || expiresIn <= 0
-        ? null
-        : nowMs() + Math.floor(expiresIn * 1000),
+    expiresAt,
     refreshToken,
     ...(resourceUrl ? { resourceUrl } : {}),
     scopes: typeof body.scope === "string" ? body.scope.split(/\s+/).filter(Boolean) : [],
@@ -495,6 +511,19 @@ function readOAuthConfig(providerKey: SubscriptionProviderKey): ProviderOAuthCon
     throw new Error(`Missing OAuth config for ${providerKey}.`);
   }
   return oauth;
+}
+
+// A non-blank value of the config's clientIdEnvVar overrides the registry
+// clientId at request time, so an operator can register their own client
+// without editing the registry; otherwise the registry clientId is used.
+function resolveOAuthClientId(config: ProviderOAuthConfig): string {
+  if (config.clientIdEnvVar) {
+    const fromEnv = process.env[config.clientIdEnvVar]?.trim();
+    if (fromEnv) {
+      return fromEnv;
+    }
+  }
+  return config.clientId;
 }
 
 function requireAuthorizationCodeOAuthConfig(

@@ -205,6 +205,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
   minimax_coding: {
     behavior: {
       connectivityProbeStyle: "anthropic",
+      metadataKey: "minimax",
       quotaSource: { supported: true },
       subscription: true,
       subscriptionAdapter: "minimax_anthropic",
@@ -219,6 +220,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     modelListEndpoint: modelsEndpoint,
     oauth: {
       clientId: "78257093-7e40-4613-99e0-527b14b39113",
+      clientIdEnvVar: "MINIMAX_OAUTH_CLIENT_ID",
       deviceCodeUrl: "https://api.minimax.io/oauth/code",
       defaultPollIntervalSeconds: 2,
       scope: "group_id profile model.completion",

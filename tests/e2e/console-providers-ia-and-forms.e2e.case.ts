@@ -350,6 +350,173 @@ test("Add Provider API Keys group carries the Batch 1 GLM, Qwen, and Kimi paste-
   }
 });
 
+test("device-code provider shows the user code and polls to a completed connection", async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_console_device_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = randomUUID();
+    await withDedicatedPostgresClient(fixture.databaseUrl, async (client) => {
+      await client.query(
+        `insert into providers (id, provider_type, provider_key, display_name, enabled)
+         values ($1, 'subscription', 'minimax_coding', 'MiniMax Coding Plan', true)`,
+        [providerId],
+      );
+    });
+
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await signInFromFirstRun(page, baseUrl);
+
+        // Drive the device dialog straight from the start-redirect query params
+        // (one-time semantics — no DB re-read). Poll is intercepted so no real
+        // upstream is contacted: first pending, then complete.
+        let pollCount = 0;
+        await page.route("**/api/provider-oauth", async (route) => {
+          pollCount += 1;
+          await route.fulfill({
+            body: JSON.stringify({ status: pollCount >= 2 ? "complete" : "pending" }),
+            contentType: "application/json",
+            status: 200,
+          });
+        });
+
+        const oauthId = randomUUID();
+        const dialogUrl =
+          `${baseUrl}/providers?selected=${providerId}` +
+          `&providerKeyDialog=${providerId}` +
+          `&providerOAuthId=${oauthId}` +
+          `&providerOAuthUserCode=WDJB-MJHT` +
+          `&providerOAuthVerificationUri=${encodeURIComponent("https://platform.minimax.io/oauth-authorize")}` +
+          `&providerOAuthInterval=1`;
+        await page.goto(dialogUrl, { waitUntil: "networkidle" });
+
+        const dialog = page.getByRole("dialog", { name: "Connect MiniMax Coding Plan" });
+        await expect(dialog).toBeVisible();
+        await expect(dialog.getByLabel("Your code")).toHaveText("WDJB-MJHT");
+        await expect(dialog.getByRole("link", { name: "Open verification page" })).toHaveAttribute(
+          "href",
+          "https://platform.minimax.io/oauth-authorize",
+        );
+
+        // The client polls (interval 1s) and, on the second reply, completes.
+        await expect(dialog.getByText(/is connected/)).toBeVisible({ timeout: 15_000 });
+        expect(pollCount).toBeGreaterThanOrEqual(2);
+
+        for (const viewport of [
+          { width: 1280, height: 900 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
+        }
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("device-code dialog surfaces the upstream error message and stops polling", async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_console_device_err_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = randomUUID();
+    await withDedicatedPostgresClient(fixture.databaseUrl, async (client) => {
+      await client.query(
+        `insert into providers (id, provider_type, provider_key, display_name, enabled)
+         values ($1, 'subscription', 'minimax_coding', 'MiniMax Coding Plan', true)`,
+        [providerId],
+      );
+    });
+
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await signInFromFirstRun(page, baseUrl);
+
+        let pollCount = 0;
+        await page.route("**/api/provider-oauth", async (route) => {
+          pollCount += 1;
+          await route.fulfill({
+            body: JSON.stringify({
+              message: "The authorization was denied upstream.",
+              status: "error",
+            }),
+            contentType: "application/json",
+            status: 200,
+          });
+        });
+
+        const oauthId = randomUUID();
+        await page.goto(
+          `${baseUrl}/providers?selected=${providerId}` +
+            `&providerKeyDialog=${providerId}` +
+            `&providerOAuthId=${oauthId}` +
+            `&providerOAuthUserCode=ZZZZ-9999` +
+            `&providerOAuthVerificationUri=${encodeURIComponent("https://platform.minimax.io/oauth-authorize")}` +
+            `&providerOAuthInterval=1`,
+          { waitUntil: "networkidle" },
+        );
+
+        const dialog = page.getByRole("dialog", { name: "Connect MiniMax Coding Plan" });
+        await expect(dialog).toBeVisible();
+        // The concrete upstream message is shown, not a generic fallback.
+        await expect(dialog.getByText("The authorization was denied upstream.")).toBeVisible({
+          timeout: 15_000,
+        });
+
+        // Polling stops after the error (a single poll, no further calls).
+        const seen = pollCount;
+        await page.waitForTimeout(2500);
+        expect(pollCount).toBe(seen);
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 async function addProviderDeleteRaceBlocker(databaseUrl: string, providerId: string) {
   await withDedicatedPostgresClient(databaseUrl, async (client) => {
     const providerModel = await client.query<{ id: string }>(

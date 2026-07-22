@@ -1,6 +1,7 @@
 import { readConsoleEncryptionKeySource } from "@llmingress/db/console-provider-keys";
 import {
   completeProviderOAuthAuthorization,
+  pollProviderOAuthDeviceAuthorization,
   revokeProviderOAuthConnection,
   setProviderOAuthConnectionEnabled,
   setProviderOAuthQuotaProbeEnabled,
@@ -10,7 +11,7 @@ import {
   enqueueProviderConnectionProbeJob,
   enqueueProviderModelRefreshJob,
 } from "@llmingress/db/provider-jobs";
-import type { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { classifyConsoleActionError } from "../_error-classify";
 import { consoleActionErrorResponse } from "../_errors";
@@ -42,6 +43,27 @@ export const POST = withConsoleAuth(async (request) => {
         trigger: "system",
       });
       return redirectToProvider(result.providerId);
+    }
+
+    if (action === "poll") {
+      const result = await pollProviderOAuthDeviceAuthorization({
+        encryptionKeySource: readConsoleEncryptionKeySource(),
+        providerOAuthId: readRequiredText(form, "providerOAuthId"),
+      });
+      if (result.status === "complete" && result.id && result.providerId) {
+        await enqueueProviderConnectionProbeJob({
+          providerConnectionId: result.id,
+          providerId: result.providerId,
+          resetHealth: true,
+          source: "oauth_ready",
+        });
+        await enqueueProviderModelRefreshJob({
+          providerId: result.providerId,
+          source: "oauth_ready",
+          trigger: "system",
+        });
+      }
+      return NextResponse.json({ message: result.message, status: result.status });
     }
 
     if (action === "delete") {
@@ -88,7 +110,13 @@ export const POST = withConsoleAuth(async (request) => {
     });
 
     return redirectToProviderOAuthDialog(request, {
-      authorizeUrl: result.authorizeUrl,
+      ...(result.flowType === "device_code"
+        ? {
+            deviceInterval: result.intervalSeconds,
+            deviceUserCode: result.userCode,
+            deviceVerificationUri: result.verificationUri,
+          }
+        : { authorizeUrl: result.authorizeUrl }),
       label: result.connection.label,
       priority: result.connection.priority,
       providerId: result.connection.providerId,
@@ -127,6 +155,9 @@ function redirectToProviderOAuthDialog(
   request: NextRequest,
   input: {
     authorizeUrl?: string;
+    deviceInterval?: number;
+    deviceUserCode?: string;
+    deviceVerificationUri?: string;
     error?: string;
     errorCode?: string;
     label?: string | null;
@@ -140,6 +171,15 @@ function redirectToProviderOAuthDialog(
   url.searchParams.set("providerKeyDialog", input.providerId);
   if (input.authorizeUrl) {
     url.searchParams.set("providerAuthorizeUrl", input.authorizeUrl);
+  }
+  if (input.deviceUserCode) {
+    url.searchParams.set("providerOAuthUserCode", input.deviceUserCode);
+  }
+  if (input.deviceVerificationUri) {
+    url.searchParams.set("providerOAuthVerificationUri", input.deviceVerificationUri);
+  }
+  if (input.deviceInterval !== undefined) {
+    url.searchParams.set("providerOAuthInterval", String(input.deviceInterval));
   }
   if (input.error) {
     url.searchParams.set("providerOAuthError", input.error);

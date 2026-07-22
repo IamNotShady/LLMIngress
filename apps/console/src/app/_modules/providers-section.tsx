@@ -1,6 +1,7 @@
 import {
   listDirectCreateEntries,
   listProviderRouteEndpointProtocols,
+  providerUsesDeviceCodeOAuth,
 } from "@llmingress/config/provider-registry";
 import { listConsoleProviderHealthSummaries } from "@llmingress/db/console-provider-health";
 import {
@@ -24,6 +25,7 @@ import { FlatIcon } from "../_components/flat-icon";
 import { buildQueryHref } from "../_lib/pagination";
 import { ProviderCreateForm } from "./provider-create-form";
 import { ProviderKeyCreateDialogClient } from "./provider-key-create-dialog-client";
+import { ProviderOAuthDeviceCreateDialog } from "./provider-oauth-device-dialog-client";
 import { ProvidersClientSection } from "./providers-client-section";
 import {
   type ConsoleSearchParams,
@@ -519,6 +521,11 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
   const providerOAuthLabelValue = readSingleSearchParam(searchParams.providerOAuthLabelValue);
   const providerOAuthPriorityValue = readSingleSearchParam(searchParams.providerOAuthPriorityValue);
   const providerAuthorizeUrl = readSingleSearchParam(searchParams.providerAuthorizeUrl);
+  const providerOAuthUserCode = readSingleSearchParam(searchParams.providerOAuthUserCode);
+  const providerOAuthVerificationUri = readSingleSearchParam(
+    searchParams.providerOAuthVerificationUri,
+  );
+  const providerOAuthInterval = readSingleSearchParam(searchParams.providerOAuthInterval);
   const providerKeyDialogCloseHref = buildQueryHref(searchParams, {
     providerKeyDelete: undefined,
     providerKeyDialog: undefined,
@@ -526,8 +533,11 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
     providerAuthorizeUrl: undefined,
     providerOAuthError: undefined,
     providerOAuthId: undefined,
+    providerOAuthInterval: undefined,
     providerOAuthLabelValue: undefined,
     providerOAuthPriorityValue: undefined,
+    providerOAuthUserCode: undefined,
+    providerOAuthVerificationUri: undefined,
   });
   const editDialogProvider =
     providerDialog && providerDialog !== "new"
@@ -585,15 +595,28 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
       ) : null}
       {providerKeyDialog && selectedProvider ? (
         selectedProvider.providerType === "subscription" ? (
-          <ProviderOAuthCreateDialog
-            authorizeUrl={providerAuthorizeUrl}
-            closeHref={providerKeyDialogCloseHref}
-            error={providerOAuthError}
-            labelValue={providerOAuthLabelValue}
-            provider={selectedProvider}
-            providerOAuthId={providerOAuthId}
-            priorityValue={providerOAuthPriorityValue}
-          />
+          providerUsesDeviceCodeOAuth(selectedProvider.providerKey) ? (
+            <ProviderOAuthDeviceCreateDialog
+              closeHref={providerKeyDialogCloseHref}
+              error={providerOAuthError}
+              intervalSeconds={providerOAuthInterval}
+              providerDisplayName={selectedProvider.displayName}
+              providerId={selectedProvider.id}
+              providerOAuthId={providerOAuthId}
+              userCode={providerOAuthUserCode}
+              verificationUri={providerOAuthVerificationUri}
+            />
+          ) : (
+            <ProviderOAuthCreateDialog
+              authorizeUrl={providerAuthorizeUrl}
+              closeHref={providerKeyDialogCloseHref}
+              error={providerOAuthError}
+              labelValue={providerOAuthLabelValue}
+              provider={selectedProvider}
+              providerOAuthId={providerOAuthId}
+              priorityValue={providerOAuthPriorityValue}
+            />
+          )
         ) : (
           <ProviderKeyCreateDialogClient
             closeHref={providerKeyDialogCloseHref}

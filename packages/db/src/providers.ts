@@ -24,10 +24,12 @@ export type ProviderOAuthMetadata = {
 };
 
 export type ProviderOAuthPendingConnection = ProviderOAuthMetadata & {
+  flowType: string;
   pendingCodeChallenge: string | null;
   pendingCodeVerifier: string | null;
   pendingExpiresAt: Date | null;
   pendingState: string | null;
+  pendingUserCode: string | null;
   providerKey: string;
 };
 
@@ -49,10 +51,12 @@ type ProviderOAuthRow = {
 };
 
 type ProviderOAuthPendingRow = ProviderOAuthRow & {
+  flow_type: string;
   pending_code_challenge: string | null;
   pending_code_verifier: string | null;
   pending_expires_at: Date | null;
   pending_state: string | null;
+  pending_user_code: string | null;
   provider_key: string;
 };
 
@@ -140,6 +144,88 @@ export async function createProviderOAuthPendingConnection(input: {
   });
 }
 
+export async function createProviderOAuthDevicePendingConnection(input: {
+  databaseUrl?: string;
+  intervalSeconds: number;
+  label?: string | null;
+  pendingCodeChallenge: string;
+  pendingCodeVerifier: string;
+  pendingExpiresAt: Date;
+  pendingState: string;
+  priority?: number;
+  providerId: string;
+  userCode: string;
+  verificationUri: string;
+}): Promise<ProviderOAuthMetadata> {
+  const rowId = cryptoRandomUUID();
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
+    const result = await client.query<ProviderOAuthRow>(
+      `
+        insert into provider_oauth (
+          id,
+          provider_id,
+          label,
+          priority,
+          pending_state,
+          pending_code_verifier,
+          pending_code_challenge,
+          pending_expires_at,
+          pending_user_code,
+          pending_verification_uri,
+          pending_interval_seconds,
+          flow_type
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'device_code')
+        returning id::text,
+                  provider_id::text,
+                  label,
+                  priority,
+                  enabled,
+                  token_expires_at,
+                  created_at,
+                  updated_at,
+                  completed_at
+      `,
+      [
+        rowId,
+        input.providerId,
+        normalizeProviderOAuthLabel(input.label),
+        normalizeProviderOAuthPriority(input.priority),
+        input.pendingState,
+        input.pendingCodeVerifier,
+        input.pendingCodeChallenge,
+        input.pendingExpiresAt,
+        input.userCode,
+        input.verificationUri,
+        input.intervalSeconds,
+      ],
+    );
+    return toProviderOAuthMetadata(requireProviderOAuthRow(result.rows[0]));
+  });
+}
+
+// Start-time cleanup: a fresh device connection invalidates any earlier,
+// still-pending device attempt for the same provider so orphan rows can't pile
+// up. Completed rows (with a token) and authorization-code rows are untouched.
+export async function deletePendingProviderOAuthDeviceConnections(input: {
+  databaseUrl?: string;
+  providerId: string;
+}): Promise<number> {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
+    const result = await client.query(
+      `
+        delete from provider_oauth
+        where provider_id = $1
+          and flow_type = 'device_code'
+          and completed_at is null
+          and deleted_at is null
+      `,
+      [input.providerId],
+    );
+    return result.rowCount ?? 0;
+  });
+}
+
 export async function readProviderOAuthPendingConnection(input: {
   databaseUrl?: string;
   providerOAuthId: string;
@@ -156,6 +242,8 @@ export async function readProviderOAuthPendingConnection(input: {
                provider_oauth.pending_code_verifier,
                provider_oauth.pending_code_challenge,
                provider_oauth.pending_expires_at,
+               provider_oauth.pending_user_code,
+               provider_oauth.flow_type,
                provider_oauth.token_expires_at,
                provider_oauth.created_at,
                provider_oauth.updated_at,
@@ -177,6 +265,13 @@ export async function completeProviderOAuthConnection(input: {
   databaseUrl?: string;
   encryptedToken: Record<string, unknown>;
   label?: string | null;
+  // When true the write only lands while the row is still pending
+  // (completed_at IS NULL); an already-completed row is an idempotent no-op that
+  // returns the existing connection without overwriting its token. The device
+  // poll uses this to close the concurrent double-complete race without holding
+  // a row lock across the upstream HTTP call. The authorization_code path leaves
+  // it unset, keeping its behavior unchanged.
+  onlyIfPending?: boolean;
   priority?: number;
   providerOAuthId: string;
   tokenExpiresAt?: Date | null;
@@ -196,10 +291,14 @@ export async function completeProviderOAuthConnection(input: {
             pending_code_verifier = null,
             pending_code_challenge = null,
             pending_expires_at = null,
+            pending_user_code = null,
+            pending_verification_uri = null,
+            pending_interval_seconds = null,
             completed_at = coalesce(completed_at, now()),
             updated_at = now()
         where id = $1
           and deleted_at is null
+          and (not $8::boolean or completed_at is null)
         returning id::text,
                   provider_id::text,
                   label,
@@ -218,14 +317,46 @@ export async function completeProviderOAuthConnection(input: {
         shouldUpdateLabel ? normalizeProviderOAuthLabel(input.label) : null,
         shouldUpdatePriority,
         shouldUpdatePriority ? normalizeProviderOAuthPriority(input.priority) : null,
+        input.onlyIfPending === true,
       ],
     );
-    const row = requireProviderOAuthRow(result.rows[0]);
-    await clearProviderConnectionHealthWithClient(client, {
-      providerConnectionId: row.id,
-      providerId: row.provider_id,
-    });
-    return toProviderOAuthMetadata(row);
+    const updated = result.rows[0];
+    if (updated) {
+      await clearProviderConnectionHealthWithClient(client, {
+        providerConnectionId: updated.id,
+        providerId: updated.provider_id,
+      });
+      return toProviderOAuthMetadata(updated);
+    }
+    // onlyIfPending guard: the row was already completed by a concurrent writer
+    // (device double-complete race). Idempotent success — return the existing
+    // row without overwriting the stored token or re-clearing health.
+    if (input.onlyIfPending) {
+      const existing = await client.query<ProviderOAuthRow>(
+        `
+          select id::text,
+                 provider_id::text,
+                 label,
+                 priority,
+                 enabled,
+                 token_expires_at,
+                 created_at,
+                 updated_at,
+                 completed_at
+          from provider_oauth
+          where id = $1
+            and deleted_at is null
+            and completed_at is not null
+        `,
+        [input.providerOAuthId],
+      );
+      const existingRow = existing.rows[0];
+      if (existingRow) {
+        return toProviderOAuthMetadata(existingRow);
+      }
+    }
+    // Genuine miss (missing row, or not yet completed) — preserve the original error.
+    return toProviderOAuthMetadata(requireProviderOAuthRow(result.rows[0]));
   });
 }
 
@@ -328,6 +459,9 @@ export async function deleteProviderOAuthConnection(input: {
             pending_code_verifier = null,
             pending_code_challenge = null,
             pending_expires_at = null,
+            pending_user_code = null,
+            pending_verification_uri = null,
+            pending_interval_seconds = null,
             completed_at = null,
             deleted_at = now(),
             enabled = false,
@@ -441,10 +575,12 @@ function toProviderOAuthPendingConnection(
 ): ProviderOAuthPendingConnection {
   return {
     ...toProviderOAuthMetadata(row),
+    flowType: row.flow_type,
     pendingCodeChallenge: row.pending_code_challenge,
     pendingCodeVerifier: row.pending_code_verifier,
     pendingExpiresAt: row.pending_expires_at ? new Date(row.pending_expires_at) : null,
     pendingState: row.pending_state,
+    pendingUserCode: row.pending_user_code,
     providerKey: row.provider_key,
   };
 }

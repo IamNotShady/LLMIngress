@@ -110,6 +110,11 @@ export async function attachGatewayProviderCredentials(input: {
     return {
       ...candidate,
       apiKey: primaryKey.apiKey,
+      // candidate.baseUrl stays the provider-level base and is only a fallback
+      // anchor: the per-token resource_url (MiniMax subscription) rides on each
+      // key and is applied at the call site via `providerApiKey.baseUrl ??
+      // candidate.baseUrl`, so a bare rotated key resolves to the provider base
+      // rather than inheriting the primary connection's resource_url.
       baseUrl: credential.baseUrl,
       providerConnectionId: primaryKey.providerConnectionId,
       providerApiKeyId: primaryKey.providerApiKeyId,
@@ -314,6 +319,9 @@ async function readProviderCredentials(input: {
         }
         providerCredentials.keys.push({
           apiKey: token.accessToken,
+          // MiniMax returns a per-token resource_url; carry it so egress targets
+          // the token's base rather than the registry base.
+          ...(token.resourceUrl ? { baseUrl: token.resourceUrl } : {}),
           credentialKind: "oauth",
           providerConnectionId: connection.id,
           providerOAuthId: connection.id,
@@ -376,6 +384,13 @@ export async function refreshProviderOAuthTokenWithLock(input: {
       providerKey: input.providerKey,
       refreshToken: current.refreshToken,
     });
+    // A refresh response frequently omits resource_url (MiniMax does); keep the
+    // prior per-token base so egress still targets it after the refresh.
+    const resourceUrl = refreshed.resourceUrl ?? current.resourceUrl ?? null;
+    const persisted: ProviderOAuthTokenBlob = {
+      ...refreshed,
+      ...(resourceUrl ? { resourceUrl } : {}),
+    };
     await client.query(
       `
         update provider_oauth
@@ -386,11 +401,11 @@ export async function refreshProviderOAuthTokenWithLock(input: {
       `,
       [
         input.providerOAuthId,
-        JSON.stringify(input.encryption.encrypt(JSON.stringify(refreshed))),
-        refreshed.expiresAt === null ? null : new Date(refreshed.expiresAt),
+        JSON.stringify(input.encryption.encrypt(JSON.stringify(persisted))),
+        persisted.expiresAt === null ? null : new Date(persisted.expiresAt),
       ],
     );
-    return refreshed;
+    return persisted;
   });
 }
 
@@ -474,6 +489,9 @@ function readProviderOAuthTokenBlob(value: string): ProviderOAuthTokenBlob {
           typeof parsed.refreshToken === "string" && parsed.refreshToken.trim()
             ? parsed.refreshToken
             : null,
+        ...(typeof parsed.resourceUrl === "string" && parsed.resourceUrl.trim()
+          ? { resourceUrl: parsed.resourceUrl }
+          : {}),
         scopes: Array.isArray(parsed.scopes)
           ? parsed.scopes.filter((scope): scope is string => typeof scope === "string")
           : [],

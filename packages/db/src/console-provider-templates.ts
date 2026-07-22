@@ -24,7 +24,7 @@ export type OpenRouterProviderTemplateId = "openrouter";
 export type GoogleProviderTemplateId = "google";
 export type OllamaProviderTemplateId = "ollama";
 export type LocalProviderTemplateId = OllamaProviderTemplateId | "lmstudio" | "llama_cpp";
-export type SubscriptionProviderTemplateId = "claude_code" | "openai_codex";
+export type SubscriptionProviderTemplateId = "claude_code" | "minimax_coding" | "openai_codex";
 export type ProviderTemplateId =
   | OpenAICompatibleProviderTemplateId
   | AnthropicCompatibleProviderTemplateId

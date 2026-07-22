@@ -202,6 +202,32 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "minimax",
     providerType: "api_key",
   },
+  minimax_coding: {
+    behavior: {
+      connectivityProbeStyle: "anthropic",
+      quotaSource: { supported: true },
+      subscription: true,
+      subscriptionAdapter: "minimax_anthropic",
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "subscription",
+      baseUrl: "https://api.minimax.io/anthropic/v1",
+    },
+    displayName: "MiniMax Coding Plan",
+    endpoints: { messages: messagesEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    oauth: {
+      clientId: "78257093-7e40-4613-99e0-527b14b39113",
+      deviceCodeUrl: "https://api.minimax.io/oauth/code",
+      defaultPollIntervalSeconds: 2,
+      scope: "group_id profile model.completion",
+      tokenEncoding: "form",
+      tokenUrl: "https://api.minimax.io/oauth/token",
+    },
+    providerKey: "minimax_coding",
+    providerType: "subscription",
+  },
   moonshot: {
     behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
@@ -390,7 +416,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
 describe("provider metadata registry", () => {
   it("carries every provider entry field-for-field from the donor sources", () => {
     expect(providerRegistry).toEqual(expectedRegistry);
-    expect(Object.keys(providerRegistry)).toHaveLength(18);
+    expect(Object.keys(providerRegistry)).toHaveLength(19);
   });
 
   it("keeps the models catalog out of the routable endpoint face", () => {
@@ -447,7 +473,11 @@ describe("provider metadata registry", () => {
   });
 
   it("lists the subscription providers", () => {
-    expect(listSubscriptionProviderKeys()).toEqual(["claude_code", "openai_codex"]);
+    expect(listSubscriptionProviderKeys()).toEqual([
+      "claude_code",
+      "minimax_coding",
+      "openai_codex",
+    ]);
   });
 
   it("pins the SubscriptionProviderKey type carrier to the registry's subscription flags", () => {
@@ -489,6 +519,7 @@ describe("provider metadata registry", () => {
     expect(listProviderTemplateEntries().map((entry) => entry.providerKey)).toEqual([
       "openai_codex",
       "claude_code",
+      "minimax_coding",
       "google",
       "openrouter",
       "deepseek",

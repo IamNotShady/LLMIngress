@@ -1261,6 +1261,28 @@ body:has(.console-dialog[open]) {
 .console-dialog .provider-create-form + .provider-create-form {
   margin-top: var(--space-md);
 }
+/* ---- provider device-code (OAuth) dialog ---- */
+.provider-oauth-device-code-label {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+.provider-oauth-device-code {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.provider-oauth-device-poll {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.provider-oauth-device-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
 /* ---- shared list pagination ---- */
 .list-pagination {
   display: flex;

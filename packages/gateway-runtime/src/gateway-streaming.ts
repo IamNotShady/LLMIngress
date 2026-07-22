@@ -452,6 +452,9 @@ function buildStreamingAttemptCandidate(input: {
   return {
     ...candidateWithoutKey,
     apiKey: input.providerApiKey.apiKey,
+    // A per-token resource_url (MiniMax subscription) rides on the key, so the
+    // streaming base follows the rotated key rather than the provider base.
+    ...(input.providerApiKey.baseUrl ? { baseUrl: input.providerApiKey.baseUrl } : {}),
     ...(input.providerApiKey.providerApiKeyId
       ? { providerApiKeyId: input.providerApiKey.providerApiKeyId }
       : {}),

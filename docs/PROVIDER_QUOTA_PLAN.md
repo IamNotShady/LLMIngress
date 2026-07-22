@@ -1,6 +1,6 @@
 # Provider Quota — Implementation Plan
 
-Executes `docs/PROVIDER_QUOTA.md`. Read that document first; it is the spec and this file is the
+Executes the local provider quota reference doc. Read that document first; it is the spec and this file is the
 step order. Two features, executed in order. Feature 2 depends on Feature 1.
 
 Work in a worktree branched from `origin/dev`. Follow `AGENTS.md`: write the failing tests for a step

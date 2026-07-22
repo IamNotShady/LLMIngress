@@ -17,6 +17,9 @@ export type OpenAICompatibleProviderTemplateId =
   | "qwen_token_plan"
   | "xai"
   | "zai";
+// Anthropic messages protocol + x-api-key, non-official base (W1). Reserved for
+// extension with future Anthropic-protocol token sources.
+export type AnthropicCompatibleProviderTemplateId = "kimi_coding";
 export type OpenRouterProviderTemplateId = "openrouter";
 export type GoogleProviderTemplateId = "google";
 export type OllamaProviderTemplateId = "ollama";
@@ -24,6 +27,7 @@ export type LocalProviderTemplateId = OllamaProviderTemplateId | "lmstudio" | "l
 export type SubscriptionProviderTemplateId = "claude_code" | "openai_codex";
 export type ProviderTemplateId =
   | OpenAICompatibleProviderTemplateId
+  | AnthropicCompatibleProviderTemplateId
   | OpenRouterProviderTemplateId
   | GoogleProviderTemplateId
   | SubscriptionProviderTemplateId
@@ -54,6 +58,12 @@ export type OpenAICompatibleProviderTemplate = ProviderTemplate & {
   auth: ProviderTemplateAuthBehavior;
   baseUrl: string;
   id: OpenAICompatibleProviderTemplateId;
+  providerType: "api_key";
+};
+export type AnthropicCompatibleProviderTemplate = ProviderTemplate & {
+  auth: ProviderTemplateAuthBehavior;
+  baseUrl: string;
+  id: AnthropicCompatibleProviderTemplateId;
   providerType: "api_key";
 };
 export type OpenRouterProviderTemplate = ProviderTemplate & {
@@ -151,6 +161,10 @@ const openAICompatibleProviderTemplateIds = [
   "glm_coding",
 ] as const satisfies readonly OpenAICompatibleProviderTemplateId[];
 
+const anthropicCompatibleProviderTemplateIds = [
+  "kimi_coding",
+] as const satisfies readonly AnthropicCompatibleProviderTemplateId[];
+
 const providerTemplateGroupOrder = [
   "subscription",
   "remote_api_key",
@@ -175,6 +189,28 @@ export function listOpenAICompatibleProviderTemplates(): OpenAICompatibleProvide
   return openAICompatibleProviderTemplateIds.map(
     (id) => readProviderTemplate(id) as OpenAICompatibleProviderTemplate,
   );
+}
+
+export function listAnthropicCompatibleProviderTemplates(): AnthropicCompatibleProviderTemplate[] {
+  return anthropicCompatibleProviderTemplateIds.map(
+    (id) => readProviderTemplate(id) as AnthropicCompatibleProviderTemplate,
+  );
+}
+
+export function getAnthropicCompatibleProviderTemplate(
+  templateId: string | null | undefined,
+): AnthropicCompatibleProviderTemplate {
+  if (!isAnthropicCompatibleProviderTemplateId(templateId)) {
+    throw providerTemplateValidation("Provider must use a whitelisted provider template.");
+  }
+
+  return readProviderTemplate(templateId) as AnthropicCompatibleProviderTemplate;
+}
+
+export function isAnthropicCompatibleProviderTemplateId(
+  value: string | null | undefined,
+): value is AnthropicCompatibleProviderTemplateId {
+  return isOneOf(anthropicCompatibleProviderTemplateIds, value);
 }
 
 export function listProviderTemplateSelectorGroups(): ProviderTemplateSelectorGroup[] {

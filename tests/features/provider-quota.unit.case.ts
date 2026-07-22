@@ -186,7 +186,7 @@ describe("provider quota parsers", () => {
     });
 
     // utilization is a 0-1 fraction (limit - remaining) / limit, never *100;
-    // window names are the fixed cc-switch literals; resetsAt is an ISO string,
+    // window names are the fixed upstream literals; resetsAt is an ISO string,
     // tolerantly parsed from epoch seconds and a date string alike.
     expect(entries).toEqual([
       {

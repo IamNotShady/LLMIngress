@@ -421,9 +421,8 @@ export function parseMinimaxQuota(body: unknown): QuotaEntry[] {
  * (video and other models are skipped), gates the weekly window on
  * `current_weekly_status === 1` (status 3 means the plan has no weekly cap and
  * its remaining percent is a constant 100), and carries reset epochs in
- * milliseconds. Field names/semantics verified against cc-switch's
- * coding_plan.rs; utilization stays the repo's 0-1 fraction (the inverse of the
- * reported remaining percent), not cc-switch's 0-100 percent.
+ * milliseconds. Utilization stays the repo's 0-1 fraction (the inverse of the
+ * reported remaining percent), never the payload's 0-100 percent scale.
  */
 export function parseMinimaxCodingPlanQuota(body: unknown): QuotaEntry[] {
   if (!isRecord(body)) {
@@ -433,8 +432,8 @@ export function parseMinimaxCodingPlanQuota(body: unknown): QuotaEntry[] {
   // status_code (e.g. an expired/invalid token) must not read as "no quota".
   // Throwing routes it through the shared parsed() catch to the probe_failed
   // path with the upstream status_msg — structurally identical to a non-2xx
-  // failure — so a stale token never renders as empty quota data. cc-switch
-  // exposes no status_code -> auth-class table, so all non-zero codes unify to
+  // failure — so a stale token never renders as empty quota data. No public
+  // status_code -> auth-class mapping exists, so all non-zero codes unify to
   // the generic probe-failure path.
   if (isRecord(body.base_resp)) {
     const statusCode = readNumber(body.base_resp.status_code);
@@ -483,8 +482,8 @@ export function parseMinimaxCodingPlanQuota(body: unknown): QuotaEntry[] {
  * Kimi coding-plan usage (`GET /coding/v1/usages`). Two windows: the first
  * detail-bearing `limits[]` entry is the 5-hour window (extra `limits[]` rows
  * are ignored to avoid duplicate Console rows), and `usage` is the weekly
- * window. utilization is a 0-1 fraction `(limit - remaining) / limit` — the
- * cc-switch reference multiplies by 100; do not copy that. `resetTime` is
+ * window. utilization is a 0-1 fraction `(limit - remaining) / limit`, never
+ * scaled to 0-100. `resetTime` is
  * tolerantly parsed (epoch number or a parseable date string) into an ISO
  * `resetsAt`, matching the repo convention.
  */

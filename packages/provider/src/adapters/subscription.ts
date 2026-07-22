@@ -140,8 +140,9 @@ export function createMiniMaxProviderAdapter(
           {
             body: JSON.stringify({
               ...payload,
-              // MiniMax follows Manifest: inject the subscription identity block
-              // (verbatim withClaudeCodeSystemPrompt), but no HTTP-header
+              // The coding-plan endpoint expects the subscription identity
+              // system block (the same withClaudeCodeSystemPrompt text);
+              // the HTTP headers stay a plain Bearer with no client
               // impersonation.
               system: withClaudeCodeSystemPrompt(payload.system),
             }),

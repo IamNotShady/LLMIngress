@@ -5,8 +5,10 @@ import {
   pollProviderOAuthDeviceAuthorization,
   startProviderOAuthConnection,
 } from "@llmingress/db/console-provider-oauth";
+import { deleteProvider } from "@llmingress/db/console-providers";
 import {
   createProviderOAuthDevicePendingConnection,
+  deleteProviderOAuthConnection,
   readProviderOAuthPendingConnection,
   readProviderOAuthRuntimeConnection,
 } from "@llmingress/db/providers";
@@ -76,6 +78,25 @@ describe("provider oauth device-code engine", () => {
     // www.minimax.io/oauth-authorize 307-redirects to the marketing home page.
     expect(result.verificationUri).toBe("https://platform.minimax.io/oauth-authorize");
     expect(result.intervalSeconds).toBe(5);
+  });
+
+  it("rejects a non-https verification URI so unsafe schemes never reach the Console href", async () => {
+    for (const verificationUri of [
+      "javascript:alert(1)",
+      "http://www.minimax.io/oauth-authorize",
+    ]) {
+      const { fetch } = recordingFetch(() => ({
+        body: { user_code: "X", verification_uri: verificationUri },
+      }));
+      await expect(
+        requestProviderOAuthUserCode({
+          codeChallenge: "c",
+          fetch,
+          providerKey: "minimax_coding",
+          state: "s",
+        }),
+      ).rejects.toThrow(/https/i);
+    }
   });
 
   it("rejects a mismatched device-code response state", async () => {
@@ -226,6 +247,63 @@ describe("provider oauth device-code engine", () => {
     });
     expect(blob.expiresAt).toBe(5000 + 7200 * 1000);
     expect(blob.refreshToken).toBe("refresh-1");
+  });
+
+  it("drops a poll resource_url that is not https on the provider's own host, keeping the token", async () => {
+    // http: (downgrade) and a foreign host are both rejected; the SSRF guard
+    // discards the field but the token exchange still succeeds so egress can
+    // fall back to the registry base.
+    for (const resourceUrl of [
+      "http://api.minimax.io/anthropic/v1",
+      "https://evil.example/anthropic/v1",
+    ]) {
+      const { fetch } = recordingFetch(() => ({
+        body: {
+          access_token: "access-2",
+          expired_in: 3600,
+          resource_url: resourceUrl,
+          status: "success",
+        },
+      }));
+      const result = await pollProviderOAuthUserCodeToken({
+        codeVerifier: "v",
+        fetch,
+        providerKey: "minimax_coding",
+        userCode: "U",
+      });
+      expect(result.status).toBe("success");
+      if (result.status === "success") {
+        expect(result.token.resourceUrl).toBeUndefined();
+        expect(result.token.accessToken).toBe("access-2");
+      }
+    }
+  });
+
+  it("applies the resource_url allowlist on the refresh path (drop out-of-allowlist, keep same-host https)", async () => {
+    const dropped = recordingFetch(() => ({
+      body: { access_token: "r1", expired_in: 7200, resource_url: "https://evil.example/x" },
+    }));
+    const droppedBlob = await refreshProviderOAuthToken({
+      fetch: dropped.fetch,
+      providerKey: "minimax_coding",
+      refreshToken: "r",
+    });
+    expect(droppedBlob.resourceUrl).toBeUndefined();
+    expect(droppedBlob.accessToken).toBe("r1");
+
+    const kept = recordingFetch(() => ({
+      body: {
+        access_token: "r2",
+        expired_in: 7200,
+        resource_url: "https://api.minimax.io/anthropic/v1",
+      },
+    }));
+    const keptBlob = await refreshProviderOAuthToken({
+      fetch: kept.fetch,
+      providerKey: "minimax_coding",
+      refreshToken: "r",
+    });
+    expect(keptBlob.resourceUrl).toBe("https://api.minimax.io/anthropic/v1");
   });
 });
 
@@ -428,7 +506,78 @@ describe("provider oauth device-code storage", () => {
       await fixture.dispose();
     }
   });
+
+  it("clears the device pending columns when a pending connection is deleted", async () => {
+    const fixture = await createDeviceFixture();
+    try {
+      const providerId = await seedSubscriptionProvider(fixture);
+      const connection = await createProviderOAuthDevicePendingConnection({
+        databaseUrl: fixture.databaseUrl,
+        intervalSeconds: 2,
+        pendingCodeChallenge: "challenge",
+        pendingCodeVerifier: "verifier",
+        pendingExpiresAt: new Date(Date.now() + 600_000),
+        pendingState: randomUUID(),
+        providerId,
+        userCode: "DELE-TE00",
+        verificationUri: "https://platform.minimax.io/oauth-authorize",
+      });
+
+      await deleteProviderOAuthConnection({
+        databaseUrl: fixture.databaseUrl,
+        providerOAuthId: connection.id,
+      });
+
+      await expectDevicePendingColumnsCleared(fixture, connection.id);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it("clears the device pending columns when the parent provider is deleted", async () => {
+    const fixture = await createDeviceFixture();
+    try {
+      const providerId = await seedSubscriptionProvider(fixture);
+      const connection = await createProviderOAuthDevicePendingConnection({
+        databaseUrl: fixture.databaseUrl,
+        intervalSeconds: 2,
+        pendingCodeChallenge: "challenge",
+        pendingCodeVerifier: "verifier",
+        pendingExpiresAt: new Date(Date.now() + 600_000),
+        pendingState: randomUUID(),
+        providerId,
+        userCode: "CASC-ADE0",
+        verificationUri: "https://platform.minimax.io/oauth-authorize",
+      });
+
+      await deleteProvider({ databaseUrl: fixture.databaseUrl, id: providerId });
+
+      await expectDevicePendingColumnsCleared(fixture, connection.id);
+    } finally {
+      await fixture.dispose();
+    }
+  });
 });
+
+async function expectDevicePendingColumnsCleared(
+  fixture: Awaited<ReturnType<typeof createDeviceFixture>>,
+  providerOAuthId: string,
+): Promise<void> {
+  const result = await fixture.query<{
+    pending_interval_seconds: number | null;
+    pending_user_code: string | null;
+    pending_verification_uri: string | null;
+  }>(
+    `select pending_user_code, pending_verification_uri, pending_interval_seconds
+     from provider_oauth where id = $1`,
+    [providerOAuthId],
+  );
+  expect(result.rows[0]).toEqual({
+    pending_interval_seconds: null,
+    pending_user_code: null,
+    pending_verification_uri: null,
+  });
+}
 
 async function createDeviceFixture() {
   const fixture = await createTestPostgresFixture({

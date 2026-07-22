@@ -18,7 +18,7 @@ Twelve remote Provider choices exist today: 10 templates plus the two hardcoded 
 (`openai`, `anthropic`) in `apps/console/src/app/_modules/providers-section.tsx`. Local Providers
 have no billing.
 
-Ten can be probed with the credential the Provider already stores.
+Eleven can be probed with the credential the Provider already stores.
 
 | Provider | Value | Endpoint | Fields |
 | --- | --- | --- | --- |
@@ -30,6 +30,7 @@ Ten can be probed with the credential the Provider already stores.
 | `openrouter` | balance | `GET /api/v1/key` | `data.limit_remaining`, `data.limit` |
 | `zai` | usage % | `GET https://api.z.ai/api/monitor/usage/quota/limit` | `data.limits[].percentage` (`0`–`100`), `.nextResetTime` (epoch **milliseconds**) |
 | `minimax` | usage % | `GET https://api.minimax.io/v1/token_plan/remains` | `current_interval_remaining_percent`, `current_weekly_remaining_percent` |
+| `minimax_coding` | usage % | `GET https://api.minimax.io/v1/api/openplatform/coding_plan/remains`, `Authorization: Bearer <oauth token>` (rejects API keys; accepts a Coding Plan subscription OAuth token; origin-derived, not a suffix of the `/anthropic/v1` egress base) | `model_remains[]` where `model_name` is `general`: `current_interval_remaining_percent` (+`end_time`), plus `current_weekly_remaining_percent` (+`weekly_end_time`) only when `current_weekly_status` is `1`; a non-zero `base_resp.status_code` is a probe failure carrying `status_msg` |
 | `glm_coding` | usage % | `GET https://api.z.ai/api/monitor/usage/quota/limit` (origin-derived; reuses the exact `zai` probe function — same URL, base path discarded) | `data.limits[].percentage`, `.nextResetTime` — identical to `zai` |
 | `kimi_coding` | usage % | `GET https://api.kimi.com/coding/v1/usages`, `Authorization: Bearer <api key>`, `Accept: application/json` (Bearer here, unlike the `x-api-key` used for messages egress) | first `limits[].detail.{limit,remaining,resetTime}` → `five_hour`; `usage.{limit,remaining,resetTime}` → `weekly_limit` |
 
@@ -63,8 +64,11 @@ Five cannot, with the stored credential:
   `https://api.z.ai/api/paas/v4` while the quota path is `https://api.z.ai/api/monitor/usage/quota/limit`.
   Derive the origin, not a path join. Every other probe in the table is a suffix of its base URL.
 - **`minimax` returns remaining, not consumed.** `current_interval_remaining_percent` must be
-  inverted. The `coding_plan/remains` path used by some third-party tools is broken — it rejects API
-  keys and demands a browser cookie session — so `token_plan/remains` is the only viable path.
+  inverted. The `coding_plan/remains` path rejects API keys — the Batch 1 conclusion still holds for
+  the API-key `minimax` provider, which probes `token_plan/remains` — but it does accept a Coding
+  Plan subscription's OAuth Bearer token, which is the path the `minimax_coding` subscription
+  provider uses (nested under `model_remains[general]`; a non-zero `base_resp.status_code` is a probe
+  failure, never empty quota).
 - **`moonshot` and `minimax` distinguish key classes.** A platform key and a coding-plan key are not
   interchangeable, and the wrong class silently yields empty or zero quota rather than an error.
   Treat an all-zero result as suspect, not as authoritative.

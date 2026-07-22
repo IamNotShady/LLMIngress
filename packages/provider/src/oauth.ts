@@ -135,7 +135,7 @@ export async function refreshProviderOAuthToken(
   input: RefreshProviderOAuthTokenInput,
 ): Promise<ProviderOAuthTokenBlob> {
   const config = readOAuthConfig(input.providerKey);
-  return requestOAuthToken({
+  const token = await requestOAuthToken({
     body: {
       client_id: config.clientId,
       grant_type: "refresh_token",
@@ -147,6 +147,7 @@ export async function refreshProviderOAuthToken(
     tokenEncoding: config.tokenEncoding,
     tokenUrl: config.tokenUrl,
   });
+  return sanitizeProviderOAuthResourceUrl(token, input.providerKey);
 }
 
 export async function revokeProviderOAuthToken(
@@ -264,7 +265,10 @@ export async function pollProviderOAuthUserCodeToken(
   }
   return {
     status: "success",
-    token: normalizeTokenBody(body, input.nowMs ?? Date.now, null),
+    token: sanitizeProviderOAuthResourceUrl(
+      normalizeTokenBody(body, input.nowMs ?? Date.now, null),
+      input.providerKey,
+    ),
   };
 }
 
@@ -333,6 +337,69 @@ async function requestOAuthToken(input: {
   return normalizeTokenBody(body, input.nowMs ?? Date.now, input.body.refresh_token ?? null);
 }
 
+/**
+ * SSRF guard for the upstream-supplied resource_url: an unknown host or a
+ * non-https scheme captured into the token blob would later steer gateway egress
+ * (and the connectivity/quota probes) to an attacker-chosen origin. Keep the
+ * value only when it is https and its host belongs to this provider's own OAuth
+ * endpoints (tokenUrl/deviceCodeUrl) or its registry creation base — derived
+ * from config, never a hardcoded domain, so the rule stays provider-agnostic.
+ * An out-of-allowlist value is dropped (not an error): the token exchange still
+ * succeeds and egress falls back to the registry base.
+ */
+function sanitizeProviderOAuthResourceUrl(
+  token: ProviderOAuthTokenBlob,
+  providerKey: SubscriptionProviderKey,
+): ProviderOAuthTokenBlob {
+  if (!token.resourceUrl || isAllowedProviderOAuthResourceUrl(token.resourceUrl, providerKey)) {
+    return token;
+  }
+  const { resourceUrl: _dropped, ...rest } = token;
+  return rest;
+}
+
+function isAllowedProviderOAuthResourceUrl(
+  resourceUrl: string,
+  providerKey: SubscriptionProviderKey,
+): boolean {
+  let url: URL;
+  try {
+    url = new URL(resourceUrl);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") {
+    return false;
+  }
+  return providerOAuthAllowedResourceHosts(providerKey).has(url.hostname);
+}
+
+function providerOAuthAllowedResourceHosts(providerKey: SubscriptionProviderKey): Set<string> {
+  const hosts = new Set<string>();
+  const config = readOAuthConfig(providerKey);
+  addProviderOAuthUrlHost(hosts, config.tokenUrl);
+  if ("deviceCodeUrl" in config) {
+    addProviderOAuthUrlHost(hosts, config.deviceCodeUrl);
+  }
+  const creation = resolveProviderRegistryEntry(providerKey)?.creation;
+  if (creation) {
+    addProviderOAuthUrlHost(hosts, "baseUrl" in creation ? creation.baseUrl : undefined);
+    addProviderOAuthUrlHost(hosts, "fixedBaseUrl" in creation ? creation.fixedBaseUrl : undefined);
+  }
+  return hosts;
+}
+
+function addProviderOAuthUrlHost(hosts: Set<string>, url: string | undefined): void {
+  if (!url) {
+    return;
+  }
+  try {
+    hosts.add(new URL(url).hostname);
+  } catch {
+    // A malformed config URL simply contributes no allowed host.
+  }
+}
+
 function normalizeTokenBody(
   body: unknown,
   nowMs: () => number,
@@ -386,19 +453,25 @@ function normalizePollIntervalSeconds(value: unknown, fallbackSeconds: number): 
 // marketing home page; rewrite it to the platform host that renders the code
 // entry page (only for the known /oauth-authorize path).
 function rewriteDeviceVerificationUri(uri: string): string {
+  let url: URL;
   try {
-    const url = new URL(uri);
-    if (url.pathname === "/oauth-authorize") {
-      if (url.hostname === "www.minimax.io") {
-        url.hostname = "platform.minimax.io";
-      } else if (url.hostname === "www.minimaxi.com") {
-        url.hostname = "platform.minimaxi.com";
-      }
-    }
-    return url.toString();
+    url = new URL(uri);
   } catch {
-    return uri;
+    throw new Error("OAuth verification URI is not a valid URL.");
   }
+  // The URI is rendered as a Console link, so reject anything but https up front
+  // (a javascript: or http: scheme must fail the start flow, not reach an href).
+  if (url.protocol !== "https:") {
+    throw new Error("OAuth verification URI must use https.");
+  }
+  if (url.pathname === "/oauth-authorize") {
+    if (url.hostname === "www.minimax.io") {
+      url.hostname = "platform.minimax.io";
+    } else if (url.hostname === "www.minimaxi.com") {
+      url.hostname = "platform.minimaxi.com";
+    }
+  }
+  return url.toString();
 }
 
 async function readJsonBody(response: Response): Promise<unknown> {

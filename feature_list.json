@@ -161,6 +161,24 @@
       "dependencies": ["gateway-protocol-execution", "provider-model-management"],
       "status": "passing",
       "evidence": "2026-07-21: TDD red-to-green. cockatiel 4.0.0 per-connection breaker registry (packages/gateway-runtime/src/gateway-circuit-breaker.ts) — SamplingBreaker error-% window with an exact min-request volume gate, halfOpenSampling trials, onBreak/onReset/onHalfOpen logging; every provider attempt in executeProviderFallbackAttempts is routed through the registry, a BrokenCircuitError becoming a synthetic provider_circuit_open attempt that advances to the next credential; breaker-first connection filtering runs in credential assembly ahead of the provider_health_summary check, whose reads are TTL-cached in memory keyed by databaseUrl (GATEWAY_HEALTH_SUMMARY_CACHE_TTL_MS, default 5s, 0 disables); transient failures (network/timeout/5xx before first byte) retry the same connection via a wrapped cockatiel retry (GATEWAY_PROVIDER_RETRIES, default 2 extra retries after the initial call), which changed the streaming 5xx fallback e2e call-count from 1 to 3; stream connect timeout default 30s → 10s; breaker state is memory-only and resets on process restart; the existing gateway_credential_error probe enqueue is preserved. 12 unit tests across 4 describes (env, registry, fallback integration, credential filtering) and 2 E2E (breaker trips to the fallback provider and recovers through half-open with in-memory filtering; transient provider errors retry the same connection before falling back) passed. pnpm run verify (403 unit + build, EXIT=0) and verify:features (18/18, zero regression) passed. 2026-07-21 boundary/negative backfill: floored GATEWAY_BREAKER_WINDOW_MS at 1000ms (Math.max clamp in gateway-env.ts) so sub-second windows can't round SamplingBreaker's bucket size to zero and void the volume gate; grew the unit suite from 12 to 20 tests (added success-ratio strict-> boundary, half-open single-trial concurrency queuing, real-failure/circuit-open/success chain interleave via a 429 credential-class key, cache TTL=0 bypass, natural TTL expiry refresh, multi-database cache-key isolation, and local + OAuth-subscription open-breaker connection filtering) and the E2E suite from 2 to 3 (streaming requests trip the breaker and are memory-filtered to the fallback). Fresh gates: pnpm run verify EXIT=0, verify:features 18/18 zero regression, breaker E2E 3/3 twice."
+    },
+    {
+      "id": "batch1-glm-qwen-providers",
+      "name": "Batch 1 GLM/Qwen API-Key Providers",
+      "description": "Two OpenAI chat_completions api_key providers join the registry and the Console API Keys template group (paste-key flow, no new dialog): glm_coding (GLM Coding Plan, base https://api.z.ai/api/coding/paas/v4, quotaSource supported reusing the zai origin-based quota probe so the probe URL is https://api.z.ai/api/monitor/usage/quota/limit) and qwen_token_plan (Qwen Token Plan, base https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1, chat_completions only with no responses endpoint, quotaSource not_supported with no probe). Both route chat_completions egress to base + /chat/completions with Bearer auth; neither sets priceSyncSupported; both appear in the API Keys selector group and never overflow at 1280 or 390.",
+      "verification": "TEST_DATABASE_URL=\"postgresql://postgres:llmi-local-db@127.0.0.1:55432/postgres\" pnpm exec vitest run tests/features/provider-metadata-registry.unit.test.ts tests/features/provider-quota.unit.test.ts tests/features/provider-management.unit.test.ts tests/features/batch1-providers.unit.test.ts && TEST_DATABASE_URL=\"postgresql://postgres:llmi-local-db@127.0.0.1:55432/postgres\" pnpm test:e2e tests/e2e/batch1-provider-egress.e2e.spec.ts tests/e2e/console-layout-interactions.e2e.spec.ts --workers=1",
+      "dependencies": ["provider-metadata-registry", "provider-model-management", "provider-quota-probe"],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "batch1-kimi-provider",
+      "name": "Batch 1 Kimi Coding Plan Provider",
+      "description": "kimi_coding (Kimi Coding Plan) joins the registry as the first Anthropic-protocol non-official-base provider: a new anthropic-compatible provider template category (type + whitelist + typed getters), messages egress with x-api-key to base https://api.kimi.com/coding/v1 + /messages, anthropic connectivity/model-list styles, and a new quota probe (GET https://api.kimi.com/coding/v1/usages, five_hour + weekly_limit windows, utilization 0-1, ISO resetsAt). Appears in the API Keys selector group via the paste-key flow and never overflows at 1280 or 390.",
+      "verification": "PENDING — Feature B not yet implemented; belongs to the next segment (W1 + kimi_coding).",
+      "dependencies": ["batch1-glm-qwen-providers", "provider-metadata-registry", "provider-model-management", "provider-quota-probe"],
+      "status": "pending",
+      "evidence": ""
     }
   ]
 }

@@ -80,6 +80,17 @@ export const quotaProbes: Record<string, QuotaProbe> = {
       headers: bearer(input.credential),
       url: joinUrl(input.baseUrl, "token_plan/remains"),
     }),
+  minimax_coding: async (input) =>
+    parsed(input, parseMinimaxCodingPlanQuota, {
+      headers: bearer(input.credential),
+      // The coding-plan quota lives at the api.minimax.io root, not under the
+      // /anthropic/v1 messages base, so derive it from the origin like zai —
+      // a joinUrl against the subscription base would land on the wrong path.
+      url: new URL(
+        "/v1/api/openplatform/coding_plan/remains",
+        new URL(input.baseUrl).origin,
+      ).toString(),
+    }),
   moonshot: async (input) =>
     parsed(input, (body) => parseMoonshotQuota(body, moonshotQuotaCurrency(input.baseUrl)), {
       headers: bearer(input.credential),
@@ -399,6 +410,51 @@ export function parseMinimaxQuota(body: unknown): QuotaEntry[] {
       continue;
     }
     entries.push({ utilization: 1 - remaining / 100, window });
+  }
+  return entries;
+}
+
+/**
+ * MiniMax Coding Plan usage (`GET /v1/api/openplatform/coding_plan/remains`).
+ * Distinct from the api_key `minimax` token_plan probe above: the coding-plan
+ * payload nests the windows inside `model_remains[]` under the `general` model
+ * (video and other models are skipped), gates the weekly window on
+ * `current_weekly_status === 1` (status 3 means the plan has no weekly cap and
+ * its remaining percent is a constant 100), and carries reset epochs in
+ * milliseconds. Field names/semantics verified against cc-switch's
+ * coding_plan.rs; utilization stays the repo's 0-1 fraction (the inverse of the
+ * reported remaining percent), not cc-switch's 0-100 percent.
+ */
+export function parseMinimaxCodingPlanQuota(body: unknown): QuotaEntry[] {
+  if (!isRecord(body) || !Array.isArray(body.model_remains)) {
+    return [];
+  }
+  const general = body.model_remains.find(
+    (item) => isRecord(item) && item.model_name === "general",
+  );
+  if (!isRecord(general)) {
+    return [];
+  }
+  const entries: QuotaEntry[] = [];
+  const interval = readNumber(general.current_interval_remaining_percent);
+  if (interval !== null) {
+    const resetMs = readNumber(general.end_time);
+    entries.push({
+      ...(resetMs === null ? {} : { resetsAt: new Date(resetMs).toISOString() }),
+      utilization: 1 - interval / 100,
+      window: "interval",
+    });
+  }
+  if (readNumber(general.current_weekly_status) === 1) {
+    const weekly = readNumber(general.current_weekly_remaining_percent);
+    if (weekly !== null) {
+      const resetMs = readNumber(general.weekly_end_time);
+      entries.push({
+        ...(resetMs === null ? {} : { resetsAt: new Date(resetMs).toISOString() }),
+        utilization: 1 - weekly / 100,
+        window: "weekly",
+      });
+    }
   }
   return entries;
 }

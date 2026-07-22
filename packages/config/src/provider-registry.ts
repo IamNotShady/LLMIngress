@@ -315,10 +315,10 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
   minimax_coding: {
     behavior: {
       connectivityProbeStyle: "anthropic",
-      // Feature A ships the device-code login closure with no quota probe yet;
-      // the MiniMax Coding Plan quota probe (Feature B) flips this to
-      // { supported: true } in the same commit that adds quotaProbes.minimax_coding.
-      quotaSource: { reason: "not_supported", supported: false },
+      // Feature B ships the MiniMax Coding Plan quota probe
+      // (quotaProbes.minimax_coding → coding_plan/remains); supported is flipped
+      // true in the same commit that adds the probe.
+      quotaSource: { supported: true },
       subscription: true,
       subscriptionAdapter: "minimax_anthropic",
     },

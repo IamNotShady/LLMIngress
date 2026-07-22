@@ -2,12 +2,14 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { providerRegistry } from "../../packages/config/src/provider-registry";
 import { providerQuotaRefreshDelayMs } from "../../packages/db/src/provider-quota";
+import { refreshProviderOAuthToken } from "../../packages/provider/src/oauth";
 import {
   moonshotQuotaCurrency,
   parseClaudeCodeQuota,
   parseCodexQuota,
   parseDeepseekQuota,
   parseKimiQuota,
+  parseMinimaxCodingPlanQuota,
   parseMinimaxQuota,
   parseMoonshotQuota,
   parseOpenAIQuota,
@@ -16,6 +18,7 @@ import {
   quotaProbes,
   resolveQuotaProbe,
 } from "../../packages/provider/src/quota-probe";
+import { isSubscriptionProviderKey } from "../../packages/provider/src/subscription";
 
 type RecordedRequest = { headers: Headers; init: RequestInit; url: string };
 
@@ -46,6 +49,7 @@ const baseUrls = {
   glm_coding: "https://api.z.ai/api/coding/paas/v4",
   kimi_coding: "https://api.kimi.com/coding/v1",
   minimax: "https://api.minimax.io/v1",
+  minimax_coding: "https://api.minimax.io/anthropic/v1",
   moonshot: "https://api.moonshot.ai/v1",
   openai: "https://api.openai.com/v1",
   openai_codex: "https://chatgpt.com/backend-api",
@@ -246,6 +250,62 @@ describe("provider quota parsers", () => {
     expect(weekly && "window" in weekly ? weekly.utilization : null).toBeCloseTo(0, 10);
   });
 
+  it("parses the minimax coding-plan general model, inverting remaining percentages", () => {
+    // The coding_plan/remains payload nests windows under model_remains[general];
+    // video and other models are skipped, remaining percent inverts to a 0-1
+    // utilization, and reset epochs are milliseconds.
+    const entries = parseMinimaxCodingPlanQuota({
+      base_resp: { status_code: 0, status_msg: "success" },
+      model_remains: [
+        {
+          current_interval_remaining_percent: 61,
+          current_weekly_remaining_percent: 40,
+          current_weekly_status: 1,
+          end_time: 1_784_000_000_000,
+          model_name: "general",
+          weekly_end_time: 1_784_500_000_000,
+        },
+        {
+          current_interval_remaining_percent: 5,
+          model_name: "video",
+        },
+      ],
+    });
+
+    expect(entries).toEqual([
+      {
+        resetsAt: new Date(1_784_000_000_000).toISOString(),
+        utilization: 1 - 61 / 100,
+        window: "interval",
+      },
+      {
+        resetsAt: new Date(1_784_500_000_000).toISOString(),
+        utilization: 1 - 40 / 100,
+        window: "weekly",
+      },
+    ]);
+  });
+
+  it("drops the minimax coding-plan weekly window unless current_weekly_status is 1", () => {
+    // status 3 means the plan has no weekly cap (remaining percent pinned at
+    // 100); only the 5-hour interval window is emitted, and a body without a
+    // general model yields nothing rather than throwing.
+    expect(
+      parseMinimaxCodingPlanQuota({
+        model_remains: [
+          {
+            current_interval_remaining_percent: 100,
+            current_weekly_remaining_percent: 100,
+            current_weekly_status: 3,
+            model_name: "general",
+          },
+        ],
+      }),
+    ).toEqual([{ utilization: 0, window: "interval" }]);
+    expect(parseMinimaxCodingPlanQuota({ model_remains: [{ model_name: "video" }] })).toEqual([]);
+    expect(parseMinimaxCodingPlanQuota(null)).toEqual([]);
+  });
+
   it("preserves deepseek decimal strings exactly across every currency", () => {
     const entries = parseDeepseekQuota({
       balance_infos: [
@@ -358,6 +418,14 @@ describe("provider quota probe transport", () => {
         expectedHeaders: { authorization: "Bearer secret-credential" },
         providerKey: "minimax",
         url: "https://api.minimax.io/v1/token_plan/remains",
+      },
+      {
+        body: { model_remains: [] },
+        expectedHeaders: { authorization: "Bearer secret-credential" },
+        providerKey: "minimax_coding",
+        // The coding-plan quota lives at the api.minimax.io root, derived from
+        // the origin — not joined onto the /anthropic/v1 messages base.
+        url: "https://api.minimax.io/v1/api/openplatform/coding_plan/remains",
       },
       {
         body: { limits: [], usage: {} },
@@ -526,6 +594,9 @@ describe("provider quota scheduling and schema", () => {
       "glm_coding",
       "kimi_coding",
       "minimax",
+      // Feature B ships the MiniMax Coding Plan quota probe and flips
+      // quotaSource to { supported: true } alongside quotaProbes.minimax_coding.
+      "minimax_coding",
       "moonshot",
       "openai",
       "openai_codex",
@@ -535,9 +606,6 @@ describe("provider quota scheduling and schema", () => {
     const unsupported: Record<string, "not_supported" | "requires_separate_credential"> = {
       anthropic: "requires_separate_credential",
       google: "not_supported",
-      // Feature A ships minimax_coding without a quota probe; Feature B flips it
-      // to { supported: true } alongside quotaProbes.minimax_coding.
-      minimax_coding: "not_supported",
       qwen: "not_supported",
       qwen_token_plan: "not_supported",
       xai: "requires_separate_credential",
@@ -609,5 +677,51 @@ describe("provider quota scheduling and schema", () => {
     expect(apiKeys).toContain("clearProviderQuotaWithClient");
     expect(oauth).toContain("clearProviderQuotaWithClient");
     expect(providers).toContain("delete from provider_quota_summary where provider_id = $1");
+  });
+});
+
+describe("minimax coding-plan subscription refresh", () => {
+  it("recognizes minimax_coding as a subscription provider so the gateway refresh loop admits it", () => {
+    // gateway-provider-credentials gates OAuth refresh on isSubscriptionProviderKey;
+    // a minimax_coding device token only reaches refreshProviderOAuthTokenWithLock
+    // when this returns true.
+    expect(isSubscriptionProviderKey("minimax_coding")).toBe(true);
+  });
+
+  it("refreshes a minimax_coding device token through the shared path, normalizing expired_in and resource_url", async () => {
+    const nowMs = Date.parse("2026-07-22T00:00:00.000Z");
+    let requestUrl = "";
+    let requestBody = "";
+    const blob = await refreshProviderOAuthToken({
+      fetch: async (url, init) => {
+        requestUrl = String(url);
+        requestBody = String(init?.body);
+        return jsonResponse({
+          access_token: "minimax-access-token",
+          expired_in: 3600,
+          refresh_token: "minimax-refresh-token-2",
+          resource_url: "https://api.minimax.io/anthropic/v1",
+        });
+      },
+      nowMs: () => nowMs,
+      providerKey: "minimax_coding",
+      refreshToken: "minimax-refresh-token",
+    });
+
+    // No MiniMax-specific refresh code exists: the shared path posts the standard
+    // refresh_token grant to the registry token URL.
+    expect(requestUrl).toBe("https://api.minimax.io/oauth/token");
+    expect(requestBody).toContain("grant_type=refresh_token");
+    expect(requestBody).toContain("refresh_token=minimax-refresh-token");
+    // MiniMax's expired_in normalizes to an absolute expiresAt and resource_url
+    // is captured so egress can target the per-token base.
+    expect(blob).toEqual({
+      accessToken: "minimax-access-token",
+      expiresAt: nowMs + 3_600_000,
+      refreshToken: "minimax-refresh-token-2",
+      resourceUrl: "https://api.minimax.io/anthropic/v1",
+      scopes: [],
+      tokenType: "Bearer",
+    });
   });
 });

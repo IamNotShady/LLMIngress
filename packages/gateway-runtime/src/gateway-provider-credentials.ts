@@ -110,9 +110,12 @@ export async function attachGatewayProviderCredentials(input: {
     return {
       ...candidate,
       apiKey: primaryKey.apiKey,
-      // A per-token resource_url (MiniMax subscription) rides on the primary key
-      // and outranks the provider-level base; fallback rotation swaps it per key.
-      baseUrl: primaryKey.baseUrl ?? credential.baseUrl,
+      // candidate.baseUrl stays the provider-level base and is only a fallback
+      // anchor: the per-token resource_url (MiniMax subscription) rides on each
+      // key and is applied at the call site via `providerApiKey.baseUrl ??
+      // candidate.baseUrl`, so a bare rotated key resolves to the provider base
+      // rather than inheriting the primary connection's resource_url.
+      baseUrl: credential.baseUrl,
       providerConnectionId: primaryKey.providerConnectionId,
       providerApiKeyId: primaryKey.providerApiKeyId,
       providerApiKeyPrefix: primaryKey.keyPrefix,
@@ -381,6 +384,13 @@ export async function refreshProviderOAuthTokenWithLock(input: {
       providerKey: input.providerKey,
       refreshToken: current.refreshToken,
     });
+    // A refresh response frequently omits resource_url (MiniMax does); keep the
+    // prior per-token base so egress still targets it after the refresh.
+    const resourceUrl = refreshed.resourceUrl ?? current.resourceUrl ?? null;
+    const persisted: ProviderOAuthTokenBlob = {
+      ...refreshed,
+      ...(resourceUrl ? { resourceUrl } : {}),
+    };
     await client.query(
       `
         update provider_oauth
@@ -391,11 +401,11 @@ export async function refreshProviderOAuthTokenWithLock(input: {
       `,
       [
         input.providerOAuthId,
-        JSON.stringify(input.encryption.encrypt(JSON.stringify(refreshed))),
-        refreshed.expiresAt === null ? null : new Date(refreshed.expiresAt),
+        JSON.stringify(input.encryption.encrypt(JSON.stringify(persisted))),
+        persisted.expiresAt === null ? null : new Date(persisted.expiresAt),
       ],
     );
-    return refreshed;
+    return persisted;
   });
 }
 

@@ -458,6 +458,27 @@ describe("provider quota probe transport", () => {
     }
   });
 
+  it("surfaces a minimax coding-plan base_resp business error as a probe failure, not empty quota", async () => {
+    const recorded: RecordedRequest[] = [];
+    const result = await probeFor("minimax_coding")({
+      baseUrl: baseUrls.minimax_coding,
+      credential: "secret-credential",
+      // HTTP 200 with a non-zero base_resp.status_code is an upstream business
+      // error (e.g. an expired/invalid token), not "no quota" — it must surface
+      // as a probe failure carrying the status_msg, never ok with empty entries.
+      fetch: recordingFetch(recorded, () =>
+        jsonResponse({
+          base_resp: { status_code: 1004, status_msg: "token is expired" },
+          model_remains: [],
+        }),
+      ),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.errorCode).toBe("probe_failed");
+    expect(result.ok ? "" : result.errorMessage).toContain("token is expired");
+  });
+
   it("derives the zai quota URL from the origin rather than joining the base path", async () => {
     const recorded: RecordedRequest[] = [];
     await probeFor("zai")({

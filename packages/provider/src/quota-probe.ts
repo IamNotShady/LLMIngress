@@ -426,7 +426,27 @@ export function parseMinimaxQuota(body: unknown): QuotaEntry[] {
  * reported remaining percent), not cc-switch's 0-100 percent.
  */
 export function parseMinimaxCodingPlanQuota(body: unknown): QuotaEntry[] {
-  if (!isRecord(body) || !Array.isArray(body.model_remains)) {
+  if (!isRecord(body)) {
+    return [];
+  }
+  // A 200 response can still carry a business error in base_resp; a non-zero
+  // status_code (e.g. an expired/invalid token) must not read as "no quota".
+  // Throwing routes it through the shared parsed() catch to the probe_failed
+  // path with the upstream status_msg — structurally identical to a non-2xx
+  // failure — so a stale token never renders as empty quota data. cc-switch
+  // exposes no status_code -> auth-class table, so all non-zero codes unify to
+  // the generic probe-failure path.
+  if (isRecord(body.base_resp)) {
+    const statusCode = readNumber(body.base_resp.status_code);
+    if (statusCode !== null && statusCode !== 0) {
+      const statusMsg =
+        typeof body.base_resp.status_msg === "string" && body.base_resp.status_msg.trim()
+          ? body.base_resp.status_msg
+          : "unknown error";
+      throw new Error(`MiniMax coding_plan error (status_code ${statusCode}): ${statusMsg}`);
+    }
+  }
+  if (!Array.isArray(body.model_remains)) {
     return [];
   }
   const general = body.model_remains.find(

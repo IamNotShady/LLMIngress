@@ -18,7 +18,7 @@ Twelve remote Provider choices exist today: 10 templates plus the two hardcoded 
 (`openai`, `anthropic`) in `apps/console/src/app/_modules/providers-section.tsx`. Local Providers
 have no billing.
 
-Eight can be probed with the credential the Provider already stores.
+Ten can be probed with the credential the Provider already stores.
 
 | Provider | Value | Endpoint | Fields |
 | --- | --- | --- | --- |
@@ -33,7 +33,7 @@ Eight can be probed with the credential the Provider already stores.
 | `glm_coding` | usage % | `GET https://api.z.ai/api/monitor/usage/quota/limit` (origin-derived; reuses the exact `zai` probe function — same URL, base path discarded) | `data.limits[].percentage`, `.nextResetTime` — identical to `zai` |
 | `kimi_coding` | usage % | `GET https://api.kimi.com/coding/v1/usages`, `Authorization: Bearer <api key>`, `Accept: application/json` (Bearer here, unlike the `x-api-key` used for messages egress) | first `limits[].detail.{limit,remaining,resetTime}` → `five_hour`; `usage.{limit,remaining,resetTime}` → `weekly_limit` |
 
-Four cannot, with the stored credential:
+Five cannot, with the stored credential:
 
 | Provider | Reason | `error_code` |
 | --- | --- | --- |

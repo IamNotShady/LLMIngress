@@ -63,8 +63,12 @@ export function ProviderOAuthDeviceCreateDialog({
         }
         const payload = (await response.json().catch(() => ({}))) as {
           error?: string;
+          message?: string;
           status?: string;
         };
+        if (!active) {
+          return;
+        }
         const next = response.ok ? payload.status : "error";
         if (next === "complete") {
           setStatus("complete");
@@ -78,7 +82,9 @@ export function ProviderOAuthDeviceCreateDialog({
         }
         if (next === "error") {
           setStatus("error");
-          setMessage(payload.error ?? "Device authorization failed. Close and try again.");
+          setMessage(
+            payload.message ?? payload.error ?? "Device authorization failed. Close and try again.",
+          );
           return;
         }
         timer = setTimeout(poll, intervalMs);

@@ -63,7 +63,7 @@ export const POST = withConsoleAuth(async (request) => {
           trigger: "system",
         });
       }
-      return NextResponse.json({ status: result.status });
+      return NextResponse.json({ message: result.message, status: result.status });
     }
 
     if (action === "delete") {

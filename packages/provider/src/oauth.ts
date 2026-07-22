@@ -227,20 +227,33 @@ export async function pollProviderOAuthUserCodeToken(
   input: PollProviderOAuthUserCodeTokenInput,
 ): Promise<ProviderOAuthUserCodePollResult> {
   const config = requireDeviceCodeOAuthConfig(input.providerKey);
-  const response = await (input.fetch ?? globalThis.fetch)(config.tokenUrl, {
-    body: new URLSearchParams({
-      client_id: config.clientId,
-      code_verifier: input.codeVerifier,
-      grant_type: "urn:ietf:params:oauth:grant-type:user_code",
-      user_code: input.userCode,
-    }),
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    method: "POST",
-    signal: AbortSignal.timeout(providerOAuthRequestTimeoutMs),
-  });
-  const body = await readJsonBody(response);
+  let response: Response;
+  let body: unknown;
+  try {
+    response = await (input.fetch ?? globalThis.fetch)(config.tokenUrl, {
+      body: new URLSearchParams({
+        client_id: config.clientId,
+        code_verifier: input.codeVerifier,
+        grant_type: "urn:ietf:params:oauth:grant-type:user_code",
+        user_code: input.userCode,
+      }),
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      method: "POST",
+      signal: AbortSignal.timeout(providerOAuthRequestTimeoutMs),
+    });
+    body = await readJsonBody(response);
+  } catch {
+    // A transient network/parse hiccup must not terminate the flow — keep
+    // polling; the caller's pending_expires_at is the real stop condition.
+    return { status: "pending" };
+  }
   const status = isRecord(body) && typeof body.status === "string" ? body.status : null;
-  if (!response.ok || status === "error") {
+  // The MiniMax "error" verdict arrives over HTTP 200, so its message must come
+  // from the response body, never be reported as "failed with status 200".
+  if (status === "error") {
+    return { message: readDeviceAuthorizationError(body), status: "error" };
+  }
+  if (!response.ok) {
     return {
       message: `OAuth device authorization failed with status ${response.status}.`,
       status: "error",
@@ -253,6 +266,18 @@ export async function pollProviderOAuthUserCodeToken(
     status: "success",
     token: normalizeTokenBody(body, input.nowMs ?? Date.now, null),
   };
+}
+
+function readDeviceAuthorizationError(body: unknown): string {
+  if (isRecord(body)) {
+    for (const key of ["error_description", "error", "message"]) {
+      const value = body[key];
+      if (typeof value === "string" && value.trim()) {
+        return value;
+      }
+    }
+  }
+  return "OAuth device authorization was rejected.";
 }
 
 function parseCallbackUrl(input: string): ProviderOAuthCallbackInput | null {

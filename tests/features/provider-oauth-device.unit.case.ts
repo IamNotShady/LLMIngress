@@ -133,17 +133,22 @@ describe("provider oauth device-code engine", () => {
       ).status,
     ).toBe("pending");
 
-    const statusError = recordingFetch(() => ({ body: { status: "error" } }));
-    expect(
-      (
-        await pollProviderOAuthUserCodeToken({
-          codeVerifier: "v",
-          fetch: statusError.fetch,
-          providerKey: "minimax_coding",
-          userCode: "U",
-        })
-      ).status,
-    ).toBe("error");
+    // A body status of "error" arrives over HTTP 200; the message must come
+    // from the response body, never read as "failed with status 200".
+    const statusError = recordingFetch(() => ({
+      body: { error: "authorization was denied", status: "error" },
+    }));
+    const statusErrorResult = await pollProviderOAuthUserCodeToken({
+      codeVerifier: "v",
+      fetch: statusError.fetch,
+      providerKey: "minimax_coding",
+      userCode: "U",
+    });
+    expect(statusErrorResult.status).toBe("error");
+    if (statusErrorResult.status === "error") {
+      expect(statusErrorResult.message).toContain("authorization was denied");
+      expect(statusErrorResult.message).not.toContain("200");
+    }
 
     const httpError = recordingFetch(() => ({ body: "nope", status: 500 }));
     expect(
@@ -156,6 +161,22 @@ describe("provider oauth device-code engine", () => {
         })
       ).status,
     ).toBe("error");
+
+    // A transient network/parse failure keeps polling (bounded by expiry),
+    // rather than terminating the device flow as a hard error.
+    const rejectingFetch = (async () => {
+      throw new Error("network hiccup");
+    }) as typeof globalThis.fetch;
+    expect(
+      (
+        await pollProviderOAuthUserCodeToken({
+          codeVerifier: "v",
+          fetch: rejectingFetch,
+          providerKey: "minimax_coding",
+          userCode: "U",
+        })
+      ).status,
+    ).toBe("pending");
   });
 
   it("normalizes expired_in and captures resource_url on a successful poll", async () => {
@@ -326,6 +347,22 @@ describe("provider oauth device-code storage", () => {
       ) as { accessToken: string; resourceUrl?: string };
       expect(decrypted.accessToken).toBe("device-access");
       expect(decrypted.resourceUrl).toBe("https://api.minimax.io/anthropic/v1");
+
+      // Completion clears every pending column, including the device-only ones.
+      const cleared = await fixture.query<{
+        pending_interval_seconds: number | null;
+        pending_user_code: string | null;
+        pending_verification_uri: string | null;
+      }>(
+        `select pending_user_code, pending_verification_uri, pending_interval_seconds
+         from provider_oauth where id = $1`,
+        [second.connection.id],
+      );
+      expect(cleared.rows[0]).toEqual({
+        pending_interval_seconds: null,
+        pending_user_code: null,
+        pending_verification_uri: null,
+      });
     } finally {
       await fixture.dispose();
     }

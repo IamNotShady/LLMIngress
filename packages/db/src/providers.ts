@@ -284,6 +284,9 @@ export async function completeProviderOAuthConnection(input: {
             pending_code_verifier = null,
             pending_code_challenge = null,
             pending_expires_at = null,
+            pending_user_code = null,
+            pending_verification_uri = null,
+            pending_interval_seconds = null,
             completed_at = coalesce(completed_at, now()),
             updated_at = now()
         where id = $1

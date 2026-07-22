@@ -21,8 +21,16 @@ the selected Provider model and does not log prompts, successful responses, or t
 Supported Provider types are API Key, Subscription OAuth, and Local. Current templates are:
 
 - Subscription: OpenAI Codex, Claude Code
-- API Key: Google Gemini, OpenRouter, DeepSeek, xAI, Qwen, Moonshot/Kimi, MiniMax, Z.ai
+- API Key: Google Gemini, OpenRouter, DeepSeek, xAI, Qwen, Moonshot/Kimi, MiniMax, Z.ai, GLM Coding Plan, Qwen Token Plan, Kimi Coding Plan
 - Local: Ollama, LM Studio, llama.cpp
+
+The three coding-plan templates are paste-key (`api_key`) providers that connect the same
+way as any API key, but they are distinct from the similarly named base templates by base
+path and/or protocol, so do not confuse them in Console:
+
+- GLM Coding Plan (`glm_coding`) — OpenAI Chat Completions at `https://api.z.ai/api/coding/paas/v4`, versus Z.ai (`zai`) at `https://api.z.ai/api/paas/v4` (`/coding/` segment differs). Upstream quota is reported (it reuses Z.ai's monitor endpoint).
+- Qwen Token Plan (`qwen_token_plan`) — OpenAI Chat Completions at `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`, versus Qwen (`qwen`) at `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` (different host). No Chat Completions Responses endpoint; upstream quota is not reported.
+- Kimi Coding Plan (`kimi_coding`) — Anthropic Messages protocol with `x-api-key` at `https://api.kimi.com/coding/v1`, versus Moonshot/Kimi (`moonshot`) which is OpenAI Chat Completions at `https://api.moonshot.ai/v1`. Upstream quota is reported from a separate `Bearer`-authenticated usage endpoint.
 
 Console supports Provider lifecycle, multiple API keys, OAuth, model refresh, dependency-protected
 deletion, and connection checks. Model metadata may be merged from Provider APIs, models.dev,

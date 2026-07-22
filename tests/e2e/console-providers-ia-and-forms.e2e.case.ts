@@ -261,7 +261,7 @@ test("provider create dialog shows registry-derived supported endpoints", async 
   }
 });
 
-test("Add Provider API Keys group carries the Batch 1 GLM and Qwen paste-key templates", async ({
+test("Add Provider API Keys group carries the Batch 1 GLM, Qwen, and Kimi paste-key templates", async ({
   browser,
 }) => {
   test.setTimeout(240_000);
@@ -308,6 +308,11 @@ test("Add Provider API Keys group carries the Batch 1 GLM and Qwen paste-key tem
           "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
         );
         await expect(endpointChips).toHaveText(["Chat Completions"]);
+
+        // Kimi Coding Plan: /coding/v1 base (Anthropic protocol), Messages only.
+        await providerType.selectOption({ label: "Kimi Coding Plan" });
+        await expect(baseUrlField).toHaveValue("https://api.kimi.com/coding/v1");
+        await expect(endpointChips).toHaveText(["Messages"]);
 
         for (const viewport of [
           { width: 1280, height: 900 },

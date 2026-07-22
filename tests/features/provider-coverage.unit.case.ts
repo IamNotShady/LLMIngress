@@ -8,6 +8,7 @@ describe("provider coverage", () => {
     expect(plan.providerScenarios.map((scenario) => scenario.id)).toEqual([
       "openai",
       "anthropic",
+      "kimi_coding",
       "google",
       "openrouter",
       "ollama",
@@ -32,6 +33,12 @@ describe("provider coverage", () => {
         endpoint: "messages",
         providerKey: "anthropic",
         providerTemplateId: null,
+        providerType: "api_key",
+      },
+      {
+        endpoint: "messages",
+        providerKey: "kimi_coding",
+        providerTemplateId: "kimi_coding",
         providerType: "api_key",
       },
       {

@@ -132,6 +132,25 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "glm_coding",
     providerType: "api_key",
   },
+  kimi_coding: {
+    behavior: {
+      connectivityProbeStyle: "anthropic",
+      metadataKey: "moonshot",
+      modelListStyle: "anthropic",
+      quotaSource: { supported: true },
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: { header: "x-api-key", scheme: "" },
+      baseUrl: "https://api.kimi.com/coding/v1",
+    },
+    displayName: "Kimi Coding Plan",
+    endpoints: { messages: messagesEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "kimi_coding",
+    providerType: "api_key",
+  },
   llama_cpp: {
     behavior: { local: true, priceSyncSupported: true },
     creation: {
@@ -371,7 +390,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
 describe("provider metadata registry", () => {
   it("carries every provider entry field-for-field from the donor sources", () => {
     expect(providerRegistry).toEqual(expectedRegistry);
-    expect(Object.keys(providerRegistry)).toHaveLength(17);
+    expect(Object.keys(providerRegistry)).toHaveLength(18);
   });
 
   it("keeps the models catalog out of the routable endpoint face", () => {
@@ -477,6 +496,7 @@ describe("provider metadata registry", () => {
       "qwen",
       "qwen_token_plan",
       "moonshot",
+      "kimi_coding",
       "minimax",
       "zai",
       "glm_coding",

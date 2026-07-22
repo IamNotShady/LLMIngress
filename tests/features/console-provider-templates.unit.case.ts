@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { listProviderTemplateEntries } from "../../packages/config/src/provider-registry";
 import {
+  getAnthropicCompatibleProviderTemplate,
+  isAnthropicCompatibleProviderTemplateId,
   isKnownProviderTemplateKey,
+  listAnthropicCompatibleProviderTemplates,
   listOpenAICompatibleProviderTemplates,
   listProviderTemplateSelectorGroups,
   normalizeProviderTemplateFormInput,
@@ -27,6 +30,7 @@ describe("console provider template registry", () => {
         "qwen",
         "qwen_token_plan",
         "moonshot",
+        "kimi_coding",
         "minimax",
         "zai",
         "glm_coding",
@@ -161,6 +165,52 @@ describe("console provider template registry", () => {
         templateId: "openai_codex",
       }).baseUrl,
     ).toBe("https://example.com/codex");
+  });
+
+  it("registers a whitelisted anthropic-compatible template category for kimi_coding (W1)", () => {
+    const templates = listAnthropicCompatibleProviderTemplates();
+    expect(templates.map((template) => template.id)).toEqual(["kimi_coding"]);
+    expect(templates[0]).toMatchObject({
+      auth: { header: "x-api-key", scheme: "" },
+      baseUrl: "https://api.kimi.com/coding/v1",
+      endpoints: {
+        messages: messagesEndpoint,
+        models: modelsEndpoint,
+      },
+      id: "kimi_coding",
+      providerKey: "kimi_coding",
+      providerType: "api_key",
+    });
+
+    expect(isAnthropicCompatibleProviderTemplateId("kimi_coding")).toBe(true);
+    expect(isAnthropicCompatibleProviderTemplateId("moonshot")).toBe(false);
+    expect(isAnthropicCompatibleProviderTemplateId(null)).toBe(false);
+
+    expect(getAnthropicCompatibleProviderTemplate("kimi_coding").providerKey).toBe("kimi_coding");
+    expect(() => getAnthropicCompatibleProviderTemplate("moonshot")).toThrow(
+      /whitelisted provider template/,
+    );
+
+    // The category is distinct from the OpenAI-compatible list.
+    expect(listOpenAICompatibleProviderTemplates().map((template) => template.id)).not.toContain(
+      "kimi_coding",
+    );
+
+    // The generic create main path handles kimi_coding with no category switch.
+    expect(
+      normalizeProviderTemplateFormInput({
+        baseUrl: "https://api.kimi.com/coding/v1",
+        displayName: "My Kimi",
+        templateId: "kimi_coding",
+      }),
+    ).toMatchObject({
+      baseUrl: "https://api.kimi.com/coding/v1",
+      displayName: "My Kimi",
+      id: "kimi_coding",
+      providerKey: "kimi_coding",
+      providerTemplateId: "kimi_coding",
+      providerType: "api_key",
+    });
   });
 
   it("keeps long-tail OpenAI-compatible list scoped to long-tail providers", () => {

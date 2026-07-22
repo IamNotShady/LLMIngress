@@ -7,6 +7,7 @@ import {
   parseClaudeCodeQuota,
   parseCodexQuota,
   parseDeepseekQuota,
+  parseKimiQuota,
   parseMinimaxQuota,
   parseMoonshotQuota,
   parseOpenAIQuota,
@@ -43,6 +44,7 @@ const baseUrls = {
   claude_code: "https://api.anthropic.com",
   deepseek: "https://api.deepseek.com",
   glm_coding: "https://api.z.ai/api/coding/paas/v4",
+  kimi_coding: "https://api.kimi.com/coding/v1",
   minimax: "https://api.minimax.io/v1",
   moonshot: "https://api.moonshot.ai/v1",
   openai: "https://api.openai.com/v1",
@@ -167,6 +169,38 @@ describe("provider quota parsers", () => {
   it("returns no zai entries for a malformed body instead of throwing", () => {
     expect(parseZaiQuota({ data: { limits: "nope" } })).toEqual([]);
     expect(parseZaiQuota(null)).toEqual([]);
+  });
+
+  it("parses kimi five_hour from the first detailed limit and weekly_limit from usage", () => {
+    const entries = parseKimiQuota({
+      limits: [
+        { detail: { limit: 100, remaining: 76, resetTime: 1_784_000_000 } },
+        // A second detailed limit must be ignored (only the first is taken).
+        { detail: { limit: 100, remaining: 5, resetTime: 1_784_000_000 } },
+      ],
+      usage: { limit: 1000, remaining: 900, resetTime: "2026-07-24T03:00:00Z" },
+    });
+
+    // utilization is a 0-1 fraction (limit - remaining) / limit, never *100;
+    // window names are the fixed cc-switch literals; resetsAt is an ISO string,
+    // tolerantly parsed from epoch seconds and a date string alike.
+    expect(entries).toEqual([
+      {
+        resetsAt: new Date(1_784_000_000_000).toISOString(),
+        utilization: 0.24,
+        window: "five_hour",
+      },
+      {
+        resetsAt: "2026-07-24T03:00:00.000Z",
+        utilization: 0.1,
+        window: "weekly_limit",
+      },
+    ]);
+  });
+
+  it("returns no kimi entries for a malformed body instead of throwing", () => {
+    expect(parseKimiQuota(null)).toEqual([]);
+    expect(parseKimiQuota({ limits: "nope" })).toEqual([]);
   });
 
   it("inverts minimax remaining percentages into utilization", () => {
@@ -295,6 +329,17 @@ describe("provider quota probe transport", () => {
         expectedHeaders: { authorization: "Bearer secret-credential" },
         providerKey: "minimax",
         url: "https://api.minimax.io/v1/token_plan/remains",
+      },
+      {
+        body: { limits: [], usage: {} },
+        expectedHeaders: {
+          accept: "application/json",
+          authorization: "Bearer secret-credential",
+        },
+        providerKey: "kimi_coding",
+        // Bearer to /coding/v1/usages, a different endpoint and auth than the
+        // messages egress (which uses x-api-key).
+        url: "https://api.kimi.com/coding/v1/usages",
       },
     ];
 
@@ -450,6 +495,7 @@ describe("provider quota scheduling and schema", () => {
       "claude_code",
       "deepseek",
       "glm_coding",
+      "kimi_coding",
       "minimax",
       "moonshot",
       "openai",
@@ -468,7 +514,7 @@ describe("provider quota scheduling and schema", () => {
       .filter((entry) => entry.behavior.local !== true)
       .map((entry) => entry.providerKey);
 
-    expect(remoteKeys).toHaveLength(14);
+    expect(remoteKeys).toHaveLength(15);
     expect([...supported, ...Object.keys(unsupported)].sort()).toEqual([...remoteKeys].sort());
 
     for (const key of remoteKeys) {

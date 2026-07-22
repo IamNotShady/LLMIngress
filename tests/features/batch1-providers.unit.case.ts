@@ -4,10 +4,14 @@ import {
   providerRegistry,
 } from "../../packages/config/src/provider-registry";
 import {
+  getAnthropicCompatibleProviderTemplate,
   getOpenAICompatibleProviderTemplate,
+  isAnthropicCompatibleProviderTemplateId,
+  listAnthropicCompatibleProviderTemplates,
   listOpenAICompatibleProviderTemplates,
   listProviderTemplateSelectorGroups,
 } from "../../packages/db/src/console-provider-templates";
+import { buildAnthropicMessagesUrl } from "../../packages/provider/src/adapters/anthropic";
 import { quotaProbes, resolveQuotaProbe } from "../../packages/provider/src/quota-probe";
 import { joinUrl } from "../../packages/util/src/index";
 
@@ -116,5 +120,93 @@ describe("batch 1 glm/qwen providers", () => {
       expect(template?.providerType).toBe("api_key");
       expect(getOpenAICompatibleProviderTemplate(id).providerKey).toBe(id);
     }
+  });
+});
+
+// Batch 1 Feature B: Kimi Coding Plan (kimi_coding). First Anthropic-protocol
+// non-official-base provider — messages + x-api-key egress, a new W1
+// anthropic-compatible template category, and a Bearer quota probe.
+
+describe("batch 1 kimi coding provider", () => {
+  it("registers kimi_coding as an Anthropic messages api_key provider with x-api-key auth", () => {
+    expect(providerRegistry.kimi_coding).toEqual({
+      behavior: {
+        connectivityProbeStyle: "anthropic",
+        metadataKey: "moonshot",
+        modelListStyle: "anthropic",
+        quotaSource: { supported: true },
+      },
+      creation: {
+        mode: "template",
+        selectorGroup: "remote_api_key",
+        auth: { header: "x-api-key", scheme: "" },
+        baseUrl: "https://api.kimi.com/coding/v1",
+      },
+      displayName: "Kimi Coding Plan",
+      endpoints: { messages: { method: "POST", path: "messages" } },
+      modelListEndpoint: { method: "GET", path: "models" },
+      providerKey: "kimi_coding",
+      providerType: "api_key",
+    });
+    // /v1 lives in the base URL; the endpoint path is the shared "messages"
+    // constant, never "v1/messages". No chat_completions face.
+    expect(providerRegistry.kimi_coding.endpoints.messages?.path).toBe("messages");
+    expect(providerRegistry.kimi_coding.endpoints.chat_completions).toBeUndefined();
+  });
+
+  it("resolves the messages egress URL to base + /messages (no /v1 loss)", () => {
+    const baseUrl =
+      providerRegistry.kimi_coding.creation.mode === "template"
+        ? (providerRegistry.kimi_coding.creation.baseUrl ?? "")
+        : "";
+    expect(buildAnthropicMessagesUrl(baseUrl)).toBe("https://api.kimi.com/coding/v1/messages");
+  });
+
+  it("exposes kimi_coding through the whitelisted anthropic-compatible template category (W1)", () => {
+    expect(listAnthropicCompatibleProviderTemplates().map((template) => template.id)).toEqual([
+      "kimi_coding",
+    ]);
+    expect(isAnthropicCompatibleProviderTemplateId("kimi_coding")).toBe(true);
+    expect(isAnthropicCompatibleProviderTemplateId("moonshot")).toBe(false);
+    expect(getAnthropicCompatibleProviderTemplate("kimi_coding").providerKey).toBe("kimi_coding");
+
+    // It appears in the API Keys selector group (paste-key flow), messages only.
+    const apiKeysGroup = listProviderTemplateSelectorGroups().find(
+      (group) => group.id === "remote_api_key",
+    );
+    const kimi = apiKeysGroup?.templates.find((template) => template.id === "kimi_coding");
+    expect(kimi?.baseUrlMode).toBe("user_remote");
+    expect(kimi?.providerType).toBe("api_key");
+    expect(Object.keys(kimi?.endpoints ?? {})).toContain("messages");
+
+    // Not part of the OpenAI-compatible category.
+    expect(listOpenAICompatibleProviderTemplates().map((template) => template.id)).not.toContain(
+      "kimi_coding",
+    );
+  });
+
+  it("gives kimi_coding a supported quota probe hitting /coding/v1/usages with Bearer", async () => {
+    const probe = resolveQuotaProbe("kimi_coding");
+    expect(typeof quotaProbes.kimi_coding).toBe("function");
+    expect(probe).toBe(quotaProbes.kimi_coding);
+
+    const recorded: Array<{ headers: Headers; url: string }> = [];
+    const result = await quotaProbes.kimi_coding({
+      baseUrl: "https://api.kimi.com/coding/v1",
+      credential: "secret-credential",
+      fetch: async (url, init) => {
+        recorded.push({ headers: new Headers(init?.headers), url: String(url) });
+        return new Response(JSON.stringify({ limits: [], usage: {} }), {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        });
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(recorded[0]?.url).toBe("https://api.kimi.com/coding/v1/usages");
+    // Quota auth is Bearer, distinct from the x-api-key used for messages egress.
+    expect(recorded[0]?.headers.get("authorization")).toBe("Bearer secret-credential");
+    expect(recorded[0]?.headers.get("accept")).toBe("application/json");
   });
 });

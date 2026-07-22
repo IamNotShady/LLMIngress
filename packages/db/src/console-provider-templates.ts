@@ -10,9 +10,11 @@ import type { ProviderType } from "./console-providers.ts";
 
 export type OpenAICompatibleProviderTemplateId =
   | "deepseek"
+  | "glm_coding"
   | "minimax"
   | "moonshot"
   | "qwen"
+  | "qwen_token_plan"
   | "xai"
   | "zai";
 export type OpenRouterProviderTemplateId = "openrouter";
@@ -142,9 +144,11 @@ const openAICompatibleProviderTemplateIds = [
   "deepseek",
   "xai",
   "qwen",
+  "qwen_token_plan",
   "moonshot",
   "minimax",
   "zai",
+  "glm_coding",
 ] as const satisfies readonly OpenAICompatibleProviderTemplateId[];
 
 const providerTemplateGroupOrder = [

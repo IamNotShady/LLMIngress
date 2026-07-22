@@ -173,7 +173,13 @@ async function seedRoutes(fixture: Fixture, fakeProviderUrl: string): Promise<vo
 
   await fixture.query(
     "update api_keys set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2",
-    [apiKeyId, seedApiKeyId, apiKey.slice(0, 12), buildGatewayApiKeyHash(apiKey), seededVirtualModelIds[0]],
+    [
+      apiKeyId,
+      seedApiKeyId,
+      apiKey.slice(0, 12),
+      buildGatewayApiKeyHash(apiKey),
+      seededVirtualModelIds[0],
+    ],
   );
   for (const virtualModelId of seededVirtualModelIds) {
     await fixture.query(

@@ -61,6 +61,7 @@ export type KnownProviderKey =
   | "anthropic"
   | "claude_code"
   | "deepseek"
+  | "glm_coding"
   | "google"
   | "llama_cpp"
   | "lmstudio"
@@ -71,6 +72,7 @@ export type KnownProviderKey =
   | "openai_codex"
   | "openrouter"
   | "qwen"
+  | "qwen_token_plan"
   | "xai"
   | "zai";
 
@@ -195,6 +197,23 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     endpoints: { chat_completions: chatCompletionsEndpoint },
     modelListEndpoint: modelsEndpoint,
     providerKey: "google",
+    providerType: "api_key",
+  },
+  glm_coding: {
+    behavior: {
+      metadataKey: "zai",
+      quotaSource: { supported: true },
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.z.ai/api/coding/paas/v4",
+    },
+    displayName: "GLM Coding Plan",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "glm_coding",
     providerType: "api_key",
   },
   llama_cpp: {
@@ -380,6 +399,23 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerKey: "qwen",
     providerType: "api_key",
   },
+  qwen_token_plan: {
+    behavior: {
+      metadataKey: "qwen",
+      quotaSource: { reason: "not_supported", supported: false },
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+    },
+    displayName: "Qwen Token Plan",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "qwen_token_plan",
+    providerType: "api_key",
+  },
   xai: {
     behavior: {
       priceSyncSupported: true,
@@ -429,6 +465,7 @@ const knownProviderKeys: KnownProviderKey[] = [
   "anthropic",
   "claude_code",
   "deepseek",
+  "glm_coding",
   "google",
   "llama_cpp",
   "lmstudio",
@@ -439,6 +476,7 @@ const knownProviderKeys: KnownProviderKey[] = [
   "openai_codex",
   "openrouter",
   "qwen",
+  "qwen_token_plan",
   "xai",
   "zai",
 ];
@@ -453,9 +491,11 @@ const providerTemplateSelectorOrder: KnownProviderKey[] = [
   "deepseek",
   "xai",
   "qwen",
+  "qwen_token_plan",
   "moonshot",
   "minimax",
   "zai",
+  "glm_coding",
   "ollama",
   "lmstudio",
   "llama_cpp",

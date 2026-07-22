@@ -12,6 +12,11 @@ describe("provider descriptors", () => {
       subscription: true,
       subscriptionAdapter: "claude_code",
     });
+    expect(resolveProviderDescriptor("minimax_coding")).toMatchObject({
+      metadataKey: "minimax",
+      subscription: true,
+      subscriptionAdapter: "minimax_anthropic",
+    });
     expect(resolveProviderDescriptor("OpenRouter")).toMatchObject({
       fixedApiKeyBaseUrl: "https://openrouter.ai/api/v1",
       openRouterAttribution: true,

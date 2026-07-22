@@ -205,6 +205,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
   minimax_coding: {
     behavior: {
       connectivityProbeStyle: "anthropic",
+      metadataKey: "minimax",
       quotaSource: { supported: true },
       subscription: true,
       subscriptionAdapter: "minimax_anthropic",

@@ -315,6 +315,9 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
   minimax_coding: {
     behavior: {
       connectivityProbeStyle: "anthropic",
+      // Model metadata (context, prices, capabilities) resolves through the
+      // shared minimax catalog entry, like kimi_coding -> moonshot.
+      metadataKey: "minimax",
       // Feature B ships the MiniMax Coding Plan quota probe
       // (quotaProbes.minimax_coding → coding_plan/remains); supported is flipped
       // true in the same commit that adds the probe.

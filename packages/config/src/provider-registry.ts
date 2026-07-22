@@ -13,6 +13,10 @@ export type ProviderAuthBehavior = { header: string; scheme: string };
 
 type ProviderOAuthConfigShared = {
   clientId: string;
+  // When set, a non-blank value of this environment variable overrides clientId
+  // at request time; otherwise clientId is used. Lets an operator supply their
+  // own registered client without editing the registry.
+  clientIdEnvVar?: string;
   defaultParams?: Record<string, string>;
   revokeUrl?: string;
   scope: string;
@@ -335,6 +339,7 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     modelListEndpoint: modelsEndpoint,
     oauth: {
       clientId: "78257093-7e40-4613-99e0-527b14b39113",
+      clientIdEnvVar: "MINIMAX_OAUTH_CLIENT_ID",
       deviceCodeUrl: "https://api.minimax.io/oauth/code",
       defaultPollIntervalSeconds: 2,
       scope: "group_id profile model.completion",

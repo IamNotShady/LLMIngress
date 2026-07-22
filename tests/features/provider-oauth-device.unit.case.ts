@@ -13,7 +13,7 @@ import {
   readProviderOAuthPendingConnection,
   readProviderOAuthRuntimeConnection,
 } from "@llmingress/db/providers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   pollProviderOAuthUserCodeToken,
   refreshProviderOAuthToken,
@@ -164,6 +164,76 @@ describe("provider oauth device-code engine", () => {
     ).toBe(1);
   });
 
+  it("passes an upstream error body through on a non-2xx poll response", async () => {
+    // An invalid/expired code comes back as HTTP 400 with an OAuth error body;
+    // the message must carry error_description, not a bare "failed with status".
+    const { fetch } = recordingFetch(() => ({
+      body: { error: "invalid_grant", error_description: "invalid or expired code" },
+      status: 400,
+    }));
+    const result = await pollProviderOAuthUserCodeToken({
+      codeVerifier: "v",
+      fetch,
+      providerKey: "minimax_coding",
+      userCode: "U",
+    });
+    expect(result.status).toBe("error");
+    expect(result.status === "error" ? result.message : "").toContain("invalid or expired code");
+  });
+
+  it("uses the MINIMAX_OAUTH_CLIENT_ID env override for client_id across start, poll, and refresh", async () => {
+    vi.stubEnv("MINIMAX_OAUTH_CLIENT_ID", "env-client-id");
+    try {
+      const start = recordingFetch(() => ({
+        body: { user_code: "X", verification_uri: "https://x.test/other" },
+      }));
+      await requestProviderOAuthUserCode({
+        codeChallenge: "c",
+        fetch: start.fetch,
+        providerKey: "minimax_coding",
+        state: "s",
+      });
+      expect(new URLSearchParams(start.calls[0]?.body).get("client_id")).toBe("env-client-id");
+
+      const poll = recordingFetch(() => ({ body: { status: "pending" } }));
+      await pollProviderOAuthUserCodeToken({
+        codeVerifier: "v",
+        fetch: poll.fetch,
+        providerKey: "minimax_coding",
+        userCode: "U",
+      });
+      expect(new URLSearchParams(poll.calls[0]?.body).get("client_id")).toBe("env-client-id");
+
+      const refresh = recordingFetch(() => ({ body: { access_token: "a", expired_in: 3600 } }));
+      await refreshProviderOAuthToken({
+        fetch: refresh.fetch,
+        providerKey: "minimax_coding",
+        refreshToken: "r",
+      });
+      expect(new URLSearchParams(refresh.calls[0]?.body).get("client_id")).toBe("env-client-id");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("falls back to the registry client_id when MINIMAX_OAUTH_CLIENT_ID is blank", async () => {
+    vi.stubEnv("MINIMAX_OAUTH_CLIENT_ID", "   ");
+    try {
+      const start = recordingFetch(() => ({
+        body: { user_code: "X", verification_uri: "https://x.test/other" },
+      }));
+      await requestProviderOAuthUserCode({
+        codeChallenge: "c",
+        fetch: start.fetch,
+        providerKey: "minimax_coding",
+        state: "s",
+      });
+      expect(new URLSearchParams(start.calls[0]?.body).get("client_id")).toBe(CLIENT_ID);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("polls with the user-code grant and judges pending/error/success from the body status", async () => {
     const pending = recordingFetch(() => ({ body: { status: "pending" } }));
     expect(
@@ -283,6 +353,66 @@ describe("provider oauth device-code engine", () => {
     });
     expect(blob.expiresAt).toBe(5000 + 7200 * 1000);
     expect(blob.refreshToken).toBe("refresh-1");
+  });
+
+  it("reads a large expired_in as an absolute epoch-ms deadline, not a relative lifetime, on the poll path", async () => {
+    // The real upstream returns expired_in as an absolute epoch-ms timestamp;
+    // treating it as relative seconds pushed token_expires_at into the year
+    // 59581. A value past the 1e10 threshold is used directly as expiresAt.
+    const absolute = recordingFetch(() => ({
+      body: { access_token: "a", expired_in: 1784729084463, status: "success" },
+    }));
+    const absResult = await pollProviderOAuthUserCodeToken({
+      codeVerifier: "v",
+      fetch: absolute.fetch,
+      nowMs: () => 1000,
+      providerKey: "minimax_coding",
+      userCode: "U",
+    });
+    expect(absResult.status === "success" ? absResult.token.expiresAt : null).toBe(1784729084463);
+
+    // A small value is still a relative-seconds lifetime.
+    const relative = recordingFetch(() => ({
+      body: { access_token: "a", expired_in: 900, status: "success" },
+    }));
+    const relResult = await pollProviderOAuthUserCodeToken({
+      codeVerifier: "v",
+      fetch: relative.fetch,
+      nowMs: () => 1000,
+      providerKey: "minimax_coding",
+      userCode: "U",
+    });
+    expect(relResult.status === "success" ? relResult.token.expiresAt : null).toBe(1000 + 900_000);
+  });
+
+  it("reads a large expired_in as an absolute epoch-ms deadline on the refresh path", async () => {
+    const absolute = recordingFetch(() => ({
+      body: { access_token: "a", expired_in: 1784729084463 },
+    }));
+    expect(
+      (
+        await refreshProviderOAuthToken({
+          fetch: absolute.fetch,
+          nowMs: () => 1000,
+          providerKey: "minimax_coding",
+          refreshToken: "r",
+        })
+      ).expiresAt,
+    ).toBe(1784729084463);
+
+    const relative = recordingFetch(() => ({
+      body: { access_token: "a", expired_in: 900 },
+    }));
+    expect(
+      (
+        await refreshProviderOAuthToken({
+          fetch: relative.fetch,
+          nowMs: () => 1000,
+          providerKey: "minimax_coding",
+          refreshToken: "r",
+        })
+      ).expiresAt,
+    ).toBe(1000 + 900_000);
   });
 
   it("drops a poll resource_url that is not https on the provider's own host, keeping the token", async () => {

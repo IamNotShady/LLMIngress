@@ -127,7 +127,10 @@ export function ProviderOAuthDeviceCreateDialog({
         </div>
       ) : hasPending ? (
         <div className="provider-create-form provider-oauth-device-form">
-          <p>Open the verification page and enter this code to authorize the connection.</p>
+          <p>
+            Open the verification page, confirm it shows the code below, then authorize the
+            connection.
+          </p>
           <span className="provider-oauth-device-code-label" id="provider-oauth-device-code-label">
             Your code
           </span>

@@ -474,6 +474,9 @@ function readProviderOAuthTokenBlob(value: string): ProviderOAuthTokenBlob {
           typeof parsed.refreshToken === "string" && parsed.refreshToken.trim()
             ? parsed.refreshToken
             : null,
+        ...(typeof parsed.resourceUrl === "string" && parsed.resourceUrl.trim()
+          ? { resourceUrl: parsed.resourceUrl }
+          : {}),
         scopes: Array.isArray(parsed.scopes)
           ? parsed.scopes.filter((scope): scope is string => typeof scope === "string")
           : [],

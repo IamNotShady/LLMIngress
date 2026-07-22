@@ -11,17 +11,38 @@ export type ProviderEndpoint = { method: "GET" | "POST"; path: string };
 export type ProviderType = "api_key" | "local" | "subscription";
 export type ProviderAuthBehavior = { header: string; scheme: string };
 
-export type ProviderOAuthConfig = {
-  authorizeUrl: string;
+type ProviderOAuthConfigShared = {
   clientId: string;
   defaultParams?: Record<string, string>;
-  redirectUri: string;
   revokeUrl?: string;
   scope: string;
   tokenEncoding: "form" | "json";
   tokenHeaders?: Record<string, string>;
   tokenUrl: string;
 };
+
+/** Standard authorization-code + PKCE flow (redirect, paste back the code). */
+export type AuthorizationCodeProviderOAuthConfig = ProviderOAuthConfigShared & {
+  authorizeUrl: string;
+  redirectUri: string;
+  deviceCodeUrl?: never;
+  defaultPollIntervalSeconds?: never;
+};
+
+/** User-code + PKCE + polling flow (no redirect URI, no browser callback). */
+export type DeviceCodeProviderOAuthConfig = ProviderOAuthConfigShared & {
+  authorizeUrl?: never;
+  redirectUri?: never;
+  deviceCodeUrl: string;
+  defaultPollIntervalSeconds?: number;
+};
+
+// Discriminated by field presence (`"authorizeUrl" in config` /
+// `"deviceCodeUrl" in config`), so authorization-code entries carry no `kind`
+// tag and their registry snapshots stay byte-identical.
+export type ProviderOAuthConfig =
+  | AuthorizationCodeProviderOAuthConfig
+  | DeviceCodeProviderOAuthConfig;
 
 export type ProviderModelListStyle =
   | "anthropic"
@@ -30,7 +51,7 @@ export type ProviderModelListStyle =
   | "lmstudio"
   | "openrouter";
 export type ProviderConnectivityProbeStyle = "anthropic" | "claude_code" | "codex";
-export type ProviderSubscriptionAdapter = "claude_code" | "codex";
+export type ProviderSubscriptionAdapter = "claude_code" | "codex" | "minimax_anthropic";
 
 /**
  * Whether Worker should schedule an upstream quota probe for this provider.
@@ -67,6 +88,7 @@ export type KnownProviderKey =
   | "llama_cpp"
   | "lmstudio"
   | "minimax"
+  | "minimax_coding"
   | "moonshot"
   | "ollama"
   | "openai"
@@ -83,7 +105,7 @@ export type KnownProviderKey =
  * entries' `behavior.subscription` flags so the type and the registry data
  * cannot drift apart.
  */
-export const subscriptionProviderKeys = ["claude_code", "openai_codex"] as const;
+export const subscriptionProviderKeys = ["claude_code", "minimax_coding", "openai_codex"] as const;
 export type SubscriptionProviderKey = (typeof subscriptionProviderKeys)[number];
 
 export type ProviderRegistryEntry = {
@@ -290,6 +312,35 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerKey: "minimax",
     providerType: "api_key",
   },
+  minimax_coding: {
+    behavior: {
+      connectivityProbeStyle: "anthropic",
+      // Feature A ships the device-code login closure with no quota probe yet;
+      // the MiniMax Coding Plan quota probe (Feature B) flips this to
+      // { supported: true } in the same commit that adds quotaProbes.minimax_coding.
+      quotaSource: { reason: "not_supported", supported: false },
+      subscription: true,
+      subscriptionAdapter: "minimax_anthropic",
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "subscription",
+      baseUrl: "https://api.minimax.io/anthropic/v1",
+    },
+    displayName: "MiniMax Coding Plan",
+    endpoints: { messages: messagesEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    oauth: {
+      clientId: "78257093-7e40-4613-99e0-527b14b39113",
+      deviceCodeUrl: "https://api.minimax.io/oauth/code",
+      defaultPollIntervalSeconds: 2,
+      scope: "group_id profile model.completion",
+      tokenEncoding: "form",
+      tokenUrl: "https://api.minimax.io/oauth/token",
+    },
+    providerKey: "minimax_coding",
+    providerType: "subscription",
+  },
   moonshot: {
     behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
@@ -494,6 +545,7 @@ const knownProviderKeys: KnownProviderKey[] = [
   "llama_cpp",
   "lmstudio",
   "minimax",
+  "minimax_coding",
   "moonshot",
   "ollama",
   "openai",
@@ -510,6 +562,7 @@ const knownProviderKeys: KnownProviderKey[] = [
 const providerTemplateSelectorOrder: KnownProviderKey[] = [
   "openai_codex",
   "claude_code",
+  "minimax_coding",
   "google",
   "openrouter",
   "deepseek",
@@ -559,6 +612,12 @@ export function providerSupportsRouteEndpointProtocol(
 
 export function listSubscriptionProviderKeys(): KnownProviderKey[] {
   return knownProviderKeys.filter((key) => providerRegistry[key].behavior.subscription === true);
+}
+
+/** True when the provider's OAuth config is the device/user-code + polling flow. */
+export function providerUsesDeviceCodeOAuth(providerKey: string | null | undefined): boolean {
+  const oauth = resolveProviderRegistryEntry(providerKey)?.oauth;
+  return Boolean(oauth && "deviceCodeUrl" in oauth && oauth.deviceCodeUrl);
 }
 
 export function listPriceSyncSupportedProviderKeys(): KnownProviderKey[] {

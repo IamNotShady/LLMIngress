@@ -535,6 +535,9 @@ describe("provider quota scheduling and schema", () => {
     const unsupported: Record<string, "not_supported" | "requires_separate_credential"> = {
       anthropic: "requires_separate_credential",
       google: "not_supported",
+      // Feature A ships minimax_coding without a quota probe; Feature B flips it
+      // to { supported: true } alongside quotaProbes.minimax_coding.
+      minimax_coding: "not_supported",
       qwen: "not_supported",
       qwen_token_plan: "not_supported",
       xai: "requires_separate_credential",
@@ -543,7 +546,7 @@ describe("provider quota scheduling and schema", () => {
       .filter((entry) => entry.behavior.local !== true)
       .map((entry) => entry.providerKey);
 
-    expect(remoteKeys).toHaveLength(15);
+    expect(remoteKeys).toHaveLength(16);
     expect([...supported, ...Object.keys(unsupported)].sort()).toEqual([...remoteKeys].sort());
 
     for (const key of remoteKeys) {

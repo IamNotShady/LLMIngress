@@ -82,6 +82,11 @@ describe("provider coverage", () => {
         id: "qwen",
       },
       {
+        baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+        displayName: "Qwen Token Plan",
+        id: "qwen_token_plan",
+      },
+      {
         baseUrl: "https://api.moonshot.ai/v1",
         displayName: "Moonshot/Kimi",
         id: "moonshot",
@@ -95,6 +100,11 @@ describe("provider coverage", () => {
         baseUrl: "https://api.z.ai/api/paas/v4",
         displayName: "Z.ai",
         id: "zai",
+      },
+      {
+        baseUrl: "https://api.z.ai/api/coding/paas/v4",
+        displayName: "GLM Coding Plan",
+        id: "glm_coding",
       },
     ]);
   });

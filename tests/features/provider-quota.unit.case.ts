@@ -42,6 +42,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 const baseUrls = {
   claude_code: "https://api.anthropic.com",
   deepseek: "https://api.deepseek.com",
+  glm_coding: "https://api.z.ai/api/coding/paas/v4",
   minimax: "https://api.minimax.io/v1",
   moonshot: "https://api.moonshot.ai/v1",
   openai: "https://api.openai.com/v1",
@@ -327,6 +328,23 @@ describe("provider quota probe transport", () => {
     expect(recorded[0]?.url).not.toContain("/paas/");
   });
 
+  it("reuses the zai probe for glm_coding and derives the same origin-based URL", async () => {
+    // glm_coding shares the api.z.ai origin, so the plan reuses the exact zai
+    // probe function reference; the base path (/coding/paas/v4) is discarded.
+    expect(quotaProbes.glm_coding).toBe(quotaProbes.zai);
+
+    const recorded: RecordedRequest[] = [];
+    const result = await probeFor("glm_coding")({
+      baseUrl: baseUrls.glm_coding,
+      credential: "secret-credential",
+      fetch: recordingFetch(recorded, () => jsonResponse({ data: { limits: [] } })),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(recorded[0]?.url).toBe("https://api.z.ai/api/monitor/usage/quota/limit");
+    expect(recorded[0]?.url).not.toContain("/coding/");
+  });
+
   it("retries zai with the raw token when the Bearer attempt is rejected", async () => {
     const recorded: RecordedRequest[] = [];
     const result = await probeFor("zai")({
@@ -431,6 +449,7 @@ describe("provider quota scheduling and schema", () => {
     const supported = [
       "claude_code",
       "deepseek",
+      "glm_coding",
       "minimax",
       "moonshot",
       "openai",
@@ -442,13 +461,14 @@ describe("provider quota scheduling and schema", () => {
       anthropic: "requires_separate_credential",
       google: "not_supported",
       qwen: "not_supported",
+      qwen_token_plan: "not_supported",
       xai: "requires_separate_credential",
     };
     const remoteKeys = Object.values(providerRegistry)
       .filter((entry) => entry.behavior.local !== true)
       .map((entry) => entry.providerKey);
 
-    expect(remoteKeys).toHaveLength(12);
+    expect(remoteKeys).toHaveLength(14);
     expect([...supported, ...Object.keys(unsupported)].sort()).toEqual([...remoteKeys].sort());
 
     for (const key of remoteKeys) {

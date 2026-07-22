@@ -115,6 +115,23 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "google",
     providerType: "api_key",
   },
+  glm_coding: {
+    behavior: {
+      metadataKey: "zai",
+      quotaSource: { supported: true },
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.z.ai/api/coding/paas/v4",
+    },
+    displayName: "GLM Coding Plan",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "glm_coding",
+    providerType: "api_key",
+  },
   llama_cpp: {
     behavior: { local: true, priceSyncSupported: true },
     creation: {
@@ -298,6 +315,23 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "qwen",
     providerType: "api_key",
   },
+  qwen_token_plan: {
+    behavior: {
+      metadataKey: "qwen",
+      quotaSource: { reason: "not_supported", supported: false },
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+    },
+    displayName: "Qwen Token Plan",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "qwen_token_plan",
+    providerType: "api_key",
+  },
   xai: {
     behavior: {
       priceSyncSupported: true,
@@ -337,7 +371,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
 describe("provider metadata registry", () => {
   it("carries every provider entry field-for-field from the donor sources", () => {
     expect(providerRegistry).toEqual(expectedRegistry);
-    expect(Object.keys(providerRegistry)).toHaveLength(15);
+    expect(Object.keys(providerRegistry)).toHaveLength(17);
   });
 
   it("keeps the models catalog out of the routable endpoint face", () => {
@@ -441,9 +475,11 @@ describe("provider metadata registry", () => {
       "deepseek",
       "xai",
       "qwen",
+      "qwen_token_plan",
       "moonshot",
       "minimax",
       "zai",
+      "glm_coding",
       "ollama",
       "lmstudio",
       "llama_cpp",

@@ -19,7 +19,18 @@ describe("console provider template registry", () => {
     expect(groups.map((group) => group.id)).toEqual(["subscription", "remote_api_key", "local"]);
     expect(groups.map((group) => group.templates.map((template) => template.id))).toEqual([
       ["openai_codex", "claude_code"],
-      ["google", "openrouter", "deepseek", "xai", "qwen", "moonshot", "minimax", "zai"],
+      [
+        "google",
+        "openrouter",
+        "deepseek",
+        "xai",
+        "qwen",
+        "qwen_token_plan",
+        "moonshot",
+        "minimax",
+        "zai",
+        "glm_coding",
+      ],
       ["ollama", "lmstudio", "llama_cpp"],
     ]);
 
@@ -159,9 +170,11 @@ describe("console provider template registry", () => {
       "deepseek",
       "xai",
       "qwen",
+      "qwen_token_plan",
       "moonshot",
       "minimax",
       "zai",
+      "glm_coding",
     ]);
     for (const template of templates) {
       expect(template.endpoints).toEqual({

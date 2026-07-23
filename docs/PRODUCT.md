@@ -21,7 +21,7 @@ the selected Provider model and does not log prompts, successful responses, or t
 Supported Provider types are API Key, Subscription OAuth, and Local. Current templates are:
 
 - Subscription: OpenAI Codex, Claude Code, MiniMax Coding Plan
-- API Key: Google Gemini, OpenRouter, DeepSeek, xAI, Qwen, Moonshot/Kimi, MiniMax, Z.ai, GLM Coding Plan, Qwen Token Plan, Kimi Coding Plan, Command Code, ClinePass, BytePlus ModelArk, NousResearch
+- API Key: Google Gemini, OpenRouter, DeepSeek, xAI, Qwen, Moonshot/Kimi, MiniMax, Z.ai, GLM Coding Plan, Qwen Token Plan, Kimi Coding Plan, Command Code, ClinePass, BytePlus ModelArk, NousResearch, Groq, Cerebras, Fireworks AI, Mistral, NVIDIA NIM, Xiaomi MiMo, Ollama Cloud
 - Local: Ollama, LM Studio, llama.cpp
 
 Coding-plan templates come in two shapes. GLM/Qwen/Kimi/Command Code/ClinePass/BytePlus ModelArk
@@ -37,9 +37,19 @@ base templates by base path and/or protocol:
 - Kimi Coding Plan (`kimi_coding`) — Anthropic Messages protocol with `x-api-key` at `https://api.kimi.com/coding/v1`, versus Moonshot/Kimi (`moonshot`) which is OpenAI Chat Completions at `https://api.moonshot.ai/v1`. Upstream quota is reported from a separate `Bearer`-authenticated usage endpoint.
 - MiniMax Coding Plan (`minimax_coding`) — the subscription-type exception: Anthropic Messages at `https://api.minimax.io/anthropic/v1`, authorized by a device/user-code OAuth flow (show a code, open the verification page, poll to completion). It is distinct from the API Key MiniMax (`minimax`), which is an OpenAI Chat Completions paste-key provider at `https://api.minimax.io/v1` with a `token_plan` quota endpoint; the coding plan uses OAuth and a `coding_plan` quota endpoint.
 - Command Code (`command_code`) — the first paste-key provider with two routable faces from one base at `https://api.commandcode.ai/provider/v1`: OpenAI Chat Completions with a `Bearer` key, and Anthropic Messages where the upstream authenticates with a bare `x-api-key` and an `anthropic-version` header. Model discovery and connectivity use the default `Bearer` Chat Completions path. Upstream quota is not reported. Keys are typically the `user_` prefix; the prefix is not validated.
-- ClinePass (`cline_pass`) — OpenAI Chat Completions at `https://api.cline.bot/api/v1` with a `Bearer` key. Upstream quota is not reported. Keys are typically the `sk_` prefix; the prefix is not validated.
+- ClinePass (`cline_pass`) — OpenAI Chat Completions at `https://api.cline.bot/api/v1` with a `Bearer` key. Upstream quota is not reported. Keys are typically the `sk_` prefix; the prefix is not validated. Prices sync automatically from its catalog section (the channel's own resale prices).
 - BytePlus ModelArk (`byteplus_coding`) — OpenAI Chat Completions at `https://ark.ap-southeast.bytepluses.com/api/coding/v3` with a `Bearer` key. It carries the `_coding` suffix but is paste-key (`api_key`), unlike the subscription `minimax_coding`. It is pinned Chat Completions only; the upstream Anthropic-protocol endpoint sits under a different base path segment and is out of scope. Upstream quota is not reported.
 - NousResearch (`nous`) — OpenAI Chat Completions at `https://inference-api.nousresearch.com/v1` with a `Bearer` key. Upstream quota is not reported.
+
+Batch 4 adds seven pay-as-you-go inference clouds, all pure OpenAI Chat Completions paste-key (`api_key`) providers with a `Bearer` key and default connectivity/model discovery. Six sync prices automatically from models.dev; `ollama_cloud` does not (it is subscription-billed and carries no per-token price). Upstream quota is not reported for any of them.
+
+- Groq (`groq`) — OpenAI Chat Completions at `https://api.groq.com/openai/v1`. Keys are typically the `gsk_` prefix; the prefix is not validated. Prices sync automatically.
+- Cerebras (`cerebras`) — OpenAI Chat Completions at `https://api.cerebras.ai/v1`. No fixed key prefix. Prices sync automatically.
+- Fireworks AI (`fireworks`) — OpenAI Chat Completions at `https://api.fireworks.ai/inference/v1`. Keys are typically the `fw_` prefix; the prefix is not validated. Prices sync automatically (models.dev names the section `fireworks-ai`, aliased to `fireworks`).
+- Mistral (`mistral`) — OpenAI Chat Completions at `https://api.mistral.ai/v1`. No fixed key prefix. Prices sync automatically. Its Admin usage/spend API exists but is Enterprise-only and needs a separate Admin credential, so upstream quota is treated as requires-separate-credential (not reported).
+- NVIDIA NIM (`nvidia`) — OpenAI Chat Completions at `https://integrate.api.nvidia.com/v1`. Keys are typically the `nvapi-` prefix; the prefix is not validated. Prices sync automatically.
+- Xiaomi MiMo (`xiaomi`) — OpenAI Chat Completions at `https://api.xiaomimimo.com/v1`. Keys are typically the `sk-` prefix; the prefix is not validated. Prices sync automatically.
+- Ollama Cloud (`ollama_cloud`) — OpenAI Chat Completions at `https://ollama.com/v1` with any key format. It is a distinct remote `api_key` provider, independent from the Local `ollama` daemon (different provider type and base handling). It is subscription-billed, so prices are not synced (its catalog section carries no per-token cost).
 
 Console supports Provider lifecycle, multiple API keys, OAuth, model refresh, dependency-protected
 deletion, and connection checks. Model metadata may be merged from Provider APIs, models.dev,

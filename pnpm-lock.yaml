@@ -215,6 +215,9 @@ importers:
       '@llmingress/domain':
         specifier: workspace:*
         version: link:../domain
+      '@llmingress/logging':
+        specifier: workspace:*
+        version: link:../logging
       '@llmingress/util':
         specifier: workspace:*
         version: link:../util

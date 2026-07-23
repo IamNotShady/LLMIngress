@@ -6,7 +6,10 @@ import {
   normalizeModelOutputModalities,
   type SyncedModelCapabilities,
 } from "@llmingress/domain";
+import { createLogger } from "@llmingress/logging";
 import { listPriceSyncSupportedProviderKeys } from "@llmingress/provider/descriptor";
+
+const logger = createLogger("provider");
 
 export const MODELS_DEV_PRICE_SOURCE_URL = "https://models.dev/api.json";
 export const LITELLM_PRICE_SOURCE_URL =
@@ -949,6 +952,10 @@ export async function cachedFetchJson(
       if (existing?.hasPayload) {
         // Keep the stale payload and its timestamp so the next refresh round retries.
         catalogCache.set(url, { ...existing, inflight: null });
+        logger.warn(
+          { err: error, url },
+          "model catalog source fetch failed; serving stale payload",
+        );
         return existing.payload;
       }
       catalogCache.delete(url);

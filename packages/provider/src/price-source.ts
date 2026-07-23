@@ -607,14 +607,17 @@ function crossCatalogCandidates(
       continue;
     }
     candidates.add(trimmed);
-    const stripped = stripProviderModelPrefix(value, {
-      providerKey: scopeKey,
-      sourceProviderKey: value.split("/")[0] ?? scopeKey,
-    })
-      .trim()
-      .toLowerCase();
-    if (stripped) {
-      candidates.add(stripped);
+    // Only a prefixed id has a distinct stripped form; without a "/" the strip is a no-op.
+    if (value.includes("/")) {
+      const stripped = stripProviderModelPrefix(value, {
+        providerKey: scopeKey,
+        sourceProviderKey: value.split("/")[0] ?? scopeKey,
+      })
+        .trim()
+        .toLowerCase();
+      if (stripped) {
+        candidates.add(stripped);
+      }
     }
   }
   return [...candidates];
@@ -897,7 +900,9 @@ export function resetProviderModelCatalogCacheForTests(): void {
   catalogCache.clear();
 }
 
-function readModelCatalogCacheTtlMs(env: NodeJS.ProcessEnv = process.env): number {
+// Exported so the worker can validate the setting once at startup and fail fast on a bad value,
+// instead of letting cachedFetchJson throw at runtime where Promise.allSettled would swallow it.
+export function readModelCatalogCacheTtlMs(env: NodeJS.ProcessEnv = process.env): number {
   return readNonNegativeIntegerEnvValue(
     env.WORKER_MODEL_CATALOG_CACHE_TTL_MS,
     defaultModelCatalogCacheTtlMs,

@@ -79,11 +79,19 @@ test("cross-catalog metadata fallback fills a multi-vendor bundle provider", asy
 
     const native = await readRow(fixture, "qwen3-max");
     expect(native.context_window).toBe(262144);
+    // Provider-scoped resolution leaves no provenance markers.
+    expect(native.capability_metadata).not.toHaveProperty("resolvedVia");
+    expect(native.capability_metadata).not.toHaveProperty("resolvedFromCatalog");
 
     // Core assertion: the foreign id resolves via cross-catalog tier-1 fallback.
     const foreign = await readRow(fixture, "deepseek-v4-pro");
     expect(foreign.context_window).toBe(131072);
     expect(foreign.input_modalities).toEqual(["text", "image"]);
+    // Cross-catalog resolution stamps provenance into capability_metadata.
+    expect(foreign.capability_metadata).toMatchObject({
+      resolvedFromCatalog: "deepseek",
+      resolvedVia: "cross-catalog",
+    });
 
     // Conflicting id stays Unknown rather than guessing.
     const conflict = await readRow(fixture, "glm-5.2-conflict");
@@ -94,6 +102,7 @@ test("cross-catalog metadata fallback fills a multi-vendor bundle provider", asy
 });
 
 type MetadataRow = {
+  capability_metadata: Record<string, unknown>;
   context_window: number | null;
   id: string;
   input_modalities: string[] | null;
@@ -105,7 +114,7 @@ async function readRow(
 ): Promise<MetadataRow> {
   const result = await fixture.query<MetadataRow>(
     `
-      select id::text, context_window, input_modalities
+      select id::text, context_window, input_modalities, capability_metadata
       from provider_models
       where model_id = $1
     `,

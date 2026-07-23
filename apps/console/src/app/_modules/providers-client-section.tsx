@@ -476,7 +476,9 @@ export function ProvidersClientSection({
                       <td>
                         <span className="model-id-cell">
                           <strong>{model.modelDisplayName}</strong>
-                          <small className="mono">{model.modelId}</small>
+                          {model.modelId !== model.modelDisplayName ? (
+                            <small className="mono">{model.modelId}</small>
+                          ) : null}
                         </span>
                       </td>
                       <td>{formatModelContext(model.contextWindow)}</td>

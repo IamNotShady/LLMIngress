@@ -40,7 +40,9 @@ async function seedIaData(databaseUrl: string) {
           randomUUID(),
           providerId,
           i === 0 ? "ia-needle-model" : `ia-model-${String(i).padStart(3, "0")}`,
-          i === 0 ? "IA Needle Model" : `IA Model ${i}`,
+          // Row 1 mirrors real catalogs where the display name IS the model id,
+          // pinning the single-line rendering of the model-id cell.
+          i === 0 ? "IA Needle Model" : i === 1 ? "ia-model-001" : `IA Model ${i}`,
         ],
       );
     }
@@ -129,6 +131,24 @@ test("providers page shows one provider representation with a searchable capped 
         await expect(libraryRows.first()).toContainText("ia-needle-model");
         expect(new URL(page.url()).searchParams.get("modelQuery")).toBe("ia-needle");
         expect(hydrationErrors).toEqual([]);
+
+        // The mono id line renders only when it differs from the display name:
+        // ia-model-001's display name IS its id, so its cell is a single line.
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-model-001`, {
+          waitUntil: "networkidle",
+        });
+        await expect(libraryRows).toHaveCount(1);
+        const sameNameCell = libraryRows.first().locator(".model-id-cell");
+        await expect(sameNameCell.locator("strong")).toHaveText("ia-model-001");
+        await expect(sameNameCell.locator("small")).toHaveCount(0);
+        // A distinct display name keeps the mono id line.
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-model-002`, {
+          waitUntil: "networkidle",
+        });
+        await expect(libraryRows).toHaveCount(1);
+        await expect(libraryRows.first().locator(".model-id-cell small")).toHaveText(
+          "ia-model-002",
+        );
 
         // The page no longer balloons to thousands of pixels.
         const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
@@ -350,7 +370,7 @@ test("Add Provider API Keys group carries the Batch 1 GLM, Qwen, and Kimi paste-
   }
 });
 
-test("device-code provider shows the user code and polls to a completed connection", async ({
+test("device-code provider shows the user code and polls to complete; the authorization-code dialog links out without printing the URL", async ({
   browser,
 }) => {
   test.setTimeout(240_000);
@@ -425,6 +445,40 @@ test("device-code provider shows the user code and polls to a completed connecti
         ]) {
           await page.setViewportSize(viewport);
           expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
+        }
+
+        // The authorization-code dialog (claude_code) links out to the
+        // authorization page instead of printing the long URL in a textarea.
+        await page.setViewportSize({ width: 1280, height: 900 });
+        const codeProviderId = randomUUID();
+        await withDedicatedPostgresClient(fixture.databaseUrl, async (client) => {
+          await client.query(
+            `insert into providers (id, provider_type, provider_key, display_name, enabled)
+             values ($1, 'subscription', 'claude_code', 'Claude Code', true)`,
+            [codeProviderId],
+          );
+        });
+        const authorizeUrl = "https://claude.ai/oauth/authorize?client_id=e2e-client&state=abc";
+        await page.goto(
+          `${baseUrl}/providers?selected=${codeProviderId}` +
+            `&providerKeyDialog=${codeProviderId}` +
+            `&providerOAuthId=${randomUUID()}` +
+            `&providerAuthorizeUrl=${encodeURIComponent(authorizeUrl)}`,
+          { waitUntil: "networkidle" },
+        );
+        const codeDialog = page.getByRole("dialog", { name: "New Claude Code OAuth connection" });
+        await expect(codeDialog).toBeVisible();
+        await expect(
+          codeDialog.getByRole("link", { name: "Open authorization URL" }),
+        ).toHaveAttribute("href", authorizeUrl);
+        await expect(codeDialog.locator("#provider-oauth-authorize-url")).toHaveCount(0);
+        await expect(codeDialog.locator("#provider-oauth-callback-input")).toBeVisible();
+        for (const viewport of [
+          { width: 1280, height: 900 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          expect(await overflowPx(page), `code-dialog ${viewport.width}px`).toBeLessThanOrEqual(0);
         }
       } finally {
         await context.close();

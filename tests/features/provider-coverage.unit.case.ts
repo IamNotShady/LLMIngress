@@ -130,6 +130,16 @@ describe("provider coverage", () => {
         displayName: "NousResearch",
         id: "nous",
       },
+      {
+        baseUrl: "https://api.cline.bot/api/v1",
+        displayName: "ClinePass",
+        id: "cline_pass",
+      },
+      {
+        baseUrl: "https://ark.ap-southeast.bytepluses.com/api/coding/v3",
+        displayName: "BytePlus ModelArk",
+        id: "byteplus_coding",
+      },
     ]);
   });
 });

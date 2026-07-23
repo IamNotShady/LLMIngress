@@ -84,7 +84,9 @@ export type ProviderBehavior = {
 
 export type KnownProviderKey =
   | "anthropic"
+  | "byteplus_coding"
   | "claude_code"
+  | "cline_pass"
   | "command_code"
   | "deepseek"
   | "glm_coding"
@@ -165,6 +167,23 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerKey: "anthropic",
     providerType: "api_key",
   },
+  byteplus_coding: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://ark.ap-southeast.bytepluses.com/api/coding/v3",
+    },
+    displayName: "BytePlus ModelArk",
+    // Chat-only: the upstream Anthropic-protocol endpoint lives under a
+    // different base path segment (…/api/coding/v1/messages) that one base URL
+    // cannot express, so no messages face is added here.
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "byteplus_coding",
+    providerType: "api_key",
+  },
   claude_code: {
     behavior: {
       connectivityProbeStyle: "claude_code",
@@ -199,6 +218,20 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     },
     providerKey: "claude_code",
     providerType: "subscription",
+  },
+  cline_pass: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.cline.bot/api/v1",
+    },
+    displayName: "ClinePass",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "cline_pass",
+    providerType: "api_key",
   },
   command_code: {
     behavior: { quotaSource: { reason: "not_supported", supported: false } },
@@ -581,7 +614,9 @@ export const defaultModelListPath = "models";
 // stable regardless of object literal order.
 const knownProviderKeys: KnownProviderKey[] = [
   "anthropic",
+  "byteplus_coding",
   "claude_code",
+  "cline_pass",
   "command_code",
   "deepseek",
   "glm_coding",
@@ -621,6 +656,8 @@ const providerTemplateSelectorOrder: KnownProviderKey[] = [
   "zai",
   "glm_coding",
   "command_code",
+  "cline_pass",
+  "byteplus_coding",
   "nous",
   "ollama",
   "lmstudio",

@@ -145,3 +145,96 @@ describe("batch 3 command code and nous providers", () => {
     expect(Object.keys(nousTemplate?.endpoints ?? {})).not.toContain("messages");
   });
 });
+
+// Batch 3 Feature B: ClinePass (cline_pass) + BytePlus ModelArk
+// (byteplus_coding). Two more paste-key coding-plan providers, both OpenAI
+// chat_completions-only with Bearer egress. byteplus_coding is pinned chat-only:
+// its upstream Anthropic-protocol endpoint lives under a different base path
+// segment and stays out of scope.
+
+describe("batch 3 clinepass and byteplus providers", () => {
+  it("registers cline_pass as an OpenAI chat_completions api_key provider", () => {
+    expect(providerRegistry.cline_pass).toEqual({
+      behavior: { quotaSource: { reason: "not_supported", supported: false } },
+      creation: {
+        mode: "template",
+        selectorGroup: "remote_api_key",
+        auth: remoteTemplateAuth,
+        baseUrl: "https://api.cline.bot/api/v1",
+      },
+      displayName: "ClinePass",
+      endpoints: { chat_completions: chatCompletionsEndpoint },
+      modelListEndpoint: modelsEndpoint,
+      providerKey: "cline_pass",
+      providerType: "api_key",
+    });
+    expect(providerRegistry.cline_pass.endpoints.responses).toBeUndefined();
+    expect(providerRegistry.cline_pass.behavior.priceSyncSupported).toBeUndefined();
+    expect(providerRegistry.cline_pass.behavior.metadataKey).toBeUndefined();
+  });
+
+  it("registers byteplus_coding as an OpenAI chat_completions api_key provider", () => {
+    expect(providerRegistry.byteplus_coding).toEqual({
+      behavior: { quotaSource: { reason: "not_supported", supported: false } },
+      creation: {
+        mode: "template",
+        selectorGroup: "remote_api_key",
+        auth: remoteTemplateAuth,
+        baseUrl: "https://ark.ap-southeast.bytepluses.com/api/coding/v3",
+      },
+      displayName: "BytePlus ModelArk",
+      endpoints: { chat_completions: chatCompletionsEndpoint },
+      modelListEndpoint: modelsEndpoint,
+      providerKey: "byteplus_coding",
+      providerType: "api_key",
+    });
+    expect(providerRegistry.byteplus_coding.behavior.priceSyncSupported).toBeUndefined();
+    expect(providerRegistry.byteplus_coding.behavior.metadataKey).toBeUndefined();
+  });
+
+  it("routes chat_completions egress to base + /chat/completions for both providers", () => {
+    expect(buildChatCompletionsUrl(registryBaseUrl("cline_pass"))).toBe(
+      "https://api.cline.bot/api/v1/chat/completions",
+    );
+    expect(buildChatCompletionsUrl(registryBaseUrl("byteplus_coding"))).toBe(
+      "https://ark.ap-southeast.bytepluses.com/api/coding/v3/chat/completions",
+    );
+  });
+
+  it("has no quota probes and appears in the API Keys group", () => {
+    expect(quotaProbes.cline_pass).toBeUndefined();
+    expect(quotaProbes.byteplus_coding).toBeUndefined();
+    expect(resolveQuotaProbe("cline_pass")).toBeNull();
+    expect(resolveQuotaProbe("byteplus_coding")).toBeNull();
+
+    const openAiCompatibleIds = listOpenAICompatibleProviderTemplates().map(
+      (template) => template.id,
+    );
+    expect(openAiCompatibleIds).toContain("cline_pass");
+    expect(openAiCompatibleIds).toContain("byteplus_coding");
+
+    const apiKeysGroup = listProviderTemplateSelectorGroups().find(
+      (group) => group.id === "remote_api_key",
+    );
+    expect(apiKeysGroup?.label).toBe("API Keys");
+    const apiKeysIds = apiKeysGroup?.templates.map((template) => template.id) ?? [];
+    expect(apiKeysIds).toContain("cline_pass");
+    expect(apiKeysIds).toContain("byteplus_coding");
+
+    for (const id of ["cline_pass", "byteplus_coding"] as const) {
+      const template = apiKeysGroup?.templates.find((entry) => entry.id === id);
+      expect(template?.baseUrlMode).toBe("user_remote");
+      expect(template?.providerType).toBe("api_key");
+      expect(getOpenAICompatibleProviderTemplate(id).providerKey).toBe(id);
+    }
+  });
+
+  it("keeps byteplus_coding chat-only so no messages face is smuggled onto the /v3 base", () => {
+    // §9-R2: the upstream Anthropic endpoint lives under a different base path
+    // segment (…/api/coding/v1/messages) — a single base cannot express it, so
+    // byteplus_coding never carries a messages endpoint.
+    expect(providerRegistry.byteplus_coding.endpoints.messages).toBeUndefined();
+    expect(providerRegistry.byteplus_coding.endpoints.responses).toBeUndefined();
+    expect(Object.keys(providerRegistry.byteplus_coding.endpoints)).toEqual(["chat_completions"]);
+  });
+});

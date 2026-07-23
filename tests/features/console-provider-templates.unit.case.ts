@@ -35,6 +35,8 @@ describe("console provider template registry", () => {
         "zai",
         "glm_coding",
         "command_code",
+        "cline_pass",
+        "byteplus_coding",
         "nous",
       ],
       ["ollama", "lmstudio", "llama_cpp"],
@@ -241,6 +243,8 @@ describe("console provider template registry", () => {
       "glm_coding",
       "command_code",
       "nous",
+      "cline_pass",
+      "byteplus_coding",
     ]);
     for (const template of templates) {
       expect(template.endpoints).toEqual({

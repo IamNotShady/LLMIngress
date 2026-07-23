@@ -9,6 +9,8 @@ import { normalizeProviderBaseUrl } from "./console-provider-base-url.ts";
 import type { ProviderType } from "./console-providers.ts";
 
 export type OpenAICompatibleProviderTemplateId =
+  | "byteplus_coding"
+  | "cline_pass"
   | "command_code"
   | "deepseek"
   | "glm_coding"
@@ -163,6 +165,8 @@ const openAICompatibleProviderTemplateIds = [
   "glm_coding",
   "command_code",
   "nous",
+  "cline_pass",
+  "byteplus_coding",
 ] as const satisfies readonly OpenAICompatibleProviderTemplateId[];
 
 const anthropicCompatibleProviderTemplateIds = [

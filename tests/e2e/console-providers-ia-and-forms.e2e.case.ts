@@ -415,6 +415,19 @@ test("Add Provider API Keys group carries the Batch 3 paste-key templates", asyn
         await expect(baseUrlField).toHaveValue("https://inference-api.nousresearch.com/v1");
         await expect(endpointChips).toHaveText(["Chat Completions"]);
 
+        // ClinePass: OpenAI chat_completions only, /api/v1 base.
+        await providerType.selectOption({ label: "ClinePass" });
+        await expect(baseUrlField).toHaveValue("https://api.cline.bot/api/v1");
+        await expect(endpointChips).toHaveText(["Chat Completions"]);
+
+        // BytePlus ModelArk: OpenAI chat_completions only on the /v3 base
+        // (chat-only; no Messages chip).
+        await providerType.selectOption({ label: "BytePlus ModelArk" });
+        await expect(baseUrlField).toHaveValue(
+          "https://ark.ap-southeast.bytepluses.com/api/coding/v3",
+        );
+        await expect(endpointChips).toHaveText(["Chat Completions"]);
+
         for (const viewport of [
           { width: 1280, height: 900 },
           { width: 390, height: 844 },

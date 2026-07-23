@@ -84,6 +84,23 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "claude_code",
     providerType: "subscription",
   },
+  command_code: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.commandcode.ai/provider/v1",
+    },
+    displayName: "Command Code",
+    endpoints: {
+      chat_completions: chatCompletionsEndpoint,
+      messages: messagesEndpoint,
+    },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "command_code",
+    providerType: "api_key",
+  },
   deepseek: {
     behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
@@ -242,6 +259,20 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     endpoints: { chat_completions: chatCompletionsEndpoint },
     modelListEndpoint: modelsEndpoint,
     providerKey: "moonshot",
+    providerType: "api_key",
+  },
+  nous: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://inference-api.nousresearch.com/v1",
+    },
+    displayName: "NousResearch",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "nous",
     providerType: "api_key",
   },
   ollama: {
@@ -418,7 +449,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
 describe("provider metadata registry", () => {
   it("carries every provider entry field-for-field from the donor sources", () => {
     expect(providerRegistry).toEqual(expectedRegistry);
-    expect(Object.keys(providerRegistry)).toHaveLength(19);
+    expect(Object.keys(providerRegistry)).toHaveLength(21);
   });
 
   it("keeps the models catalog out of the routable endpoint face", () => {
@@ -533,6 +564,8 @@ describe("provider metadata registry", () => {
       "minimax",
       "zai",
       "glm_coding",
+      "command_code",
+      "nous",
       "ollama",
       "lmstudio",
       "llama_cpp",

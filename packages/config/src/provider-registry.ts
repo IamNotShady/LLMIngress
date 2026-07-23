@@ -85,6 +85,7 @@ export type ProviderBehavior = {
 export type KnownProviderKey =
   | "anthropic"
   | "claude_code"
+  | "command_code"
   | "deepseek"
   | "glm_coding"
   | "google"
@@ -94,6 +95,7 @@ export type KnownProviderKey =
   | "minimax"
   | "minimax_coding"
   | "moonshot"
+  | "nous"
   | "ollama"
   | "openai"
   | "openai_codex"
@@ -197,6 +199,26 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     },
     providerKey: "claude_code",
     providerType: "subscription",
+  },
+  command_code: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.commandcode.ai/provider/v1",
+    },
+    displayName: "Command Code",
+    // Dual routable faces from one base: chat_completions egress carries the
+    // Bearer credential, while the messages egress authenticates with a bare
+    // x-api-key (hardcoded by the anthropic adapter, like kimi_coding).
+    endpoints: {
+      chat_completions: chatCompletionsEndpoint,
+      messages: messagesEndpoint,
+    },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "command_code",
+    providerType: "api_key",
   },
   deepseek: {
     behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
@@ -361,6 +383,20 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     endpoints: { chat_completions: chatCompletionsEndpoint },
     modelListEndpoint: modelsEndpoint,
     providerKey: "moonshot",
+    providerType: "api_key",
+  },
+  nous: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://inference-api.nousresearch.com/v1",
+    },
+    displayName: "NousResearch",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "nous",
     providerType: "api_key",
   },
   ollama: {
@@ -546,6 +582,7 @@ export const defaultModelListPath = "models";
 const knownProviderKeys: KnownProviderKey[] = [
   "anthropic",
   "claude_code",
+  "command_code",
   "deepseek",
   "glm_coding",
   "google",
@@ -555,6 +592,7 @@ const knownProviderKeys: KnownProviderKey[] = [
   "minimax",
   "minimax_coding",
   "moonshot",
+  "nous",
   "ollama",
   "openai",
   "openai_codex",
@@ -582,6 +620,8 @@ const providerTemplateSelectorOrder: KnownProviderKey[] = [
   "minimax",
   "zai",
   "glm_coding",
+  "command_code",
+  "nous",
   "ollama",
   "lmstudio",
   "llama_cpp",

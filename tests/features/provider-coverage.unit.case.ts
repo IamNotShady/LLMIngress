@@ -9,6 +9,7 @@ describe("provider coverage", () => {
       "openai",
       "anthropic",
       "kimi_coding",
+      "command_code",
       "google",
       "openrouter",
       "ollama",
@@ -39,6 +40,12 @@ describe("provider coverage", () => {
         endpoint: "messages",
         providerKey: "kimi_coding",
         providerTemplateId: "kimi_coding",
+        providerType: "api_key",
+      },
+      {
+        endpoint: "messages",
+        providerKey: "command_code",
+        providerTemplateId: "command_code",
         providerType: "api_key",
       },
       {
@@ -112,6 +119,16 @@ describe("provider coverage", () => {
         baseUrl: "https://api.z.ai/api/coding/paas/v4",
         displayName: "GLM Coding Plan",
         id: "glm_coding",
+      },
+      {
+        baseUrl: "https://api.commandcode.ai/provider/v1",
+        displayName: "Command Code",
+        id: "command_code",
+      },
+      {
+        baseUrl: "https://inference-api.nousresearch.com/v1",
+        displayName: "NousResearch",
+        id: "nous",
       },
     ]);
   });

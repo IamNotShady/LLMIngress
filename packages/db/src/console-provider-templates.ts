@@ -9,10 +9,12 @@ import { normalizeProviderBaseUrl } from "./console-provider-base-url.ts";
 import type { ProviderType } from "./console-providers.ts";
 
 export type OpenAICompatibleProviderTemplateId =
+  | "command_code"
   | "deepseek"
   | "glm_coding"
   | "minimax"
   | "moonshot"
+  | "nous"
   | "qwen"
   | "qwen_token_plan"
   | "xai"
@@ -159,6 +161,8 @@ const openAICompatibleProviderTemplateIds = [
   "minimax",
   "zai",
   "glm_coding",
+  "command_code",
+  "nous",
 ] as const satisfies readonly OpenAICompatibleProviderTemplateId[];
 
 const anthropicCompatibleProviderTemplateIds = [

@@ -1,6 +1,7 @@
 # LLMIngress Development State
 
 Updated: 2026-07-23 · Branch: `feat/batch3-providers` · Version: V1 released; post-release development open
+- 2026-07-23 risk note: under sustained parallel load the e2e console-readiness probe (30s) intermittently times out even though the dev server logs Ready in ~300ms — full verify:features runs can flag unrelated console-suite features. Batch-level flakes cleared on a quiet-machine rerun (25/25). Test-infra follow-up candidate: raise/warm the readiness probe; not a feature regression.
 
 ## Feature domains
 

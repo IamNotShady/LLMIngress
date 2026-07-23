@@ -6,7 +6,10 @@ import {
   normalizeModelOutputModalities,
   type SyncedModelCapabilities,
 } from "@llmingress/domain";
+import { createLogger } from "@llmingress/logging";
 import { listPriceSyncSupportedProviderKeys } from "@llmingress/provider/descriptor";
+
+const logger = createLogger("provider");
 
 export const MODELS_DEV_PRICE_SOURCE_URL = "https://models.dev/api.json";
 export const LITELLM_PRICE_SOURCE_URL =
@@ -93,8 +96,8 @@ export async function fetchProviderModelPrices(
   const timeoutMs = options.timeoutMs ?? defaultPriceSourceTimeoutMs;
   const syncedAt = options.now?.() ?? new Date();
   const [primary, auxiliary] = await Promise.allSettled([
-    fetchJson(fetchImpl, MODELS_DEV_PRICE_SOURCE_URL, timeoutMs),
-    fetchJson(fetchImpl, LITELLM_PRICE_SOURCE_URL, timeoutMs),
+    cachedFetchJson(fetchImpl, MODELS_DEV_PRICE_SOURCE_URL, timeoutMs),
+    cachedFetchJson(fetchImpl, LITELLM_PRICE_SOURCE_URL, timeoutMs),
   ]);
   const primaryPrices =
     primary.status === "fulfilled"
@@ -126,10 +129,10 @@ export async function fetchProviderModelRegistryEntries(
   const timeoutMs = options.timeoutMs ?? defaultPriceSourceTimeoutMs;
   const syncedAt = options.now?.() ?? new Date();
   const [modelsDev, openRouter, liteLlm, vercel] = await Promise.allSettled([
-    fetchJson(fetchImpl, MODELS_DEV_PRICE_SOURCE_URL, timeoutMs),
-    fetchJson(fetchImpl, OPENROUTER_MODEL_SOURCE_URL, timeoutMs),
-    fetchJson(fetchImpl, LITELLM_PRICE_SOURCE_URL, timeoutMs),
-    fetchJson(fetchImpl, VERCEL_AI_GATEWAY_MODEL_SOURCE_URL, timeoutMs),
+    cachedFetchJson(fetchImpl, MODELS_DEV_PRICE_SOURCE_URL, timeoutMs),
+    cachedFetchJson(fetchImpl, OPENROUTER_MODEL_SOURCE_URL, timeoutMs),
+    cachedFetchJson(fetchImpl, LITELLM_PRICE_SOURCE_URL, timeoutMs),
+    cachedFetchJson(fetchImpl, VERCEL_AI_GATEWAY_MODEL_SOURCE_URL, timeoutMs),
   ]);
 
   return mergeProviderModelRegistryEntries(
@@ -168,7 +171,7 @@ export function normalizeModelsDevProviderModelRegistryEntries(
   const entries: ProviderModelRegistryEntry[] = [];
 
   for (const [sourceProviderKey, providerPayload] of Object.entries(providers)) {
-    const providerKey = normalizeProviderKey(sourceProviderKey);
+    const providerKey = resolveRegistryCatalogKey(sourceProviderKey);
     if (!providerKey) {
       continue;
     }
@@ -241,7 +244,7 @@ export function normalizeOpenRouterProviderModelRegistryEntries(
       continue;
     }
     const sourceProviderKey = rawModelId.split("/")[0] ?? "";
-    const providerKey = normalizeProviderKey(sourceProviderKey);
+    const providerKey = resolveRegistryCatalogKey(sourceProviderKey);
     if (!providerKey) {
       continue;
     }
@@ -320,7 +323,7 @@ export function normalizeLiteLlmProviderModelRegistryEntries(
 
     const model = readRecord(modelPayload);
     const sourceProviderKey = readString(model.litellm_provider) ?? readString(model.provider);
-    const providerKey = normalizeProviderKey(sourceProviderKey);
+    const providerKey = resolveRegistryCatalogKey(sourceProviderKey);
     if (!providerKey) {
       continue;
     }
@@ -400,7 +403,7 @@ export function normalizeVercelAiGatewayProviderModelRegistryEntries(
       continue;
     }
     const sourceProviderKey = readString(model.owned_by) ?? rawModelId.split("/")[0] ?? "";
-    const providerKey = normalizeProviderKey(sourceProviderKey);
+    const providerKey = resolveRegistryCatalogKey(sourceProviderKey);
     if (!providerKey) {
       continue;
     }
@@ -505,6 +508,119 @@ export function findProviderModelRegistryEntry(
   }
 
   return null;
+}
+
+// Resolve model metadata for a listed model. The provider's own catalog wins; on a miss the model
+// id is looked up across every other catalog, layered so trusted (price-sync allowlist) catalogs
+// are consulted before the rest. Ambiguous matches within a layer stay unresolved rather than
+// guessing.
+export function resolveProviderModelMetadataEntry(
+  entries: ProviderModelRegistryEntry[],
+  input: {
+    displayName?: string | null;
+    modelId: string;
+    providerKey: string;
+  },
+): ProviderModelRegistryEntry | null {
+  const scoped = findProviderModelRegistryEntry(entries, input);
+  if (scoped) {
+    return scoped;
+  }
+  return findCrossCatalogRegistryEntry(entries, input);
+}
+
+const crossCatalogIndexCache = new WeakMap<
+  ProviderModelRegistryEntry[],
+  Map<string, Map<string, ProviderModelRegistryEntry>>
+>();
+
+function crossCatalogIndex(
+  entries: ProviderModelRegistryEntry[],
+): Map<string, Map<string, ProviderModelRegistryEntry>> {
+  const cached = crossCatalogIndexCache.get(entries);
+  if (cached) {
+    return cached;
+  }
+  const index = new Map<string, Map<string, ProviderModelRegistryEntry>>();
+  for (const entry of entries) {
+    const modelIdKey = entry.modelId.trim().toLowerCase();
+    let byCatalog = index.get(modelIdKey);
+    if (!byCatalog) {
+      byCatalog = new Map();
+      index.set(modelIdKey, byCatalog);
+    }
+    byCatalog.set(entry.providerKey.trim().toLowerCase(), entry);
+  }
+  crossCatalogIndexCache.set(entries, index);
+  return index;
+}
+
+function findCrossCatalogRegistryEntry(
+  entries: ProviderModelRegistryEntry[],
+  input: {
+    displayName?: string | null;
+    modelId: string;
+    providerKey: string;
+  },
+): ProviderModelRegistryEntry | null {
+  const scopeKey =
+    normalizeProviderKey(input.providerKey) ?? input.providerKey.trim().toLowerCase();
+  const index = crossCatalogIndex(entries);
+  const candidates = crossCatalogCandidates(input.modelId, input.displayName, scopeKey);
+
+  for (const candidate of candidates) {
+    const hits = index.get(candidate);
+    if (!hits) {
+      continue;
+    }
+    const tier1: ProviderModelRegistryEntry[] = [];
+    const tier2: ProviderModelRegistryEntry[] = [];
+    for (const [catalogKey, entry] of hits) {
+      if (catalogKey === scopeKey) {
+        continue;
+      }
+      (supportedProviderKeys.has(catalogKey) ? tier1 : tier2).push(entry);
+    }
+    if (tier1.length === 1) {
+      return tier1[0] ?? null;
+    }
+    if (tier1.length > 1) {
+      return null;
+    }
+    if (tier2.length === 1) {
+      return tier2[0] ?? null;
+    }
+  }
+
+  return null;
+}
+
+function crossCatalogCandidates(
+  modelId: string,
+  displayName: string | null | undefined,
+  scopeKey: string,
+): string[] {
+  const candidates = new Set<string>();
+  for (const value of [modelId, displayName ?? ""]) {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) {
+      continue;
+    }
+    candidates.add(trimmed);
+    // Only a prefixed id has a distinct stripped form; without a "/" the strip is a no-op.
+    if (value.includes("/")) {
+      const stripped = stripProviderModelPrefix(value, {
+        providerKey: scopeKey,
+        sourceProviderKey: value.split("/")[0] ?? scopeKey,
+      })
+        .trim()
+        .toLowerCase();
+      if (stripped) {
+        candidates.add(stripped);
+      }
+    }
+  }
+  return [...candidates];
 }
 
 export function normalizeModelsDevProviderModelPrices(
@@ -770,6 +886,97 @@ function dedupeProviderModelRegistryEntries(
   return [...deduped.values()];
 }
 
+type CatalogCacheEntry = {
+  fetchedAt: number;
+  hasPayload: boolean;
+  inflight: Promise<unknown> | null;
+  payload: unknown;
+};
+
+const catalogCache = new Map<string, CatalogCacheEntry>();
+const defaultModelCatalogCacheTtlMs = 1_800_000;
+
+export function resetProviderModelCatalogCacheForTests(): void {
+  catalogCache.clear();
+}
+
+// Exported so the worker can validate the setting once at startup and fail fast on a bad value,
+// instead of letting cachedFetchJson throw at runtime where Promise.allSettled would swallow it.
+export function readModelCatalogCacheTtlMs(env: NodeJS.ProcessEnv = process.env): number {
+  return readNonNegativeIntegerEnvValue(
+    env.WORKER_MODEL_CATALOG_CACHE_TTL_MS,
+    defaultModelCatalogCacheTtlMs,
+    "WORKER_MODEL_CATALOG_CACHE_TTL_MS",
+  );
+}
+
+function readNonNegativeIntegerEnvValue(
+  value: string | undefined,
+  defaultValue: number,
+  name: string,
+): number {
+  if (value === undefined || value.trim() === "") {
+    return defaultValue;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative integer`);
+  }
+  return parsed;
+}
+
+// Per-URL in-memory cache over fetchJson so a model-refresh burst hits each catalog source once.
+// TTL is env-tunable (0 disables); concurrent misses share one in-flight fetch (single-flight); an
+// expired refetch that fails serves the last good payload (stale-on-error) and retries next round.
+export async function cachedFetchJson(
+  fetchImpl: typeof globalThis.fetch,
+  url: string,
+  timeoutMs = defaultPriceSourceTimeoutMs,
+  now: () => number = Date.now,
+): Promise<unknown> {
+  const ttlMs = readModelCatalogCacheTtlMs();
+  if (ttlMs === 0) {
+    return fetchJson(fetchImpl, url, timeoutMs);
+  }
+
+  const current = catalogCache.get(url);
+  if (current?.hasPayload && now() - current.fetchedAt < ttlMs) {
+    return current.payload;
+  }
+  if (current?.inflight) {
+    return current.inflight;
+  }
+
+  const inflight = (async () => {
+    try {
+      const payload = await fetchJson(fetchImpl, url, timeoutMs);
+      catalogCache.set(url, { fetchedAt: now(), hasPayload: true, inflight: null, payload });
+      return payload;
+    } catch (error) {
+      const existing = catalogCache.get(url);
+      if (existing?.hasPayload) {
+        // Keep the stale payload and its timestamp so the next refresh round retries.
+        catalogCache.set(url, { ...existing, inflight: null });
+        logger.warn(
+          { err: error, url },
+          "model catalog source fetch failed; serving stale payload",
+        );
+        return existing.payload;
+      }
+      catalogCache.delete(url);
+      throw error;
+    }
+  })();
+
+  catalogCache.set(url, {
+    fetchedAt: current?.fetchedAt ?? 0,
+    hasPayload: current?.hasPayload ?? false,
+    inflight,
+    payload: current?.payload ?? null,
+  });
+  return inflight;
+}
+
 async function fetchJson(
   fetchImpl: typeof globalThis.fetch,
   url: string,
@@ -808,6 +1015,23 @@ function normalizeProviderKey(value: string | null | undefined): string | null {
 
   const aliased = providerKeyAliases.get(normalized) ?? normalized;
   return supportedProviderKeys.has(aliased) ? aliased : null;
+}
+
+// Registry catalogs keep every source section (not just the price-sync allowlist): allowlisted
+// sections are aliased to their canonical key, and any other section is retained under its own
+// normalized name. The price path keeps using normalizeProviderKey, which still drops non-allowlist
+// sections.
+function resolveRegistryCatalogKey(value: string | null | undefined): string | null {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const aliased = providerKeyAliases.get(normalized) ?? normalized;
+  if (supportedProviderKeys.has(aliased)) {
+    return aliased;
+  }
+  return aliased.replaceAll("-", "_");
 }
 
 function normalizeLiteLlmModelId(

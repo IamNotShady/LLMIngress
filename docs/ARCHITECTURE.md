@@ -78,6 +78,12 @@ Retention and stale-concurrency repair are idempotent in-process tasks protected
 advisory locks. They create no `jobs` or `job_attempts`. Retention deletes in batches of at most
 1,000 and preserves the health event referenced by the current summary.
 
+Model refresh keeps every catalog source section (not just the price-sync allowlist) and, when a
+model's own catalog misses, resolves its metadata by model id across the other catalogs, trusted
+sources first, leaving genuinely ambiguous matches unresolved. Catalog source fetches share a
+per-URL in-memory cache (`WORKER_MODEL_CATALOG_CACHE_TTL_MS`, 0 disables) with single-flight and
+stale-on-error.
+
 ## Data invariants
 
 - `api_keys.limits_enabled` is the only API-key-level Limits switch. Disabled rules remain stored.

@@ -22,8 +22,8 @@ import {
 import { refreshProviderOAuthToken } from "@llmingress/provider/oauth";
 import {
   fetchProviderModelRegistryEntries,
-  findProviderModelRegistryEntry,
   type ProviderModelRegistryEntry,
+  resolveProviderModelMetadataEntry,
 } from "@llmingress/provider/price-source";
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { EncryptionKeySource } from "@llmingress/security/encryption-key";
@@ -265,7 +265,7 @@ export function enrichListedProviderModels(input: {
   const metadataProviderKey = providerMetadataKey(input.providerKey);
 
   return input.listedModels.map((model) => {
-    const registryEntry = findProviderModelRegistryEntry(input.registryEntries, {
+    const registryEntry = resolveProviderModelMetadataEntry(input.registryEntries, {
       displayName: model.displayName,
       modelId: model.modelId,
       providerKey: metadataProviderKey,
@@ -278,6 +278,7 @@ export function enrichListedProviderModels(input: {
     const capabilityMetadata = buildProviderModelCapabilityMetadata(registryEntry, {
       syncedCapabilities,
     });
+    stampCrossCatalogProvenance(capabilityMetadata, registryEntry, metadataProviderKey);
 
     return withLocalProviderDefaults(
       {
@@ -323,6 +324,21 @@ export function enrichListedProviderModels(input: {
 function providerMetadataKey(providerKey: string): string {
   const normalized = providerKey.trim().toLowerCase();
   return resolveProviderDescriptor(normalized).metadataKey ?? normalized;
+}
+
+// Record where cross-catalog metadata came from (observation only). A hit whose catalog key differs
+// from the provider's own metadata scope was resolved by the by-model-id fallback; a scoped hit (or
+// an unresolved model, which reaches neither this call) leaves these keys absent.
+function stampCrossCatalogProvenance(
+  capabilityMetadata: Record<string, unknown>,
+  entry: ProviderModelRegistryEntry,
+  scopeKey: string,
+): void {
+  const catalogKey = entry.providerKey.trim().toLowerCase();
+  if (catalogKey !== scopeKey.trim().toLowerCase()) {
+    capabilityMetadata.resolvedVia = "cross-catalog";
+    capabilityMetadata.resolvedFromCatalog = catalogKey;
+  }
 }
 
 function withLocalProviderDefaults(
@@ -860,6 +876,8 @@ async function applyProviderModelRefreshPlan(
               - 'registrySources'
               - 'registrySyncedAt'
               - 'streamingInferred'
+              - 'resolvedVia'
+              - 'resolvedFromCatalog'
             ) || excluded.capability_metadata,
             availability = 'available',
             updated_at = now()
@@ -906,6 +924,8 @@ async function applyProviderModelRefreshPlan(
               - 'registrySources'
               - 'registrySyncedAt'
               - 'streamingInferred'
+              - 'resolvedVia'
+              - 'resolvedFromCatalog'
             ) || $16::jsonb,
             updated_at = now()
         where id = $1

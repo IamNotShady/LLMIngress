@@ -68,6 +68,7 @@
   "dependencies": {
     "@llmingress/config": "workspace:*",
     "@llmingress/domain": "workspace:*",
+    "@llmingress/logging": "workspace:*",
     "@llmingress/util": "workspace:*"
   }
 }

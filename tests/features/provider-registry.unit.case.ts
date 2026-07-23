@@ -49,6 +49,20 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "anthropic",
     providerType: "api_key",
   },
+  byteplus_coding: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://ark.ap-southeast.bytepluses.com/api/coding/v3",
+    },
+    displayName: "BytePlus ModelArk",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "byteplus_coding",
+    providerType: "api_key",
+  },
   claude_code: {
     behavior: {
       connectivityProbeStyle: "claude_code",
@@ -83,6 +97,37 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     },
     providerKey: "claude_code",
     providerType: "subscription",
+  },
+  cline_pass: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.cline.bot/api/v1",
+    },
+    displayName: "ClinePass",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "cline_pass",
+    providerType: "api_key",
+  },
+  command_code: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.commandcode.ai/provider/v1",
+    },
+    displayName: "Command Code",
+    endpoints: {
+      chat_completions: chatCompletionsEndpoint,
+      messages: messagesEndpoint,
+    },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "command_code",
+    providerType: "api_key",
   },
   deepseek: {
     behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
@@ -242,6 +287,20 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     endpoints: { chat_completions: chatCompletionsEndpoint },
     modelListEndpoint: modelsEndpoint,
     providerKey: "moonshot",
+    providerType: "api_key",
+  },
+  nous: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://inference-api.nousresearch.com/v1",
+    },
+    displayName: "NousResearch",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "nous",
     providerType: "api_key",
   },
   ollama: {
@@ -418,7 +477,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
 describe("provider metadata registry", () => {
   it("carries every provider entry field-for-field from the donor sources", () => {
     expect(providerRegistry).toEqual(expectedRegistry);
-    expect(Object.keys(providerRegistry)).toHaveLength(19);
+    expect(Object.keys(providerRegistry)).toHaveLength(23);
   });
 
   it("keeps the models catalog out of the routable endpoint face", () => {
@@ -533,6 +592,10 @@ describe("provider metadata registry", () => {
       "minimax",
       "zai",
       "glm_coding",
+      "command_code",
+      "cline_pass",
+      "byteplus_coding",
+      "nous",
       "ollama",
       "lmstudio",
       "llama_cpp",

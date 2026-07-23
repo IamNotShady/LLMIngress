@@ -34,6 +34,10 @@ describe("console provider template registry", () => {
         "minimax",
         "zai",
         "glm_coding",
+        "command_code",
+        "cline_pass",
+        "byteplus_coding",
+        "nous",
       ],
       ["ollama", "lmstudio", "llama_cpp"],
     ]);
@@ -237,6 +241,10 @@ describe("console provider template registry", () => {
       "minimax",
       "zai",
       "glm_coding",
+      "command_code",
+      "nous",
+      "cline_pass",
+      "byteplus_coding",
     ]);
     for (const template of templates) {
       expect(template.endpoints).toEqual({
@@ -245,6 +253,9 @@ describe("console provider template registry", () => {
         ...(template.id === "xai" || template.id === "qwen" || template.id === "minimax"
           ? { responses: responsesEndpoint }
           : {}),
+        // command_code carries a second routable face (Anthropic messages) that
+        // rides on the same base; the Console renders both endpoint chips.
+        ...(template.id === "command_code" ? { messages: messagesEndpoint } : {}),
       });
       expect(template).not.toHaveProperty("capabilities");
     }

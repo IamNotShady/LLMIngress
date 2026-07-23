@@ -626,7 +626,11 @@ describe("provider quota scheduling and schema", () => {
     ];
     const unsupported: Record<string, "not_supported" | "requires_separate_credential"> = {
       anthropic: "requires_separate_credential",
+      byteplus_coding: "not_supported",
+      cline_pass: "not_supported",
+      command_code: "not_supported",
       google: "not_supported",
+      nous: "not_supported",
       qwen: "not_supported",
       qwen_token_plan: "not_supported",
       xai: "requires_separate_credential",
@@ -635,7 +639,7 @@ describe("provider quota scheduling and schema", () => {
       .filter((entry) => entry.behavior.local !== true)
       .map((entry) => entry.providerKey);
 
-    expect(remoteKeys).toHaveLength(16);
+    expect(remoteKeys).toHaveLength(20);
     expect([...supported, ...Object.keys(unsupported)].sort()).toEqual([...remoteKeys].sort());
 
     for (const key of remoteKeys) {

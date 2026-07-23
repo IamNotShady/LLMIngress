@@ -84,7 +84,10 @@ export type ProviderBehavior = {
 
 export type KnownProviderKey =
   | "anthropic"
+  | "byteplus_coding"
   | "claude_code"
+  | "cline_pass"
+  | "command_code"
   | "deepseek"
   | "glm_coding"
   | "google"
@@ -94,6 +97,7 @@ export type KnownProviderKey =
   | "minimax"
   | "minimax_coding"
   | "moonshot"
+  | "nous"
   | "ollama"
   | "openai"
   | "openai_codex"
@@ -163,6 +167,23 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerKey: "anthropic",
     providerType: "api_key",
   },
+  byteplus_coding: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://ark.ap-southeast.bytepluses.com/api/coding/v3",
+    },
+    displayName: "BytePlus ModelArk",
+    // Chat-only: the upstream Anthropic-protocol endpoint lives under a
+    // different base path segment (…/api/coding/v1/messages) that one base URL
+    // cannot express, so no messages face is added here.
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "byteplus_coding",
+    providerType: "api_key",
+  },
   claude_code: {
     behavior: {
       connectivityProbeStyle: "claude_code",
@@ -197,6 +218,40 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     },
     providerKey: "claude_code",
     providerType: "subscription",
+  },
+  cline_pass: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.cline.bot/api/v1",
+    },
+    displayName: "ClinePass",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "cline_pass",
+    providerType: "api_key",
+  },
+  command_code: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.commandcode.ai/provider/v1",
+    },
+    displayName: "Command Code",
+    // Dual routable faces from one base: chat_completions egress carries the
+    // Bearer credential, while the messages egress authenticates with a bare
+    // x-api-key (hardcoded by the anthropic adapter, like kimi_coding).
+    endpoints: {
+      chat_completions: chatCompletionsEndpoint,
+      messages: messagesEndpoint,
+    },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "command_code",
+    providerType: "api_key",
   },
   deepseek: {
     behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
@@ -361,6 +416,20 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     endpoints: { chat_completions: chatCompletionsEndpoint },
     modelListEndpoint: modelsEndpoint,
     providerKey: "moonshot",
+    providerType: "api_key",
+  },
+  nous: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://inference-api.nousresearch.com/v1",
+    },
+    displayName: "NousResearch",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "nous",
     providerType: "api_key",
   },
   ollama: {
@@ -545,7 +614,10 @@ export const defaultModelListPath = "models";
 // stable regardless of object literal order.
 const knownProviderKeys: KnownProviderKey[] = [
   "anthropic",
+  "byteplus_coding",
   "claude_code",
+  "cline_pass",
+  "command_code",
   "deepseek",
   "glm_coding",
   "google",
@@ -555,6 +627,7 @@ const knownProviderKeys: KnownProviderKey[] = [
   "minimax",
   "minimax_coding",
   "moonshot",
+  "nous",
   "ollama",
   "openai",
   "openai_codex",
@@ -582,6 +655,10 @@ const providerTemplateSelectorOrder: KnownProviderKey[] = [
   "minimax",
   "zai",
   "glm_coding",
+  "command_code",
+  "cline_pass",
+  "byteplus_coding",
+  "nous",
   "ollama",
   "lmstudio",
   "llama_cpp",

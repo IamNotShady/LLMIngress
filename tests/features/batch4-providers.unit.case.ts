@@ -17,16 +17,18 @@ const remoteTemplateAuth = { header: "Authorization", scheme: "Bearer" };
 const chatCompletionsEndpoint = { method: "POST", path: "chat/completions" };
 const modelsEndpoint = { method: "GET", path: "models" };
 
-// Batch 4 Feature A: seven pay-as-you-go inference clouds join as pure OpenAI
+// Batch 4: seven pay-as-you-go inference clouds join as pure OpenAI
 // chat_completions paste-key providers with Bearer egress. Except for base URL,
 // displayName and providerKey they are field-for-field identical; the only
 // behavior variation is mistral's quotaSource (requires_separate_credential —
 // its Admin usage API needs a separate enterprise credential), while the other
-// six are not_supported. Price-sync flags are intentionally NOT set in this
-// feature (the allowlist expansion ships separately in Feature B).
+// six are not_supported. Feature B opens six onto the price-sync allowlist
+// (priceSyncSupported: true); ollama_cloud stays off (its catalog section
+// carries no per-token cost).
 type Batch4Provider = {
   baseUrl: string;
   displayName: string;
+  priceSyncSupported: boolean;
   providerKey: keyof typeof providerRegistry;
   quotaSource: ProviderQuotaSource;
 };
@@ -41,42 +43,49 @@ const batch4Providers: Batch4Provider[] = [
   {
     baseUrl: "https://api.groq.com/openai/v1",
     displayName: "Groq",
+    priceSyncSupported: true,
     providerKey: "groq",
     quotaSource: notSupported,
   },
   {
     baseUrl: "https://api.cerebras.ai/v1",
     displayName: "Cerebras",
+    priceSyncSupported: true,
     providerKey: "cerebras",
     quotaSource: notSupported,
   },
   {
     baseUrl: "https://api.fireworks.ai/inference/v1",
     displayName: "Fireworks AI",
+    priceSyncSupported: true,
     providerKey: "fireworks",
     quotaSource: notSupported,
   },
   {
     baseUrl: "https://api.mistral.ai/v1",
     displayName: "Mistral",
+    priceSyncSupported: true,
     providerKey: "mistral",
     quotaSource: requiresSeparateCredential,
   },
   {
     baseUrl: "https://integrate.api.nvidia.com/v1",
     displayName: "NVIDIA NIM",
+    priceSyncSupported: true,
     providerKey: "nvidia",
     quotaSource: notSupported,
   },
   {
     baseUrl: "https://api.xiaomimimo.com/v1",
     displayName: "Xiaomi MiMo",
+    priceSyncSupported: true,
     providerKey: "xiaomi",
     quotaSource: notSupported,
   },
   {
     baseUrl: "https://ollama.com/v1",
     displayName: "Ollama Cloud",
+    priceSyncSupported: false,
     providerKey: "ollama_cloud",
     quotaSource: notSupported,
   },
@@ -86,7 +95,10 @@ describe("batch 4 inference cloud providers", () => {
   it("registers all seven as OpenAI chat_completions api_key providers field-for-field", () => {
     for (const provider of batch4Providers) {
       expect(providerRegistry[provider.providerKey], provider.providerKey).toEqual({
-        behavior: { quotaSource: provider.quotaSource },
+        behavior: {
+          ...(provider.priceSyncSupported ? { priceSyncSupported: true } : {}),
+          quotaSource: provider.quotaSource,
+        },
         creation: {
           mode: "template",
           selectorGroup: "remote_api_key",
@@ -99,12 +111,15 @@ describe("batch 4 inference cloud providers", () => {
         providerKey: provider.providerKey,
         providerType: "api_key",
       });
-      // chat-only, no responses/messages face, and — this feature — no price
-      // sync, no metadataKey, no probe-style overrides.
+      // chat-only, no responses/messages face, no metadataKey and no probe-style
+      // overrides; priceSyncSupported is set for the six on the allowlist and
+      // stays unset for ollama_cloud.
       const entry = providerRegistry[provider.providerKey];
       expect(entry.endpoints.responses, provider.providerKey).toBeUndefined();
       expect(entry.endpoints.messages, provider.providerKey).toBeUndefined();
-      expect(entry.behavior.priceSyncSupported, provider.providerKey).toBeUndefined();
+      expect(entry.behavior.priceSyncSupported, provider.providerKey).toBe(
+        provider.priceSyncSupported ? true : undefined,
+      );
       expect(entry.behavior.metadataKey, provider.providerKey).toBeUndefined();
       expect(entry.behavior.connectivityProbeStyle, provider.providerKey).toBeUndefined();
       expect(entry.behavior.modelListStyle, provider.providerKey).toBeUndefined();

@@ -64,7 +64,10 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "api_key",
   },
   cerebras: {
-    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -113,7 +116,10 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "subscription",
   },
   cline_pass: {
-    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -158,7 +164,10 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "api_key",
   },
   fireworks: {
-    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -206,7 +215,10 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "api_key",
   },
   groq: {
-    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -319,6 +331,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
   },
   mistral: {
     behavior: {
+      priceSyncSupported: true,
       quotaSource: { reason: "requires_separate_credential", supported: false },
     },
     creation: {
@@ -362,7 +375,10 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "api_key",
   },
   nvidia: {
-    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -545,7 +561,10 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "api_key",
   },
   xiaomi: {
-    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -651,17 +670,24 @@ describe("provider metadata registry", () => {
   it("lists the price-sync supported providers (everything except subscriptions)", () => {
     expect(listPriceSyncSupportedProviderKeys().sort()).toEqual([
       "anthropic",
+      "cerebras",
+      "cline_pass",
       "deepseek",
+      "fireworks",
       "google",
+      "groq",
       "llama_cpp",
       "lmstudio",
       "minimax",
+      "mistral",
       "moonshot",
+      "nvidia",
       "ollama",
       "openai",
       "openrouter",
       "qwen",
       "xai",
+      "xiaomi",
       "zai",
     ]);
   });

@@ -192,7 +192,10 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "api_key",
   },
   cerebras: {
-    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -241,7 +244,12 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "subscription",
   },
   cline_pass: {
-    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    behavior: {
+      // ClinePass resells upstream models; its models.dev section carries the
+      // channel's own resale prices, so it joins the price-sync allowlist.
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -289,7 +297,10 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "api_key",
   },
   fireworks: {
-    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -337,7 +348,10 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "api_key",
   },
   groq: {
-    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -455,6 +469,7 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
   },
   mistral: {
     behavior: {
+      priceSyncSupported: true,
       // Mistral exposes an Admin usage/spend API, but it is Enterprise-only and
       // requires a separate Backoffice-issued Admin key (a standard API key
       // cannot read it), so quota is requires_separate_credential — like
@@ -502,7 +517,10 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "api_key",
   },
   nvidia: {
-    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",
@@ -688,7 +706,10 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "api_key",
   },
   xiaomi: {
-    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "not_supported", supported: false },
+    },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",

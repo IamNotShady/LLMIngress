@@ -80,13 +80,23 @@ const supportedProviderKeys = new Set(listPriceSyncSupportedProviderKeys());
 
 const providerKeyAliases = new Map<string, string>([
   ["alibaba", "qwen"],
+  // models.dev names the Fireworks section "fireworks-ai"; the price path only
+  // consults this alias table (no hyphen normalization), so without this the
+  // section's prices would be dropped despite the allowlist.
+  ["cline-pass", "cline_pass"],
   ["dashscope", "qwen"],
+  ["fireworks-ai", "fireworks"],
   ["google-ai-studio", "google"],
   ["google_ai_studio", "google"],
+  // HF-style organization prefixes seen on vendor-prefixed model ids; these two
+  // benefit metadata prefix resolution only (models.dev has no same-named
+  // section, so prices are unaffected).
+  ["minimaxai", "minimax"],
   ["moonshotai", "moonshot"],
   ["moonshotai-cn", "moonshot"],
   ["x-ai", "xai"],
   ["z-ai", "zai"],
+  ["zai-org", "zai"],
 ]);
 
 export async function fetchProviderModelPrices(
@@ -526,7 +536,39 @@ export function resolveProviderModelMetadataEntry(
   if (scoped) {
     return scoped;
   }
+  const prefixed = findPrefixVendorRegistryEntry(entries, input);
+  if (prefixed) {
+    return prefixed;
+  }
   return findCrossCatalogRegistryEntry(entries, input);
+}
+
+// A vendor-prefixed model id names its own catalog: "z-ai/glm-5.2" is the zai
+// catalog's "glm-5.2". Resolving it directly beats the tiered sweep — the same
+// prefixed id can legitimately appear in several host catalogs (openrouter,
+// nvidia, groq) whose deployment parameters differ, which the sweep would
+// treat as an unresolvable tier-1 conflict.
+function findPrefixVendorRegistryEntry(
+  entries: ProviderModelRegistryEntry[],
+  input: { modelId: string; providerKey: string },
+): ProviderModelRegistryEntry | null {
+  const slash = input.modelId.indexOf("/");
+  if (slash <= 0) {
+    return null;
+  }
+  const catalogKey = resolveRegistryCatalogKey(input.modelId.slice(0, slash));
+  if (!catalogKey) {
+    return null;
+  }
+  const strippedId = input.modelId
+    .slice(slash + 1)
+    .trim()
+    .toLowerCase();
+  if (!strippedId) {
+    return null;
+  }
+  const index = crossCatalogIndex(entries);
+  return index.get(strippedId)?.get(catalogKey) ?? null;
 }
 
 const crossCatalogIndexCache = new WeakMap<

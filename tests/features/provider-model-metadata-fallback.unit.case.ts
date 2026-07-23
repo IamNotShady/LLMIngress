@@ -5,6 +5,7 @@ import {
   fetchProviderModelRegistryEntries,
   MODELS_DEV_PRICE_SOURCE_URL,
   type ProviderModelRegistryEntry,
+  readModelCatalogCacheTtlMs,
   resetProviderModelCatalogCacheForTests,
   resolveProviderModelMetadataEntry,
 } from "../../packages/provider/src/price-source.ts";
@@ -150,6 +151,46 @@ describe("provider model metadata fallback", () => {
         providerKey: "qwen",
       })?.maxContextTokens,
     ).toBe(2);
+  });
+
+  it("falls through a tier-2 conflict on one lookup form to a unique tier-1 hit on the stripped form", () => {
+    const entries: ProviderModelRegistryEntry[] = [
+      // Raw id `vendorx/foreign-b` is claimed by two untrusted (tier-2) catalogs.
+      entry("cline_pass", "vendorx/foreign-b", 10),
+      entry("zhipuai", "vendorx/foreign-b", 11),
+      // Stripped id `foreign-b` is unique in a trusted (tier-1) catalog.
+      entry("deepseek", "foreign-b", 12),
+    ];
+
+    expect(
+      resolveProviderModelMetadataEntry(entries, {
+        modelId: "vendorx/foreign-b",
+        providerKey: "qwen",
+      })?.maxContextTokens,
+    ).toBe(12);
+  });
+
+  it("resolves via the displayName candidate when the model id misses every catalog", () => {
+    const entries: ProviderModelRegistryEntry[] = [entry("deepseek", "real-name", 20)];
+
+    expect(
+      resolveProviderModelMetadataEntry(entries, {
+        displayName: "real-name",
+        modelId: "unlisted-id",
+        providerKey: "qwen",
+      })?.maxContextTokens,
+    ).toBe(20);
+  });
+
+  it("reads and validates the catalog cache TTL at startup, throwing on an invalid value", () => {
+    delete process.env[cacheTtlEnvKey];
+    expect(readModelCatalogCacheTtlMs()).toBe(1_800_000);
+    process.env[cacheTtlEnvKey] = "0";
+    expect(readModelCatalogCacheTtlMs()).toBe(0);
+    process.env[cacheTtlEnvKey] = "nope";
+    expect(() => readModelCatalogCacheTtlMs()).toThrow(
+      "WORKER_MODEL_CATALOG_CACHE_TTL_MS must be a non-negative integer",
+    );
   });
 
   it("caches catalog fetches per URL with TTL, single-flight, and stale-on-error", async () => {

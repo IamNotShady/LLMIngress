@@ -140,6 +140,41 @@ describe("provider coverage", () => {
         displayName: "BytePlus ModelArk",
         id: "byteplus_coding",
       },
+      {
+        baseUrl: "https://api.mistral.ai/v1",
+        displayName: "Mistral",
+        id: "mistral",
+      },
+      {
+        baseUrl: "https://api.groq.com/openai/v1",
+        displayName: "Groq",
+        id: "groq",
+      },
+      {
+        baseUrl: "https://api.cerebras.ai/v1",
+        displayName: "Cerebras",
+        id: "cerebras",
+      },
+      {
+        baseUrl: "https://api.fireworks.ai/inference/v1",
+        displayName: "Fireworks AI",
+        id: "fireworks",
+      },
+      {
+        baseUrl: "https://integrate.api.nvidia.com/v1",
+        displayName: "NVIDIA NIM",
+        id: "nvidia",
+      },
+      {
+        baseUrl: "https://api.xiaomimimo.com/v1",
+        displayName: "Xiaomi MiMo",
+        id: "xiaomi",
+      },
+      {
+        baseUrl: "https://ollama.com/v1",
+        displayName: "Ollama Cloud",
+        id: "ollama_cloud",
+      },
     ]);
   });
 });

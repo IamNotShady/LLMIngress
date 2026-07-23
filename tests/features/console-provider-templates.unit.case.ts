@@ -38,6 +38,13 @@ describe("console provider template registry", () => {
         "cline_pass",
         "byteplus_coding",
         "nous",
+        "mistral",
+        "groq",
+        "cerebras",
+        "fireworks",
+        "nvidia",
+        "xiaomi",
+        "ollama_cloud",
       ],
       ["ollama", "lmstudio", "llama_cpp"],
     ]);
@@ -245,6 +252,13 @@ describe("console provider template registry", () => {
       "nous",
       "cline_pass",
       "byteplus_coding",
+      "mistral",
+      "groq",
+      "cerebras",
+      "fireworks",
+      "nvidia",
+      "xiaomi",
+      "ollama_cloud",
     ]);
     for (const template of templates) {
       expect(template.endpoints).toEqual({

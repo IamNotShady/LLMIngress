@@ -10,16 +10,23 @@ import type { ProviderType } from "./console-providers.ts";
 
 export type OpenAICompatibleProviderTemplateId =
   | "byteplus_coding"
+  | "cerebras"
   | "cline_pass"
   | "command_code"
   | "deepseek"
+  | "fireworks"
   | "glm_coding"
+  | "groq"
   | "minimax"
+  | "mistral"
   | "moonshot"
   | "nous"
+  | "nvidia"
+  | "ollama_cloud"
   | "qwen"
   | "qwen_token_plan"
   | "xai"
+  | "xiaomi"
   | "zai";
 // Anthropic messages protocol + x-api-key, non-official base (W1). Reserved for
 // extension with future Anthropic-protocol token sources.
@@ -167,6 +174,13 @@ const openAICompatibleProviderTemplateIds = [
   "nous",
   "cline_pass",
   "byteplus_coding",
+  "mistral",
+  "groq",
+  "cerebras",
+  "fireworks",
+  "nvidia",
+  "xiaomi",
+  "ollama_cloud",
 ] as const satisfies readonly OpenAICompatibleProviderTemplateId[];
 
 const anthropicCompatibleProviderTemplateIds = [

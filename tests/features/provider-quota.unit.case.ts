@@ -627,19 +627,29 @@ describe("provider quota scheduling and schema", () => {
     const unsupported: Record<string, "not_supported" | "requires_separate_credential"> = {
       anthropic: "requires_separate_credential",
       byteplus_coding: "not_supported",
+      cerebras: "not_supported",
       cline_pass: "not_supported",
       command_code: "not_supported",
+      fireworks: "not_supported",
       google: "not_supported",
+      groq: "not_supported",
+      // Mistral has an Admin usage API but it needs a separate enterprise
+      // credential, so it is requires_separate_credential (like anthropic/xai),
+      // not not_supported.
+      mistral: "requires_separate_credential",
       nous: "not_supported",
+      nvidia: "not_supported",
+      ollama_cloud: "not_supported",
       qwen: "not_supported",
       qwen_token_plan: "not_supported",
       xai: "requires_separate_credential",
+      xiaomi: "not_supported",
     };
     const remoteKeys = Object.values(providerRegistry)
       .filter((entry) => entry.behavior.local !== true)
       .map((entry) => entry.providerKey);
 
-    expect(remoteKeys).toHaveLength(20);
+    expect(remoteKeys).toHaveLength(27);
     expect([...supported, ...Object.keys(unsupported)].sort()).toEqual([...remoteKeys].sort());
 
     for (const key of remoteKeys) {

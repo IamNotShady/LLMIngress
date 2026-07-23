@@ -63,6 +63,20 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "byteplus_coding",
     providerType: "api_key",
   },
+  cerebras: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.cerebras.ai/v1",
+    },
+    displayName: "Cerebras",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "cerebras",
+    providerType: "api_key",
+  },
   claude_code: {
     behavior: {
       connectivityProbeStyle: "claude_code",
@@ -143,6 +157,20 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "deepseek",
     providerType: "api_key",
   },
+  fireworks: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.fireworks.ai/inference/v1",
+    },
+    displayName: "Fireworks AI",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "fireworks",
+    providerType: "api_key",
+  },
   google: {
     behavior: {
       priceSyncSupported: true,
@@ -175,6 +203,20 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     endpoints: { chat_completions: chatCompletionsEndpoint },
     modelListEndpoint: modelsEndpoint,
     providerKey: "glm_coding",
+    providerType: "api_key",
+  },
+  groq: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.groq.com/openai/v1",
+    },
+    displayName: "Groq",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "groq",
     providerType: "api_key",
   },
   kimi_coding: {
@@ -275,6 +317,22 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "minimax_coding",
     providerType: "subscription",
   },
+  mistral: {
+    behavior: {
+      quotaSource: { reason: "requires_separate_credential", supported: false },
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.mistral.ai/v1",
+    },
+    displayName: "Mistral",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "mistral",
+    providerType: "api_key",
+  },
   moonshot: {
     behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
@@ -303,6 +361,20 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "nous",
     providerType: "api_key",
   },
+  nvidia: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://integrate.api.nvidia.com/v1",
+    },
+    displayName: "NVIDIA NIM",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "nvidia",
+    providerType: "api_key",
+  },
   ollama: {
     behavior: { local: true, priceSyncSupported: true },
     creation: {
@@ -319,6 +391,20 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     modelListEndpoint: modelsEndpoint,
     providerKey: "ollama",
     providerType: "local",
+  },
+  ollama_cloud: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://ollama.com/v1",
+    },
+    displayName: "Ollama Cloud",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "ollama_cloud",
+    providerType: "api_key",
   },
   openai: {
     behavior: {
@@ -458,6 +544,20 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "xai",
     providerType: "api_key",
   },
+  xiaomi: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.xiaomimimo.com/v1",
+    },
+    displayName: "Xiaomi MiMo",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "xiaomi",
+    providerType: "api_key",
+  },
   zai: {
     behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
@@ -477,7 +577,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
 describe("provider metadata registry", () => {
   it("carries every provider entry field-for-field from the donor sources", () => {
     expect(providerRegistry).toEqual(expectedRegistry);
-    expect(Object.keys(providerRegistry)).toHaveLength(23);
+    expect(Object.keys(providerRegistry)).toHaveLength(30);
   });
 
   it("keeps the models catalog out of the routable endpoint face", () => {
@@ -596,6 +696,13 @@ describe("provider metadata registry", () => {
       "cline_pass",
       "byteplus_coding",
       "nous",
+      "mistral",
+      "groq",
+      "cerebras",
+      "fireworks",
+      "nvidia",
+      "xiaomi",
+      "ollama_cloud",
       "ollama",
       "lmstudio",
       "llama_cpp",

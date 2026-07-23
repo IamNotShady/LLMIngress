@@ -348,6 +348,34 @@ describe("prefix-vendor resolution and price allowlist expansion", () => {
     ).toBe(55);
   });
 
+  it("matches the vendor prefix case-insensitively, including an uppercased prefix", () => {
+    const entries: ProviderModelRegistryEntry[] = [
+      // Stripped id `glm-5.2` is a tier-1 conflict, so only the prefix can
+      // disambiguate to zai — which pins that the prefix itself, not just the
+      // stripped suffix, is matched case-insensitively.
+      entry("nvidia", "glm-5.2", 1),
+      entry("openrouter", "glm-5.2", 2),
+      entry("zai", "glm-5.2", 42),
+    ];
+
+    // Uppercased alias prefix (Z-AI -> zai) resolves via resolveRegistryCatalogKey's
+    // leading trim().toLowerCase(); the suffix here stays lowercase to isolate the
+    // prefix casing.
+    expect(
+      resolveProviderModelMetadataEntry(entries, {
+        modelId: "Z-AI/glm-5.2",
+        providerKey: "nous",
+      })?.maxContextTokens,
+    ).toBe(42);
+    // Fully uppercased prefix and suffix (ZAI-ORG/GLM-5.2) resolve too.
+    expect(
+      resolveProviderModelMetadataEntry(entries, {
+        modelId: "ZAI-ORG/GLM-5.2",
+        providerKey: "nous",
+      })?.maxContextTokens,
+    ).toBe(42);
+  });
+
   it("leaves bare-id resolution and the trusted-layer hard stop unchanged", () => {
     const entries: ProviderModelRegistryEntry[] = [
       entry("deepseek", "solo-model", 7),

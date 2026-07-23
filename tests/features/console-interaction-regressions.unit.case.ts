@@ -41,6 +41,12 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(activity).toContain("Math.ceil(total / ACTIVITY_PAGE_SIZE)");
   });
 
+  test("the OAuth pending dialog links out instead of printing the authorization URL", () => {
+    const providers = sectionSource("providers-section.tsx");
+    expect(providers).toContain("oauth-open-link");
+    expect(providers).not.toContain('id="provider-oauth-authorize-url"');
+  });
+
   test("the model library id line renders only when it differs from the display name", () => {
     const providers = sectionSource("providers-client-section.tsx");
     expect(providers).toContain("model.modelId !== model.modelDisplayName");

@@ -370,7 +370,7 @@ test("Add Provider API Keys group carries the Batch 1 GLM, Qwen, and Kimi paste-
   }
 });
 
-test("device-code provider shows the user code and polls to a completed connection", async ({
+test("device-code provider shows the user code and polls to complete; the authorization-code dialog links out without printing the URL", async ({
   browser,
 }) => {
   test.setTimeout(240_000);
@@ -445,6 +445,40 @@ test("device-code provider shows the user code and polls to a completed connecti
         ]) {
           await page.setViewportSize(viewport);
           expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
+        }
+
+        // The authorization-code dialog (claude_code) links out to the
+        // authorization page instead of printing the long URL in a textarea.
+        await page.setViewportSize({ width: 1280, height: 900 });
+        const codeProviderId = randomUUID();
+        await withDedicatedPostgresClient(fixture.databaseUrl, async (client) => {
+          await client.query(
+            `insert into providers (id, provider_type, provider_key, display_name, enabled)
+             values ($1, 'subscription', 'claude_code', 'Claude Code', true)`,
+            [codeProviderId],
+          );
+        });
+        const authorizeUrl = "https://claude.ai/oauth/authorize?client_id=e2e-client&state=abc";
+        await page.goto(
+          `${baseUrl}/providers?selected=${codeProviderId}` +
+            `&providerKeyDialog=${codeProviderId}` +
+            `&providerOAuthId=${randomUUID()}` +
+            `&providerAuthorizeUrl=${encodeURIComponent(authorizeUrl)}`,
+          { waitUntil: "networkidle" },
+        );
+        const codeDialog = page.getByRole("dialog", { name: "New Claude Code OAuth connection" });
+        await expect(codeDialog).toBeVisible();
+        await expect(
+          codeDialog.getByRole("link", { name: "Open authorization URL" }),
+        ).toHaveAttribute("href", authorizeUrl);
+        await expect(codeDialog.locator("#provider-oauth-authorize-url")).toHaveCount(0);
+        await expect(codeDialog.locator("#provider-oauth-callback-input")).toBeVisible();
+        for (const viewport of [
+          { width: 1280, height: 900 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          expect(await overflowPx(page), `code-dialog ${viewport.width}px`).toBeLessThanOrEqual(0);
         }
       } finally {
         await context.close();

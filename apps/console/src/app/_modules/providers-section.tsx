@@ -246,13 +246,6 @@ function ProviderOAuthCreateDialog({
       {hasPendingAuthorization ? (
         <>
           <div className="provider-create-form">
-            <label htmlFor="provider-oauth-authorize-url">Authorization URL</label>
-            <textarea
-              id="provider-oauth-authorize-url"
-              readOnly
-              rows={4}
-              defaultValue={authorizeUrl}
-            />
             <a
               className="oauth-open-link secondary-button"
               href={authorizeUrl}

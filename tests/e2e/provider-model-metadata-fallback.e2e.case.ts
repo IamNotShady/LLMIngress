@@ -27,11 +27,7 @@ test("cross-catalog metadata fallback fills a multi-vendor bundle provider", asy
       fetch: async () =>
         new Response(
           JSON.stringify({
-            data: [
-              { id: "qwen3-max" },
-              { id: "deepseek-v4-pro" },
-              { id: "glm-5.2-conflict" },
-            ],
+            data: [{ id: "qwen3-max" }, { id: "deepseek-v4-pro" }, { id: "glm-5.2-conflict" }],
           }),
           {
             headers: { "content-type": "application/json" },

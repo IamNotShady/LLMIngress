@@ -949,7 +949,6 @@ export async function cachedFetchJson(
       if (existing?.hasPayload) {
         // Keep the stale payload and its timestamp so the next refresh round retries.
         catalogCache.set(url, { ...existing, inflight: null });
-        console.warn(`Model catalog source ${url} refresh failed; serving cached payload.`);
         return existing.payload;
       }
       catalogCache.delete(url);

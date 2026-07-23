@@ -22,8 +22,8 @@ import {
 import { refreshProviderOAuthToken } from "@llmingress/provider/oauth";
 import {
   fetchProviderModelRegistryEntries,
-  findProviderModelRegistryEntry,
   type ProviderModelRegistryEntry,
+  resolveProviderModelMetadataEntry,
 } from "@llmingress/provider/price-source";
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { EncryptionKeySource } from "@llmingress/security/encryption-key";
@@ -265,7 +265,7 @@ export function enrichListedProviderModels(input: {
   const metadataProviderKey = providerMetadataKey(input.providerKey);
 
   return input.listedModels.map((model) => {
-    const registryEntry = findProviderModelRegistryEntry(input.registryEntries, {
+    const registryEntry = resolveProviderModelMetadataEntry(input.registryEntries, {
       displayName: model.displayName,
       modelId: model.modelId,
       providerKey: metadataProviderKey,

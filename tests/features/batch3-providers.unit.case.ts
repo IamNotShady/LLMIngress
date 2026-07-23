@@ -155,7 +155,12 @@ describe("batch 3 command code and nous providers", () => {
 describe("batch 3 clinepass and byteplus providers", () => {
   it("registers cline_pass as an OpenAI chat_completions api_key provider", () => {
     expect(providerRegistry.cline_pass).toEqual({
-      behavior: { quotaSource: { reason: "not_supported", supported: false } },
+      // Batch 4 Feature B opened cline_pass onto the price-sync allowlist (its
+      // catalog section carries the channel's own resale prices).
+      behavior: {
+        priceSyncSupported: true,
+        quotaSource: { reason: "not_supported", supported: false },
+      },
       creation: {
         mode: "template",
         selectorGroup: "remote_api_key",
@@ -169,7 +174,7 @@ describe("batch 3 clinepass and byteplus providers", () => {
       providerType: "api_key",
     });
     expect(providerRegistry.cline_pass.endpoints.responses).toBeUndefined();
-    expect(providerRegistry.cline_pass.behavior.priceSyncSupported).toBeUndefined();
+    expect(providerRegistry.cline_pass.behavior.priceSyncSupported).toBe(true);
     expect(providerRegistry.cline_pass.behavior.metadataKey).toBeUndefined();
   });
 

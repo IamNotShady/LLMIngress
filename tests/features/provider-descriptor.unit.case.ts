@@ -28,17 +28,24 @@ describe("provider descriptors", () => {
   it("derives the price sync allowlist from descriptors", () => {
     expect(listPriceSyncSupportedProviderKeys().sort()).toEqual([
       "anthropic",
+      "cerebras",
+      "cline_pass",
       "deepseek",
+      "fireworks",
       "google",
+      "groq",
       "llama_cpp",
       "lmstudio",
       "minimax",
+      "mistral",
       "moonshot",
+      "nvidia",
       "ollama",
       "openai",
       "openrouter",
       "qwen",
       "xai",
+      "xiaomi",
       "zai",
     ]);
   });

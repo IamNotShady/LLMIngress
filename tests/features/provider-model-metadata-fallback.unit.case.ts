@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ListedProviderModel } from "../../packages/provider/src/model-list.ts";
 import {
   cachedFetchJson,
   fetchProviderModelPrices,
@@ -9,6 +10,7 @@ import {
   resetProviderModelCatalogCacheForTests,
   resolveProviderModelMetadataEntry,
 } from "../../packages/provider/src/price-source.ts";
+import { enrichListedProviderModels } from "../../packages/worker-runtime/src/worker-model-refresh.ts";
 
 const syncedAt = new Date("2026-07-23T00:00:00.000Z");
 const cacheTtlEnvKey = "WORKER_MODEL_CATALOG_CACHE_TTL_MS";
@@ -34,7 +36,9 @@ const modelsDevFixture = {
   },
   zhipuai: {
     models: {
-      "glm-cn": { id: "glm-cn", limit: { context: 128000 } },
+      // Carries cost, so its exclusion from prices proves the gate is closed on
+      // merit (a section with real price data), not merely absent cost.
+      "glm-cn": { cost: { input: 5, output: 6 }, id: "glm-cn", limit: { context: 128000 } },
     },
   },
   "z-ai": {
@@ -99,8 +103,11 @@ describe("provider model metadata fallback", () => {
     const priceKeys = new Set(prices.map((price) => price.providerKey));
 
     expect(priceKeys.has("anthropic")).toBe(true);
-    expect(priceKeys.has("cline_pass")).toBe(false);
-    expect(priceKeys.has("cline-pass")).toBe(false);
+    // Batch 4 opened cline_pass into the price-sync allowlist, so this guard now
+    // samples zhipuai — a section that carries cost in the fixture but is NOT on
+    // the allowlist — to prove the price path still drops non-allowlist sections
+    // (the registry catalog keeps zhipuai; the price gate does not).
+    expect(priceKeys.has("zhipuai")).toBe(false);
   });
 
   it("resolves metadata across catalogs in provider / tier-1 / tier-2 order", () => {
@@ -109,8 +116,10 @@ describe("provider model metadata fallback", () => {
       entry("deepseek", "foreign-a", 2),
       entry("deepseek", "conflict-1", 3),
       entry("openai", "conflict-1", 4),
-      entry("cline_pass", "foreign-b", 5),
-      entry("cline_pass", "conflict-2", 6),
+      // novita/zhipuai are the tier-2 (non-allowlist) catalogs here; cline_pass
+      // used to play this role but Batch 4 moved it onto the tier-1 allowlist.
+      entry("novita", "foreign-b", 5),
+      entry("novita", "conflict-2", 6),
       entry("zhipuai", "conflict-2", 7),
     ];
 
@@ -155,8 +164,9 @@ describe("provider model metadata fallback", () => {
 
   it("falls through a tier-2 conflict on one lookup form to a unique tier-1 hit on the stripped form", () => {
     const entries: ProviderModelRegistryEntry[] = [
-      // Raw id `vendorx/foreign-b` is claimed by two untrusted (tier-2) catalogs.
-      entry("cline_pass", "vendorx/foreign-b", 10),
+      // Raw id `vendorx/foreign-b` is claimed by two untrusted (tier-2) catalogs
+      // (novita/zhipuai — cline_pass is now a tier-1 allowlist catalog).
+      entry("novita", "vendorx/foreign-b", 10),
       entry("zhipuai", "vendorx/foreign-b", 11),
       // Stripped id `foreign-b` is unique in a trusted (tier-1) catalog.
       entry("deepseek", "foreign-b", 12),
@@ -269,5 +279,179 @@ describe("provider model metadata fallback", () => {
     await expect(
       cachedFetchJson(neverResolving, MODELS_DEV_PRICE_SOURCE_URL, 20, () => 0),
     ).rejects.toThrow(/timed out/);
+  });
+});
+
+const listed = (modelId: string, overrides: Partial<ListedProviderModel> = {}) => ({
+  displayName: modelId,
+  modelId,
+  ...overrides,
+});
+
+describe("prefix-vendor resolution and price allowlist expansion", () => {
+  beforeEach(() => {
+    resetProviderModelCatalogCacheForTests();
+  });
+
+  afterEach(() => {
+    resetProviderModelCatalogCacheForTests();
+  });
+
+  it("resolves a vendor-prefixed id directly from the prefix's catalog, beating a trusted-layer conflict", () => {
+    const entries: ProviderModelRegistryEntry[] = [
+      // The same vendor-prefixed id is listed by two host catalogs that Batch 4
+      // put on the price-sync allowlist (both tier-1): nvidia and openrouter.
+      // The tiered sweep can only treat that as an unresolvable trusted-layer
+      // conflict.
+      entry("nvidia", "z-ai/glm-5.2", 100),
+      entry("openrouter", "z-ai/glm-5.2", 200),
+      // The prefix z-ai names the zai catalog, which lists the stripped id.
+      entry("zai", "glm-5.2", 300),
+    ];
+
+    // Without the prefix-vendor step this returns null (the tier-1 conflict); the
+    // step reads the prefix as the vendor's own catalog signature and resolves
+    // straight from zai.
+    expect(
+      resolveProviderModelMetadataEntry(entries, {
+        modelId: "z-ai/glm-5.2",
+        providerKey: "nous",
+      })?.maxContextTokens,
+    ).toBe(300);
+  });
+
+  it("resolves HF-style org-prefixed ids through the new metadata aliases, past a stripped-form conflict", () => {
+    const entries: ProviderModelRegistryEntry[] = [
+      // Bare ids are ambiguous across two trusted catalogs, so the stripped-form
+      // cross-catalog sweep conflicts; only the aliased prefix disambiguates.
+      entry("nvidia", "glm-5.2", 1),
+      entry("openrouter", "glm-5.2", 2),
+      entry("zai", "glm-5.2", 42),
+      entry("nvidia", "minimax-m2", 3),
+      entry("groq", "minimax-m2", 4),
+      entry("minimax", "minimax-m2", 55),
+    ];
+
+    // zai-org -> zai via the new alias, and case-insensitive (GLM-5.2).
+    expect(
+      resolveProviderModelMetadataEntry(entries, {
+        modelId: "zai-org/GLM-5.2",
+        providerKey: "nous",
+      })?.maxContextTokens,
+    ).toBe(42);
+    // minimaxai -> minimax via the new alias.
+    expect(
+      resolveProviderModelMetadataEntry(entries, {
+        modelId: "minimaxai/minimax-m2",
+        providerKey: "nous",
+      })?.maxContextTokens,
+    ).toBe(55);
+  });
+
+  it("matches the vendor prefix case-insensitively, including an uppercased prefix", () => {
+    const entries: ProviderModelRegistryEntry[] = [
+      // Stripped id `glm-5.2` is a tier-1 conflict, so only the prefix can
+      // disambiguate to zai — which pins that the prefix itself, not just the
+      // stripped suffix, is matched case-insensitively.
+      entry("nvidia", "glm-5.2", 1),
+      entry("openrouter", "glm-5.2", 2),
+      entry("zai", "glm-5.2", 42),
+    ];
+
+    // Uppercased alias prefix (Z-AI -> zai) resolves via resolveRegistryCatalogKey's
+    // leading trim().toLowerCase(); the suffix here stays lowercase to isolate the
+    // prefix casing.
+    expect(
+      resolveProviderModelMetadataEntry(entries, {
+        modelId: "Z-AI/glm-5.2",
+        providerKey: "nous",
+      })?.maxContextTokens,
+    ).toBe(42);
+    // Fully uppercased prefix and suffix (ZAI-ORG/GLM-5.2) resolve too.
+    expect(
+      resolveProviderModelMetadataEntry(entries, {
+        modelId: "ZAI-ORG/GLM-5.2",
+        providerKey: "nous",
+      })?.maxContextTokens,
+    ).toBe(42);
+  });
+
+  it("leaves bare-id resolution and the trusted-layer hard stop unchanged", () => {
+    const entries: ProviderModelRegistryEntry[] = [
+      entry("deepseek", "solo-model", 7),
+      entry("nvidia", "clash", 1),
+      entry("groq", "clash", 2),
+    ];
+
+    // Bare id with a unique tier-1 hit still resolves (no slash -> the
+    // prefix-vendor step never fires).
+    expect(
+      resolveProviderModelMetadataEntry(entries, { modelId: "solo-model", providerKey: "nous" })
+        ?.maxContextTokens,
+    ).toBe(7);
+    // Bare id claimed by two tier-1 catalogs still hard-stops at null rather than
+    // guessing — the expansion adds no new bare-id conflict resolution.
+    expect(
+      resolveProviderModelMetadataEntry(entries, { modelId: "clash", providerKey: "nous" }),
+    ).toBeNull();
+  });
+
+  it("stamps cross-catalog provenance when the prefix-vendor step resolves from a foreign catalog", () => {
+    const registry: ProviderModelRegistryEntry[] = [
+      entry("nvidia", "z-ai/glm-5.2", 100),
+      entry("openrouter", "z-ai/glm-5.2", 200),
+      {
+        maxContextTokens: 300,
+        modelId: "glm-5.2",
+        providerKey: "zai",
+        registrySources: { maxContextTokens: "models.dev" },
+        syncedAt,
+      },
+    ];
+
+    const enriched = enrichListedProviderModels({
+      listedModels: [listed("z-ai/glm-5.2")],
+      providerKey: "nous",
+      registryEntries: registry,
+    });
+
+    // The prefix-vendor hit comes from a foreign catalog (zai), so the existing
+    // worker-side provenance comparison stamps it — no new provenance code.
+    expect(enriched[0]?.capabilityMetadata).toMatchObject({
+      resolvedFromCatalog: "zai",
+      resolvedVia: "cross-catalog",
+    });
+    expect(enriched[0]?.contextWindow).toBe(300);
+  });
+
+  it("expands the price allowlist: fireworks-ai/cline-pass/groq map in, ollama-cloud stays out", async () => {
+    const priceFixture = {
+      "cline-pass": { models: { "cline-x": { cost: { input: 3, output: 4 }, id: "cline-x" } } },
+      "fireworks-ai": {
+        models: { "llama-v3": { cost: { input: 1, output: 2 }, id: "llama-v3" } },
+      },
+      groq: { models: { "llama-70b": { cost: { input: 5, output: 6 }, id: "llama-70b" } } },
+      // Deliberately off the allowlist even though it carries cost.
+      "ollama-cloud": { models: { "gpt-oss": { cost: { input: 7, output: 8 }, id: "gpt-oss" } } },
+    };
+    const fetchImpl = (async (url: string | URL | Request) => {
+      const href = typeof url === "string" ? url : url.toString();
+      if (href === MODELS_DEV_PRICE_SOURCE_URL) {
+        return jsonResponse(priceFixture);
+      }
+      return jsonResponse({});
+    }) as typeof globalThis.fetch;
+
+    const prices = await fetchProviderModelPrices({ fetch: fetchImpl });
+    const byKey = new Set(prices.map((price) => price.providerKey));
+
+    // fireworks-ai and cline-pass normalize via the new price-path aliases; groq
+    // is now allowlisted directly.
+    expect(byKey.has("fireworks")).toBe(true);
+    expect(byKey.has("groq")).toBe(true);
+    expect(byKey.has("cline_pass")).toBe(true);
+    // ollama_cloud is intentionally excluded from price sync — the section drops.
+    expect(byKey.has("ollama_cloud")).toBe(false);
+    expect(byKey.has("ollama-cloud")).toBe(false);
   });
 });

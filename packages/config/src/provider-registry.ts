@@ -52,10 +52,11 @@ export type ProviderModelListStyle =
   | "anthropic"
   | "claude_code"
   | "codex"
+  | "grok"
   | "lmstudio"
   | "openrouter";
-export type ProviderConnectivityProbeStyle = "anthropic" | "claude_code" | "codex";
-export type ProviderSubscriptionAdapter = "claude_code" | "codex" | "minimax_anthropic";
+export type ProviderConnectivityProbeStyle = "anthropic" | "claude_code" | "codex" | "grok";
+export type ProviderSubscriptionAdapter = "claude_code" | "codex" | "grok" | "minimax_anthropic";
 
 /**
  * Whether Worker should schedule an upstream quota probe for this provider.
@@ -94,6 +95,7 @@ export type KnownProviderKey =
   | "fireworks"
   | "glm_coding"
   | "google"
+  | "grok"
   | "groq"
   | "kimi_coding"
   | "llama_cpp"
@@ -124,7 +126,12 @@ export type KnownProviderKey =
  * entries' `behavior.subscription` flags so the type and the registry data
  * cannot drift apart.
  */
-export const subscriptionProviderKeys = ["claude_code", "minimax_coding", "openai_codex"] as const;
+export const subscriptionProviderKeys = [
+  "claude_code",
+  "grok",
+  "minimax_coding",
+  "openai_codex",
+] as const;
 export type SubscriptionProviderKey = (typeof subscriptionProviderKeys)[number];
 
 export type ProviderRegistryEntry = {
@@ -366,6 +373,46 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     modelListEndpoint: modelsEndpoint,
     providerKey: "glm_coding",
     providerType: "api_key",
+  },
+  // Grok subscription (SuperGrok used through OAuth). Egress goes to the official
+  // inference proxy (cli-chat-proxy.grok.com), not the api.x.ai API-key path.
+  // Feature A ships the chat_completions face and popup authorization-code OAuth;
+  // the follow-up feature adds the responses endpoint and flips quotaSource to
+  // supported. Model metadata resolves through the shared xai catalog entry.
+  grok: {
+    behavior: {
+      connectivityProbeStyle: "grok",
+      metadataKey: "xai",
+      modelListStyle: "grok",
+      // Feature B flips this to supported alongside quotaProbes.grok (the
+      // /billing double-request probe).
+      quotaSource: { supported: true },
+      subscription: true,
+      subscriptionAdapter: "grok",
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "subscription",
+      baseUrl: "https://cli-chat-proxy.grok.com/v1",
+    },
+    displayName: "Grok",
+    // The upstream's multi-agent grok variants are responses-only, so the
+    // responses face rides on the same proxy base as chat_completions.
+    endpoints: { chat_completions: chatCompletionsEndpoint, responses: responsesEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    oauth: {
+      authorizeUrl: "https://auth.x.ai/oauth2/authorize",
+      clientId: "b1a00492-073a-47ea-816f-4c329264a828",
+      clientIdEnvVar: "GROK_OAUTH_CLIENT_ID",
+      redirectUri: "http://127.0.0.1:56121/callback",
+      revokeUrl: "https://auth.x.ai/oauth2/revoke",
+      scope: "openid profile email offline_access grok-cli:access api:access",
+      tokenEncoding: "form",
+      tokenHeaders: { accept: "application/json" },
+      tokenUrl: "https://auth.x.ai/oauth2/token",
+    },
+    providerKey: "grok",
+    providerType: "subscription",
   },
   groq: {
     behavior: {
@@ -837,6 +884,7 @@ const knownProviderKeys: KnownProviderKey[] = [
   "fireworks",
   "glm_coding",
   "google",
+  "grok",
   "groq",
   "kimi_coding",
   "llama_cpp",
@@ -868,6 +916,7 @@ const providerTemplateSelectorOrder: KnownProviderKey[] = [
   "openai_codex",
   "claude_code",
   "minimax_coding",
+  "grok",
   "google",
   "openrouter",
   "deepseek",

@@ -10,6 +10,7 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
+  buildGrokSubscriptionHeaders,
   buildMiniMaxSubscriptionHeaders,
   withClaudeCodeSystemPrompt,
 } from "./subscription.js";
@@ -56,6 +57,13 @@ const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
       buildCodexSubscriptionHeaders(apiKey, protocolHeaders(apiKey)),
     buildUrl: (baseUrl, pathSuffix) =>
       pathSuffix === "responses" ? buildCodexResponsesUrl(baseUrl) : joinUrl(baseUrl, pathSuffix),
+  },
+  grok: {
+    // Default joinUrl and body: grok's proxy is OpenAI-protocol, so only the
+    // headers change — the versioned client identity headers the proxy's 426
+    // gate requires, layered on the protocol Bearer/content-type.
+    buildHeaders: (apiKey, protocolHeaders) =>
+      buildGrokSubscriptionHeaders(apiKey, protocolHeaders(apiKey)),
   },
   minimax_coding: {
     // Bearer + anthropic-version only (strip x-api-key); no stainless/beta/UA

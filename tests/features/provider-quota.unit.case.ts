@@ -708,6 +708,9 @@ describe("provider quota scheduling and schema", () => {
       // account quotas endpoint (two-hop probe: account resolution first).
       "fireworks",
       "glm_coding",
+      // Feature B ships the Grok /billing double-request quota probe and flips
+      // quotaSource to { supported: true } alongside quotaProbes.grok.
+      "grok",
       "kimi_coding",
       "minimax",
       // Feature B ships the MiniMax Coding Plan quota probe and flips
@@ -748,7 +751,7 @@ describe("provider quota scheduling and schema", () => {
       .filter((entry) => entry.behavior.local !== true)
       .map((entry) => entry.providerKey);
 
-    expect(remoteKeys).toHaveLength(31);
+    expect(remoteKeys).toHaveLength(32);
     expect([...supported, ...Object.keys(unsupported)].sort()).toEqual([...remoteKeys].sort());
 
     for (const key of remoteKeys) {

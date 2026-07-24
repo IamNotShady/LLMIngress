@@ -19,6 +19,7 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
+  buildGrokSubscriptionHeaders,
 } from "./subscription.js";
 
 export type ProviderProbeModelCandidate = {
@@ -224,6 +225,24 @@ export function buildProviderConnectivityRequest(input: {
         method: "POST",
       },
       url: buildClaudeCodeMessagesUrl(input.provider.baseUrl),
+    };
+  }
+
+  if (descriptor.connectivityProbeStyle === "grok") {
+    return {
+      init: {
+        body: JSON.stringify({
+          max_tokens: 1,
+          messages: [{ content: "ping", role: "user" }],
+          model: input.provider.modelId,
+          stream: false,
+        }),
+        headers: buildGrokSubscriptionHeaders(input.apiKey ?? "", {
+          "content-type": "application/json",
+        }),
+        method: "POST",
+      },
+      url: buildChatCompletionsUrl(input.provider.baseUrl),
     };
   }
 

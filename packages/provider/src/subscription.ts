@@ -32,6 +32,12 @@ export function withClaudeCodeSystemPrompt(system: unknown): AnthropicContentBlo
 export const codexClientVersion = "0.128.0";
 export const codexOriginator = "codex_cli_rs";
 export const codexUserAgent = "codex_cli_rs/0.0.0 (Unknown 0; unknown) unknown";
+// The proxy inference endpoints gate on a versioned client User-Agent: an
+// unversioned agent is rejected with HTTP 426 Upgrade Required. This single
+// constant feeds both the User-Agent and the x-grok-client-version header; bump
+// it here if the upstream proxy raises its minimum accepted client version.
+export const grokClientVersion = "1.0.0";
+export const grokTokenAuthHeaderValue = "xai-grok-cli";
 export const claudeCodeBetaFlags =
   "claude-code-20250219,oauth-2025-04-20,context-management-2025-06-27,effort-2025-11-24";
 export const claudeCodeStainlessPackageVersion = "0.80.0";
@@ -102,6 +108,25 @@ export function buildMiniMaxSubscriptionHeaders(
     "anthropic-version": readHttpHeader(forwarded, "anthropic-version") ?? "2023-06-01",
     authorization: `Bearer ${accessToken}`,
     "content-type": "application/json",
+  });
+}
+
+export function buildGrokSubscriptionHeaders(
+  accessToken: string,
+  requestHeaders?: Record<string, string>,
+): Record<string, string> {
+  // Mirror the upstream client's identity headers so the proxy's version gate
+  // (HTTP 426 without a versioned User-Agent) passes. The subscription Bearer
+  // owns auth, so the grok headers are merged last and win over any forwarded
+  // authorization. content-type is intentionally omitted here — the POST callers
+  // add it; this builder owns only the six client-identity headers.
+  return mergeHttpHeaders(requestHeaders, {
+    accept: "application/json",
+    authorization: `Bearer ${accessToken}`,
+    "user-agent": `grok-shell/${grokClientVersion}`,
+    "x-grok-client-mode": "headless",
+    "x-grok-client-version": grokClientVersion,
+    "x-xai-token-auth": grokTokenAuthHeaderValue,
   });
 }
 

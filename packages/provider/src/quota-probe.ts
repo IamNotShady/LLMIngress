@@ -1,6 +1,7 @@
 import type { QuotaEntry, WindowEntry } from "@llmingress/domain/quota";
 import { isRecord, joinUrl } from "@llmingress/util";
 import { fetchCredentialedProviderRequestWithTimeout } from "./authenticated-http.js";
+import { grokTokenAuthHeaderValue } from "./subscription.js";
 
 export type QuotaProbeErrorCode = "probe_failed" | "unauthorized";
 
@@ -46,6 +47,93 @@ const zaiQuotaProbe: QuotaProbe = async (input) => {
     url,
   });
 };
+
+// Grok /billing probe parameters, centralized for correction (probe params are
+// unverified against a real account; see the local Batch 8 Grok plan §7/R1).
+const grokQuotaProbeConfig = {
+  billingPath: "billing",
+  creditsQuery: "format=credits",
+  headers: (credential: string): Record<string, string> => ({
+    accept: "application/json",
+    authorization: `Bearer ${credential}`,
+    "x-xai-token-auth": grokTokenAuthHeaderValue,
+  }),
+  timeoutMs: 15_000,
+} as const;
+
+/**
+ * Grok subscription quota. Two requests against the proxy /billing endpoint,
+ * mirroring the upstream client: `?format=credits` (the period percent the
+ * client primarily reads) plus the bare path (the legacy USD-cent monthly
+ * config, still returned). A failed credits request degrades to the monthly
+ * window alone; 401 is unauthorized, any other non-2xx (including a 402
+ * exhaustion at billing) is probe_failed — 402 is never read as a probe-level
+ * quota signal. Two proto3 zero-value traps are tolerated in the parsers.
+ */
+const grokQuotaProbe: QuotaProbe = async (input) => {
+  const billingUrl = joinUrl(input.baseUrl, grokQuotaProbeConfig.billingPath);
+  const headers = grokQuotaProbeConfig.headers(input.credential);
+  const timeoutMs = input.timeoutMs ?? grokQuotaProbeConfig.timeoutMs;
+
+  const credits = await grokBillingRequest(
+    input,
+    `${billingUrl}?${grokQuotaProbeConfig.creditsQuery}`,
+    headers,
+    timeoutMs,
+  );
+  if (credits.status === 401) {
+    return grokUnauthorized(credits.status);
+  }
+  const legacy = await grokBillingRequest(input, billingUrl, headers, timeoutMs);
+  if (legacy.status === 401) {
+    return grokUnauthorized(legacy.status);
+  }
+  // Neither request produced usable billing data: a probe failure, not "no quota".
+  if (!credits.ok && !legacy.ok) {
+    return {
+      errorCode: "probe_failed",
+      errorMessage: `Quota probe failed with status ${legacy.status ?? credits.status ?? "unknown"}.`,
+      ok: false,
+    };
+  }
+  const entries: QuotaEntry[] = [];
+  if (credits.ok) {
+    entries.push(...parseGrokCreditsQuota(credits.body));
+  }
+  if (legacy.ok) {
+    entries.push(...parseGrokMonthlyQuota(legacy.body));
+  }
+  return { entries, ok: true };
+};
+
+async function grokBillingRequest(
+  input: QuotaProbeInput,
+  url: string,
+  headers: Record<string, string>,
+  timeoutMs: number,
+): Promise<{ body: unknown; ok: boolean; status: number | null }> {
+  const fetchImpl = input.fetch ?? globalThis.fetch;
+  try {
+    const response = await fetchCredentialedProviderRequestWithTimeout(
+      fetchImpl,
+      url,
+      { headers, method: "GET" },
+      { timeoutMs },
+    );
+    const text = await response.text();
+    return { body: readJson(text), ok: response.ok, status: response.status };
+  } catch {
+    return { body: null, ok: false, status: null };
+  }
+}
+
+function grokUnauthorized(status: number): QuotaProbeResult {
+  return {
+    errorCode: "unauthorized",
+    errorMessage: `Quota probe failed with status ${status}.`,
+    ok: false,
+  };
+}
 
 /**
  * Fireworks quota lives on the control-plane API at the account scope, not
@@ -102,6 +190,7 @@ export const quotaProbes: Record<string, QuotaProbe> = {
   fireworks: fireworksQuotaProbe,
   // glm_coding shares the api.z.ai origin, so it reuses the exact zai probe.
   glm_coding: zaiQuotaProbe,
+  grok: grokQuotaProbe,
   kimi_coding: async (input) =>
     parsed(input, parseKimiQuota, {
       // Bearer to /coding/v1/usages — a different endpoint and auth than the
@@ -492,6 +581,83 @@ export function parseZaiQuota(body: unknown): QuotaEntry[] {
     });
   }
   return entries;
+}
+
+/**
+ * Grok credits response (`GET /billing?format=credits`): a period utilization
+ * percent (0-100). A new period omits `creditUsagePercent` (proto3 default), so
+ * a missing field reads as 0, never a parse failure. The window name follows
+ * `config.currentPeriod.type` when present, else "weekly".
+ */
+export function parseGrokCreditsQuota(body: unknown): QuotaEntry[] {
+  if (!isRecord(body) || !isRecord(body.config)) {
+    return [];
+  }
+  const config = body.config;
+  const percent = readNumber(config.creditUsagePercent) ?? 0;
+  const currentPeriod = isRecord(config.currentPeriod) ? config.currentPeriod : undefined;
+  const window =
+    typeof currentPeriod?.type === "string" && currentPeriod.type.trim()
+      ? currentPeriod.type.trim().toLowerCase()
+      : "weekly";
+  const resetsAt = readGrokReset(
+    typeof config.billingPeriodEnd === "string" ? config.billingPeriodEnd : currentPeriod?.end,
+  );
+  return [
+    {
+      ...(resetsAt === null ? {} : { resetsAt }),
+      utilization: clampUnitFraction(percent / 100),
+      window,
+    },
+  ];
+}
+
+/**
+ * Grok legacy monthly config (`GET /billing`): `used`/`monthlyLimit` are Cent
+ * messages in USD cents. A zero-value Cent serializes as an empty object (or is
+ * absent), so a missing `val` reads as 0. A non-positive monthly limit produces
+ * no window (division would be meaningless).
+ */
+export function parseGrokMonthlyQuota(body: unknown): QuotaEntry[] {
+  if (!isRecord(body) || !isRecord(body.config)) {
+    return [];
+  }
+  const config = body.config;
+  const monthlyLimit = readGrokCentValue(config.monthlyLimit);
+  if (monthlyLimit <= 0) {
+    return [];
+  }
+  const used = readGrokCentValue(config.used);
+  const resetsAt = readGrokReset(
+    typeof config.billingPeriodEnd === "string" ? config.billingPeriodEnd : undefined,
+  );
+  return [
+    {
+      ...(resetsAt === null ? {} : { resetsAt }),
+      utilization: clampUnitFraction(used / monthlyLimit),
+      window: "monthly",
+    },
+  ];
+}
+
+/** A Cent message is `{ val: number }` in cents; a zero value serializes as {}. */
+function readGrokCentValue(value: unknown): number {
+  return isRecord(value) ? (readNumber(value.val) ?? 0) : 0;
+}
+
+function readGrokReset(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
+}
+
+function clampUnitFraction(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.min(1, Math.max(0, value));
 }
 
 /** The API reports REMAINING percent; utilization is the inverse. */

@@ -20,7 +20,7 @@ the selected Provider model and does not log prompts, successful responses, or t
 
 Supported Provider types are API Key, Subscription OAuth, and Local. Current templates are:
 
-- Subscription: OpenAI Codex, Claude Code, MiniMax Coding Plan
+- Subscription: OpenAI Codex, Claude Code, MiniMax Coding Plan, Grok
 - API Key: Google Gemini, OpenRouter, DeepSeek, AWS Bedrock, xAI, Qwen, Moonshot/Kimi, MiniMax, Z.ai, GLM Coding Plan, Qwen Token Plan, Kimi Coding Plan, Command Code, ClinePass, BytePlus ModelArk, NousResearch, Groq, Cerebras, Fireworks AI, Mistral, NVIDIA NIM, Xiaomi MiMo, Ollama Cloud, OpenCode Go, Xiaomi MiMo Token Plan, Mistral Vibe
 - Local: Ollama, LM Studio, llama.cpp
 
@@ -60,6 +60,10 @@ Batch 5 adds three subscription-plan providers that connect by pasting a token, 
 Batch 7 adds AWS Bedrock as a paste-key (`api_key`) OpenAI Chat Completions provider on AWS's documented OpenAI-compatible mantle face. Prices sync automatically; upstream quota is not reported from the ABSK key.
 
 - AWS Bedrock (`bedrock`) — OpenAI Chat Completions at the default mantle base `https://bedrock-mantle.us-east-1.api.aws/v1` (us-east-1). Fourteen mantle regions are available (`us-east-1`, `us-east-2`, `us-west-2`, `ap-southeast-3`, `ap-south-1`, `ap-southeast-2`, `ap-northeast-1`, `eu-central-1`, `eu-west-1`, `eu-west-2`, `eu-south-1`, `eu-north-1`, `sa-east-1`, `us-gov-west-1`); the base is editable in the Add Provider dialog, including the bedrock-runtime variant `https://bedrock-runtime.{region}.amazonaws.com/v1` for runtime-only models. Mantle is a model subset relative to bedrock-runtime (for example GPT-5.x/Grok on mantle; older Claude/Llama may require the runtime base). Paste an ABSK long-term key or a short-lived `bedrock-api-key-` key as a `Bearer` credential; key prefixes are not validated (AWS recommends long-term ABSK keys for exploration only; short-lived keys are region-bound and expire in about 12 hours). Prices sync automatically from the models.dev `amazon-bedrock` catalog (aliased to `bedrock`). Upstream quota is treated as requires-separate-credential — usage lives in CloudWatch and quotas in Service Quotas, both reachable only with a separate SigV4 IAM credential, not the ABSK key.
+
+Batch 8 adds **Grok** (`grok`) as the fourth subscription-type provider — a SuperGrok plan used through OAuth as an API — and the first subscription provider to route the OpenAI Chat Completions face. It authorizes through a popup authorization-code flow (open the authorization page at `auth.x.ai`, paste the callback URL back), reusing the same OAuth engine and Console dialog as Claude Code; there is no pasted key.
+
+- Grok (`grok`) — dual OpenAI faces from the official inference proxy base `https://cli-chat-proxy.grok.com/v1`: Chat Completions and Responses (the upstream's `grok-*-multi-agent*` variants are Responses-only, so both faces ride the same base). This is the OAuth inference-proxy path and is distinct from the API Key xAI (`xai`) template at `https://api.x.ai/v1`, which is the pay-as-you-go direct API path; the two coexist and use separate credentials. Egress carries the OAuth `Bearer` plus the upstream client's identity headers (`X-XAI-Token-Auth`, a versioned `grok-shell` `User-Agent`), which the proxy requires. Upstream quota is reported: a `/billing` probe surfaces two windows — a rolling period-usage window and a legacy monthly-limit window. **403 gate:** xAI allowlists accounts for OAuth API usage, so some otherwise-valid SuperGrok accounts connect successfully but have every request rejected with 403 (an upstream account policy, not a configuration error) — if that happens, switch to the xAI API key template (`xai`), which is pay-as-you-go and unaffected. A 402 means the plan's credits are exhausted.
 
 Console supports Provider lifecycle, multiple API keys, OAuth, model refresh, dependency-protected
 deletion, and connection checks. Model metadata may be merged from Provider APIs, models.dev,

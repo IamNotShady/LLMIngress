@@ -9,6 +9,7 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
+  buildGrokSubscriptionHeaders,
   buildMiniMaxSubscriptionHeaders,
   withClaudeCodeSystemPrompt,
 } from "../subscription.js";
@@ -24,6 +25,7 @@ import {
   buildAnthropicMessagesPayload,
 } from "./anthropic.js";
 import type {
+  NormalizedOpenAIChatRequest,
   NormalizedOpenAIResponsesRequest,
   OpenAIAdapterResult,
   OpenAIProviderAdapter,
@@ -74,6 +76,72 @@ export function createCodexSubscriptionAdapter(
         return requestFailed(error, timeoutMs);
       }
     },
+  };
+}
+
+export function createGrokSubscriptionAdapter(
+  options: CreateSubscriptionAdapterOptions = {},
+): OpenAIProviderAdapter {
+  const fetchImpl = options.fetch ?? globalThis.fetch;
+  const timeoutMs = options.timeoutMs ?? providerRequestTimeoutMs();
+
+  const call = async (
+    pathSuffix: "chat/completions" | "responses",
+    payload: Record<string, unknown>,
+    headers: Record<string, string> | undefined,
+    apiKey: string | null | undefined,
+    baseUrl: string,
+  ): Promise<OpenAIAdapterResult> => {
+    try {
+      const response = await fetchCredentialedProviderRequest(
+        fetchImpl,
+        joinUrl(baseUrl, pathSuffix),
+        {
+          body: JSON.stringify(payload),
+          // The proxy inference endpoint owns auth via the OAuth Bearer and
+          // requires the upstream client's versioned identity headers (426 gate).
+          headers: {
+            "content-type": "application/json",
+            ...buildGrokSubscriptionHeaders(apiKey ?? "", headers),
+          },
+          method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
+        },
+      );
+      const body = await readResponseBody(response);
+      const responseHeaders = readProviderResponseHeaders(response.headers);
+      if (!response.ok) {
+        return mapOpenAIProviderError(response.status, body, responseHeaders);
+      }
+      return {
+        body,
+        headers: responseHeaders,
+        ok: true,
+        providerRequestId: readProviderRequestId(body),
+        statusCode: response.status,
+      };
+    } catch (error) {
+      return requestFailed(error, timeoutMs);
+    }
+  };
+
+  return {
+    chatCompletion: ({ headers, request, target }) =>
+      call(
+        "chat/completions",
+        buildGrokChatPayload(request, target.modelId),
+        headers,
+        target.apiKey,
+        target.baseUrl,
+      ),
+    response: ({ headers, request, target }) =>
+      call(
+        "responses",
+        buildGrokResponsesPayload(request, target.modelId),
+        headers,
+        target.apiKey,
+        target.baseUrl,
+      ),
   };
 }
 
@@ -174,6 +242,20 @@ function buildCodexResponsesPayload(
   request: NormalizedOpenAIResponsesRequest,
   modelId: string,
 ): CodexResponsesPayload {
+  return { ...request.payload, model: modelId };
+}
+
+function buildGrokChatPayload(
+  request: NormalizedOpenAIChatRequest,
+  modelId: string,
+): Record<string, unknown> {
+  return { ...request.payload, model: modelId };
+}
+
+function buildGrokResponsesPayload(
+  request: NormalizedOpenAIResponsesRequest,
+  modelId: string,
+): Record<string, unknown> {
   return { ...request.payload, model: modelId };
 }
 

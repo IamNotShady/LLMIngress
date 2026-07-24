@@ -182,6 +182,21 @@ describe("provider coverage", () => {
         displayName: "Ollama Cloud",
         id: "ollama_cloud",
       },
+      {
+        baseUrl: "https://opencode.ai/zen/go/v1",
+        displayName: "OpenCode Go",
+        id: "opencode_go",
+      },
+      {
+        baseUrl: "https://token-plan-sgp.xiaomimimo.com/v1",
+        displayName: "Xiaomi MiMo Token Plan",
+        id: "xiaomi_token_plan",
+      },
+      {
+        baseUrl: "https://api.mistral.ai/v1",
+        displayName: "Mistral Vibe",
+        id: "mistral_vibe",
+      },
     ]);
   });
 });

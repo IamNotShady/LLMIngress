@@ -148,7 +148,9 @@ describe("batch 5 token plan providers", () => {
     // This pins the "same base, distinct key" contract for the standard/vibe pair.
     expect(providerRegistry.mistral_vibe.providerKey).toBe("mistral_vibe");
     expect(providerRegistry.mistral.providerKey).toBe("mistral");
-    expect(providerRegistry.mistral_vibe.providerKey).not.toBe(providerRegistry.mistral.providerKey);
+    expect(providerRegistry.mistral_vibe.providerKey).not.toBe(
+      providerRegistry.mistral.providerKey,
+    );
 
     const vibeBase =
       providerRegistry.mistral_vibe.creation.mode === "template"

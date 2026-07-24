@@ -346,6 +346,22 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "mistral",
     providerType: "api_key",
   },
+  mistral_vibe: {
+    behavior: {
+      quotaSource: { reason: "requires_separate_credential", supported: false },
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.mistral.ai/v1",
+    },
+    displayName: "Mistral Vibe",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "mistral_vibe",
+    providerType: "api_key",
+  },
   moonshot: {
     behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
@@ -479,6 +495,23 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "openai_codex",
     providerType: "subscription",
   },
+  opencode_go: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://opencode.ai/zen/go/v1",
+    },
+    displayName: "OpenCode Go",
+    endpoints: {
+      chat_completions: chatCompletionsEndpoint,
+      messages: messagesEndpoint,
+    },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "opencode_go",
+    providerType: "api_key",
+  },
   openrouter: {
     behavior: {
       fixedApiKeyBaseUrl: "https://openrouter.ai/api/v1",
@@ -577,6 +610,20 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "xiaomi",
     providerType: "api_key",
   },
+  xiaomi_token_plan: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://token-plan-sgp.xiaomimimo.com/v1",
+    },
+    displayName: "Xiaomi MiMo Token Plan",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "xiaomi_token_plan",
+    providerType: "api_key",
+  },
   zai: {
     behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
@@ -596,7 +643,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
 describe("provider metadata registry", () => {
   it("carries every provider entry field-for-field from the donor sources", () => {
     expect(providerRegistry).toEqual(expectedRegistry);
-    expect(Object.keys(providerRegistry)).toHaveLength(30);
+    expect(Object.keys(providerRegistry)).toHaveLength(33);
   });
 
   it("keeps the models catalog out of the routable endpoint face", () => {
@@ -729,6 +776,9 @@ describe("provider metadata registry", () => {
       "nvidia",
       "xiaomi",
       "ollama_cloud",
+      "opencode_go",
+      "xiaomi_token_plan",
+      "mistral_vibe",
       "ollama",
       "lmstudio",
       "llama_cpp",

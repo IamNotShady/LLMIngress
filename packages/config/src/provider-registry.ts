@@ -100,6 +100,7 @@ export type KnownProviderKey =
   | "minimax"
   | "minimax_coding"
   | "mistral"
+  | "mistral_vibe"
   | "moonshot"
   | "nous"
   | "nvidia"
@@ -107,11 +108,13 @@ export type KnownProviderKey =
   | "ollama_cloud"
   | "openai"
   | "openai_codex"
+  | "opencode_go"
   | "openrouter"
   | "qwen"
   | "qwen_token_plan"
   | "xai"
   | "xiaomi"
+  | "xiaomi_token_plan"
   | "zai";
 
 /**
@@ -488,6 +491,26 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerKey: "mistral",
     providerType: "api_key",
   },
+  // Mistral Vibe (Vibe CLI subscription plan) shares the standard mistral base
+  // as a distinct paste-key. Quota is requires_separate_credential for the same
+  // reason as mistral (usage API is enterprise-only behind an Admin key); it is
+  // not on the price-sync allowlist (a subscription plan has no per-token price).
+  mistral_vibe: {
+    behavior: {
+      quotaSource: { reason: "requires_separate_credential", supported: false },
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://api.mistral.ai/v1",
+    },
+    displayName: "Mistral Vibe",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "mistral_vibe",
+    providerType: "api_key",
+  },
   moonshot: {
     behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
@@ -624,6 +647,28 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerKey: "openai_codex",
     providerType: "subscription",
   },
+  opencode_go: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://opencode.ai/zen/go/v1",
+    },
+    displayName: "OpenCode Go",
+    // Dual routable faces from one base (command_code precedent): chat_completions
+    // egress carries the Bearer credential; the messages egress authenticates with
+    // a bare x-api-key (hardcoded by the anthropic adapter), matching the
+    // upstream gateway's per-protocol auth. creation.auth shows the Bearer chat
+    // face; default Bearer connectivity probing and model discovery.
+    endpoints: {
+      chat_completions: chatCompletionsEndpoint,
+      messages: messagesEndpoint,
+    },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "opencode_go",
+    providerType: "api_key",
+  },
   openrouter: {
     behavior: {
       fixedApiKeyBaseUrl: "https://openrouter.ai/api/v1",
@@ -722,6 +767,22 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerKey: "xiaomi",
     providerType: "api_key",
   },
+  xiaomi_token_plan: {
+    behavior: { quotaSource: { reason: "not_supported", supported: false } },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      // Default region sgp; cn/ams variants documented in PRODUCT.md, and the
+      // base stays user-editable in the template dialog.
+      baseUrl: "https://token-plan-sgp.xiaomimimo.com/v1",
+    },
+    displayName: "Xiaomi MiMo Token Plan",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "xiaomi_token_plan",
+    providerType: "api_key",
+  },
   zai: {
     behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
@@ -765,6 +826,7 @@ const knownProviderKeys: KnownProviderKey[] = [
   "minimax",
   "minimax_coding",
   "mistral",
+  "mistral_vibe",
   "moonshot",
   "nous",
   "nvidia",
@@ -772,11 +834,13 @@ const knownProviderKeys: KnownProviderKey[] = [
   "ollama_cloud",
   "openai",
   "openai_codex",
+  "opencode_go",
   "openrouter",
   "qwen",
   "qwen_token_plan",
   "xai",
   "xiaomi",
+  "xiaomi_token_plan",
   "zai",
 ];
 
@@ -808,6 +872,9 @@ const providerTemplateSelectorOrder: KnownProviderKey[] = [
   "nvidia",
   "xiaomi",
   "ollama_cloud",
+  "opencode_go",
+  "xiaomi_token_plan",
+  "mistral_vibe",
   "ollama",
   "lmstudio",
   "llama_cpp",

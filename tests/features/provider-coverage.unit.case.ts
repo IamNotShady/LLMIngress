@@ -10,6 +10,7 @@ describe("provider coverage", () => {
       "anthropic",
       "kimi_coding",
       "command_code",
+      "opencode_go",
       "google",
       "openrouter",
       "ollama",
@@ -46,6 +47,12 @@ describe("provider coverage", () => {
         endpoint: "messages",
         providerKey: "command_code",
         providerTemplateId: "command_code",
+        providerType: "api_key",
+      },
+      {
+        endpoint: "messages",
+        providerKey: "opencode_go",
+        providerTemplateId: "opencode_go",
         providerType: "api_key",
       },
       {
@@ -174,6 +181,21 @@ describe("provider coverage", () => {
         baseUrl: "https://ollama.com/v1",
         displayName: "Ollama Cloud",
         id: "ollama_cloud",
+      },
+      {
+        baseUrl: "https://opencode.ai/zen/go/v1",
+        displayName: "OpenCode Go",
+        id: "opencode_go",
+      },
+      {
+        baseUrl: "https://token-plan-sgp.xiaomimimo.com/v1",
+        displayName: "Xiaomi MiMo Token Plan",
+        id: "xiaomi_token_plan",
+      },
+      {
+        baseUrl: "https://api.mistral.ai/v1",
+        displayName: "Mistral Vibe",
+        id: "mistral_vibe",
       },
     ]);
   });

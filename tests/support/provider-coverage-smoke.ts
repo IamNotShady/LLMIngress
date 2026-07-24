@@ -9,6 +9,7 @@ export type ProviderCoverageScenarioId =
   | "llama_cpp"
   | "ollama"
   | "openai"
+  | "opencode_go"
   | "openrouter";
 
 export type ProviderCoverageEndpoint = "chat_completions" | "messages";
@@ -134,6 +135,28 @@ export function buildProviderCoverageSmokePlan(
         requestId: "req_v1_provider_command_code_094",
         virtualModelDisplayName: "Provider Smoke Command Code",
         virtualModelName: "coverage-smoke-command-code",
+      },
+      {
+        // OpenCode Go: OpenAI chat template category, but its second routable
+        // face is Anthropic messages + x-api-key riding on the same base. This
+        // scenario pins the messages egress (path + x-api-key, not
+        // authorization); the chat face is covered by the batch5 egress e2e.
+        baseUrl: `${baseUrl}/opencode_go/zen/go/v1`,
+        displayName: "OpenCode Go",
+        endpoint: "messages",
+        expectedAuthHeader: "x-api-key",
+        expectedAuthValue: "sk-opencode-go-coverage-smoke-094",
+        expectedProviderPath: "/opencode_go/zen/go/v1/messages",
+        id: "opencode_go",
+        modelDisplayName: "Claude Sonnet 4.5",
+        modelId: "claude-sonnet-4-5",
+        providerApiKey: "sk-opencode-go-coverage-smoke-094",
+        providerKey: "opencode_go",
+        providerTemplateId: "opencode_go",
+        providerType: "api_key",
+        requestId: "req_v1_provider_opencode_go_094",
+        virtualModelDisplayName: "Provider Smoke OpenCode Go",
+        virtualModelName: "coverage-smoke-opencode-go",
       },
       {
         baseUrl: `${baseUrl}/google/v1beta/openai`,

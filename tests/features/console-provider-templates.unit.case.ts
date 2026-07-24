@@ -45,6 +45,9 @@ describe("console provider template registry", () => {
         "nvidia",
         "xiaomi",
         "ollama_cloud",
+        "opencode_go",
+        "xiaomi_token_plan",
+        "mistral_vibe",
       ],
       ["ollama", "lmstudio", "llama_cpp"],
     ]);
@@ -259,6 +262,9 @@ describe("console provider template registry", () => {
       "nvidia",
       "xiaomi",
       "ollama_cloud",
+      "opencode_go",
+      "xiaomi_token_plan",
+      "mistral_vibe",
     ]);
     for (const template of templates) {
       expect(template.endpoints).toEqual({
@@ -267,9 +273,11 @@ describe("console provider template registry", () => {
         ...(template.id === "xai" || template.id === "qwen" || template.id === "minimax"
           ? { responses: responsesEndpoint }
           : {}),
-        // command_code carries a second routable face (Anthropic messages) that
-        // rides on the same base; the Console renders both endpoint chips.
-        ...(template.id === "command_code" ? { messages: messagesEndpoint } : {}),
+        // command_code and opencode_go carry a second routable face (Anthropic
+        // messages) that rides on the same base; the Console renders both chips.
+        ...(template.id === "command_code" || template.id === "opencode_go"
+          ? { messages: messagesEndpoint }
+          : {}),
       });
       expect(template).not.toHaveProperty("capabilities");
     }

@@ -21,7 +21,7 @@ the selected Provider model and does not log prompts, successful responses, or t
 Supported Provider types are API Key, Subscription OAuth, and Local. Current templates are:
 
 - Subscription: OpenAI Codex, Claude Code, MiniMax Coding Plan
-- API Key: Google Gemini, OpenRouter, DeepSeek, xAI, Qwen, Moonshot/Kimi, MiniMax, Z.ai, GLM Coding Plan, Qwen Token Plan, Kimi Coding Plan, Command Code, ClinePass, BytePlus ModelArk, NousResearch, Groq, Cerebras, Fireworks AI, Mistral, NVIDIA NIM, Xiaomi MiMo, Ollama Cloud
+- API Key: Google Gemini, OpenRouter, DeepSeek, xAI, Qwen, Moonshot/Kimi, MiniMax, Z.ai, GLM Coding Plan, Qwen Token Plan, Kimi Coding Plan, Command Code, ClinePass, BytePlus ModelArk, NousResearch, Groq, Cerebras, Fireworks AI, Mistral, NVIDIA NIM, Xiaomi MiMo, Ollama Cloud, OpenCode Go, Xiaomi MiMo Token Plan, Mistral Vibe
 - Local: Ollama, LM Studio, llama.cpp
 
 Coding-plan templates come in two shapes. GLM/Qwen/Kimi/Command Code/ClinePass/BytePlus ModelArk
@@ -50,6 +50,12 @@ Batch 4 adds seven pay-as-you-go inference clouds, all pure OpenAI Chat Completi
 - NVIDIA NIM (`nvidia`) — OpenAI Chat Completions at `https://integrate.api.nvidia.com/v1`. Keys are typically the `nvapi-` prefix; the prefix is not validated. Prices sync automatically.
 - Xiaomi MiMo (`xiaomi`) — OpenAI Chat Completions at `https://api.xiaomimimo.com/v1`. Keys are typically the `sk-` prefix; the prefix is not validated. Prices sync automatically.
 - Ollama Cloud (`ollama_cloud`) — OpenAI Chat Completions at `https://ollama.com/v1` with any key format. It is a distinct remote `api_key` provider, independent from the Local `ollama` daemon (different provider type and base handling). It is subscription-billed, so prices are not synced (its catalog section carries no per-token cost).
+
+Batch 5 adds three subscription-plan providers that connect by pasting a token, all paste-key (`api_key`) providers with a `Bearer` chat key and default connectivity/model discovery. None sync prices (a subscription plan has no per-token list price) and none report upstream quota.
+
+- OpenCode Go (`opencode_go`) — a paste-key provider with two routable faces from one base at `https://opencode.ai/zen/go/v1`: OpenAI Chat Completions with a `Bearer` key, and Anthropic Messages where the upstream authenticates with a bare `x-api-key`. Model discovery and connectivity use the default `Bearer` Chat Completions path. It is a monthly subscription with USD-quota rate limiting tracked in the OpenCode console, so upstream quota is not reported. No fixed key prefix.
+- Xiaomi MiMo Token Plan (`xiaomi_token_plan`) — OpenAI Chat Completions, default base `https://token-plan-sgp.xiaomimimo.com/v1` (the Singapore region). The upstream also serves `https://token-plan-cn.xiaomimimo.com/v1` (mainland China) and `https://token-plan-ams.xiaomimimo.com/v1` (Amsterdam); the base is editable in the Add Provider dialog, so pick the closest region there. It is distinct from Xiaomi MiMo (`xiaomi`) at `https://api.xiaomimimo.com/v1`. Keys are typically the `tp-` prefix; the prefix is not validated. Upstream quota is not reported (Token Plan usage lives in the plan-manage console).
+- Mistral Vibe (`mistral_vibe`) — OpenAI Chat Completions at `https://api.mistral.ai/v1`, the same base as the standard Mistral (`mistral`) but a distinct paste-key template: use Mistral for a standard API key and Mistral Vibe for a Vibe subscription key. Upstream quota is treated as requires-separate-credential (the Admin usage API is Enterprise-only, like Mistral). Its `mistral-vibe-cli-latest` model has no models.dev or LiteLLM entry, so metadata shows as Unknown until set manually via the Console override.
 
 Console supports Provider lifecycle, multiple API keys, OAuth, model refresh, dependency-protected
 deletion, and connection checks. Model metadata may be merged from Provider APIs, models.dev,

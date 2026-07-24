@@ -637,19 +637,23 @@ describe("provider quota scheduling and schema", () => {
       // credential, so it is requires_separate_credential (like anthropic/xai),
       // not not_supported.
       mistral: "requires_separate_credential",
+      // Mistral Vibe shares mistral's usage judgment: enterprise-only Admin key.
+      mistral_vibe: "requires_separate_credential",
       nous: "not_supported",
       nvidia: "not_supported",
       ollama_cloud: "not_supported",
+      opencode_go: "not_supported",
       qwen: "not_supported",
       qwen_token_plan: "not_supported",
       xai: "requires_separate_credential",
       xiaomi: "not_supported",
+      xiaomi_token_plan: "not_supported",
     };
     const remoteKeys = Object.values(providerRegistry)
       .filter((entry) => entry.behavior.local !== true)
       .map((entry) => entry.providerKey);
 
-    expect(remoteKeys).toHaveLength(27);
+    expect(remoteKeys).toHaveLength(30);
     expect([...supported, ...Object.keys(unsupported)].sort()).toEqual([...remoteKeys].sort());
 
     for (const key of remoteKeys) {

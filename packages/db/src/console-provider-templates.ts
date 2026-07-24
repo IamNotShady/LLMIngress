@@ -19,14 +19,17 @@ export type OpenAICompatibleProviderTemplateId =
   | "groq"
   | "minimax"
   | "mistral"
+  | "mistral_vibe"
   | "moonshot"
   | "nous"
   | "nvidia"
   | "ollama_cloud"
+  | "opencode_go"
   | "qwen"
   | "qwen_token_plan"
   | "xai"
   | "xiaomi"
+  | "xiaomi_token_plan"
   | "zai";
 // Anthropic messages protocol + x-api-key, non-official base (W1). Reserved for
 // extension with future Anthropic-protocol token sources.
@@ -181,6 +184,9 @@ const openAICompatibleProviderTemplateIds = [
   "nvidia",
   "xiaomi",
   "ollama_cloud",
+  "opencode_go",
+  "xiaomi_token_plan",
+  "mistral_vibe",
 ] as const satisfies readonly OpenAICompatibleProviderTemplateId[];
 
 const anthropicCompatibleProviderTemplateIds = [

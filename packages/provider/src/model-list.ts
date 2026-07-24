@@ -23,6 +23,7 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexModelListUrl,
   buildCodexSubscriptionHeaders,
+  buildGrokSubscriptionHeaders,
 } from "./subscription.js";
 
 const defaultModelListTimeoutMs = 15_000;
@@ -85,6 +86,16 @@ export function buildProviderModelListRequest(input: {
     return {
       init,
       url: buildClaudeCodeModelListUrl(input.baseUrl),
+    };
+  }
+
+  if (style === "grok" && input.apiKey) {
+    // Default /models URL, but the proxy may require the versioned client
+    // headers on every endpoint (the Bearer superset is harmless where not).
+    init.headers = buildGrokSubscriptionHeaders(input.apiKey);
+    return {
+      init,
+      url: buildModelsUrl(input.baseUrl),
     };
   }
 

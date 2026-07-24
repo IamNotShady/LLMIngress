@@ -228,6 +228,41 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "glm_coding",
     providerType: "api_key",
   },
+  // Grok subscription: popup authorization-code OAuth against auth.x.ai, egress
+  // to the official inference proxy, chat_completions face (Feature A). quotaSource
+  // starts not_supported; the follow-up feature adds the responses endpoint and
+  // flips it to supported.
+  grok: {
+    behavior: {
+      connectivityProbeStyle: "grok",
+      metadataKey: "xai",
+      modelListStyle: "grok",
+      quotaSource: { reason: "not_supported", supported: false },
+      subscription: true,
+      subscriptionAdapter: "grok",
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "subscription",
+      baseUrl: "https://cli-chat-proxy.grok.com/v1",
+    },
+    displayName: "Grok",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    oauth: {
+      authorizeUrl: "https://auth.x.ai/oauth2/authorize",
+      clientId: "b1a00492-073a-47ea-816f-4c329264a828",
+      clientIdEnvVar: "GROK_OAUTH_CLIENT_ID",
+      redirectUri: "http://127.0.0.1:56121/callback",
+      revokeUrl: "https://auth.x.ai/oauth2/revoke",
+      scope: "openid profile email offline_access grok-cli:access api:access",
+      tokenEncoding: "form",
+      tokenHeaders: { accept: "application/json" },
+      tokenUrl: "https://auth.x.ai/oauth2/token",
+    },
+    providerKey: "grok",
+    providerType: "subscription",
+  },
   groq: {
     behavior: {
       priceSyncSupported: true,
@@ -657,7 +692,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
 describe("provider metadata registry", () => {
   it("carries every provider entry field-for-field from the donor sources", () => {
     expect(providerRegistry).toEqual(expectedRegistry);
-    expect(Object.keys(providerRegistry)).toHaveLength(34);
+    expect(Object.keys(providerRegistry)).toHaveLength(35);
   });
 
   it("keeps the models catalog out of the routable endpoint face", () => {
@@ -716,6 +751,7 @@ describe("provider metadata registry", () => {
   it("lists the subscription providers", () => {
     expect(listSubscriptionProviderKeys()).toEqual([
       "claude_code",
+      "grok",
       "minimax_coding",
       "openai_codex",
     ]);
@@ -769,6 +805,7 @@ describe("provider metadata registry", () => {
       "openai_codex",
       "claude_code",
       "minimax_coding",
+      "grok",
       "google",
       "openrouter",
       "deepseek",

@@ -727,6 +727,9 @@ describe("provider quota scheduling and schema", () => {
       cline_pass: "not_supported",
       command_code: "not_supported",
       google: "not_supported",
+      // Grok subscription quota is shipped by the follow-up feature; Feature A
+      // registers it not_supported (no quotaProbes.grok yet).
+      grok: "not_supported",
       groq: "not_supported",
       // Mistral has an Admin usage API but it needs a separate enterprise
       // credential, so it is requires_separate_credential (like anthropic/xai),
@@ -748,7 +751,7 @@ describe("provider quota scheduling and schema", () => {
       .filter((entry) => entry.behavior.local !== true)
       .map((entry) => entry.providerKey);
 
-    expect(remoteKeys).toHaveLength(31);
+    expect(remoteKeys).toHaveLength(32);
     expect([...supported, ...Object.keys(unsupported)].sort()).toEqual([...remoteKeys].sort());
 
     for (const key of remoteKeys) {

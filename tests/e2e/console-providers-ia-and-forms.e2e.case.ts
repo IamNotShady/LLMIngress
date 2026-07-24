@@ -844,6 +844,97 @@ test("device-code dialog surfaces the upstream error message and stops polling",
   }
 });
 
+test("Grok subscription: a Chat Completions chip in the Subscription group and an authorization-code dialog linking to auth.x.ai", async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_console_grok_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await signInFromFirstRun(page, baseUrl);
+
+        // --- Add Provider: Grok lives in the Subscription group with a single
+        // Chat Completions chip (Feature A ships only the chat face).
+        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
+        const dialog = page.getByRole("dialog", { name: "Add Provider" });
+        await expect(dialog).toBeVisible();
+        await dialog.getByRole("tab", { name: "Subscription" }).click();
+        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
+        await dialog.getByLabel("Provider type", { exact: true }).selectOption({ label: "Grok" });
+        await expect(endpointChips).toHaveText(["Chat Completions"]);
+        for (const viewport of [
+          { width: 1280, height: 900 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          expect(await overflowPx(page), `add-dialog ${viewport.width}px`).toBeLessThanOrEqual(0);
+        }
+
+        // --- Grok is a popup authorization-code provider: the dialog links out to
+        // auth.x.ai instead of printing the URL, and offers the callback paste box
+        // (donor: the claude_code authorization-code half).
+        await page.setViewportSize({ width: 1280, height: 900 });
+        const grokProviderId = randomUUID();
+        await withDedicatedPostgresClient(fixture.databaseUrl, async (client) => {
+          await client.query(
+            `insert into providers (id, provider_type, provider_key, display_name, enabled)
+             values ($1, 'subscription', 'grok', 'Grok', true)`,
+            [grokProviderId],
+          );
+        });
+        const authorizeUrl =
+          "https://auth.x.ai/oauth2/authorize?client_id=b1a00492-073a-47ea-816f-4c329264a828&state=abc";
+        await page.goto(
+          `${baseUrl}/providers?selected=${grokProviderId}` +
+            `&providerKeyDialog=${grokProviderId}` +
+            `&providerOAuthId=${randomUUID()}` +
+            `&providerAuthorizeUrl=${encodeURIComponent(authorizeUrl)}`,
+          { waitUntil: "networkidle" },
+        );
+        const codeDialog = page.getByRole("dialog", { name: "New Grok OAuth connection" });
+        await expect(codeDialog).toBeVisible();
+        await expect(
+          codeDialog.getByRole("link", { name: "Open authorization URL" }),
+        ).toHaveAttribute("href", authorizeUrl);
+        await expect(codeDialog.locator("#provider-oauth-authorize-url")).toHaveCount(0);
+        await expect(codeDialog.locator("#provider-oauth-callback-input")).toBeVisible();
+        for (const viewport of [
+          { width: 1280, height: 900 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          expect(
+            await overflowPx(page),
+            `grok-code-dialog ${viewport.width}px`,
+          ).toBeLessThanOrEqual(0);
+        }
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 async function addProviderDeleteRaceBlocker(databaseUrl: string, providerId: string) {
   await withDedicatedPostgresClient(databaseUrl, async (client) => {
     const providerModel = await client.query<{ id: string }>(

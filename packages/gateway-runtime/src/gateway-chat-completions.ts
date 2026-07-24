@@ -8,7 +8,7 @@ import {
   type OpenAIProviderAdapter,
 } from "@llmingress/provider/openai";
 import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
-import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
+import { createGrokSubscriptionAdapter } from "@llmingress/provider/subscription-adapters";
 import type { EncryptionKeySource } from "@llmingress/security/encryption-key";
 import { isRecord, omitUndefined } from "@llmingress/util";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
@@ -77,6 +77,20 @@ export function normalizeOpenAIChatCompletionRequest(
   };
 }
 
+/**
+ * chat_completions is an adapter allowlist, not a blanket subscription ban:
+ * ordinary (non-subscription) providers always pass, and among subscription
+ * providers only those whose face routes chat_completions through a dedicated
+ * adapter (currently grok) are admitted. claude_code / openai_codex /
+ * minimax_coding stay rejected so the allowlist is not accidentally widened.
+ */
+export function chatCompletionsSupportsSubscriptionProvider(
+  providerKey: string | null | undefined,
+): boolean {
+  const descriptor = resolveProviderDescriptor(providerKey);
+  return descriptor.subscription !== true || descriptor.subscriptionAdapter === "grok";
+}
+
 export async function executeGatewayOpenAIChatCompletion(input: {
   apiKeyId: string;
   adapter?: OpenAIProviderAdapter;
@@ -91,6 +105,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
 }): Promise<GatewayChatCompletionResponse> {
   const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
   const openRouterAdapter = input.adapter ?? createOpenRouterProviderAdapter();
+  const grokAdapter = input.adapter ? null : createGrokSubscriptionAdapter();
 
   return executeGatewayProtocolRequest<NormalizedOpenAIChatRequest, OpenAIAdapterSuccess>({
     ...input,
@@ -98,9 +113,13 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     spec: {
       buildRequestMetadata: buildOpenAIChatCompletionRequestMetadata,
       callProvider: ({ candidate, providerApiKey, providerRequestHeaders, request }) => {
-        const adapter = resolveProviderDescriptor(candidate.providerKey).openRouterAttribution
-          ? openRouterAdapter
-          : genericAdapter;
+        const descriptor = resolveProviderDescriptor(candidate.providerKey);
+        const adapter =
+          descriptor.subscriptionAdapter === "grok" && grokAdapter
+            ? grokAdapter
+            : descriptor.openRouterAttribution
+              ? openRouterAdapter
+              : genericAdapter;
         return adapter.chatCompletion({
           headers: providerRequestHeaders,
           request,
@@ -116,10 +135,10 @@ export async function executeGatewayOpenAIChatCompletion(input: {
         noneSupportedError: () =>
           new GatewayPipelineError(
             "provider_protocol_unsupported",
-            "Chat completions cannot use subscription providers.",
+            "Chat completions cannot use unsupported subscription providers.",
           ),
-        supported: candidates.filter(
-          (candidate) => !isSubscriptionProviderKey(candidate.providerKey),
+        supported: candidates.filter((candidate) =>
+          chatCompletionsSupportsSubscriptionProvider(candidate.providerKey),
         ),
       }),
     },

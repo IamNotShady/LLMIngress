@@ -9,6 +9,7 @@ import { normalizeProviderBaseUrl } from "./console-provider-base-url.ts";
 import type { ProviderType } from "./console-providers.ts";
 
 export type OpenAICompatibleProviderTemplateId =
+  | "bedrock"
   | "byteplus_coding"
   | "cerebras"
   | "cline_pass"
@@ -187,6 +188,7 @@ const openAICompatibleProviderTemplateIds = [
   "opencode_go",
   "xiaomi_token_plan",
   "mistral_vibe",
+  "bedrock",
 ] as const satisfies readonly OpenAICompatibleProviderTemplateId[];
 
 const anthropicCompatibleProviderTemplateIds = [

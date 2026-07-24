@@ -26,6 +26,7 @@ describe("console provider template registry", () => {
         "google",
         "openrouter",
         "deepseek",
+        "bedrock",
         "xai",
         "qwen",
         "qwen_token_plan",
@@ -265,6 +266,7 @@ describe("console provider template registry", () => {
       "opencode_go",
       "xiaomi_token_plan",
       "mistral_vibe",
+      "bedrock",
     ]);
     for (const template of templates) {
       expect(template.endpoints).toEqual({

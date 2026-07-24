@@ -80,6 +80,10 @@ const supportedProviderKeys = new Set(listPriceSyncSupportedProviderKeys());
 
 const providerKeyAliases = new Map<string, string>([
   ["alibaba", "qwen"],
+  // models.dev names the Bedrock section "amazon-bedrock"; without this alias
+  // the section normalizes to amazon_bedrock and misses bedrock's allowlist +
+  // own-catalog metadata scope.
+  ["amazon-bedrock", "bedrock"],
   // models.dev names the Fireworks section "fireworks-ai"; the price path only
   // consults this alias table (no hyphen normalization), so without this the
   // section's prices would be dropped despite the allowlist.

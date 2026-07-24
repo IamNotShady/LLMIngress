@@ -28,6 +28,7 @@ describe("provider descriptors", () => {
   it("derives the price sync allowlist from descriptors", () => {
     expect(listPriceSyncSupportedProviderKeys().sort()).toEqual([
       "anthropic",
+      "bedrock",
       "cerebras",
       "cline_pass",
       "deepseek",

@@ -588,6 +588,61 @@ test("Add Provider API Keys group carries the Batch 5 token-plan templates", asy
   }
 });
 
+test("Add Provider API Keys group carries the Batch 7 bedrock template", async ({ browser }) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_console_batch7_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await signInFromFirstRun(page, baseUrl);
+        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
+
+        const dialog = page.getByRole("dialog", { name: "Add Provider" });
+        await expect(dialog).toBeVisible();
+
+        await dialog.getByRole("tab", { name: "API Keys" }).click();
+        const providerType = dialog.getByLabel("Provider type", { exact: true });
+        const baseUrlField = dialog.getByLabel("Provider base URL", { exact: true });
+        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
+
+        // AWS Bedrock: OpenAI chat_completions only, mantle us-east-1 base prefilled.
+        await providerType.selectOption({ label: "AWS Bedrock" });
+        await expect(baseUrlField).toHaveValue("https://bedrock-mantle.us-east-1.api.aws/v1");
+        await expect(endpointChips).toHaveText(["Chat Completions"]);
+
+        for (const viewport of [
+          { width: 1280, height: 900 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
+        }
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 test("device-code provider shows the user code and polls to complete; the authorization-code dialog links out without printing the URL", async ({
   browser,
 }) => {

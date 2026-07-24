@@ -84,6 +84,7 @@ export type ProviderBehavior = {
 
 export type KnownProviderKey =
   | "anthropic"
+  | "bedrock"
   | "byteplus_coding"
   | "cerebras"
   | "claude_code"
@@ -175,6 +176,25 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     endpoints: { messages: messagesEndpoint },
     modelListEndpoint: modelsEndpoint,
     providerKey: "anthropic",
+    providerType: "api_key",
+  },
+  bedrock: {
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "requires_separate_credential", supported: false },
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      // Default region us-east-1; 14 mantle regions documented in PRODUCT.md,
+      // base user-editable (bedrock-runtime.{region}.amazonaws.com/v1 also works).
+      baseUrl: "https://bedrock-mantle.us-east-1.api.aws/v1",
+    },
+    displayName: "AWS Bedrock",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "bedrock",
     providerType: "api_key",
   },
   byteplus_coding: {
@@ -810,6 +830,7 @@ export const defaultModelListPath = "models";
 // stable regardless of object literal order.
 const knownProviderKeys: KnownProviderKey[] = [
   "anthropic",
+  "bedrock",
   "byteplus_coding",
   "cerebras",
   "claude_code",
@@ -853,6 +874,7 @@ const providerTemplateSelectorOrder: KnownProviderKey[] = [
   "google",
   "openrouter",
   "deepseek",
+  "bedrock",
   "xai",
   "qwen",
   "qwen_token_plan",

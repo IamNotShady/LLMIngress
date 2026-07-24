@@ -49,6 +49,23 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerKey: "anthropic",
     providerType: "api_key",
   },
+  bedrock: {
+    behavior: {
+      priceSyncSupported: true,
+      quotaSource: { reason: "requires_separate_credential", supported: false },
+    },
+    creation: {
+      mode: "template",
+      selectorGroup: "remote_api_key",
+      auth: remoteTemplateAuth,
+      baseUrl: "https://bedrock-mantle.us-east-1.api.aws/v1",
+    },
+    displayName: "AWS Bedrock",
+    endpoints: { chat_completions: chatCompletionsEndpoint },
+    modelListEndpoint: modelsEndpoint,
+    providerKey: "bedrock",
+    providerType: "api_key",
+  },
   byteplus_coding: {
     behavior: { quotaSource: { reason: "not_supported", supported: false } },
     creation: {
@@ -643,7 +660,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
 describe("provider metadata registry", () => {
   it("carries every provider entry field-for-field from the donor sources", () => {
     expect(providerRegistry).toEqual(expectedRegistry);
-    expect(Object.keys(providerRegistry)).toHaveLength(33);
+    expect(Object.keys(providerRegistry)).toHaveLength(34);
   });
 
   it("keeps the models catalog out of the routable endpoint face", () => {
@@ -717,6 +734,7 @@ describe("provider metadata registry", () => {
   it("lists the price-sync supported providers (everything except subscriptions)", () => {
     expect(listPriceSyncSupportedProviderKeys().sort()).toEqual([
       "anthropic",
+      "bedrock",
       "cerebras",
       "cline_pass",
       "deepseek",
@@ -757,6 +775,7 @@ describe("provider metadata registry", () => {
       "google",
       "openrouter",
       "deepseek",
+      "bedrock",
       "xai",
       "qwen",
       "qwen_token_plan",

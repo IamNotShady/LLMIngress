@@ -197,6 +197,11 @@ describe("provider coverage", () => {
         displayName: "Mistral Vibe",
         id: "mistral_vibe",
       },
+      {
+        baseUrl: "https://bedrock-mantle.us-east-1.api.aws/v1",
+        displayName: "AWS Bedrock",
+        id: "bedrock",
+      },
     ]);
   });
 });

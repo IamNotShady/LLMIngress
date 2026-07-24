@@ -708,6 +708,9 @@ describe("provider quota scheduling and schema", () => {
       // account quotas endpoint (two-hop probe: account resolution first).
       "fireworks",
       "glm_coding",
+      // Feature B ships the Grok /billing double-request quota probe and flips
+      // quotaSource to { supported: true } alongside quotaProbes.grok.
+      "grok",
       "kimi_coding",
       "minimax",
       // Feature B ships the MiniMax Coding Plan quota probe and flips
@@ -727,9 +730,6 @@ describe("provider quota scheduling and schema", () => {
       cline_pass: "not_supported",
       command_code: "not_supported",
       google: "not_supported",
-      // Grok subscription quota is shipped by the follow-up feature; Feature A
-      // registers it not_supported (no quotaProbes.grok yet).
-      grok: "not_supported",
       groq: "not_supported",
       // Mistral has an Admin usage API but it needs a separate enterprise
       // credential, so it is requires_separate_credential (like anthropic/xai),

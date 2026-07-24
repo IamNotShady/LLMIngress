@@ -229,15 +229,14 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
     providerType: "api_key",
   },
   // Grok subscription: popup authorization-code OAuth against auth.x.ai, egress
-  // to the official inference proxy, chat_completions face (Feature A). quotaSource
-  // starts not_supported; the follow-up feature adds the responses endpoint and
-  // flips it to supported.
+  // to the official inference proxy, dual OpenAI faces (chat_completions +
+  // responses), quotaSource supported via the /billing double-request probe.
   grok: {
     behavior: {
       connectivityProbeStyle: "grok",
       metadataKey: "xai",
       modelListStyle: "grok",
-      quotaSource: { reason: "not_supported", supported: false },
+      quotaSource: { supported: true },
       subscription: true,
       subscriptionAdapter: "grok",
     },
@@ -247,7 +246,7 @@ const expectedRegistry: Record<string, ProviderRegistryEntry> = {
       baseUrl: "https://cli-chat-proxy.grok.com/v1",
     },
     displayName: "Grok",
-    endpoints: { chat_completions: chatCompletionsEndpoint },
+    endpoints: { chat_completions: chatCompletionsEndpoint, responses: responsesEndpoint },
     modelListEndpoint: modelsEndpoint,
     oauth: {
       authorizeUrl: "https://auth.x.ai/oauth2/authorize",

@@ -384,7 +384,9 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
       connectivityProbeStyle: "grok",
       metadataKey: "xai",
       modelListStyle: "grok",
-      quotaSource: { reason: "not_supported", supported: false },
+      // Feature B flips this to supported alongside quotaProbes.grok (the
+      // /billing double-request probe).
+      quotaSource: { supported: true },
       subscription: true,
       subscriptionAdapter: "grok",
     },
@@ -394,7 +396,9 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
       baseUrl: "https://cli-chat-proxy.grok.com/v1",
     },
     displayName: "Grok",
-    endpoints: { chat_completions: chatCompletionsEndpoint },
+    // The upstream's multi-agent grok variants are responses-only, so the
+    // responses face rides on the same proxy base as chat_completions.
+    endpoints: { chat_completions: chatCompletionsEndpoint, responses: responsesEndpoint },
     modelListEndpoint: modelsEndpoint,
     oauth: {
       authorizeUrl: "https://auth.x.ai/oauth2/authorize",

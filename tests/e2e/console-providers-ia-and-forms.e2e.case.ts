@@ -877,7 +877,7 @@ test("Grok subscription: a Chat Completions chip in the Subscription group and a
         await dialog.getByRole("tab", { name: "Subscription" }).click();
         const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
         await dialog.getByLabel("Provider type", { exact: true }).selectOption({ label: "Grok" });
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
+        await expect(endpointChips).toHaveText(["Chat Completions", "Responses"]);
         for (const viewport of [
           { width: 1280, height: 900 },
           { width: 390, height: 844 },

@@ -28,6 +28,7 @@ const nonStreamingScenario = {
   id: "grok_non_streaming",
   modelDisplayName: "Grok Code",
   modelId: "grok-code",
+  protocol: "chat_completions",
   providerBaseUrlSuffix: "/grok-proxy/v1",
   expectedEgressPath: "/grok-proxy/v1/chat/completions",
   requestId: "req_grok_non_streaming_001",
@@ -41,6 +42,7 @@ const streamingScenario = {
   id: "grok_streaming",
   modelDisplayName: "Grok Code Stream",
   modelId: "grok-code-stream",
+  protocol: "chat_completions",
   // ?mode=stream drives the fake upstream's SSE response; joinUrl preserves the
   // query while appending /chat/completions to the path.
   providerBaseUrlSuffix: "/grok-proxy-stream/v1?mode=stream&stream_end_ms=20",
@@ -50,7 +52,23 @@ const streamingScenario = {
   virtualModelName: "grok-chat-streaming",
 } as const;
 
-type Scenario = typeof nonStreamingScenario | typeof streamingScenario;
+// Feature B: the responses face (the upstream's multi-agent variants are
+// responses-only) routes through the same grok header adapter to /v1/responses.
+const responsesScenario = {
+  accessToken: "grok-oauth-token-responses",
+  displayName: "Grok (responses)",
+  id: "grok_responses",
+  modelDisplayName: "Grok Multi-Agent",
+  modelId: "grok-multi-agent",
+  protocol: "responses",
+  providerBaseUrlSuffix: "/grok-proxy-responses/v1",
+  expectedEgressPath: "/grok-proxy-responses/v1/responses",
+  requestId: "req_grok_responses_001",
+  stream: false,
+  virtualModelName: "grok-responses",
+} as const;
+
+type Scenario = typeof nonStreamingScenario | typeof streamingScenario | typeof responsesScenario;
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 type CapturedProviderRequest = Awaited<
   ReturnType<typeof createFakeProviderServer>
@@ -72,7 +90,11 @@ test("grok routes subscription chat_completions egress with the OAuth Bearer and
       fakeProviderUrl: fakeProvider.url,
       scenario: streamingScenario,
     });
-    await seedApiKey(fixture, [nonStreamingVmId, streamingVmId]);
+    const responsesVmId = await seedSubscriptionRoute(fixture, {
+      fakeProviderUrl: fakeProvider.url,
+      scenario: responsesScenario,
+    });
+    await seedApiKey(fixture, [nonStreamingVmId, streamingVmId, responsesVmId]);
 
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
@@ -83,22 +105,24 @@ test("grok routes subscription chat_completions egress with the OAuth Bearer and
       const baseUrl = `http://127.0.0.1:${gateway.port}`;
       await waitForGateway(baseUrl, gateway);
 
-      const nonStreamingResponse = await postChatCompletion(baseUrl, nonStreamingScenario);
+      const nonStreamingResponse = await postScenario(baseUrl, nonStreamingScenario);
       expect(nonStreamingResponse.status).toBe(200);
       const nonStreamingBody = await nonStreamingResponse.json();
       expect(nonStreamingBody).toMatchObject({
         choices: [{ message: { content: "fake provider response", role: "assistant" } }],
       });
 
-      const streamingResponse = await postChatCompletion(baseUrl, streamingScenario);
+      const streamingResponse = await postScenario(baseUrl, streamingScenario);
       expect(streamingResponse.status).toBe(200);
       expect(await streamingResponse.text()).toContain("fake");
 
-      expectGrokEgress(
-        findEgress(fakeProvider.requests, nonStreamingScenario),
-        nonStreamingScenario,
-      );
-      expectGrokEgress(findEgress(fakeProvider.requests, streamingScenario), streamingScenario);
+      const responsesResponse = await postScenario(baseUrl, responsesScenario);
+      expect(responsesResponse.status).toBe(200);
+      expect(await responsesResponse.text()).toContain("fake provider response");
+
+      for (const scenario of [nonStreamingScenario, streamingScenario, responsesScenario]) {
+        expectGrokEgress(findEgress(fakeProvider.requests, scenario), scenario);
+      }
 
       await expectSucceededActivity(fixture);
     } finally {
@@ -152,8 +176,8 @@ async function seedSubscriptionRoute(
     [virtualModelId, scenario.virtualModelName, scenario.displayName],
   );
   await fixture.query(
-    "insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol) values ($1, $2, 'fixed', 'chat_completions')",
-    [routePolicyId, virtualModelId],
+    "insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol) values ($1, $2, 'fixed', $3)",
+    [routePolicyId, virtualModelId, scenario.protocol],
   );
   await fixture.query(
     "insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order) values ($1, $2, $3, 1)",
@@ -181,18 +205,32 @@ async function seedApiKey(fixture: Fixture, virtualModelIds: string[]): Promise<
   );
 }
 
-async function postChatCompletion(baseUrl: string, scenario: Scenario): Promise<Response> {
+async function postScenario(baseUrl: string, scenario: Scenario): Promise<Response> {
+  const headers = {
+    authorization: `Bearer ${apiKey}`,
+    "content-type": "application/json",
+    "x-request-id": scenario.requestId,
+  };
+  if (scenario.protocol === "responses") {
+    return fetch(`${baseUrl}/v1/responses`, {
+      body: JSON.stringify({
+        input: [
+          { content: [{ text: `hello through ${scenario.id}`, type: "input_text" }], role: "user" },
+        ],
+        model: scenario.virtualModelName,
+        stream: scenario.stream,
+      }),
+      headers,
+      method: "POST",
+    });
+  }
   return fetch(`${baseUrl}/v1/chat/completions`, {
     body: JSON.stringify({
       messages: [{ content: `hello through ${scenario.id}`, role: "user" }],
       model: scenario.virtualModelName,
       stream: scenario.stream,
     }),
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-      "x-request-id": scenario.requestId,
-    },
+    headers,
     method: "POST",
   });
 }
@@ -223,10 +261,11 @@ function expectGrokEgress(request: CapturedProviderRequest | undefined, scenario
 }
 
 async function expectSucceededActivity(fixture: Fixture): Promise<void> {
-  const expected = [nonStreamingScenario, streamingScenario].map((scenario) => ({
+  const scenarios = [nonStreamingScenario, streamingScenario, responsesScenario];
+  const expected = scenarios.map((scenario) => ({
     http_status: 200,
     model_id: scenario.modelId,
-    protocol: "chat_completions",
+    protocol: scenario.protocol,
     provider_key: "grok",
     request_id: scenario.requestId,
     status: "succeeded",
@@ -254,7 +293,7 @@ async function expectSucceededActivity(fixture: Fixture): Promise<void> {
            join provider_models on provider_models.id = request_activity.provider_model_id
            where request_activity.request_id = any($1::text[])
            order by array_position($1::text[], request_activity.request_id)`,
-          [[nonStreamingScenario.requestId, streamingScenario.requestId]],
+          [scenarios.map((scenario) => scenario.requestId)],
         );
         return result.rows;
       },

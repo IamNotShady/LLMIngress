@@ -7,7 +7,10 @@ import {
   type OpenAIAdapterSuccess,
   type OpenAIProviderAdapter,
 } from "@llmingress/provider/openai";
-import { createCodexSubscriptionAdapter } from "@llmingress/provider/subscription-adapters";
+import {
+  createCodexSubscriptionAdapter,
+  createGrokSubscriptionAdapter,
+} from "@llmingress/provider/subscription-adapters";
 import { isRecord, omitUndefined } from "@llmingress/util";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import {
@@ -79,6 +82,23 @@ export function normalizeOpenAIResponsesRequest(
   };
 }
 
+/**
+ * responses is an adapter allowlist, not a blanket subscription ban: ordinary
+ * (non-subscription) providers always pass, and among subscription providers
+ * only those whose face routes responses through a dedicated adapter (codex or
+ * grok) are admitted. claude_code / minimax_coding stay rejected.
+ */
+export function responsesSupportsSubscriptionProvider(
+  providerKey: string | null | undefined,
+): boolean {
+  const descriptor = resolveProviderDescriptor(providerKey);
+  return (
+    descriptor.subscription !== true ||
+    descriptor.subscriptionAdapter === "codex" ||
+    descriptor.subscriptionAdapter === "grok"
+  );
+}
+
 export async function executeGatewayOpenAIResponse(input: {
   apiKeyId: string;
   adapter?: OpenAIProviderAdapter;
@@ -92,6 +112,7 @@ export async function executeGatewayOpenAIResponse(input: {
 }): Promise<GatewayResponsesResponse> {
   const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
   const codexAdapter = input.adapter ? null : createCodexSubscriptionAdapter();
+  const grokAdapter = input.adapter ? null : createGrokSubscriptionAdapter();
   const unsupportedProviders = new Set<string>();
 
   return executeGatewayProtocolRequest<NormalizedOpenAIResponsesRequest, OpenAIAdapterSuccess>({
@@ -100,11 +121,15 @@ export async function executeGatewayOpenAIResponse(input: {
     spec: {
       buildRequestMetadata: buildOpenAIResponsesRequestMetadata,
       callProvider: ({ candidate, providerApiKey, providerRequestHeaders, request }) => {
+        const subscriptionAdapter = resolveProviderDescriptor(
+          candidate.providerKey,
+        ).subscriptionAdapter;
         const adapter =
-          resolveProviderDescriptor(candidate.providerKey).subscriptionAdapter === "codex" &&
-          codexAdapter
+          subscriptionAdapter === "codex" && codexAdapter
             ? codexAdapter
-            : genericAdapter;
+            : subscriptionAdapter === "grok" && grokAdapter
+              ? grokAdapter
+              : genericAdapter;
         if (!adapter.response) {
           throw new GatewayPipelineError(
             "provider_protocol_unsupported",
@@ -125,12 +150,11 @@ export async function executeGatewayOpenAIResponse(input: {
       planCandidates: (candidates) => {
         unsupportedProviders.clear();
         const supported = candidates.filter((candidate) => {
-          const descriptor = resolveProviderDescriptor(candidate.providerKey);
-          if (descriptor.subscription === true && descriptor.subscriptionAdapter !== "codex") {
-            unsupportedProviders.add(candidate.providerKey);
-            return false;
+          if (responsesSupportsSubscriptionProvider(candidate.providerKey)) {
+            return true;
           }
-          return true;
+          unsupportedProviders.add(candidate.providerKey);
+          return false;
         });
         return {
           noneSupportedError: () =>

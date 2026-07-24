@@ -101,7 +101,12 @@ test("a fireworks probe resolves the account then stores the monthly budget wind
         }
         return Response.json({
           quotas: [
-            { maxValue: "8", name: "accounts/my-account/quotas/h100-us-iowa-1", usage: 0, value: "8" },
+            {
+              maxValue: "8",
+              name: "accounts/my-account/quotas/h100-us-iowa-1",
+              usage: 0,
+              value: "8",
+            },
             {
               maxValue: "500",
               name: "accounts/my-account/quotas/monthly-spend-usd",

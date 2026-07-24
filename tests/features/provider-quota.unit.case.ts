@@ -8,6 +8,7 @@ import {
   parseClaudeCodeQuota,
   parseCodexQuota,
   parseDeepseekQuota,
+  parseFireworksQuota,
   parseKimiQuota,
   parseMinimaxCodingPlanQuota,
   parseMinimaxQuota,
@@ -46,6 +47,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 const baseUrls = {
   claude_code: "https://api.anthropic.com",
   deepseek: "https://api.deepseek.com",
+  fireworks: "https://api.fireworks.ai/inference/v1",
   glm_coding: "https://api.z.ai/api/coding/paas/v4",
   kimi_coding: "https://api.kimi.com/coding/v1",
   minimax: "https://api.minimax.io/v1",
@@ -331,6 +333,42 @@ describe("provider quota parsers", () => {
     ]);
   });
 
+  it("parses the fireworks monthly spend budget into a monthly_budget window", () => {
+    const entries = parseFireworksQuota({
+      quotas: [
+        { maxValue: "8", name: "accounts/my-account/quotas/h100-us-iowa-1", usage: 0, value: "8" },
+        {
+          maxValue: "500",
+          name: "accounts/my-account/quotas/monthly-spend-usd",
+          usage: 84,
+          value: "200",
+        },
+      ],
+    });
+    expect(entries).toEqual([{ utilization: 0.42, window: "monthly_budget" }]);
+  });
+
+  it("returns no fireworks entries when the spend budget is absent, zero, or malformed", () => {
+    expect(parseFireworksQuota(null)).toEqual([]);
+    expect(parseFireworksQuota({ quotas: [] })).toEqual([]);
+    expect(
+      parseFireworksQuota({
+        quotas: [{ name: "accounts/a/quotas/h100-us-iowa-1", usage: 1, value: "8" }],
+      }),
+    ).toEqual([]);
+    // A zero budget cannot produce a utilization ratio.
+    expect(
+      parseFireworksQuota({
+        quotas: [{ name: "accounts/a/quotas/monthly-spend-usd", usage: 3, value: "0" }],
+      }),
+    ).toEqual([]);
+    expect(
+      parseFireworksQuota({
+        quotas: [{ name: "accounts/a/quotas/monthly-spend-usd", value: "200" }],
+      }),
+    ).toEqual([]);
+  });
+
   it("emits no openrouter entry when limit_remaining is null", () => {
     expect(parseOpenRouterQuota({ data: { limit: 20, limit_remaining: null } })).toEqual([]);
     expect(parseOpenRouterQuota({ data: { limit: 20, limit_remaining: 4.75 } })).toEqual([
@@ -540,6 +578,60 @@ describe("provider quota probe transport", () => {
     expect(result.ok ? null : result.errorCode).toBe("probe_failed");
   });
 
+  it("resolves the fireworks account before listing quotas from the control-plane origin", async () => {
+    const recorded: RecordedRequest[] = [];
+    const result = await probeFor("fireworks")({
+      baseUrl: baseUrls.fireworks,
+      credential: "secret-credential",
+      fetch: recordingFetch(recorded, (attempt) =>
+        attempt === 0
+          ? jsonResponse({ accounts: [{ name: "accounts/my-account" }], totalSize: 1 })
+          : jsonResponse({
+              quotas: [
+                { name: "accounts/my-account/quotas/monthly-spend-usd", usage: 84, value: "200" },
+              ],
+            }),
+      ),
+    });
+    expect(result.ok).toBe(true);
+    expect(result.ok ? result.entries : []).toEqual([
+      { utilization: 0.42, window: "monthly_budget" },
+    ]);
+    expect(recorded).toHaveLength(2);
+    expect(recorded[0]?.url).toBe("https://api.fireworks.ai/v1/accounts");
+    expect(recorded[1]?.url).toBe(
+      "https://api.fireworks.ai/v1/accounts/my-account/quotas?pageSize=200",
+    );
+    for (const request of recorded) {
+      expect(request.headers.get("authorization")).toBe("Bearer secret-credential");
+      expect(request.init).toMatchObject({ method: "GET", redirect: "manual" });
+    }
+  });
+
+  it("classifies a rejected fireworks account listing as unauthorized without a second request", async () => {
+    const recorded: RecordedRequest[] = [];
+    const result = await probeFor("fireworks")({
+      baseUrl: baseUrls.fireworks,
+      credential: "secret-credential",
+      fetch: recordingFetch(recorded, () => jsonResponse({ error: "unauthorized" }, 401)),
+    });
+    expect(recorded).toHaveLength(1);
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.errorCode).toBe("unauthorized");
+  });
+
+  it("fails the fireworks probe when the key resolves no account", async () => {
+    const recorded: RecordedRequest[] = [];
+    const result = await probeFor("fireworks")({
+      baseUrl: baseUrls.fireworks,
+      credential: "secret-credential",
+      fetch: recordingFetch(recorded, () => jsonResponse({ accounts: [], totalSize: 0 })),
+    });
+    expect(recorded).toHaveLength(1);
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.errorCode).toBe("probe_failed");
+  });
+
   it("classifies 401 and 403 as unauthorized and other failures as probe_failed", async () => {
     for (const status of [401, 403]) {
       const result = await probeFor("deepseek")({
@@ -612,6 +704,9 @@ describe("provider quota scheduling and schema", () => {
     const supported = [
       "claude_code",
       "deepseek",
+      // Fireworks reports the monthly spend budget from its control-plane
+      // account quotas endpoint (two-hop probe: account resolution first).
+      "fireworks",
       "glm_coding",
       "kimi_coding",
       "minimax",
@@ -631,7 +726,6 @@ describe("provider quota scheduling and schema", () => {
       cerebras: "not_supported",
       cline_pass: "not_supported",
       command_code: "not_supported",
-      fireworks: "not_supported",
       google: "not_supported",
       groq: "not_supported",
       // Mistral has an Admin usage API but it needs a separate enterprise

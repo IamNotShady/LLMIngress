@@ -74,6 +74,68 @@ test("an api key quota probe stores the normalized balance entries", async () =>
   }
 });
 
+test("a fireworks probe resolves the account then stores the monthly budget window", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_quota_fireworks_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const providerId = randomUUID();
+  const providerConnectionId = randomUUID();
+  const requestedUrls: string[] = [];
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await seedApiKeyProvider(fixture, {
+      baseUrl: "https://api.fireworks.ai/inference/v1",
+      providerConnectionId,
+      providerId,
+      providerKey: "fireworks",
+    });
+    const handler = createProviderQuotaProbeJobHandler({
+      databaseUrl: fixture.databaseUrl,
+      encryptionKeySource,
+      fetch: async (url, init) => {
+        requestedUrls.push(String(url));
+        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer fireworks-secret");
+        if (String(url).endsWith("/v1/accounts")) {
+          return Response.json({ accounts: [{ name: "accounts/my-account" }], totalSize: 1 });
+        }
+        return Response.json({
+          quotas: [
+            {
+              maxValue: "8",
+              name: "accounts/my-account/quotas/h100-us-iowa-1",
+              usage: 0,
+              value: "8",
+            },
+            {
+              maxValue: "500",
+              name: "accounts/my-account/quotas/monthly-spend-usd",
+              usage: 84,
+              value: "200",
+            },
+          ],
+        });
+      },
+    });
+
+    await handler(quotaJob({ providerConnectionId, providerId }));
+
+    expect(requestedUrls).toEqual([
+      "https://api.fireworks.ai/v1/accounts",
+      "https://api.fireworks.ai/v1/accounts/my-account/quotas?pageSize=200",
+    ]);
+    const summary = await readQuotaSummary(fixture);
+    expect(summary).toMatchObject({
+      entries: [{ utilization: 0.42, window: "monthly_budget" }],
+      error_code: null,
+      provider_connection_id: providerConnectionId,
+      rows: 1,
+    });
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 test("a disabled connection on an unsupported provider is canceled before any write", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_quota_unsupported_disabled_${randomUUID().replaceAll("-", "_")}`,

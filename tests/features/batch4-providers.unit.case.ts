@@ -19,12 +19,13 @@ const modelsEndpoint = { method: "GET", path: "models" };
 
 // Batch 4: seven pay-as-you-go inference clouds join as pure OpenAI
 // chat_completions paste-key providers with Bearer egress. Except for base URL,
-// displayName and providerKey they are field-for-field identical; the only
-// behavior variation is mistral's quotaSource (requires_separate_credential —
-// its Admin usage API needs a separate enterprise credential), while the other
-// six are not_supported. Feature B opens six onto the price-sync allowlist
-// (priceSyncSupported: true); ollama_cloud stays off (its catalog section
-// carries no per-token cost).
+// displayName and providerKey they are field-for-field identical; the behavior
+// variations are mistral's quotaSource (requires_separate_credential —
+// its Admin usage API needs a separate enterprise credential) and fireworks',
+// which reports the monthly spend budget from its control-plane quotas
+// endpoint; the other five are not_supported. Feature B opens six onto the
+// price-sync allowlist (priceSyncSupported: true); ollama_cloud stays off
+// (its catalog section carries no per-token cost).
 type Batch4Provider = {
   baseUrl: string;
   displayName: string;
@@ -38,6 +39,7 @@ const requiresSeparateCredential: ProviderQuotaSource = {
   reason: "requires_separate_credential",
   supported: false,
 };
+const supported: ProviderQuotaSource = { supported: true };
 
 const batch4Providers: Batch4Provider[] = [
   {
@@ -59,7 +61,7 @@ const batch4Providers: Batch4Provider[] = [
     displayName: "Fireworks AI",
     priceSyncSupported: true,
     providerKey: "fireworks",
-    quotaSource: notSupported,
+    quotaSource: supported,
   },
   {
     baseUrl: "https://api.mistral.ai/v1",
@@ -136,10 +138,14 @@ describe("batch 4 inference cloud providers", () => {
     }
   });
 
-  it("has no quota probe and defaults connectivity + model discovery for every provider", () => {
+  it("has a quota probe only for fireworks and defaults connectivity + model discovery", () => {
     for (const provider of batch4Providers) {
-      expect(quotaProbes[provider.providerKey], provider.providerKey).toBeUndefined();
-      expect(resolveQuotaProbe(provider.providerKey), provider.providerKey).toBeNull();
+      if (provider.quotaSource.supported) {
+        expect(typeof quotaProbes[provider.providerKey], provider.providerKey).toBe("function");
+      } else {
+        expect(quotaProbes[provider.providerKey], provider.providerKey).toBeUndefined();
+        expect(resolveQuotaProbe(provider.providerKey), provider.providerKey).toBeNull();
+      }
 
       const descriptor = resolveProviderDescriptor(provider.providerKey);
       expect(descriptor.connectivityProbeStyle, provider.providerKey).toBeUndefined();

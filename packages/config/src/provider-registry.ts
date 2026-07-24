@@ -320,10 +320,7 @@ export const providerRegistry: Record<KnownProviderKey, ProviderRegistryEntry> =
     providerType: "api_key",
   },
   fireworks: {
-    behavior: {
-      priceSyncSupported: true,
-      quotaSource: { reason: "not_supported", supported: false },
-    },
+    behavior: { priceSyncSupported: true, quotaSource: { supported: true } },
     creation: {
       mode: "template",
       selectorGroup: "remote_api_key",

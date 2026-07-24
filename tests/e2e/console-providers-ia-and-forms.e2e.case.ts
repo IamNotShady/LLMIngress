@@ -517,6 +517,77 @@ test("Add Provider API Keys group carries the Batch 4 inference cloud templates"
   }
 });
 
+test("Add Provider API Keys group carries the Batch 5 token-plan templates", async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_console_batch5_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await signInFromFirstRun(page, baseUrl);
+        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
+
+        const dialog = page.getByRole("dialog", { name: "Add Provider" });
+        await expect(dialog).toBeVisible();
+
+        // All three Batch 5 token-plan providers live in the API Keys template
+        // group (remote_api_key), the editable paste-key base URL mode.
+        await dialog.getByRole("tab", { name: "API Keys" }).click();
+        const providerType = dialog.getByLabel("Provider type", { exact: true });
+        const baseUrlField = dialog.getByLabel("Provider base URL", { exact: true });
+        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
+
+        // OpenCode Go: dual endpoints — Chat Completions + Messages chips, in
+        // registry endpoint-key order, prefilled /zen/go/v1 base.
+        await providerType.selectOption({ label: "OpenCode Go" });
+        await expect(baseUrlField).toHaveValue("https://opencode.ai/zen/go/v1");
+        await expect(endpointChips).toHaveText(["Chat Completions", "Messages"]);
+
+        // Xiaomi MiMo Token Plan: OpenAI chat_completions only, default sgp base.
+        await providerType.selectOption({ label: "Xiaomi MiMo Token Plan" });
+        await expect(baseUrlField).toHaveValue("https://token-plan-sgp.xiaomimimo.com/v1");
+        await expect(endpointChips).toHaveText(["Chat Completions"]);
+
+        // Mistral Vibe: OpenAI chat_completions only, sharing the standard
+        // mistral base as a distinct paste-key template.
+        await providerType.selectOption({ label: "Mistral Vibe" });
+        await expect(baseUrlField).toHaveValue("https://api.mistral.ai/v1");
+        await expect(endpointChips).toHaveText(["Chat Completions"]);
+
+        for (const viewport of [
+          { width: 1280, height: 900 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
+        }
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 test("device-code provider shows the user code and polls to complete; the authorization-code dialog links out without printing the URL", async ({
   browser,
 }) => {

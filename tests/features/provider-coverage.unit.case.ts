@@ -10,6 +10,7 @@ describe("provider coverage", () => {
       "anthropic",
       "kimi_coding",
       "command_code",
+      "opencode_go",
       "google",
       "openrouter",
       "ollama",
@@ -46,6 +47,12 @@ describe("provider coverage", () => {
         endpoint: "messages",
         providerKey: "command_code",
         providerTemplateId: "command_code",
+        providerType: "api_key",
+      },
+      {
+        endpoint: "messages",
+        providerKey: "opencode_go",
+        providerTemplateId: "opencode_go",
         providerType: "api_key",
       },
       {

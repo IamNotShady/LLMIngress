@@ -48,6 +48,39 @@ const zaiQuotaProbe: QuotaProbe = async (input) => {
 };
 
 /**
+ * Fireworks quota lives on the control-plane API at the account scope, not
+ * under the /inference/v1 chat base, so both URLs derive from the origin.
+ * The account slug is not derivable from the API key, so the probe first
+ * lists the accounts the key can see and takes the first.
+ */
+const fireworksQuotaProbe: QuotaProbe = async (input) => {
+  const origin = new URL(input.baseUrl).origin;
+  const accounts = await fetchProbeJson(input, {
+    headers: bearer(input.credential),
+    url: new URL("/v1/accounts", origin).toString(),
+  });
+  if (!accounts.ok) {
+    return accounts;
+  }
+  const accountName = readFireworksAccountName(accounts.body);
+  if (!accountName) {
+    return {
+      errorCode: "probe_failed",
+      errorMessage: "Fireworks account listing returned no account.",
+      ok: false,
+    };
+  }
+  const quotasUrl = new URL(`/v1/${accountName}/quotas`, origin);
+  // 200 is the documented pageSize maximum; per-GPU-type quota rows can push
+  // monthly-spend-usd past the default page of 50.
+  quotasUrl.searchParams.set("pageSize", "200");
+  return parsed(input, parseFireworksQuota, {
+    headers: bearer(input.credential),
+    url: quotasUrl.toString(),
+  });
+};
+
+/**
  * This module is the implementing module for quota probing, so keying the
  * lookup by providerKey is the dispatch itself, not a leaked string compare.
  */
@@ -66,6 +99,7 @@ export const quotaProbes: Record<string, QuotaProbe> = {
       headers: bearer(input.credential),
       url: joinUrl(input.baseUrl, "user/balance"),
     }),
+  fireworks: fireworksQuotaProbe,
   // glm_coding shares the api.z.ai origin, so it reuses the exact zai probe.
   glm_coding: zaiQuotaProbe,
   kimi_coding: async (input) =>
@@ -125,11 +159,10 @@ export function resolveQuotaProbe(providerKey: string | null | undefined): Quota
   return quotaProbes[providerKey] ?? null;
 }
 
-async function parsed(
+async function fetchProbeJson(
   input: QuotaProbeInput,
-  parse: (body: unknown) => QuotaEntry[],
   request: { headers: Record<string, string>; url: string },
-): Promise<QuotaProbeResult> {
+): Promise<ProbeJsonResult> {
   const fetchImpl = input.fetch ?? globalThis.fetch;
   try {
     const response = await fetchCredentialedProviderRequestWithTimeout(
@@ -139,7 +172,6 @@ async function parsed(
       { timeoutMs: input.timeoutMs ?? defaultTimeoutMs },
     );
     const text = await response.text();
-    const body = readJson(text);
     if (!response.ok) {
       return {
         errorCode:
@@ -148,7 +180,31 @@ async function parsed(
         ok: false,
       };
     }
-    return { entries: parse(body), ok: true };
+    return { body: readJson(text), ok: true };
+  } catch (error) {
+    return {
+      errorCode: "probe_failed",
+      errorMessage: error instanceof Error ? error.message : "Quota probe failed.",
+      ok: false,
+    };
+  }
+}
+
+type ProbeJsonResult =
+  | { body: unknown; ok: true }
+  | { errorCode: QuotaProbeErrorCode; errorMessage: string; ok: false };
+
+async function parsed(
+  input: QuotaProbeInput,
+  parse: (body: unknown) => QuotaEntry[],
+  request: { headers: Record<string, string>; url: string },
+): Promise<QuotaProbeResult> {
+  const result = await fetchProbeJson(input, request);
+  if (!result.ok) {
+    return result;
+  }
+  try {
+    return { entries: parse(result.body), ok: true };
   } catch (error) {
     return {
       errorCode: "probe_failed",
@@ -299,6 +355,50 @@ export function parseDeepseekQuota(body: unknown): QuotaEntry[] {
     });
   }
   return entries;
+}
+
+function readFireworksAccountName(body: unknown): string | null {
+  if (!isRecord(body) || !Array.isArray(body.accounts)) {
+    return null;
+  }
+  for (const account of body.accounts) {
+    if (
+      isRecord(account) &&
+      typeof account.name === "string" &&
+      account.name.startsWith("accounts/")
+    ) {
+      return account.name;
+    }
+  }
+  return null;
+}
+
+/**
+ * The monthly-spend-usd quota carries the account's monthly budget (`value`,
+ * an int64 string of whole dollars) and its consumption (`usage`, a double).
+ * The other quota rows (per-GPU counts, request-rate ceilings) are capacity
+ * grants, not consumables, and are not rendered. No public endpoint exposes
+ * the prepaid credit balance, so a balance entry is not possible.
+ */
+export function parseFireworksQuota(body: unknown): QuotaEntry[] {
+  if (!isRecord(body) || !Array.isArray(body.quotas)) {
+    return [];
+  }
+  for (const quota of body.quotas) {
+    if (!isRecord(quota) || typeof quota.name !== "string") {
+      continue;
+    }
+    if (!quota.name.endsWith("/quotas/monthly-spend-usd")) {
+      continue;
+    }
+    const value = readNumber(quota.value);
+    const usage = readNumber(quota.usage);
+    if (value === null || value <= 0 || usage === null) {
+      return [];
+    }
+    return [{ utilization: usage / value, window: "monthly_budget" }];
+  }
+  return [];
 }
 
 /** api.moonshot.ai bills USD; the .cn deployment bills CNY on the same path. */

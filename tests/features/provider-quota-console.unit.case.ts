@@ -323,16 +323,15 @@ describe("account-scoped balances", () => {
 
 describe("providers page wiring", () => {
   it("loads the quota read model and passes it into the rendered provider section", () => {
-    const section = readFileSync("apps/console/src/app/_modules/providers-section.tsx", "utf8");
-    expect(section).toContain("listConsoleProviderQuotaSummaries");
-    expect(section).toContain("providerQuotaSummaries={providerQuotaSummaries}");
+    const page = readFileSync("apps/console/src/app/(dashboard)/providers/page.tsx", "utf8");
+    expect(page).toContain("listConsoleProviderQuotaSummaries");
+    // Only the selected provider's quota reaches the detail panel, so the panel
+    // can never show another provider's plan.
+    expect(page).toContain("quotas.filter((quota) => quota.providerId === selected.id)");
 
-    const clientSection = readFileSync(
-      "apps/console/src/app/_modules/providers-client-section.tsx",
-      "utf8",
-    );
-    expect(clientSection).toContain("buildProviderQuotaConnectionView");
-    expect(clientSection).toContain("findSharedProviderBalances");
+    const panel = readFileSync("apps/console/src/app/_ui/quota-panel.tsx", "utf8");
+    expect(panel).toContain("buildProviderQuotaConnectionView");
+    expect(panel).toContain("findSharedProviderBalances");
   });
 
   it("exports the read model as its own package subpath", () => {

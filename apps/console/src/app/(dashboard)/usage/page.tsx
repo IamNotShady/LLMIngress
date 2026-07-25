@@ -6,6 +6,8 @@ import {
 import { ChartLegend, StackedBarChart } from "../../_ui/charts";
 import { ActionLink } from "../../_ui/controls";
 import {
+  failureRateTone,
+  failureRateToneClass,
   formatCompact,
   formatCost,
   formatCount,
@@ -118,7 +120,7 @@ export default async function UsagePage({
             </Kpi>
             <Kpi
               label="FAILURE RATE"
-              tone="text-red"
+              tone={failureRateToneClass[failureRateTone(usage.failureCount / usage.requestCount)]}
               value={formatPercent(usage.failureCount / usage.requestCount, 2)}
             >
               {formatCount(usage.failureCount)} failed

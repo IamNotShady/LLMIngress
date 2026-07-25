@@ -16,6 +16,8 @@ import Link from "next/link";
 import { ChartLegend, StackedBarChart } from "../_ui/charts";
 import { ActionLink, Meter, StatusDot } from "../_ui/controls";
 import {
+  failureRateTone,
+  failureRateToneClass,
   formatClock,
   formatCompact,
   formatCost,
@@ -79,7 +81,7 @@ export default async function OverviewPage({
     ),
   );
   const keyedLimits = new Set(limits.map((limit) => limit.apiKeyId));
-  const requestDelta = formatDelta(usage.requestCount, previous.requestCount);
+  const requestDelta = formatDelta(usage.requestCount, previous.requestCount, "up-good");
 
   const requestSeries = [
     {
@@ -128,7 +130,15 @@ export default async function OverviewPage({
           <div className="mt-[18px] grid grid-cols-5 border-y border-hair border-b-rule">
             <Kpi label="REQUESTS" value={formatCount(usage.requestCount)}>
               {requestDelta ? (
-                <span className={requestDelta.up ? "text-green" : "text-redtx"}>
+                <span
+                  className={
+                    requestDelta.tone === "good"
+                      ? "text-green"
+                      : requestDelta.tone === "bad"
+                        ? "text-redtx"
+                        : "text-dim"
+                  }
+                >
                   {requestDelta.text}
                 </span>
               ) : (
@@ -144,7 +154,7 @@ export default async function OverviewPage({
             </Kpi>
             <Kpi
               label="FAILURE RATE"
-              tone="text-red"
+              tone={failureRateToneClass[failureRateTone(usage.failureCount / usage.requestCount)]}
               value={formatPercent(usage.failureCount / usage.requestCount, 2)}
             >
               {formatCount(usage.failureCount)} failed

@@ -202,10 +202,8 @@ describe("provider connection health", () => {
     const healthStart = migration.indexOf("CREATE TABLE public.provider_health_events");
     const modelsStart = migration.indexOf("CREATE TABLE public.provider_models");
     const healthSchema = migration.slice(healthStart, modelsStart);
-    const console = readFileSync(
-      "apps/console/src/app/_modules/providers-client-section.tsx",
-      "utf8",
-    );
+    const consoleModel = readFileSync("apps/console/src/app/_ui/providers/model.ts", "utf8");
+    const consoleDetail = readFileSync("apps/console/src/app/_ui/providers/detail.tsx", "utf8");
     const worker = readFileSync("apps/worker/src/main.ts", "utf8");
 
     expect(healthSchema).toContain("provider_connection_id uuid NOT NULL");
@@ -215,8 +213,11 @@ describe("provider connection health", () => {
     expect(migration).not.toContain("last_test_status");
     expect(worker).toContain("provider_connection_probe:");
     expect(worker).not.toContain("provider_connectivity_check:");
-    expect(console).toContain("/api/provider-health-probes");
-    expect(console).not.toContain("ProviderApiKeyTestStatusPill");
-    expect(console).not.toContain("ConsoleProviderModelHealthSummary");
+    expect(consoleDetail).toContain("/api/provider-health-probes");
+    // Health is scoped to a connection, never to a model: the console probes a
+    // connection id and reads the summary keyed by that same id.
+    expect(consoleModel).toContain("healthById.get(connection.id)");
+    expect(consoleDetail).toContain('name="providerConnectionId"');
+    expect(consoleModel).not.toContain("ConsoleProviderModelHealthSummary");
   });
 });

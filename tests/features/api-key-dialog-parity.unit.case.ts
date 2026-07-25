@@ -4,68 +4,45 @@ import { describe, expect, test } from "vitest";
 
 const rootDir = process.cwd();
 const appDir = join(rootDir, "apps/console/src/app");
-const css = () => readFileSync(join(appDir, "globals.css"), "utf8");
 const source = (file: string) => readFileSync(join(appDir, file), "utf8");
 
-describe("api key dialog parity static contract", () => {
-  test("both dialogs render the shared detail panels component", () => {
-    const panels = source("_modules/api-key-detail-panels.tsx");
-    expect(panels).toContain("export function ApiKeyDetailPanels");
-    expect(panels).toContain('className="api-key-view-columns"');
-    expect(panels).toContain("<h3>Budget / Limit</h3>");
-    expect(panels).toContain("<h3>Endpoints</h3>");
-    expect(panels).toContain("<h3>Integration guide</h3>");
-    expect(panels).toContain("SecretRevealField");
+describe("api key presentation contract", () => {
+  test("the plaintext secret appears only on the one-time page", () => {
+    const createdPage = source("api/api-keys/_created-page.ts");
+    const detail = source("_ui/api-keys/detail.tsx");
+    const dialogs = source("_ui/api-keys/dialogs.tsx");
 
-    for (const file of [
-      "_modules/api-keys-section.tsx",
-      "_modules/api-key-create-dialog-client.tsx",
-    ]) {
-      expect(source(file), file).toContain("ApiKeyDetailPanels");
-    }
-  });
-
-  test("the created dialog inherits the view dialog shell class", () => {
-    const created = source("_modules/api-key-create-dialog-client.tsx");
-    expect(created).toContain(
-      'className="console-dialog api-key-view-dialog api-key-created-dialog"',
+    expect(createdPage).toContain("SECRET · SHOWN ONCE");
+    // Everywhere else only the stored prefix exists, and that is all the console
+    // renders — the plaintext is not kept anywhere to be shown again.
+    expect(detail).toContain("apiKey.keyPrefix");
+    expect(detail).not.toContain("plaintext");
+    expect(dialogs).not.toContain("plaintext");
+    expect(dialogs).toContain(
+      "the llmi_ secret cannot be shown or changed — delete the key and issue a new one to rotate it",
     );
-    // The bespoke created-only guide wrapper is gone.
-    expect(created).not.toContain("api-key-created-guide");
-    expect(css()).not.toContain(".api-key-created-guide");
   });
 
-  test("the two dialogs differ only in how the api key is presented", () => {
-    const created = source("_modules/api-key-create-dialog-client.tsx");
-    const view = source("_modules/api-keys-section.tsx");
-
-    expect(created).toContain('secretLabel="API key"');
-    expect(created).toContain("secretHideable={true}");
-    expect(view).toContain('secretLabel="API key prefix"');
-    expect(view).toContain("secretHideable={false}");
-    expect(view).toContain("secretValue={apiKey.keyPrefix}");
+  test("the one-time page never introduces a script into interpolated markup", () => {
+    const createdPage = source("api/api-keys/_created-page.ts");
+    // The page is assembled by string interpolation around user-controlled
+    // names; a script tag there turns an escaping slip into code execution.
+    expect(createdPage).not.toContain("<script");
+    expect(createdPage).toContain("function escapeHtml");
   });
 
-  test("the secret field always copies the real value and hides only when hideable", () => {
-    const field = source("_components/secret-reveal-field.tsx");
-    expect(field.startsWith('"use client"')).toBe(true);
-    expect(field).toContain("navigator.clipboard.writeText(value)");
-    expect(field).toContain('"•".repeat(24)');
-    // The eye toggle renders only when the caller opts in.
-    expect(field).toContain("hideable ? (");
-    expect(field).toContain('FlatIcon name={revealed ? "hide" : "view"}');
-    expect(source("_components/flat-icon.tsx")).toContain('| "hide"');
+  test("the created page and the detail view state the same configuration facts", () => {
+    const createdPage = source("api/api-keys/_created-page.ts");
+    const detail = source("_ui/api-keys/detail.tsx");
+
+    for (const fact of ["gateway", "default model", "limits"]) {
+      expect(createdPage, fact).toContain(fact);
+    }
+    expect(detail).toContain("Virtual Model access");
+    expect(detail).toContain("Limits");
   });
 
-  test("the view dialog width is declared exactly once", () => {
-    const stylesheet = css();
-    const declarations = stylesheet.match(/^\.api-key-view-dialog\s*\{/gm) ?? [];
-    expect(declarations).toHaveLength(1);
-    expect(stylesheet).toMatch(/\.api-key-view-dialog\s*\{[^}]*width:\s*min\(72rem/s);
-    expect(stylesheet).not.toMatch(/\.api-key-view-dialog\s*\{[^}]*width:\s*min\(42rem/s);
-  });
-
-  test("the create result carries limits so the created dialog can render them", () => {
+  test("the create result carries limits so the created page can render them", () => {
     const db = readFileSync(join(rootDir, "packages/db/src/console-api-keys.ts"), "utf8");
     expect(db).toContain("limits: ConsoleApiKeyLimit[]");
     expect(db).toContain("readApiKeyLimitsWithClient");

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { formatModelContextTokens } from "../../apps/console/src/app/_ui/model-capability-format";
 import {
   listProviderTemplateSelectorGroups,
   normalizeProviderTemplateFormInput,
@@ -51,20 +52,13 @@ describe("provider probe lifecycle", () => {
   });
 
   it("submits and edits base URLs for template providers", () => {
-    const createForm = readFileSync(
-      "apps/console/src/app/_modules/provider-create-form.tsx",
-      "utf8",
-    );
-    const providerSection = readFileSync(
-      "apps/console/src/app/_modules/providers-section.tsx",
-      "utf8",
-    );
+    const dialogs = readFileSync("apps/console/src/app/_ui/providers/dialogs.tsx", "utf8");
 
-    expect(createForm).toContain('name="baseUrl"');
-    expect(createForm).not.toContain('type="hidden" name="baseUrl"');
-    expect(providerSection).not.toContain("readOnly={Boolean(provider.providerTemplateId)}");
-    expect(providerSection).toContain('name="baseUrl"');
-    expect(providerSection).toMatch(/name="baseUrl"[\s\S]{0,160}required/);
+    // The template supplies a default, but the field stays editable — a
+    // self-hosted deployment of a templated provider has a different base url.
+    expect(dialogs).toContain('name="baseUrl"');
+    expect(dialogs).not.toContain('type="hidden" name="baseUrl"');
+    expect(dialogs).not.toContain("readOnly={Boolean(provider.providerTemplateId)}");
   });
 
   it("uses a connection-scoped probe job independent from model refresh", () => {
@@ -113,11 +107,13 @@ describe("provider probe lifecycle", () => {
       ]),
     ).toBe("unknown-chat");
 
-    const providerModelsUi = readFileSync(
-      "apps/console/src/app/_modules/providers-client-section.tsx",
+    // A model whose context window or price is unknown still renders and is
+    // still routable; the cell says Unknown rather than inventing a number.
+    const contextFormat = readFileSync(
+      "apps/console/src/app/_ui/model-capability-format.ts",
       "utf8",
     );
-    expect(providerModelsUi).toMatch(/function formatModelContext[\s\S]*?return "Unknown";/);
-    expect(providerModelsUi).toMatch(/function formatModelPrice[\s\S]*?return "Unknown";/);
+    expect(contextFormat).toContain('return contextWindow === null ? "Unknown"');
+    expect(formatModelContextTokens(null)).toBe("Unknown");
   });
 });

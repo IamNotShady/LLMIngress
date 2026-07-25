@@ -146,26 +146,23 @@ describe("apiKey integration guidance", () => {
   });
 
   it("removes the Integration Platform field from ApiKey UI and API surfaces", () => {
-    const apiKeysUi = readFileSync("apps/console/src/app/_modules/api-keys-section.tsx", "utf8");
     const apiKeysRoute = readFileSync("apps/console/src/app/api/api-keys/route.ts", "utf8");
-    // The guide tabs and the Endpoints section now live in the panels module
-    // that both the created and the detail dialog render.
-    const detailPanels = readFileSync(
-      "apps/console/src/app/_modules/api-key-detail-panels.tsx",
-      "utf8",
-    );
+    const detail = readFileSync("apps/console/src/app/_ui/api-keys/detail.tsx", "utf8");
+    const dialogs = readFileSync("apps/console/src/app/_ui/api-keys/dialogs.tsx", "utf8");
+    // A key is not bound to one platform: every guide is offered on the page
+    // that shows the secret, and no platform is stored against the key.
+    const createdPage = readFileSync("apps/console/src/app/api/api-keys/_created-page.ts", "utf8");
 
     for (const [label, source] of [
-      ["api-keys-section", apiKeysUi],
-      ["api-key-detail-panels", detailPanels],
+      ["api-key detail", detail],
+      ["api-key dialogs", dialogs],
+      ["created page", createdPage],
     ] as const) {
       expect(source, label).not.toContain('name="integrationPlatform"');
       expect(source, label).not.toContain("apiKeyPlatform");
-      expect(source, label).not.toContain("<dt>Platform</dt>");
-      expect(source, label).not.toContain("api-key-filter-platform");
     }
-    expect(detailPanels).toContain("IntegrationGuideTabs");
-    expect(detailPanels).toContain("<h3>Endpoints</h3>");
+    expect(createdPage).toContain("buildIntegrationGuides");
+    expect(createdPage).toContain("SET UP YOUR AGENT");
     expect(apiKeysRoute).not.toContain("integrationPlatform");
   });
 

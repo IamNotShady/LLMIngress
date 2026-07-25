@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+import { formatCost } from "../../apps/console/src/app/_ui/format";
 import {
   formatConsoleCompactCount,
   formatConsoleCount,
@@ -11,21 +12,13 @@ import {
 
 const rootDir = process.cwd();
 const appDir = join(rootDir, "apps/console/src/app");
-const moduleSource = (file: string) => readFileSync(join(appDir, "_modules", file), "utf8");
-const consoleSectionSource = () =>
-  [
-    "sections.tsx",
-    "overview-section.tsx",
-    "usage-section.tsx",
-    "activity-section.tsx",
-    "virtual-models-section.tsx",
-    "api-keys-section.tsx",
-    "limits-section.tsx",
-    "models-section.tsx",
-    "providers-section.tsx",
-  ]
-    .map(moduleSource)
-    .join("\n");
+
+function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap((entry) => {
+    const path = join(dir, entry);
+    return statSync(path).isDirectory() ? walk(path) : [path];
+  });
+}
 
 describe("shared console formatters", () => {
   test("USD uses smart precision: cents at 2 decimals, sub-cent at 3 significant digits", () => {
@@ -61,23 +54,24 @@ describe("shared console formatters", () => {
 });
 
 describe("console pages consume the shared formatters", () => {
-  test("console section modules import the shared module and drop local look-alikes", () => {
-    const source = consoleSectionSource();
-    expect(source).toContain('from "@llmingress/db/console-format"');
-    for (const orphan of [
-      "function formatCompactNumber",
-      "function formatFullNumber",
-      "function formatActivityTableTokens",
-      "function formatActivityTableCost",
-      "function formatOverviewMoney",
-      "function formatOverviewActivityCost",
-      "function formatTime",
-    ]) {
-      expect(source, `${orphan} should be replaced by the shared module`).not.toContain(orphan);
+  test("the console money formatter delegates to the shared USD rule", () => {
+    // A fraction of a cent must not collapse to $0.00 on one page only.
+    expect(formatCost("0.00008428")).toBe(formatConsoleUsd(0.00008428));
+    expect(formatCost("0.13614875")).toBe("$0.14");
+    expect(formatCost(null)).toBe(MISSING_VALUE);
+    // Subscription traffic is unmetered, which is not the same as costing zero.
+    expect(formatCost("0", { metered: false })).toBe("plan");
+  });
+
+  test("no page grows a local money or count formatter of its own", () => {
+    const sources = walk(appDir)
+      .filter((path) => /\.tsx?$/.test(path) && !path.endsWith("_ui/format.ts"))
+      .map((path) => [path, readFileSync(path, "utf8")] as const);
+
+    for (const [path, source] of sources) {
+      expect(source, path).not.toMatch(/function format(Compact|Full)?(Number|Money|Usd)/);
+      expect(source, path).not.toContain('"N/A"');
     }
-    // The old null vocabulary is gone from data cells.
-    expect(source).not.toContain('"N/A"');
-    expect(source).not.toContain('? "Unavailable" :');
   });
 
   test("db display formatters delegate to the shared USD rule", () => {

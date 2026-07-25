@@ -1,3 +1,4 @@
+import { formatConsoleUsd } from "@llmingress/db/console-format";
 import { formatRelativeDateTime } from "./provider-relative-time";
 
 // Presentation helpers shared by every module. Anything that turns a stored
@@ -77,21 +78,14 @@ export function formatCost(
   if (options.metered === false) {
     return "plan";
   }
-  if (value === null || value === undefined) {
-    return "—";
-  }
-  const amount = typeof value === "string" ? Number.parseFloat(value) : value;
-  if (!Number.isFinite(amount)) {
-    return "—";
-  }
-  if (amount === 0) {
-    return "$0.00";
-  }
-  return amount < 0.01 ? `$${amount.toFixed(4)}` : `$${amount.toFixed(2)}`;
+  // The amount itself follows the shared USD rule — cents at two decimals,
+  // sub-cent at three significant digits — so a fraction of a cent never
+  // collapses to $0.00 on one page and not another.
+  return formatConsoleUsd(value ?? null);
 }
 
 export function formatPricePerMillion(value: number | null): string {
-  return value === null ? "—" : `$${value.toFixed(2)}`;
+  return value === null ? "—" : formatConsoleUsd(value);
 }
 
 /** "$3.00 / $15.00 per M" or "subscription plan" for unmetered candidates. */
@@ -122,18 +116,49 @@ export function formatPercent(ratio: number, digits = 1): string {
   return `${(ratio * 100).toFixed(digits)}%`;
 }
 
-/** Signed period-over-period delta, e.g. "+8.2% ↑". */
+/**
+ * Signed period-over-period delta, e.g. "+8.2% ↑". The tone is per metric, not
+ * per direction: more requests is good, more cost is not, so the caller states
+ * which way is good and the colour follows that rather than the arrow.
+ */
 export function formatDelta(
   current: number,
   previous: number,
-): { text: string; up: boolean } | null {
+  polarity: "down-good" | "up-good" = "up-good",
+): { text: string; tone: "bad" | "good" | "neutral" } | null {
   if (previous === 0) {
     return null;
   }
   const ratio = (current - previous) / previous;
   const up = ratio >= 0;
-  return { text: `${up ? "+" : ""}${(ratio * 100).toFixed(1)}% ${up ? "↑" : "↓"}`, up };
+  const tone =
+    ratio === 0
+      ? "neutral"
+      : (up ? polarity === "up-good" : polarity === "down-good")
+        ? "good"
+        : "bad";
+  return { text: `${up ? "+" : ""}${(ratio * 100).toFixed(1)}% ${up ? "↑" : "↓"}`, tone };
 }
+
+/**
+ * Failure rate crosses into warning at 5% and into danger at 20%. A low but
+ * non-zero rate is normal for upstreams and must not be painted as an outage.
+ */
+export function failureRateTone(rate: number): "danger" | "neutral" | "warn" {
+  if (rate >= 0.2) {
+    return "danger";
+  }
+  if (rate >= 0.05) {
+    return "warn";
+  }
+  return "neutral";
+}
+
+export const failureRateToneClass: Record<"danger" | "neutral" | "warn", string> = {
+  danger: "text-red",
+  neutral: "text-ink",
+  warn: "text-ambtx",
+};
 
 export function formatCapabilities(input: {
   supportsFunctionCalling: boolean | null;

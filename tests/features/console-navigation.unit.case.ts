@@ -24,12 +24,26 @@ describe("console module navigation config", () => {
     expect(hrefs.sort()).toEqual([...expectedRoutes].sort());
   });
 
-  test("every item has an absolute href, a label, and a hint", () => {
+  test("every item has an absolute href and a label", () => {
+    // The masthead is a single row of labels — there is no second line to hint
+    // in, so a hint would have nowhere to render.
     for (const item of consoleNavItems) {
       expect(item.href.startsWith("/")).toBe(true);
       expect(item.label.trim().length).toBeGreaterThan(0);
-      expect(item.hint.trim().length).toBeGreaterThan(0);
     }
+  });
+
+  test("items are ordered by responsibility, not alphabetically", () => {
+    expect(consoleNavItems.map((item) => item.label)).toEqual([
+      "Overview",
+      "Providers",
+      "Virtual Models",
+      "API Keys",
+      "Limits",
+      "Activity",
+      "Usage",
+      "Playground",
+    ]);
   });
 
   test("findActiveNavItem resolves the longest matching href", () => {

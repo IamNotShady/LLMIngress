@@ -76,8 +76,7 @@ describe("console secure bootstrap", () => {
       "docs/PRODUCT.md",
       "packages/config/src/index.ts",
       "apps/console/src/app/(dashboard)/layout.tsx",
-      "apps/console/src/app/_components/auth-screens.tsx",
-      "apps/console/src/app/_components/console-mutation-form.tsx",
+      "apps/console/src/app/_ui/auth.tsx",
       "apps/console/src/app/api/auth/setup/route.ts",
     ];
 

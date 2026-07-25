@@ -5,26 +5,27 @@ import { describe, expect, test } from "vitest";
 const appDir = join(process.cwd(), "apps/console/src/app");
 const read = (rel: string) => readFileSync(join(appDir, rel), "utf8");
 
-describe("console spinner primitive", () => {
-  test("exports an accessible Spinner with a stable class and no hardcoded color", () => {
-    const src = read("_components/spinner.tsx");
-    expect(src).toMatch(/export function Spinner/);
-    expect(src).toMatch(/className="spinner"/);
-    expect(src).toMatch(/role="status"/);
-    expect(src).toMatch(/aria-label/);
-    expect(src).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+describe("console in-flight feedback", () => {
+  test("the playground reports an in-flight send and cannot be double-submitted", () => {
+    const src = read("_ui/playground/playground.tsx");
+    expect(src).toMatch(/Sending…/);
+    expect(src).toMatch(/disabled=\{sending/);
   });
 
-  test("stylesheet animates the spinner and respects reduced motion", () => {
+  test("skeleton rows announce what is loading rather than spinning silently", () => {
+    const src = read("_ui/layout.tsx");
+    expect(src).toMatch(/export function LoadingRows/);
+    expect(src).toMatch(/note/);
+  });
+
+  test("no animation runs without honouring reduced motion", () => {
     const css = read("globals.css");
-    expect(css).toMatch(/\.spinner\s*\{/);
-    expect(css).toMatch(/@keyframes spinner-rotate/);
-    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.spinner-ring/);
-  });
-
-  test("playground uses the shared Spinner for in-flight states", () => {
-    const src = read("playground.tsx");
-    expect(src).toMatch(/from "\.\/_components\/spinner"/);
-    expect(src).toMatch(/<Spinner/);
+    const animations = css.match(/animation:/g) ?? [];
+    if (animations.length > 0) {
+      expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
+    }
+    // The console's only motion is the theme knob, which is a 150ms position
+    // transition rather than a looping animation.
+    expect(css).not.toMatch(/@keyframes/);
   });
 });

@@ -1,3 +1,5 @@
+import { formatRelativeDateTime } from "./provider-relative-time";
+
 // Presentation helpers shared by every module. Anything that turns a stored
 // value into display text lives here so two pages never disagree about what a
 // price, a plan cost or a timestamp reads like.
@@ -20,22 +22,15 @@ export function formatDateOnly(value: Date | null | undefined): string {
   return value ? value.toISOString().slice(0, 10) : "—";
 }
 
-/** "4m ago" / "3h ago" / "6d ago" — relative to now, never a bare timestamp. */
+/**
+ * "just now" / "12 min ago" / "3 h ago", falling back to the date past a day.
+ * Delegates to the shared relative formatter so every surface agrees.
+ */
 export function formatRelative(value: Date | null | undefined, now: Date = new Date()): string {
   if (!value) {
     return "never";
   }
-  const seconds = Math.max(0, Math.round((now.getTime() - value.getTime()) / 1000));
-  if (seconds < 60) {
-    return "just now";
-  }
-  if (seconds < 3600) {
-    return `${Math.floor(seconds / 60)}m ago`;
-  }
-  if (seconds < 86_400) {
-    return `${Math.floor(seconds / 3600)}h ago`;
-  }
-  return `${Math.floor(seconds / 86_400)}d ago`;
+  return formatRelativeDateTime(value, now.getTime());
 }
 
 /** "in 6d" / "in 4h" — the mirror of formatRelative for a moment still ahead. */
@@ -114,13 +109,6 @@ export function formatPricePair(input: {
   return `${formatPricePerMillion(input.inputUsdPerMillionTokens)} / ${formatPricePerMillion(
     input.outputUsdPerMillionTokens,
   )} per M`;
-}
-
-export function formatContextWindow(value: number | null): string {
-  if (value === null) {
-    return "—";
-  }
-  return value >= 1000 ? `${Math.round(value / 1000)}k` : String(value);
 }
 
 export function formatLatency(ms: number | null | undefined): string {

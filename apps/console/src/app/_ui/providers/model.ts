@@ -3,6 +3,7 @@ import type { ConsoleProviderHealthSummary } from "@llmingress/db/console-provid
 import type { ProviderApiKeyMetadata } from "@llmingress/db/console-provider-keys";
 import type { ConsoleProvider } from "@llmingress/db/console-providers";
 import type { ProviderOAuthMetadata } from "@llmingress/db/providers";
+import { aggregateProviderConnectionHealthStatus } from "../provider-health";
 
 /**
  * One row of the Connections table. A provider's health belongs to each key or
@@ -107,23 +108,40 @@ export function describeConnectionHealth(connection: ProviderConnection): Connec
   return { text: `${reason} · ${health.consecutiveFailures} fails`, tone: "red" };
 }
 
-/** The provider dot rolls its connections up: any failure wins, else healthy. */
+/**
+ * The provider dot rolls its connections up. One healthy connection is enough
+ * for the provider to keep serving, so a provider with a working fallback is
+ * healthy rather than red — the failing connection is still named beside it so
+ * the problem is not hidden.
+ */
 export function describeProviderHealth(connections: ProviderConnection[]): ConnectionHealthView {
   if (connections.length === 0) {
     return { text: "no connections", tone: "dim" };
   }
-  const views = connections.map(describeConnectionHealth);
-  const failing = views.filter((view) => view.tone === "red");
-  if (failing.length > 0) {
-    return { text: `${failing.length} unhealthy`, tone: "red" };
-  }
-  if (views.some((view) => view.tone === "amber")) {
-    return { text: "checking", tone: "amber" };
-  }
-  if (views.every((view) => view.tone === "dim")) {
+  const status = aggregateProviderConnectionHealthStatus(
+    connections.map((connection) => ({
+      enabled: connection.enabled,
+      providerId: "provider",
+      status: describeConnectionHealth(connection).tone === "green" ? "healthy" : "unhealthy",
+    })),
+  );
+  const failing = connections.filter(
+    (connection) => describeConnectionHealth(connection).tone === "red",
+  ).length;
+
+  if (status === "unknown") {
     return { text: "disabled", tone: "dim" };
   }
-  return { text: "healthy", tone: "green" };
+  if (status === "unhealthy") {
+    return { text: failing === 1 ? "unhealthy" : `${failing} unhealthy`, tone: "red" };
+  }
+  if (status === "checking") {
+    return { text: "checking", tone: "amber" };
+  }
+  return {
+    text: failing > 0 ? `healthy · ${failing} failing` : "healthy",
+    tone: failing > 0 ? "amber" : "green",
+  };
 }
 
 /** Endpoint protocols and quota capability come from the provider registry. */

@@ -3,7 +3,7 @@ import {
   type ConsoleNavItem,
   consoleNavItems,
   findActiveNavItem,
-} from "../../apps/console/src/app/_lib/nav";
+} from "../../apps/console/src/app/_ui/nav";
 import { redirectToConsolePath } from "../../apps/console/src/app/api/_redirect";
 
 const expectedRoutes = [

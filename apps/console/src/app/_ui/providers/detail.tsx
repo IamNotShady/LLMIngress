@@ -14,13 +14,13 @@ import {
 } from "../controls";
 import {
   formatCapabilities,
-  formatContextWindow,
   formatCost,
   formatCount,
   formatPricePerMillion,
   formatRelative,
 } from "../format";
 import { DetailRow, SectionTitle } from "../layout";
+import { formatModelContextTokens } from "../model-capability-format";
 import { buildHref, readIntParam, readParam, type SearchParams } from "../params";
 import { PlanQuotaPanel } from "../quota-panel";
 import { formatRange, GridRow, Pagination } from "../table";
@@ -258,7 +258,7 @@ export function ProviderDetail({
                 {metered ? formatPricePerMillion(model.outputUsdPerMillionTokens) : "plan"}
               </span>
               <span className="text-right text-dim tabnum">
-                {formatContextWindow(model.contextWindow)}
+                {formatModelContextTokens(model.contextWindow)}
               </span>
               <span className="text-right text-dim cell-clip">{formatCapabilities(model)}</span>
             </GridRow>

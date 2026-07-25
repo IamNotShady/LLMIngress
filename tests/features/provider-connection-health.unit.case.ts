@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { countProviderAggregateHealthStatuses } from "../../apps/console/src/app/_lib/provider-health";
+import { countProviderAggregateHealthStatuses } from "../../apps/console/src/app/_ui/provider-health";
 import { buildProviderConnectionProbeJobPayload } from "../../packages/db/src/provider-jobs";
 import {
   isProviderCredentialFailure,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatModelContextTokens } from "../../apps/console/src/app/_modules/model-capability-format.ts";
+import { formatModelContextTokens } from "../../apps/console/src/app/_ui/model-capability-format.ts";
 
 describe("model capability formatting", () => {
   it("renders known context windows as exact grouped token counts", () => {

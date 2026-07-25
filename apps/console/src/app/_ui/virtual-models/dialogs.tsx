@@ -21,8 +21,9 @@ import {
   SelectInput,
   TextInput,
 } from "../controls";
-import { formatContextWindow, formatCost, formatCount, formatPricePair } from "../format";
+import { formatCost, formatCount, formatPricePair } from "../format";
 import { DetailRow } from "../layout";
+import { formatModelContextTokens } from "../model-capability-format";
 import { Dialog, DialogActions, DialogBody, DialogImpact, DialogNote } from "../overlay";
 import { buildHref, readParam, type SearchParams } from "../params";
 import { providerIsMetered } from "../providers/model";
@@ -197,7 +198,7 @@ export async function VirtualModelDialogs({
                     })}
                   </span>
                   <span className="whitespace-nowrap text-dim">
-                    ctx {formatContextWindow(model.contextWindow)}
+                    ctx {formatModelContextTokens(model.contextWindow)}
                   </span>
                   <span className="flex flex-none gap-[5px] text-dim">
                     <Link
@@ -357,7 +358,7 @@ function CandidateBrowser({
                 })}
               </span>
               <span className="whitespace-nowrap text-dim">
-                ctx {formatContextWindow(model.contextWindow)}
+                ctx {formatModelContextTokens(model.contextWindow)}
               </span>
             </>
           );

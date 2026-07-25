@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { formatRelativeDateTime } from "../../apps/console/src/app/_lib/provider-relative-time";
+import { formatRelativeDateTime } from "../../apps/console/src/app/_ui/provider-relative-time";
 
 const rootDir = process.cwd();
 const appDir = join(rootDir, "apps/console/src/app");

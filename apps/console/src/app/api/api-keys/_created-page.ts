@@ -83,10 +83,9 @@ export function renderOneTimeApiKeyResponse(
         <section aria-label="Secret">
           <p class="label">SECRET · SHOWN ONCE</p>
           <div class="secret">
-            <code id="secret">${escapeHtml(apiKey)}</code>
-            <button type="button" id="copy">Copy</button>
+            <input id="secret" readonly value="${escapeHtml(apiKey)}" aria-label="API key secret" />
           </div>
-          <p class="warn">Stored hashed — it cannot be shown again. Copy it before closing.</p>
+          <p class="warn">Stored hashed — it cannot be shown again. Select the value and copy it before closing.</p>
         </section>
         <section aria-label="Configuration">
           <p class="label">CONFIGURATION</p>
@@ -122,15 +121,6 @@ export function renderOneTimeApiKeyResponse(
         <a href="/playground">Test in Playground</a>
       </footer>
     </main>
-    <div id="toast" role="status" hidden>Secret copied to the clipboard<span>It is not stored anywhere else — paste it into your agent now.</span></div>
-    <script>
-      document.getElementById("copy").addEventListener("click", async () => {
-        await navigator.clipboard.writeText(document.getElementById("secret").textContent ?? "");
-        const toast = document.getElementById("toast");
-        toast.hidden = false;
-        setTimeout(() => { toast.hidden = true; }, 4000);
-      });
-    </script>
   </body>
 </html>`,
     {
@@ -158,8 +148,7 @@ h1{margin:0;font:600 18px var(--sans)}
 .label.spaced{margin-top:20px}
 .split{display:grid;grid-template-columns:1fr 300px;gap:24px;margin-top:16px;align-items:start}
 .secret{display:flex;align-items:center;gap:10px;margin-top:6px;background:var(--track);border:1px solid var(--ambbd);border-radius:3px;padding:12px 14px}
-.secret code{flex:1;font:500 15px var(--mono);word-break:break-all}
-.secret button{flex:none;border:0;border-radius:3px;background:var(--seg);color:var(--segfg);font:500 13px var(--mono);padding:5px 14px;cursor:pointer}
+.secret input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:500 15px var(--mono)}
 .warn{margin:6px 0 0;font:400 12.5px var(--mono);color:var(--ambtx)}
 dl{display:block;margin:6px 0 0;border-top:1px solid var(--hair)}
 dl div{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--rule2);font:400 12.5px var(--mono)}
@@ -177,8 +166,6 @@ pre{margin:0 0 10px;background:var(--track);border:1px solid var(--rule);border-
 footer{display:flex;align-items:center;gap:8px;margin-top:20px;padding-top:14px;border-top:1px solid var(--hair)}
 footer a{display:inline-flex;align-items:center;border:1px solid var(--btnbd);background:var(--btnbg);color:var(--ink);border-radius:3px;font:500 13.5px var(--mono);padding:6px 12px;text-decoration:none}
 footer a.primary{border-color:transparent;background:var(--seg);color:var(--segfg);padding:6px 18px}
-#toast{position:fixed;right:24px;bottom:24px;width:420px;max-width:calc(100vw - 48px);background:var(--btnbg);border:1px solid var(--hair);border-left:3px solid var(--accent);border-radius:4px;padding:11px 14px;font:400 13px var(--mono);box-shadow:0 8px 24px rgba(0,0,0,.18)}
-#toast span{display:block;margin-top:3px;font-size:12.5px;color:var(--faint)}
 `;
 }
 

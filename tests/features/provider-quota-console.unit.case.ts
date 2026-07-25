@@ -12,7 +12,7 @@ import {
   QUOTA_PROBING_PAUSED_LABEL,
   quotaBalanceKey,
   readQuotaErrorReason,
-} from "../../apps/console/src/app/_lib/provider-quota-format";
+} from "../../apps/console/src/app/_ui/provider-quota-format";
 import { isBalanceEntry, isWindowEntry, type QuotaEntry } from "../../packages/domain/src/quota";
 
 const referenceTimeMs = Date.parse("2026-07-20T10:00:00Z");

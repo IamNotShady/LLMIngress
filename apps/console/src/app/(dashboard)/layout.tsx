@@ -6,8 +6,8 @@ import { getConsoleRuntimeStatus } from "@llmingress/db/console-runtime-status";
 import { loadEncryptionKey } from "@llmingress/security/encryption-key";
 import { cookies } from "next/headers";
 import { type ReactNode, Suspense } from "react";
-import { FirstRunSetup, Login } from "../_components/auth-screens";
-import { ConsoleFooter } from "../_ui/footer";
+import { FirstRunSetup, Login } from "../_ui/auth";
+import { ConsoleFooter, consoleStatusLine } from "../_ui/footer";
 import { Masthead } from "../_ui/masthead";
 import { ToastHost } from "../_ui/toast";
 
@@ -17,20 +17,25 @@ import { ToastHost } from "../_ui/toast";
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const cookieStore = await cookies();
   const authState = await readConsoleAuthState(cookieStore.get(sessionCookieName)?.value);
+  const runtime = await getConsoleRuntimeStatus();
+  const statusFacts = {
+    encryptionReady: isEncryptionReady(),
+    runtime,
+    version: process.env.LLMINGRESS_VERSION?.trim() || "dev",
+  };
 
   if (authState === "setup") {
-    return <FirstRunSetup />;
+    return <FirstRunSetup statusLine={consoleStatusLine(statusFacts)} />;
   }
   if (authState === "login") {
-    return <Login />;
+    return <Login statusLine={consoleStatusLine(statusFacts)} />;
   }
 
-  const [healthSummaries, failedRequestCount, runtime] = await Promise.all([
+  const [healthSummaries, failedRequestCount] = await Promise.all([
     listConsoleProviderHealthSummaries(),
     countConsoleActivities({
       filters: { status: "failed", from: new Date(Date.now() - 24 * 60 * 60 * 1000) },
     }),
-    getConsoleRuntimeStatus(),
   ]);
 
   return (
@@ -47,11 +52,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       <Suspense fallback={null}>
         <ToastHost />
       </Suspense>
-      <ConsoleFooter
-        encryptionReady={isEncryptionReady()}
-        runtime={runtime}
-        version={process.env.LLMINGRESS_VERSION?.trim() || "dev"}
-      />
+      <ConsoleFooter {...statusFacts} />
     </div>
   );
 }

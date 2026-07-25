@@ -148,6 +148,13 @@
     color: var(--accent);
     text-decoration: none;
   }
+
+  /* Focus is a selected state, so it uses --accent rather than the user agent's
+     own blue, which would put a colour outside the token table on screen. */
+  :focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 1px;
+  }
 }
 
 @utility tabnum {

@@ -6,6 +6,23 @@ export type ConsoleFooterProps = {
   version: string;
 };
 
+/**
+ * One-line condensation of the same facts, for screens that have no footer.
+ * The auth panels show this so the version, database and encryption state are
+ * visible before anyone can sign in.
+ */
+export function consoleStatusLine({
+  encryptionReady,
+  runtime,
+  version,
+}: ConsoleFooterProps): string {
+  return [
+    `LLMIngress ${version}`,
+    `postgres ${runtime.databaseServerVersion}`,
+    encryptionReady ? "encryption ok" : "encryption unavailable",
+  ].join(" · ");
+}
+
 /** Fixed to the bottom of the viewport on every module. */
 export function ConsoleFooter({ encryptionReady, runtime, version }: ConsoleFooterProps) {
   const workerLine = runtime.workerJobs

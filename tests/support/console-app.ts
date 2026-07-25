@@ -17,15 +17,16 @@ export async function signInFromFirstRun(page: Page, baseUrl: string) {
   const navigationTimeout = 15_000;
 
   await page.goto(baseUrl);
-  await expect(page.getByRole("heading", { name: "First run setup" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: "Create the console admin" })).toBeVisible({
     timeout: navigationTimeout,
   });
-  await page.getByLabel("Admin password").fill(password);
+  await page.getByLabel("Admin password", { exact: true }).fill(password);
+  await page.getByLabel("Confirm admin password").fill(password);
   await page.getByRole("button", { name: "Create admin" }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
     timeout: navigationTimeout,
   });
-  await page.getByLabel("Admin password").fill(password);
+  await page.getByLabel("Admin password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible({
     timeout: navigationTimeout,

@@ -7,7 +7,7 @@ import {
   endpointPathByProtocol,
   groupVirtualModelEndpoints,
   integrationGuidePlatforms,
-} from "../../apps/console/src/app/_modules/api-key-integration-guide.ts";
+} from "../../apps/console/src/app/_ui/api-keys/integration-guide.ts";
 import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page.ts";
 import { listApiKeyVirtualModelAccess } from "../../packages/db/src/console-api-keys.ts";
 import {

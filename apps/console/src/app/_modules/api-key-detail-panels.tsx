@@ -7,7 +7,7 @@ import type { ConsoleApiKeyLimit } from "@llmingress/db/console-api-key-limits";
 import type { ApiKeyAllowedVirtualModel } from "@llmingress/db/console-api-keys";
 import { formatConsoleCompactCount } from "@llmingress/db/console-format";
 import { SecretRevealField } from "../_components/secret-reveal-field";
-import { groupVirtualModelEndpoints } from "./api-key-integration-guide";
+import { groupVirtualModelEndpoints } from "../_ui/api-keys/integration-guide";
 import { IntegrationGuideTabs } from "./api-key-integration-guide-tabs";
 import { findApiKeyLimit } from "./sections";
 

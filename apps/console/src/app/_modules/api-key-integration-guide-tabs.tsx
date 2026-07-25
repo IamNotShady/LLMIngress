@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { API_KEY_PLACEHOLDER, buildIntegrationGuides } from "./api-key-integration-guide";
+import { API_KEY_PLACEHOLDER, buildIntegrationGuides } from "../_ui/api-keys/integration-guide";
 
 export function IntegrationGuideTabs({
   apiKey,

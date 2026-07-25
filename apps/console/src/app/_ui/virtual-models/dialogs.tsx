@@ -31,6 +31,10 @@ import { strategyRouteNote } from "./strategy";
 
 const PROTOCOLS = ["chat_completions", "messages", "responses"] as const;
 
+/** The candidate filters submit as GET while the editor posts, so they own a
+ * separate form element and the controls associate with it by id. */
+const CANDIDATE_FILTER_FORM_ID = "virtual-model-candidate-filters";
+
 /** Selection lives in the URL as an ordered id list, so paging never drops it. */
 function readSelection(params: SearchParams): string[] {
   const raw = readParam(params, "candidates");
@@ -244,6 +248,9 @@ export async function VirtualModelDialogs({
           <ActionLink href={closeHref}>Cancel</ActionLink>
         </DialogActions>
       </form>
+      <form id={CANDIDATE_FILTER_FORM_ID} method="get" action="/models" hidden>
+        {passthroughFields(params, ["selected", "dialog", "candidates", "protocol", "strategy"])}
+      </form>
     </Dialog>
   );
 }
@@ -269,9 +276,9 @@ function CandidateBrowser({
   return (
     <>
       <div className="mt-[14px] flex items-center gap-2">
-        <form method="get" action="/models" className="flex items-center gap-2">
-          {passthroughFields(params, ["selected", "dialog", "candidates", "protocol", "strategy"])}
+        <span className="flex items-center gap-2">
           <select
+            form={CANDIDATE_FILTER_FORM_ID}
             name="candidateProvider"
             defaultValue={activeProviderId}
             aria-label="Filter candidates by provider"
@@ -284,6 +291,7 @@ function CandidateBrowser({
             ))}
           </select>
           <input
+            form={CANDIDATE_FILTER_FORM_ID}
             name="candidateQuery"
             defaultValue={readParam(params, "candidateQuery") ?? ""}
             placeholder="search model id…"
@@ -291,6 +299,7 @@ function CandidateBrowser({
             className={`${filterControlClass} w-[170px]`}
           />
           <select
+            form={CANDIDATE_FILTER_FORM_ID}
             name="candidateAvailability"
             defaultValue={readParam(params, "candidateAvailability") ?? "available"}
             aria-label="Filter candidates by availability"
@@ -301,12 +310,13 @@ function CandidateBrowser({
             <option value="deprecated">deprecated</option>
           </select>
           <button
+            form={CANDIDATE_FILTER_FORM_ID}
             type="submit"
             className="whitespace-nowrap rounded-xs border border-btnbd bg-btnbg px-2 py-1 font-mono text-12 text-ink"
           >
             Apply
           </button>
-        </form>
+        </span>
         <span className="ml-auto whitespace-nowrap font-mono text-12 text-faint">
           {candidatePage ? `${formatCount(candidatePage.total)} matches` : null}
         </span>

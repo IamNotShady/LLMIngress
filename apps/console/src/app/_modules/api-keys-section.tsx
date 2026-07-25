@@ -11,9 +11,9 @@ import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
+import { API_KEY_PLACEHOLDER } from "../_ui/api-keys/integration-guide";
 import { ApiKeyCreateDialogClient } from "./api-key-create-dialog-client";
 import { ApiKeyDetailPanels } from "./api-key-detail-panels";
-import { API_KEY_PLACEHOLDER } from "./api-key-integration-guide";
 import { ApiKeyVirtualModelFields } from "./api-key-virtual-model-fields";
 import { loadApiKeysSectionData } from "./api-keys-section-data";
 import {

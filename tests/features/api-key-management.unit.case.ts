@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildConfigurationGuide,
   integrationGuidePlatforms,
-} from "../../apps/console/src/app/_modules/api-key-integration-guide.ts";
+} from "../../apps/console/src/app/_ui/api-keys/integration-guide.ts";
 import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page.ts";
 import { normalizeApiKeyVirtualModelSelectionInput } from "../../packages/db/src/console-api-keys.ts";
 import { enforceGatewayApiKeyLimitsIfEnabled } from "../../packages/gateway-runtime/src/gateway-api-key-limits.ts";

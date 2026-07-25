@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { DM_Mono, Open_Sans } from "next/font/google";
+import Script from "next/script";
 import type { ReactNode } from "react";
 import { THEME_BOOTSTRAP_SCRIPT } from "./_ui/theme";
 
@@ -31,14 +32,13 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
-      <head>
+      <body>
         {/* Stamps data-theme before first paint so a stored preference never flashes. */}
-        <script
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: the theme bootstrap must run before paint
-          dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }}
-        />
-      </head>
-      <body>{children}</body>
+        <Script id="console-theme-bootstrap" strategy="beforeInteractive">
+          {THEME_BOOTSTRAP_SCRIPT}
+        </Script>
+        {children}
+      </body>
     </html>
   );
 }

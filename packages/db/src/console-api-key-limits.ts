@@ -546,3 +546,51 @@ function clampPercent(value: number): number {
   }
   return Math.min(999, value);
 }
+
+/** The budget window a key is inside right now — what SPENT is measured against. */
+export type ConsoleBudgetPeriod = {
+  apiKeyId: string;
+  costUsedUsd: string;
+  periodEnd: Date;
+  periodStart: Date;
+  periodType: string;
+  tokensUsed: number;
+};
+
+export async function listConsoleCurrentBudgetPeriods(
+  input: { databaseUrl?: string; now?: Date } = {},
+): Promise<ConsoleBudgetPeriod[]> {
+  const now = input.now ?? new Date();
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
+    const result = await client.query<{
+      api_key_id: string;
+      cost_used_usd: string;
+      period_end: Date;
+      period_start: Date;
+      period_type: string;
+      tokens_used: string;
+    }>(
+      `
+        select distinct on (api_key_id)
+               api_key_id::text,
+               cost_used_usd::text,
+               period_end,
+               period_start,
+               period_type,
+               tokens_used::text
+        from budget_periods
+        where period_start <= $1 and period_end > $1
+        order by api_key_id, period_start desc
+      `,
+      [now.toISOString()],
+    );
+    return result.rows.map((row) => ({
+      apiKeyId: row.api_key_id,
+      costUsedUsd: row.cost_used_usd,
+      periodEnd: row.period_end,
+      periodStart: row.period_start,
+      periodType: row.period_type,
+      tokensUsed: Number(row.tokens_used),
+    }));
+  });
+}

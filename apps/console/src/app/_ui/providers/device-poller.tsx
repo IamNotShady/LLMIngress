@@ -41,11 +41,20 @@ export function DeviceCodePoller({
         }
         if (response.ok) {
           const payload = (await response.json().catch(() => null)) as {
+            message?: string;
             status?: string;
           } | null;
-          if (payload?.status === "authorized" || payload?.status === "completed") {
+          // The route reports complete | error | expired | pending; only the
+          // first is done and the middle two are terminal, so polling must stop
+          // rather than hammering an authorization that will never arrive.
+          if (payload?.status === "complete") {
             setState("authorized");
             router.refresh();
+            return;
+          }
+          if (payload?.status === "error" || payload?.status === "expired") {
+            setState("failed");
+            setDetail(payload.message ?? `Authorization ${payload.status}.`);
             return;
           }
         } else if (response.status >= 400 && response.status !== 409) {
@@ -72,7 +81,7 @@ export function DeviceCodePoller({
   const tone = state === "authorized" ? "bg-green" : state === "failed" ? "bg-red" : "bg-amber";
   const message =
     state === "authorized"
-      ? "authorized · storing the token"
+      ? "authorized · this connection is connected"
       : state === "failed"
         ? (detail ?? "authorization failed")
         : `waiting for authorization · polling every ${Math.max(1, intervalSeconds)}s`;

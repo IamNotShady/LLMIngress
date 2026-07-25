@@ -591,8 +591,13 @@ function SubscriptionForm({
         </div>
         <div className="mt-3 flex items-center gap-4 rounded-xs border border-rule bg-track px-4 py-[14px]">
           <div>
-            <div className="font-mono text-12 text-dim">enter this code at the provider</div>
-            <div className="mt-1 font-mono text-26 font-medium tracking-[.16em] text-ink">
+            <div id="device-user-code-label" className="font-mono text-12 text-dim">
+              Your code
+            </div>
+            <div
+              aria-labelledby="device-user-code-label"
+              className="mt-1 font-mono text-26 font-medium tracking-[.16em] text-ink"
+            >
               {userCode}
             </div>
           </div>
@@ -606,7 +611,7 @@ function SubscriptionForm({
                 rel="noreferrer"
                 className="mt-2 inline-block rounded-xs border border-btnbd bg-btnbg px-[10px] py-1 font-mono text-135 font-medium text-ink"
               >
-                Open
+                Open verification page
               </a>
             ) : null}
           </div>
@@ -645,7 +650,7 @@ function SubscriptionForm({
             rel="noreferrer"
             className="mt-[10px] inline-block rounded-xs border border-btnbd bg-btnbg px-[10px] py-1 font-mono text-135 font-medium text-ink"
           >
-            Open in browser
+            Open authorization URL
           </a>
         </div>
         <div className="mt-4 border-b border-hair pb-[5px] font-mono text-115 font-medium tracking-[.08em] text-dim">

@@ -684,7 +684,7 @@ test("device-code provider shows the user code and polls to complete; the author
           `&providerOAuthInterval=1`;
         await page.goto(dialogUrl, { waitUntil: "networkidle" });
 
-        const dialog = page.getByRole("dialog", { name: "Connect MiniMax Coding Plan" });
+        const dialog = page.getByRole("dialog", { name: "Authorize token" });
         await expect(dialog).toBeVisible();
         await expect(dialog.getByLabel("Your code")).toHaveText("WDJB-MJHT");
         await expect(dialog.getByRole("link", { name: "Open verification page" })).toHaveAttribute(
@@ -704,8 +704,8 @@ test("device-code provider shows the user code and polls to complete; the author
           expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
         }
 
-        // The authorization-code dialog (claude_code) links out to the
-        // authorization page instead of printing the long URL in a textarea.
+        // The authorization-code dialog links out to the authorization page so
+        // it never has to be copied by hand.
         await page.setViewportSize({ width: 1280, height: 900 });
         const codeProviderId = randomUUID();
         await withDedicatedPostgresClient(fixture.databaseUrl, async (client) => {
@@ -723,13 +723,15 @@ test("device-code provider shows the user code and polls to complete; the author
             `&providerAuthorizeUrl=${encodeURIComponent(authorizeUrl)}`,
           { waitUntil: "networkidle" },
         );
-        const codeDialog = page.getByRole("dialog", { name: "New Claude Code OAuth connection" });
+        const codeDialog = page.getByRole("dialog", { name: "Authorize token" });
         await expect(codeDialog).toBeVisible();
         await expect(
           codeDialog.getByRole("link", { name: "Open authorization URL" }),
         ).toHaveAttribute("href", authorizeUrl);
-        await expect(codeDialog.locator("#provider-oauth-authorize-url")).toHaveCount(0);
-        await expect(codeDialog.locator("#provider-oauth-callback-input")).toBeVisible();
+        // The url is shown so it can be checked before it is followed, and the
+        // callback value is pasted back in the same dialog.
+        await expect(codeDialog.getByText(authorizeUrl)).toBeVisible();
+        await expect(codeDialog.getByLabel("CALLBACK VALUE")).toBeVisible();
         for (const viewport of [
           { width: 1280, height: 900 },
           { width: 390, height: 844 },
@@ -806,7 +808,7 @@ test("device-code dialog surfaces the upstream error message and stops polling",
           { waitUntil: "networkidle" },
         );
 
-        const dialog = page.getByRole("dialog", { name: "Connect MiniMax Coding Plan" });
+        const dialog = page.getByRole("dialog", { name: "Authorize token" });
         await expect(dialog).toBeVisible();
         // The concrete upstream message is shown, not a generic fallback.
         await expect(dialog.getByText("The authorization was denied upstream.")).toBeVisible({
@@ -896,8 +898,10 @@ test("Grok subscription: a Chat Completions chip in the Subscription group and a
         await expect(
           codeDialog.getByRole("link", { name: "Open authorization URL" }),
         ).toHaveAttribute("href", authorizeUrl);
-        await expect(codeDialog.locator("#provider-oauth-authorize-url")).toHaveCount(0);
-        await expect(codeDialog.locator("#provider-oauth-callback-input")).toBeVisible();
+        // The url is shown so it can be checked before it is followed, and the
+        // callback value is pasted back in the same dialog.
+        await expect(codeDialog.getByText(authorizeUrl)).toBeVisible();
+        await expect(codeDialog.getByLabel("CALLBACK VALUE")).toBeVisible();
         for (const viewport of [
           { width: 1280, height: 900 },
           { width: 390, height: 844 },

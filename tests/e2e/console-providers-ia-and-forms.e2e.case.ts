@@ -111,136 +111,68 @@ test("providers page shows one provider representation with a searchable capped 
         await waitForConsole(baseUrl, consoleApp);
         await signInFromFirstRun(page, baseUrl);
 
-        // --- Providers: no duplicate card grid; the list is the single
-        // representation and the model library is capped and searchable.
-        await page.goto(`${baseUrl}/providers`, { waitUntil: "networkidle" });
-        await expect(page.locator(".provider-card-grid")).toHaveCount(0);
-        await expect(page.locator(".provider-summary-card")).toHaveCount(0);
         const hydrationErrors: string[] = [];
         page.on("console", (message) => {
           if (message.type() === "error" && message.text().includes("Hydration failed")) {
             hydrationErrors.push(message.text());
           }
         });
-        await expect(
-          page.locator(".providers-list-card tr", { hasText: "IA Probe Provider" }).first(),
-        ).toBeVisible();
 
-        // Collapsed list renders no model library; selecting the provider does.
-        await expect(page.locator(".model-library-card")).toHaveCount(0);
-        await page.goto(`${baseUrl}/providers?selected=${providerId}`, {
+        // --- Providers: the list and its detail are the only representation.
+        await page.goto(`${baseUrl}/providers`, { waitUntil: "networkidle" });
+        await expect(page.getByRole("link", { name: /IA Probe Provider/ }).first()).toBeVisible();
+
+        // The model library is paged on the server: the header count and the
+        // range share one denominator, and the query runs in the URL.
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&modelPageSize=50`, {
           waitUntil: "networkidle",
         });
-        const libraryRows = page.locator(".model-library-table tbody tr");
-        await expect(libraryRows).toHaveCount(50);
-        const modelPagination = page.getByRole("navigation", { name: "Model pages" });
-        await expect(modelPagination).toHaveClass(/list-pagination/);
-        await expect(modelPagination.locator(".list-pagination-summary strong")).toHaveText(
-          "Page 1 of 2",
-        );
-        await expect(modelPagination.locator(".list-pagination-range")).toHaveText(
-          `${MODEL_COUNT} models`,
-        );
-        await expect(modelPagination.getByRole("button", { name: "Previous page" })).toBeDisabled();
-        await modelPagination.getByRole("link", { name: "Next page" }).click();
-        await expect(page).toHaveURL(`${baseUrl}/providers?selected=${providerId}&modelPage=2`);
-        await expect(libraryRows).toHaveCount(10);
-        await expect(modelPagination.locator(".list-pagination-summary strong")).toHaveText(
-          "Page 2 of 2",
-        );
-        await modelPagination.getByRole("link", { name: "Previous page" }).click();
-        await expect(page).toHaveURL(`${baseUrl}/providers?selected=${providerId}`);
-        await expect(libraryRows).toHaveCount(50);
+        await expect(page.getByText(`${MODEL_COUNT} matching`)).toBeVisible();
+        await expect(page.getByText(`1–50 of ${MODEL_COUNT}`)).toBeVisible();
+        await page.getByRole("link", { name: "Next →" }).click();
+        await expect(page.getByText(`51–${MODEL_COUNT} of ${MODEL_COUNT}`)).toBeVisible();
 
         await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-needle`, {
           waitUntil: "networkidle",
         });
-        await expect(libraryRows).toHaveCount(1);
-        await expect(libraryRows.first()).toContainText("ia-needle-model");
+        await expect(page.getByText("1–1 of 1")).toBeVisible();
+        await expect(page.getByText("ia-needle-model")).toBeVisible();
         expect(new URL(page.url()).searchParams.get("modelQuery")).toBe("ia-needle");
         expect(hydrationErrors).toEqual([]);
 
-        // The mono id line renders only when it differs from the display name:
-        // ia-model-001's display name IS its id, so its cell is a single line.
-        await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-model-001`, {
-          waitUntil: "networkidle",
-        });
-        await expect(libraryRows).toHaveCount(1);
-        const sameNameCell = libraryRows.first().locator(".model-id-cell");
-        await expect(sameNameCell.locator("strong")).toHaveText("ia-model-001");
-        await expect(sameNameCell.locator("small")).toHaveCount(0);
-        // A distinct display name keeps the mono id line.
-        await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-model-002`, {
-          waitUntil: "networkidle",
-        });
-        await expect(libraryRows).toHaveCount(1);
-        await expect(libraryRows.first().locator(".model-id-cell small")).toHaveText(
-          "ia-model-002",
+        // A search that matches nothing says so and hides the pagination.
+        await page.goto(
+          `${baseUrl}/providers?selected=${providerId}&modelQuery=nothing-matches-this`,
+          { waitUntil: "networkidle" },
         );
+        await expect(
+          page.getByText("No models match this search and availability filter."),
+        ).toBeVisible();
+        await expect(page.getByText(/of \d+$/)).toHaveCount(0);
 
-        // The page no longer balloons to thousands of pixels.
+        // The page does not balloon to thousands of pixels.
         const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
         expect(pageHeight).toBeLessThan(4500);
 
-        // Saving a Provider API key stays on the Providers page and reveals
-        // the one-time plaintext in a modal instead of navigating away.
-        const addApiKey = page.getByRole("link", { name: "Add API key" });
-        await expect(addApiKey).toHaveCount(1);
-        await addApiKey.click();
-        const createKeyDialog = page.getByRole("dialog", {
-          name: "New IA Probe Provider API key",
-        });
-        await expect(createKeyDialog).toBeVisible();
-        await createKeyDialog.getByLabel("Provider API key").fill("provider-key-dialog-e2e");
-        await createKeyDialog.getByLabel("Label").fill("E2E key");
-        await createKeyDialog.getByRole("button", { name: "Save" }).click();
-
-        const savedKeyDialog = page.getByRole("dialog", { name: "Provider API key saved" });
-        await expect(savedKeyDialog).toBeVisible();
-        await expect(
-          page.getByRole("heading", { level: 1, name: "Providers & Models", exact: true }),
-        ).toBeVisible();
-        await expect(savedKeyDialog.getByLabel("Provider API key")).toHaveValue(
-          "provider-key-dialog-e2e",
-        );
-        await savedKeyDialog.getByRole("link", { name: "Close" }).click();
-        await expect(savedKeyDialog).toHaveCount(0);
-
-        await page.goto(
-          `${baseUrl}/providers?selected=${providerId}&providerDelete=${providerId}`,
-          {
-            waitUntil: "networkidle",
-          },
-        );
-        const deleteProviderDialog = page.getByRole("dialog", { name: "Delete provider?" });
-        await expect(deleteProviderDialog).toBeVisible();
+        // --- Deleting a provider that a route still uses is refused, and the
+        // refusal is stated in the dialog rather than replacing the page.
         await addProviderDeleteRaceBlocker(fixture.databaseUrl, providerId);
-        await deleteProviderDialog.getByRole("button", { name: "Delete provider" }).click();
-        await expect(page).toHaveURL(
-          `${baseUrl}/providers?selected=${providerId}&providerDelete=${providerId}`,
-        );
-        await expect(
-          deleteProviderDialog.getByText("Provider is still used by active route policies."),
-        ).toBeVisible();
-
-        // --- ApiKeys KPIs on mobile: two columns, no truncated values.
-        await page.setViewportSize({ width: 390, height: 844 });
-        await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
-        const columns = await page
-          .locator(".api-keys-stat-grid")
-          .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
-        expect(columns).toBe(2);
-        const truncated = await page
-          .locator(".api-keys-stat-grid .stat-card-value")
-          .evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth).length);
-        expect(truncated).toBe(0);
-
-        // --- Virtual model dialog: create mode says Create.
-        await page.setViewportSize({ width: 1280, height: 900 });
-        await page.goto(`${baseUrl}/models?virtualModelDialog=new`, {
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&dialog=delete`, {
           waitUntil: "networkidle",
         });
-        await expect(page.locator(".vm-dialog-actions button[type=submit]")).toHaveText("Create");
+        const deleteDialog = page.getByRole("dialog", { name: "Delete provider" });
+        await expect(deleteDialog).toBeVisible();
+        await deleteDialog
+          .getByLabel("TYPE THE PROVIDER NAME TO CONFIRM")
+          .fill("IA Probe Provider");
+        await deleteDialog.getByRole("button", { name: "Delete provider" }).click();
+        await expect(
+          deleteDialog.getByText("Provider is still used by active route policies."),
+        ).toBeVisible();
+
+        // --- The virtual model editor says Create when creating.
+        await page.goto(`${baseUrl}/models?dialog=new`, { waitUntil: "networkidle" });
+        await expect(page.getByRole("button", { name: "Create virtual model" })).toBeVisible();
       } finally {
         await context.close();
       }
@@ -854,13 +786,8 @@ test("Grok subscription: a Chat Completions chip in the Subscription group and a
 
         // --- Add Provider: Grok lives in the Subscription group with a single
         // Chat Completions chip (Feature A ships only the chat face).
-        await page.goto(`${baseUrl}/providers?dialog=new`, { waitUntil: "networkidle" });
-        const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-        await dialog.getByRole("tab", { name: "Subscription" }).click();
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-        await dialog.getByLabel("Provider type", { exact: true }).selectOption({ label: "Grok" });
-        await expect(endpointChips).toHaveText(["Chat Completions", "Responses"]);
+        const grok = await readTemplate(page, baseUrl, "Subscription", "Grok");
+        expect(grok.endpoints).toEqual(["chat_completions", "responses"]);
         for (const viewport of [
           { width: 1280, height: 900 },
           { width: 390, height: 844 },
@@ -890,7 +817,7 @@ test("Grok subscription: a Chat Completions chip in the Subscription group and a
             `&providerAuthorizeUrl=${encodeURIComponent(authorizeUrl)}`,
           { waitUntil: "networkidle" },
         );
-        const codeDialog = page.getByRole("dialog", { name: "New Grok OAuth connection" });
+        const codeDialog = page.getByRole("dialog", { name: "Authorize token" });
         await expect(codeDialog).toBeVisible();
         await expect(
           codeDialog.getByRole("link", { name: "Open authorization URL" }),

@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { ActionButton, TextInput } from "./controls";
+import { MutationForm } from "./mutation-form";
 
 /**
  * Destructive confirm for objects: the delete button stays inert until the
@@ -28,7 +29,7 @@ export function TypeNameToConfirm({
   const armed = typed.trim() === name;
 
   return (
-    <form action={action} method="post">
+    <MutationForm action={action} fallbackError="The delete was refused.">
       {Object.entries(hiddenFields).map(([field, value]) => (
         <input key={field} type="hidden" name={field} value={value} />
       ))}
@@ -58,7 +59,7 @@ export function TypeNameToConfirm({
         </button>
         {children}
       </div>
-    </form>
+    </MutationForm>
   );
 }
 
@@ -77,23 +78,25 @@ export function ConfirmForm({
   tone?: "danger" | "primary";
 }) {
   return (
-    <form action={action} method="post" className="mt-[18px] flex flex-wrap items-center gap-2">
-      {Object.entries(hiddenFields).map(([field, value]) => (
-        <input key={field} type="hidden" name={field} value={value} />
-      ))}
-      {tone === "danger" ? (
-        <button
-          type="submit"
-          className="inline-flex cursor-pointer items-center whitespace-nowrap rounded-xs bg-red px-[18px] py-[6px] font-mono text-135 font-medium text-bg"
-        >
-          {confirmLabel}
-        </button>
-      ) : (
-        <ActionButton className="px-[18px] py-[6px] text-135" tone="primary">
-          {confirmLabel}
-        </ActionButton>
-      )}
-      {children}
-    </form>
+    <MutationForm action={action} className="mt-[18px]" fallbackError="The action was refused.">
+      <div className="flex flex-wrap items-center gap-2">
+        {Object.entries(hiddenFields).map(([field, value]) => (
+          <input key={field} type="hidden" name={field} value={value} />
+        ))}
+        {tone === "danger" ? (
+          <button
+            type="submit"
+            className="inline-flex cursor-pointer items-center whitespace-nowrap rounded-xs bg-red px-[18px] py-[6px] font-mono text-135 font-medium text-bg"
+          >
+            {confirmLabel}
+          </button>
+        ) : (
+          <ActionButton className="px-[18px] py-[6px] text-135" tone="primary">
+            {confirmLabel}
+          </ActionButton>
+        )}
+        {children}
+      </div>
+    </MutationForm>
   );
 }

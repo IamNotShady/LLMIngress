@@ -26,7 +26,7 @@ export function DistributionTable({
   return (
     <div>
       <SectionTitle>{title}</SectionTitle>
-      <div className="mt-2">
+      <div className="mt-2 overflow-x-auto">
         <GridRow columns={DISTRIBUTION_COLUMNS} gap={8} head>
           <span>{unit}</span>
           <span>SHARE</span>
@@ -69,7 +69,7 @@ export function ProtocolPanel({ breakouts }: { breakouts: ConsoleUsageBreakouts 
   return (
     <div>
       <SectionTitle>Protocol mix</SectionTitle>
-      <div className="mt-2">
+      <div className="mt-2 overflow-x-auto">
         <GridRow columns={PROTOCOL_COLUMNS} gap={8} head>
           <span>PROTOCOL</span>
           <span>SHARE</span>
@@ -125,7 +125,7 @@ export function StatusPanel({ breakouts }: { breakouts: ConsoleUsageBreakouts })
   return (
     <div>
       <SectionTitle>Status</SectionTitle>
-      <div className="mt-2">
+      <div className="mt-2 overflow-x-auto">
         <GridRow columns={STATUS_COLUMNS} gap={8} head>
           <span>STATUS</span>
           <span>SHARE</span>
@@ -193,7 +193,7 @@ export function TopErrorsPanel({ breakouts }: { breakouts: ConsoleUsageBreakouts
       >
         Top errors
       </SectionTitle>
-      <div className="mt-2">
+      <div className="mt-2 overflow-x-auto">
         <GridRow columns={ERROR_COLUMNS} gap={8} head>
           <span>ERROR CODE</span>
           <span className="text-right">HTTP</span>

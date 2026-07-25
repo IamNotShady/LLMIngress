@@ -87,7 +87,7 @@ export default async function UsagePage({
 
   return (
     <PageShell label="Usage">
-      <div className="flex items-baseline gap-4 pt-[22px]">
+      <div className="flex items-baseline gap-4 overflow-x-auto pt-[22px]">
         <h1 className="font-sans text-25 font-semibold tracking-[-.02em] text-ink">Usage</h1>
         <WindowPicker params={params} pathname="/usage" window={window} />
         <span className="ml-auto font-mono text-13 text-faint">
@@ -107,46 +107,52 @@ export default async function UsagePage({
         />
       ) : (
         <>
-          <div className="mt-4 grid grid-cols-7 border-y border-hair border-b-rule">
-            <Kpi label="REQUESTS" value={formatCount(usage.requestCount)}>
-              {(usage.requestCount / windowMinutes).toFixed(2)} req/min avg
-            </Kpi>
-            <Kpi label="TOKENS" value={formatCompact(usage.totalTokens)}>
-              {formatCompact(usage.inputTokens)} in / {formatCompact(usage.outputTokens)} out
-            </Kpi>
-            <Kpi label="COST" value={formatCost(usage.totalCostUsd)}>
-              {formatCost((Number.parseFloat(usage.totalCostUsd ?? "0") || 0) / usage.requestCount)}{" "}
-              / req
-            </Kpi>
-            <Kpi
-              label="FAILURE RATE"
-              tone={failureRateToneClass[failureRateTone(usage.failureCount / usage.requestCount)]}
-              value={formatPercent(usage.failureCount / usage.requestCount, 2)}
-            >
-              {formatCount(usage.failureCount)} failed
-            </Kpi>
-            <Kpi label="AVG LATENCY" value={formatLatency(usage.avgLatencyMs)}>
-              first byte, mean
-            </Kpi>
-            <Kpi
-              label="CACHED INPUT"
-              value={
-                usage.inputTokens > 0
-                  ? formatPercent(usage.cachedInputTokens / usage.inputTokens, 1)
-                  : "—"
-              }
-            >
-              {formatCompact(usage.cachedInputTokens)} cached
-            </Kpi>
-            <Kpi
-              label="SERVED BY FALLBACK"
-              value={formatPercent(fallbackServed / usage.requestCount, 2)}
-            >
-              {formatCount(fallbackServed)} requests
-            </Kpi>
+          <div className="mt-4 overflow-x-auto border-y border-hair border-b-rule">
+            <div className="grid min-w-[1100px] grid-cols-7">
+              <Kpi label="REQUESTS" value={formatCount(usage.requestCount)}>
+                {(usage.requestCount / windowMinutes).toFixed(2)} req/min avg
+              </Kpi>
+              <Kpi label="TOKENS" value={formatCompact(usage.totalTokens)}>
+                {formatCompact(usage.inputTokens)} in / {formatCompact(usage.outputTokens)} out
+              </Kpi>
+              <Kpi label="COST" value={formatCost(usage.totalCostUsd)}>
+                {formatCost(
+                  (Number.parseFloat(usage.totalCostUsd ?? "0") || 0) / usage.requestCount,
+                )}{" "}
+                / req
+              </Kpi>
+              <Kpi
+                label="FAILURE RATE"
+                tone={
+                  failureRateToneClass[failureRateTone(usage.failureCount / usage.requestCount)]
+                }
+                value={formatPercent(usage.failureCount / usage.requestCount, 2)}
+              >
+                {formatCount(usage.failureCount)} failed
+              </Kpi>
+              <Kpi label="AVG LATENCY" value={formatLatency(usage.avgLatencyMs)}>
+                first byte, mean
+              </Kpi>
+              <Kpi
+                label="CACHED INPUT"
+                value={
+                  usage.inputTokens > 0
+                    ? formatPercent(usage.cachedInputTokens / usage.inputTokens, 1)
+                    : "—"
+                }
+              >
+                {formatCompact(usage.cachedInputTokens)} cached
+              </Kpi>
+              <Kpi
+                label="SERVED BY FALLBACK"
+                value={formatPercent(fallbackServed / usage.requestCount, 2)}
+              >
+                {formatCount(fallbackServed)} requests
+              </Kpi>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-x-8 py-5">
+          <div className="grid grid-cols-2 gap-x-8 overflow-x-auto py-5">
             <div>
               <div className="flex items-baseline">
                 <span className="font-sans text-155 font-semibold text-ink">Requests</span>
@@ -165,7 +171,7 @@ export default async function UsagePage({
             </div>
           </div>
 
-          <div className="grid grid-cols-[1fr_340px] gap-x-8 pb-5">
+          <div className="grid grid-cols-[minmax(0,1fr)_340px] gap-x-8 pb-5 overflow-x-auto">
             <div>
               <div className="flex items-baseline">
                 <span className="font-sans text-155 font-semibold text-ink">Token composition</span>
@@ -176,7 +182,7 @@ export default async function UsagePage({
             <DataQualityPanel breakouts={breakouts} />
           </div>
 
-          <div className="grid grid-cols-2 items-start gap-x-8 gap-y-6">
+          <div className="grid grid-cols-2 items-start gap-x-8 gap-y-6 overflow-x-auto">
             <DistributionTable
               lastColumn="AVG LAT"
               rows={usage.providerBreakdowns}
@@ -203,7 +209,7 @@ export default async function UsagePage({
             />
           </div>
 
-          <div className="mt-6 grid grid-cols-3 gap-x-8">
+          <div className="mt-6 grid grid-cols-3 gap-x-8 overflow-x-auto">
             <ProtocolPanel breakouts={breakouts} />
             <StatusPanel breakouts={breakouts} />
             <TopErrorsPanel breakouts={breakouts} />

@@ -5,6 +5,13 @@ import type { ReactNode } from "react";
  * Tables are fixed pixel columns + gap. Long-text cells must carry cell-clip so
  * nothing wraps at the 1440px target width and every row keeps one height.
  */
+/*
+ * Wide tables scroll inside their own box rather than pushing the document
+ * sideways: each table's wrapper carries overflow-x-auto, so the columns stay
+ * fixed at the 1440px target and every other element on the page still fits
+ * below it.
+ */
+
 /** Grid wrapper that owns the column widths for a head/row pair. */
 export function GridRow({
   children,

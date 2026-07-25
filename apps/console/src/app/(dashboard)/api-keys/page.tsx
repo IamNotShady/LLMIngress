@@ -66,7 +66,7 @@ export default async function ApiKeysPage({
           }
         />
       ) : (
-        <div className="mt-4 grid grid-cols-[384px_1fr] border-t border-hair">
+        <div className="mt-4 grid grid-cols-[384px_minmax(0,1fr)] border-t border-hair overflow-x-auto">
           <div className="border-r border-rule pr-5">
             <form
               method="get"

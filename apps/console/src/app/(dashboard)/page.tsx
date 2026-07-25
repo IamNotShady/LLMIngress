@@ -103,7 +103,7 @@ export default async function OverviewPage({
 
   return (
     <PageShell label="Overview">
-      <div className="flex items-baseline gap-4 pt-[22px]">
+      <div className="flex items-baseline gap-4 overflow-x-auto pt-[22px]">
         <h1 className="font-sans text-25 font-semibold tracking-[-.02em] text-ink">Overview</h1>
         <WindowPicker params={params} pathname="/" window={window} />
         <AutoRefresh />
@@ -127,44 +127,50 @@ export default async function OverviewPage({
         />
       ) : (
         <>
-          <div className="mt-[18px] grid grid-cols-5 border-y border-hair border-b-rule">
-            <Kpi label="REQUESTS" value={formatCount(usage.requestCount)}>
-              {requestDelta ? (
-                <span
-                  className={
-                    requestDelta.tone === "good"
-                      ? "text-green"
-                      : requestDelta.tone === "bad"
-                        ? "text-redtx"
-                        : "text-dim"
-                  }
-                >
-                  {requestDelta.text}
-                </span>
-              ) : (
-                <span>no prior window to compare</span>
-              )}
-            </Kpi>
-            <Kpi label="TOKENS" value={formatCompact(usage.totalTokens)}>
-              {formatCompact(usage.inputTokens)} in / {formatCompact(usage.outputTokens)} out
-            </Kpi>
-            <Kpi label="COST" value={formatCost(usage.totalCostUsd)}>
-              {formatCost((Number.parseFloat(usage.totalCostUsd ?? "0") || 0) / usage.requestCount)}{" "}
-              / req
-            </Kpi>
-            <Kpi
-              label="FAILURE RATE"
-              tone={failureRateToneClass[failureRateTone(usage.failureCount / usage.requestCount)]}
-              value={formatPercent(usage.failureCount / usage.requestCount, 2)}
-            >
-              {formatCount(usage.failureCount)} failed
-            </Kpi>
-            <Kpi label="AVG LATENCY" value={formatLatency(usage.avgLatencyMs)}>
-              first byte, mean
-            </Kpi>
+          <div className="mt-[18px] overflow-x-auto border-y border-hair border-b-rule">
+            <div className="grid min-w-[900px] grid-cols-5">
+              <Kpi label="REQUESTS" value={formatCount(usage.requestCount)}>
+                {requestDelta ? (
+                  <span
+                    className={
+                      requestDelta.tone === "good"
+                        ? "text-green"
+                        : requestDelta.tone === "bad"
+                          ? "text-redtx"
+                          : "text-dim"
+                    }
+                  >
+                    {requestDelta.text}
+                  </span>
+                ) : (
+                  <span>no prior window to compare</span>
+                )}
+              </Kpi>
+              <Kpi label="TOKENS" value={formatCompact(usage.totalTokens)}>
+                {formatCompact(usage.inputTokens)} in / {formatCompact(usage.outputTokens)} out
+              </Kpi>
+              <Kpi label="COST" value={formatCost(usage.totalCostUsd)}>
+                {formatCost(
+                  (Number.parseFloat(usage.totalCostUsd ?? "0") || 0) / usage.requestCount,
+                )}{" "}
+                / req
+              </Kpi>
+              <Kpi
+                label="FAILURE RATE"
+                tone={
+                  failureRateToneClass[failureRateTone(usage.failureCount / usage.requestCount)]
+                }
+                value={formatPercent(usage.failureCount / usage.requestCount, 2)}
+              >
+                {formatCount(usage.failureCount)} failed
+              </Kpi>
+              <Kpi label="AVG LATENCY" value={formatLatency(usage.avgLatencyMs)}>
+                first byte, mean
+              </Kpi>
+            </div>
           </div>
 
-          <div className="grid grid-cols-[1fr_400px]">
+          <div className="grid grid-cols-[minmax(0,1fr)_400px] overflow-x-auto">
             <div className="border-r border-rule py-5 pr-6">
               <div className="flex items-baseline">
                 <span className="font-sans text-155 font-semibold text-ink">
@@ -351,7 +357,7 @@ function Breakdown({
       >
         {title}
       </SectionTitle>
-      <div className="mt-2">
+      <div className="mt-2 overflow-x-auto">
         <GridRow columns={columns} gap={8} head>
           <span>{unit}</span>
           <span>SHARE</span>

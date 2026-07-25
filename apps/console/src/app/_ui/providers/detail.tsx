@@ -63,7 +63,7 @@ export function ProviderDetail({
   const pageSize = readIntParam(params, "modelPageSize", 20);
 
   return (
-    <div className="pl-6 pt-[18px]">
+    <div className="min-w-0 pl-6 pt-[18px]">
       <div className="flex items-center gap-3">
         <span className="font-sans text-19 font-semibold text-ink">{provider.displayName}</span>
         <span className="font-mono text-13 text-dim">{provider.providerType}</span>
@@ -139,7 +139,7 @@ export function ProviderDetail({
       >
         Connections
       </SectionTitle>
-      <div className="mt-2">
+      <div className="mt-2 overflow-x-auto">
         <GridRow columns={CONNECTION_COLUMNS} head>
           <span>LABEL</span>
           <span>CREDENTIAL</span>
@@ -239,7 +239,7 @@ export function ProviderDetail({
           <span className="text-faint">/ page</span>
         </span>
       </div>
-      <div className="mt-2">
+      <div className="mt-2 overflow-x-auto">
         <GridRow columns={MODEL_COLUMNS} head>
           <span>MODEL ID</span>
           <span className="text-right">PRICE IN / M</span>

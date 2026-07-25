@@ -68,7 +68,11 @@ export default async function LimitsPage({
         />
       ) : (
         <>
-          <form method="get" action="/limits" className="mt-[14px] flex items-center gap-2">
+          <form
+            method="get"
+            action="/limits"
+            className="mt-[14px] flex items-center gap-2 overflow-x-auto"
+          >
             <input
               name="q"
               defaultValue={readParam(params, "q") ?? ""}
@@ -97,7 +101,7 @@ export default async function LimitsPage({
             </span>
           </form>
 
-          <div className="mt-[10px]">
+          <div className="mt-[10px] overflow-x-auto">
             <GridRow columns={COLUMNS} head className="border-t border-hair">
               <span>API KEY</span>
               <span>LIMITS</span>

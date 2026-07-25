@@ -57,7 +57,7 @@ export function GettingStarted({ counts, params }: { counts: SetupCounts; params
 
   return (
     <>
-      <div className="mt-[18px] flex items-center gap-[10px] border-b border-hair pb-[6px]">
+      <div className="mt-[18px] flex items-center gap-[10px] overflow-x-auto border-b border-hair pb-[6px]">
         <span className="whitespace-nowrap font-sans text-155 font-semibold text-ink">
           Getting started
         </span>
@@ -73,41 +73,43 @@ export function GettingStarted({ counts, params }: { counts: SetupCounts; params
       </div>
 
       {open ? (
-        <div className="mt-[14px] grid grid-cols-4 gap-[14px]">
-          {steps.map((step) => (
-            <div
-              key={step.title}
-              className={`rounded-sm border px-[14px] py-3 ${
-                step.done ? "border-rule bg-btnbg" : "border-ambbd bg-ambbg"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className={`grid size-[17px] flex-none place-items-center rounded-full font-mono text-115 font-medium ${
-                    step.done ? "bg-green text-bg" : "border-[1.5px] border-ambtx text-ambtx"
-                  }`}
-                >
-                  {step.done ? "✓" : step.title.slice(0, 1)}
-                </span>
-                <span className="font-mono text-13 font-medium text-ink">{step.title}</span>
-              </div>
-              <p className="mt-2 font-mono text-12 leading-[1.6] text-dim">{step.body}</p>
-              <div className="mt-[10px] flex flex-wrap items-center gap-2">
-                {step.links.map((link) => (
-                  <ActionLink
-                    key={link.href}
-                    className="px-[9px] py-[3px] text-12"
-                    href={link.href}
+        <div className="mt-[14px] overflow-x-auto">
+          <div className="grid min-w-[1000px] grid-cols-4 gap-[14px]">
+            {steps.map((step) => (
+              <div
+                key={step.title}
+                className={`rounded-sm border px-[14px] py-3 ${
+                  step.done ? "border-rule bg-btnbg" : "border-ambbd bg-ambbg"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`grid size-[17px] flex-none place-items-center rounded-full font-mono text-115 font-medium ${
+                      step.done ? "bg-green text-bg" : "border-[1.5px] border-ambtx text-ambtx"
+                    }`}
                   >
-                    {link.label}
-                  </ActionLink>
-                ))}
-                <span className={`font-mono text-12 ${step.done ? "text-faint" : "text-ambtx"}`}>
-                  {step.note}
-                </span>
+                    {step.done ? "✓" : step.title.slice(0, 1)}
+                  </span>
+                  <span className="font-mono text-13 font-medium text-ink">{step.title}</span>
+                </div>
+                <p className="mt-2 font-mono text-12 leading-[1.6] text-dim">{step.body}</p>
+                <div className="mt-[10px] flex flex-wrap items-center gap-2">
+                  {step.links.map((link) => (
+                    <ActionLink
+                      key={link.href}
+                      className="px-[9px] py-[3px] text-12"
+                      href={link.href}
+                    >
+                      {link.label}
+                    </ActionLink>
+                  ))}
+                  <span className={`font-mono text-12 ${step.done ? "text-faint" : "text-ambtx"}`}>
+                    {step.note}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ) : null}
     </>

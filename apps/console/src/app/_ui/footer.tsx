@@ -32,7 +32,7 @@ export function ConsoleFooter({ encryptionReady, runtime, version }: ConsoleFoot
     .join(" · ");
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-30 flex gap-6 border-t border-rule bg-bg px-8 py-3 font-mono text-125 text-faint">
+    <footer className="fixed inset-x-0 bottom-0 z-30 flex gap-6 overflow-x-auto whitespace-nowrap border-t border-rule bg-bg px-8 py-3 font-mono text-125 text-faint">
       <span>LLMIngress {version}</span>
       <span>
         worker: {workerLine} {runtime.busy ? "busy" : "idle"}

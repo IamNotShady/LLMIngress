@@ -76,7 +76,7 @@ export function VirtualModelDetail({
   const href = (changes: Record<string, string | null>) => buildHref("/models", params, changes);
 
   return (
-    <div className="pl-6 pt-[18px]">
+    <div className="min-w-0 pl-6 pt-[18px]">
       <div className="flex items-center gap-3">
         <span className="font-sans text-19 font-semibold text-ink">{virtualModel.name}</span>
         <span className="font-mono text-13 text-dim cell-clip">{virtualModel.description}</span>
@@ -104,7 +104,7 @@ export function VirtualModelDetail({
       <SectionTitle className="mt-5" note={policy ? strategyRouteNote[policy.strategy] : undefined}>
         Route
       </SectionTitle>
-      <div className="mt-2">
+      <div className="mt-2 overflow-x-auto">
         <GridRow columns={ROUTE_COLUMNS} head>
           <span>#</span>
           <span>CANDIDATE</span>
@@ -175,7 +175,7 @@ export function VirtualModelDetail({
           >
             API keys with access
           </SectionTitle>
-          <div className="mt-2">
+          <div className="mt-2 overflow-x-auto">
             <GridRow columns={KEY_COLUMNS} head>
               <span>API KEY</span>
               <span className="text-right">REQS 24H</span>

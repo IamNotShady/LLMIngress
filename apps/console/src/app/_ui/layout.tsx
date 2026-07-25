@@ -19,7 +19,7 @@ export function PageTitleRow({
   title: string;
 }) {
   return (
-    <div className="flex items-center gap-4 pt-[22px]">
+    <div className="flex items-center gap-4 overflow-x-auto pt-[22px]">
       <h1 className="font-sans text-25 font-semibold tracking-[-.02em] text-ink">{title}</h1>
       {meta ? <span className="font-mono text-13 text-faint">{meta}</span> : null}
       {actions ? <div className="ml-auto flex gap-2">{actions}</div> : null}
@@ -40,7 +40,7 @@ export function SectionTitle({
   trailing?: ReactNode;
 }) {
   return (
-    <div className={`flex items-baseline gap-[10px] ${className}`}>
+    <div className={`flex items-baseline gap-[10px] overflow-x-auto ${className}`}>
       <span className="font-sans text-155 font-semibold text-ink">{children}</span>
       {note ? <span className="font-mono text-12 text-faint">{note}</span> : null}
       {trailing ? <span className="ml-auto flex-none">{trailing}</span> : null}
@@ -79,7 +79,7 @@ export function EmptyState({
 }) {
   return (
     <div className="mt-4 border-t border-hair py-14 text-center">
-      <div className="font-sans text-17 font-semibold text-ink">{title}</div>
+      <h2 className="font-sans text-17 font-semibold text-ink">{title}</h2>
       <p className="mx-auto mt-2 max-w-[560px] font-mono text-13 leading-[1.7] text-dim">{body}</p>
       {actions ? <div className="mt-4 flex justify-center gap-2">{actions}</div> : null}
     </div>

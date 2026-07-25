@@ -78,7 +78,7 @@ export default async function ActivityPage({
       <form
         method="get"
         action="/activity"
-        className="mt-[14px] grid grid-cols-[repeat(6,1fr)_1.6fr_auto_auto] items-center gap-2"
+        className="mt-[14px] grid grid-cols-[repeat(6,1fr)_1.6fr_auto_auto] items-center gap-2 overflow-x-auto"
       >
         <select
           name="status"
@@ -172,7 +172,7 @@ export default async function ActivityPage({
         </span>
       </form>
 
-      <div className="mt-3">
+      <div className="mt-3 overflow-x-auto">
         <GridRow columns={COLUMNS} gap={10} head className="border-t border-hair text-12">
           <span>TIME</span>
           <span>REQUEST</span>

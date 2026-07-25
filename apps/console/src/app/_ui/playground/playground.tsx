@@ -150,7 +150,7 @@ export function Playground({
   };
 
   return (
-    <div className="mt-4 grid grid-cols-[440px_1fr] border-t border-hair">
+    <div className="mt-4 grid grid-cols-[440px_minmax(0,1fr)] border-t border-hair overflow-x-auto">
       <div className="border-r border-rule py-[18px] pr-6">
         <div className="font-mono text-115 font-medium tracking-[.08em] text-dim">PROTOCOL</div>
         <div className="mt-[6px] flex overflow-hidden rounded-sm border border-rule">

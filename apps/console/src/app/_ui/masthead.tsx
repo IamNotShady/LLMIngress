@@ -22,14 +22,19 @@ export function Masthead({
   const pathname = usePathname() || "/";
 
   return (
-    <div className="sticky top-0 z-40 flex h-[54px] items-center gap-6 border-b border-hair bg-bg px-8">
+    <div className="sticky top-0 z-40 flex h-[54px] items-center gap-6 overflow-x-auto border-b border-hair bg-bg px-8">
       <div className="flex flex-none items-baseline gap-[9px]">
         <span className="font-sans text-165 font-semibold tracking-[-.01em] text-ink">
           LLMIngress
         </span>
         <span className="font-mono text-11 tracking-[.14em] text-dim">CONSOLE</span>
       </div>
-      <nav aria-label="Console modules" className="flex h-[54px] items-stretch">
+      {/* The module row keeps its full width and scrolls inside itself below the
+          desktop target, so the masthead never pushes the document sideways. */}
+      <nav
+        aria-label="Console modules"
+        className="flex h-[54px] min-w-0 items-stretch overflow-x-auto"
+      >
         {consoleNavItems.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (
@@ -51,7 +56,7 @@ export function Masthead({
           );
         })}
       </nav>
-      <div className="ml-auto flex items-center gap-4">
+      <div className="ml-auto flex flex-none items-center gap-4">
         <span className="font-mono text-12 text-dim">gw · {gatewayAddress}</span>
         {unhealthyConnectionCount > 0 ? (
           <Link

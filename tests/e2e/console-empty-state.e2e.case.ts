@@ -35,10 +35,20 @@ test("empty dashboard views render the shared EmptyState with no overflow", asyn
         await page.setViewportSize({ width: 1280, height: 800 });
         await signInFromFirstRun(page, baseUrl);
         await page.goto(`${baseUrl}/providers`);
-        await expect(page.locator(".empty-state").first()).toBeVisible();
-        await expect(page.locator(".empty-state-title").first()).toContainText(
-          "No providers configured",
-        );
+        await expect(page.getByRole("heading", { name: "No providers yet" })).toBeVisible();
+        // The empty state says what a provider is for and offers the way in.
+        await expect(page.getByText("A provider is where requests actually go")).toBeVisible();
+        await expect(
+          page.getByRole("link", { name: "+ Add Provider" }).first(),
+        ).toBeVisible();
+
+        await page.goto(`${baseUrl}/models`);
+        await expect(page.getByRole("heading", { name: "No virtual models yet" })).toBeVisible();
+        await page.goto(`${baseUrl}/api-keys`);
+        await expect(page.getByRole("heading", { name: "No API keys yet" })).toBeVisible();
+        await page.goto(`${baseUrl}/activity`);
+        await expect(page.getByRole("heading", { name: "No requests yet" })).toBeVisible();
+
         for (const viewport of [
           { width: 1280, height: 800 },
           { width: 390, height: 844 },

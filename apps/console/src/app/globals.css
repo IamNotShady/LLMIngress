@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
-/* Theme is driven by an explicit data-theme attribute on <html>, stamped before
-   paint by the inline script in the root layout (stored preference, else the
-   system preference). Every dark: utility resolves against that attribute so the
-   nav toggle and prefers-color-scheme agree on one source of truth. */
+/* Theme resolves in two steps. The system preference applies through a media
+   query so the first paint is already right, and the bootstrap script then
+   stamps data-theme for whatever was stored. Every dark: utility resolves
+   against that attribute, so the toggle and the system agree on one source. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /* Design tokens — docs/ConsoleUIRedesign/design-tokens.md. Do not add colours:
@@ -65,6 +65,41 @@
   --pick-on: rgba(255, 255, 255, 0.045);
 }
 
+
+/* The same values, applied before any script runs, so a dark-preference
+   visitor never sees a flash of the light canvas. The explicit attribute
+   below still wins once a choice has been stored. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15181c;
+    --ink: #e9ecf0;
+    --ink2: rgba(233, 236, 240, 0.45);
+    --seg: oklch(0.72 0.12 245);
+    --segfg: #15181c;
+    /* Already lifted for small-text legibility on dark — do not darken further. */
+    --dim: #b3bac2;
+    --faint: #8b929b;
+    --hair: rgba(255, 255, 255, 0.17);
+    --rule: rgba(255, 255, 255, 0.09);
+    --rule2: rgba(255, 255, 255, 0.05);
+    --track: #20242a;
+    --btnbg: #22262d;
+    --btnbd: rgba(255, 255, 255, 0.22);
+
+    --accent: oklch(0.7 0.12 245);
+    --red: oklch(0.7 0.16 25);
+    --redtx: oklch(0.78 0.13 25);
+    --green: oklch(0.76 0.13 160);
+    --amber: oklch(0.83 0.12 82);
+    --ambtx: oklch(0.85 0.11 82);
+    --ambbg: rgba(226, 182, 96, 0.14);
+    --ambbd: rgba(226, 182, 96, 0.3);
+
+    --pick-hover: rgba(255, 255, 255, 0.03);
+    --pick-on: rgba(255, 255, 255, 0.045);
+  }
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-ink: var(--ink);
@@ -122,11 +157,15 @@
 @layer base {
   html {
     background: var(--bg);
-    color-scheme: light;
+    color-scheme: light dark;
   }
 
   [data-theme="dark"] {
     color-scheme: dark;
+  }
+
+  [data-theme="light"] {
+    color-scheme: light;
   }
 
   body {

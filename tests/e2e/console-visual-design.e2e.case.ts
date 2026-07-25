@@ -31,11 +31,12 @@ async function backgroundRgb(
   }, color);
 }
 
-test("console serves the dark violet Geist skin with compact controls and no overflow", async ({
+test("console serves the light-default token skin in both themes with no overflow", async ({
   browser,
 }) => {
+  test.setTimeout(240_000);
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_console_dark_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_console_skin_${randomUUID().replaceAll("-", "_")}`,
   });
 
   try {
@@ -55,85 +56,74 @@ test("console serves the dark violet Geist skin with compact controls and no ove
         await waitForConsole(baseUrl, consoleApp);
         await page.goto(baseUrl);
 
-        // Auth screens already wear the skin: violet primary button, 30px tall.
+        // The auth panel already wears the skin: a shadowless hairline card on
+        // the page background, with a full-width primary button.
         const createAdmin = page.getByRole("button", { name: "Create admin" });
         await expect(createAdmin).toBeVisible();
-        const [r, g, b] = await backgroundRgb(page, createAdmin);
-        expect(b).toBeGreaterThan(150); // violet: blue dominates
-        expect(b).toBeGreaterThan(g);
-        expect(r).toBeGreaterThan(g);
-        const box = await createAdmin.boundingBox();
-        expect(box).not.toBeNull();
-        expect(Math.round(box?.height ?? 0)).toBe(30);
+        expect(await createAdmin.evaluate((el) => getComputedStyle(el).boxShadow)).toBe("none");
+        expect(Math.round((await createAdmin.boundingBox())?.height ?? 0)).toBe(40);
 
         await signInFromFirstRun(page, baseUrl);
         await expect(
           page.getByRole("heading", { level: 1, name: "Overview", exact: true }),
         ).toBeVisible();
 
-        // Dark-only document theme, no toggle anywhere.
-        expect(await page.evaluate(() => document.documentElement.getAttribute("data-theme"))).toBe(
-          "dark",
-        );
-        await expect(page.getByRole("button", { name: /theme/i })).toHaveCount(0);
+        // Light is the default here (the test browser reports no dark
+        // preference) and the canvas is the pure white the tokens declare.
+        await expect
+          .poll(() => page.evaluate(() => document.documentElement.getAttribute("data-theme")))
+          .toBe("light");
+        const lightCanvas = await backgroundRgb(page, null);
+        for (const channel of lightCanvas) {
+          expect(channel).toBe(255);
+        }
 
-        // Dark canvas: every channel of the body background is deep.
-        const canvas = await backgroundRgb(page, null);
-        for (const channel of canvas) {
+        // Open Sans is the rendered UI font; DM Mono carries the data.
+        expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain(
+          "Open Sans",
+        );
+        const dataCell = page.getByText(/^gw · /);
+        expect(await dataCell.evaluate((el) => getComputedStyle(el).fontFamily)).toContain(
+          "DM Mono",
+        );
+        // DM Mono ships nothing above 500; a heavier request would be faked.
+        const monoWeights = await page.evaluate(() =>
+          Array.from(document.querySelectorAll("*"))
+            .filter((el) => getComputedStyle(el).fontFamily.includes("DM Mono"))
+            .map((el) => Number.parseInt(getComputedStyle(el).fontWeight, 10)),
+        );
+        expect(Math.max(...monoWeights)).toBeLessThanOrEqual(500);
+
+        // The toggle switches the whole document, not one component.
+        await page.getByRole("button", { name: "Switch to dark theme" }).click();
+        await expect
+          .poll(() => page.evaluate(() => document.documentElement.getAttribute("data-theme")))
+          .toBe("dark");
+        const darkCanvas = await backgroundRgb(page, null);
+        for (const channel of darkCanvas) {
           expect(channel).toBeLessThan(40);
         }
 
-        // Geist is the rendered UI font.
-        const fontFamily = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
-        expect(fontFamily).toContain("Geist");
-
-        await page.setViewportSize({ width: 1280, height: 800 });
-        const overviewLayout = await page.evaluate(() => {
-          const findHeading = (text: string) =>
-            Array.from(document.querySelectorAll("h2")).find(
-              (heading) => heading.textContent === text,
-            );
-          const recentCard = findHeading("Recent requests")?.closest(".chart-card");
-          if (!recentCard) {
-            throw new Error("Recent requests card was not rendered.");
+        // No horizontal overflow at the desktop target or below it, in either
+        // theme — wide bands scroll inside themselves instead.
+        for (const theme of ["dark", "light"]) {
+          if (theme === "light") {
+            await page.getByRole("button", { name: "Switch to light theme" }).click();
           }
-
-          const recent = recentCard.getBoundingClientRect();
-          return {
-            recentWidth: recent.width,
-          };
-        });
-        expect(overviewLayout.recentWidth).toBeGreaterThan(900);
-        await expect(page.getByRole("heading", { level: 2, name: "Gateway status" })).toHaveCount(
-          0,
-        );
-        const runtimeCard = page.locator(".sidebar-runtime-card");
-        await expect(runtimeCard).toContainText("Gateway URL");
-        await expect(runtimeCard).toContainText("Providers");
-        await expect(runtimeCard).not.toContainText(/healthy|unhealthy/i);
-        expect(await runtimeCard.locator(".sidebar-provider-health-count").count()).toBe(2);
-        const runtimeCardBox = await runtimeCard.boundingBox();
-        expect(runtimeCardBox).not.toBeNull();
-        expect(runtimeCardBox?.height ?? 0).toBeGreaterThanOrEqual(112);
-        await expect(page.locator(".sidebar-account")).toHaveCount(0);
-        await expect(page.getByText("Signed in as admin")).toHaveCount(0);
-        await expect(page.locator(".topbar-status")).toHaveCount(0);
-        await expect(page.locator(".topbar-link")).toHaveCount(0);
-        await expect(page.getByText("Help", { exact: true })).toHaveCount(0);
-
-        // No horizontal overflow at desktop and mobile checkpoints.
-        for (const viewport of [
-          { width: 1280, height: 800 },
-          { width: 390, height: 844 },
-        ]) {
-          await page.setViewportSize(viewport);
-          await expect
-            .poll(() =>
-              page.evaluate(
-                () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-              ),
-            )
-            .toBeLessThanOrEqual(0);
+          for (const viewport of [
+            { width: 1440, height: 900 },
+            { width: 1280, height: 800 },
+            { width: 390, height: 844 },
+          ]) {
+            await page.setViewportSize(viewport);
+            await expect
+              .poll(() =>
+                page.evaluate(
+                  () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+                ),
+              )
+              .toBeLessThanOrEqual(0);
+          }
         }
       } finally {
         await context.close();

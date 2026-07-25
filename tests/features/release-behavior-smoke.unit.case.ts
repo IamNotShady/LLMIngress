@@ -26,7 +26,7 @@ import {
   readPlaygroundResponseText,
   readPlaygroundStreamResponseText,
   retryPlaygroundRequestDetail,
-} from "../../apps/console/src/app/playground-helpers.ts";
+} from "../../apps/console/src/app/_ui/playground/helpers.ts";
 
 const listed = (modelId: string, overrides: Partial<ListedProviderModel> = {}) => ({
   displayName: modelId,

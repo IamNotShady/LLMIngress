@@ -17,6 +17,7 @@ export function ActionButton({
   className = "",
   disabled,
   name,
+  onClick,
   tone = "secondary",
   type = "submit",
   value,
@@ -25,6 +26,7 @@ export function ActionButton({
   className?: string;
   disabled?: boolean;
   name?: string;
+  onClick?: () => void;
   tone?: ButtonTone;
   type?: "button" | "submit";
   value?: string;
@@ -35,6 +37,7 @@ export function ActionButton({
       name={name}
       value={value}
       disabled={disabled}
+      onClick={onClick}
       className={`${buttonBase} ${toneClass[tone]} px-[10px] py-1 ${className}`}
     >
       {children}

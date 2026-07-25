@@ -1,27 +1,25 @@
 import { gatewayPublicBaseUrl } from "@llmingress/config";
-import { PageHeader } from "../../_components/page-header";
-import { Playground } from "../../playground";
+import { listRoutePolicies } from "@llmingress/db/console-route-policies";
+import { PageShell, PageTitleRow } from "../../_ui/layout";
+import { Playground } from "../../_ui/playground/playground";
 
-function getPlaygroundGatewayBaseUrl(): string {
-  return gatewayPublicBaseUrl();
-}
+export default async function PlaygroundPage() {
+  const routePolicies = await listRoutePolicies();
 
-export default function PlaygroundPage() {
   return (
-    <div className="page playground-page">
-      <PageHeader
+    <PageShell label="Playground">
+      <PageTitleRow
         title="Playground"
-        description={
-          <>
-            <span>Test live requests through the Gateway Public API.</span>
-            <span className="playground-memory-note">
-              Note: API key stays in browser memory only. The Console backend does not store
-              plaintext keys.
-            </span>
-          </>
-        }
+        meta="send a real request through the gateway — it counts toward the key's limits and appears in Activity"
       />
-      <Playground defaultGatewayBaseUrl={getPlaygroundGatewayBaseUrl()} />
-    </div>
+      <Playground
+        gatewayBaseUrl={gatewayPublicBaseUrl()}
+        virtualModels={routePolicies.map((policy) => ({
+          endpointProtocol: policy.endpointProtocol,
+          name: policy.virtualModelName,
+          strategy: policy.strategy,
+        }))}
+      />
+    </PageShell>
   );
 }

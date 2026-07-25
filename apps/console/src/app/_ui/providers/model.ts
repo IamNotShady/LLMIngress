@@ -115,7 +115,7 @@ export function describeProviderHealth(connections: ProviderConnection[]): Conne
   const views = connections.map(describeConnectionHealth);
   const failing = views.filter((view) => view.tone === "red");
   if (failing.length > 0) {
-    return { text: `${failing.length} of ${views.length} unhealthy`, tone: "red" };
+    return { text: `${failing.length} unhealthy`, tone: "red" };
   }
   if (views.some((view) => view.tone === "amber")) {
     return { text: "checking", tone: "amber" };

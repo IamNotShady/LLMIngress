@@ -1,0 +1,247 @@
+import type { ConsoleActivity } from "@llmingress/db/console-activity";
+import type { ConsoleProviderHealthSummary } from "@llmingress/db/console-provider-health";
+import type { ProviderApiKeyMetadata } from "@llmingress/db/console-provider-keys";
+import type { ConsoleProvider } from "@llmingress/db/console-providers";
+import type { ConsoleRoutePolicy } from "@llmingress/db/console-route-policies";
+import type {
+  ConsoleUsageSummary,
+  ConsoleVirtualModelCandidateTraffic,
+} from "@llmingress/db/console-usage";
+import type {
+  ConsoleApiKeyVirtualModelGrant,
+  ConsoleVirtualModel,
+} from "@llmingress/db/console-virtual-models";
+import type { ProviderOAuthMetadata } from "@llmingress/db/providers";
+import Link from "next/link";
+import { ActionLink, Meter, StatusDot } from "../controls";
+import {
+  formatCapabilities,
+  formatClock,
+  formatCost,
+  formatCount,
+  formatPricePair,
+} from "../format";
+import { DetailRow, SectionTitle } from "../layout";
+import { buildHref, type SearchParams } from "../params";
+import {
+  buildProviderConnections,
+  describeProviderHealth,
+  providerIsMetered,
+} from "../providers/model";
+import { GridRow } from "../table";
+import { strategyRouteNote } from "./strategy";
+
+const ROUTE_COLUMNS = "36px 282px 190px 116px 170px 1fr";
+const KEY_COLUMNS = "148px 104px 1fr";
+const FAILURE_COLUMNS = "64px 1fr 126px";
+
+export function VirtualModelDetail({
+  candidateTraffic,
+  grants,
+  health,
+  now,
+  oauth,
+  params,
+  policy,
+  providerApiKeys,
+  providers,
+  recentFailures,
+  usage,
+  virtualModel,
+}: {
+  candidateTraffic: ConsoleVirtualModelCandidateTraffic[];
+  grants: ConsoleApiKeyVirtualModelGrant[];
+  health: ConsoleProviderHealthSummary[];
+  now: Date;
+  oauth: ProviderOAuthMetadata[];
+  params: SearchParams;
+  policy: ConsoleRoutePolicy | null;
+  providerApiKeys: ProviderApiKeyMetadata[];
+  providers: ConsoleProvider[];
+  recentFailures: ConsoleActivity[];
+  usage: ConsoleUsageSummary;
+  virtualModel: ConsoleVirtualModel;
+}) {
+  const breakdown = usage.virtualModelBreakdowns.find((entry) => entry.id === virtualModel.id);
+  const trafficByModelId = new Map(candidateTraffic.map((entry) => [entry.providerModelId, entry]));
+  const providerById = new Map(providers.map((provider) => [provider.id, provider]));
+  const healthByProviderId = new Map(
+    providers.map((provider) => [
+      provider.id,
+      describeProviderHealth(
+        buildProviderConnections({ apiKeys: providerApiKeys, health, oauth, provider }),
+      ),
+    ]),
+  );
+  const href = (changes: Record<string, string | null>) => buildHref("/models", params, changes);
+
+  return (
+    <div className="pl-6 pt-[18px]">
+      <div className="flex items-center gap-3">
+        <span className="font-sans text-19 font-semibold text-ink">{virtualModel.name}</span>
+        <span className="font-mono text-13 text-dim cell-clip">{virtualModel.description}</span>
+        <div className="ml-auto flex gap-2">
+          <ActionLink href={href({ dialog: "edit" })}>Edit route</ActionLink>
+          <ActionLink href={href({ dialog: "delete" })} tone="danger">
+            Delete
+          </ActionLink>
+        </div>
+      </div>
+
+      <div className="mt-[14px] grid grid-cols-3 gap-x-6 border-t border-hair">
+        <DetailRow label="protocol" value={policy?.endpointProtocol ?? "no route yet"} />
+        <DetailRow label="strategy" value={policy?.strategy ?? "—"} />
+        <DetailRow label="candidates" value={formatCount(policy?.candidates.length ?? 0)} />
+        <DetailRow label="requests 24h" value={formatCount(virtualModel.requestCount24h)} />
+        <DetailRow
+          label="failures"
+          value={formatCount(breakdown?.failureCount ?? 0)}
+          valueClassName="text-redtx"
+        />
+        <DetailRow label="cost 24h" value={formatCost(virtualModel.cost24hUsd)} />
+      </div>
+
+      <SectionTitle className="mt-5" note={policy ? strategyRouteNote[policy.strategy] : undefined}>
+        Route
+      </SectionTitle>
+      <div className="mt-2">
+        <GridRow columns={ROUTE_COLUMNS} head>
+          <span>#</span>
+          <span>CANDIDATE</span>
+          <span>PRICE</span>
+          <span>HEALTH</span>
+          <span>CAPABILITIES</span>
+          <span className="text-right">TRAFFIC 24H</span>
+        </GridRow>
+        {policy && policy.candidates.length > 0 ? (
+          policy.candidates.map((candidate) => {
+            const provider = providerById.get(candidate.providerId);
+            const candidateHealth = healthByProviderId.get(candidate.providerId);
+            const traffic = trafficByModelId.get(candidate.id);
+            const metered = provider ? providerIsMetered(provider) : true;
+            return (
+              <GridRow key={candidate.id} columns={ROUTE_COLUMNS} className="py-2">
+                <span className="text-faint tabnum">{candidate.candidateOrder}</span>
+                <span className="font-medium cell-clip">
+                  {candidate.providerDisplayName} · {candidate.modelId}
+                </span>
+                <span className="text-dim cell-clip">
+                  {formatPricePair({
+                    inputUsdPerMillionTokens: candidate.inputUsdPerMillionTokens,
+                    metered,
+                    outputUsdPerMillionTokens: candidate.outputUsdPerMillionTokens,
+                  })}
+                </span>
+                <span
+                  className={`flex items-center gap-[6px] cell-clip ${
+                    candidateHealth?.tone === "green"
+                      ? "text-green"
+                      : candidateHealth?.tone === "red"
+                        ? "text-redtx"
+                        : candidateHealth?.tone === "amber"
+                          ? "text-ambtx"
+                          : "text-faint"
+                  }`}
+                >
+                  <StatusDot tone={candidateHealth?.tone ?? "dim"} />
+                  {candidateHealth?.text ?? "unknown"}
+                </span>
+                <span className="text-dim cell-clip">{formatCapabilities(candidate)}</span>
+                <span className="flex items-center justify-end gap-2">
+                  <Meter className="w-[90px]" height={6} ratio={traffic?.share ?? 0} />
+                  <span className="w-[74px] text-right text-dim tabnum">
+                    {formatCount(traffic?.requestCount ?? 0)}
+                  </span>
+                </span>
+              </GridRow>
+            );
+          })
+        ) : (
+          <p className="py-6 font-mono text-13 leading-[1.6] text-dim">
+            This virtual model has no candidate yet, so requests naming it fail. Add at least one
+            provider model to its route.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-x-8">
+        <div>
+          <SectionTitle
+            trailing={
+              <Link href="/api-keys" className="font-mono text-13 text-dim">
+                → API Keys
+              </Link>
+            }
+          >
+            API keys with access
+          </SectionTitle>
+          <div className="mt-2">
+            <GridRow columns={KEY_COLUMNS} head>
+              <span>API KEY</span>
+              <span className="text-right">REQS 24H</span>
+              <span className="text-right">DEFAULT MODEL</span>
+            </GridRow>
+            {grants.length === 0 ? (
+              <p className="py-4 font-mono text-13 text-dim">
+                No API key grants this model — no client can call it yet.
+              </p>
+            ) : (
+              grants.map((grant) => {
+                const keyUsage = usage.apiKeyBreakdowns.find(
+                  (entry) => entry.id === grant.apiKeyId,
+                );
+                return (
+                  <GridRow key={grant.apiKeyId} columns={KEY_COLUMNS}>
+                    <span className="font-medium cell-clip">{grant.apiKeyName}</span>
+                    <span className="text-right tabnum">
+                      {formatCount(keyUsage?.requestCount ?? 0)}
+                    </span>
+                    <span className={`text-right ${grant.isDefault ? "text-ambtx" : "text-dim"}`}>
+                      {grant.isDefault ? "default" : "granted"}
+                    </span>
+                  </GridRow>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div>
+          <SectionTitle
+            trailing={
+              <Link href="/activity" className="font-mono text-13 text-dim">
+                → Activity
+              </Link>
+            }
+          >
+            Recent failures
+          </SectionTitle>
+          <div className="mt-2 border-t border-hair">
+            {recentFailures.length === 0 ? (
+              <p className="py-4 font-mono text-13 text-dim">
+                No failed request in the retention window.
+              </p>
+            ) : (
+              recentFailures.map((activity) => (
+                <GridRow key={activity.id} columns={FAILURE_COLUMNS} gap={10}>
+                  <span className="text-faint tabnum">{formatClock(activity.startedAt)}</span>
+                  <span className="cell-clip">
+                    {activity.apiKeyName ?? "unknown key"} →{" "}
+                    {activity.providerDisplayName ?? "no candidate"}
+                  </span>
+                  <span className="text-right text-redtx cell-clip">
+                    {activity.httpStatus ?? "—"} {activity.errorCode ?? "failed"}
+                  </span>
+                </GridRow>
+              ))
+            )}
+          </div>
+          <p className="mt-2 font-mono text-12 leading-[1.6] text-faint">
+            Requests are attributed to {virtualModel.name} by name snapshot, so history survives a
+            rename. {now.toISOString().slice(11, 16)} UTC
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

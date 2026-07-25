@@ -1123,3 +1123,20 @@ function requireSavedRoutePolicy(routePolicy: ConsoleRoutePolicy | undefined): C
   }
   return routePolicy;
 }
+
+/**
+ * Resolve specific provider models by id. The route editor keeps its selection
+ * in the URL so paging the candidate browser cannot lose it, which means the
+ * selected rows have to be readable independently of the current page.
+ */
+export async function listProviderModelOptionsByIds(input: {
+  databaseUrl?: string;
+  providerModelIds: readonly string[];
+}): Promise<ConsoleProviderModelOption[]> {
+  if (input.providerModelIds.length === 0) {
+    return [];
+  }
+  return withPooledPostgresClient(input.databaseUrl, async (client) =>
+    readProviderModelOptionsById(client, input.providerModelIds),
+  );
+}

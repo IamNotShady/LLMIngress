@@ -537,3 +537,43 @@ function requireSavedRoutePolicy(routePolicy: ConsoleRoutePolicy | undefined): C
   }
   return routePolicy;
 }
+
+/** One api_key_virtual_models row, resolved for display on both sides. */
+export type ConsoleApiKeyVirtualModelGrant = {
+  apiKeyId: string;
+  apiKeyName: string;
+  /** True when this virtual model is the key's default_virtual_model_id. */
+  isDefault: boolean;
+  virtualModelId: string;
+};
+
+export async function listConsoleApiKeyVirtualModelGrants(
+  input: { databaseUrl?: string } = {},
+): Promise<ConsoleApiKeyVirtualModelGrant[]> {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
+    const result = await client.query<{
+      api_key_id: string;
+      api_key_name: string;
+      is_default: boolean;
+      virtual_model_id: string;
+    }>(
+      `
+        select api_keys.id::text as api_key_id,
+               api_keys.name as api_key_name,
+               (api_keys.default_virtual_model_id = api_key_virtual_models.virtual_model_id)
+                 as is_default,
+               api_key_virtual_models.virtual_model_id::text as virtual_model_id
+        from api_key_virtual_models
+        join api_keys on api_keys.id = api_key_virtual_models.api_key_id
+        where api_keys.deleted_at is null
+        order by api_keys.name
+      `,
+    );
+    return result.rows.map((row) => ({
+      apiKeyId: row.api_key_id,
+      apiKeyName: row.api_key_name,
+      isDefault: row.is_default ?? false,
+      virtualModelId: row.virtual_model_id,
+    }));
+  });
+}

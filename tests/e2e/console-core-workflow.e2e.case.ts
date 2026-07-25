@@ -26,16 +26,19 @@ test("fresh Console guides users through only the retained core workflow", async
       await signInFromFirstRun(page, baseUrl);
 
       await page.goto(baseUrl, { waitUntil: "networkidle" });
-      await expect(page.getByRole("heading", { name: "Route your first request" })).toBeVisible();
-      await expect(page.getByText("Gateway target", { exact: true })).toBeVisible();
+      // A fresh console leads with the four steps that make it able to serve.
+      await expect(page.getByText("Getting started")).toBeVisible();
+      await expect(page.getByText("1 · Connect a provider")).toBeVisible();
+      await expect(page.getByText("4 · Set limits, then verify")).toBeVisible();
+      await expect(page.getByText(/^gw · /)).toBeVisible();
       await expect(
-        page.getByRole("navigation", { name: "Console sections" }).getByRole("link"),
+        page.getByRole("navigation", { name: "Console modules" }).getByRole("link"),
       ).toHaveCount(8);
 
       for (const corePage of [
-        { path: "/providers", title: "Providers & Models" },
+        { path: "/providers", title: "Providers" },
         { path: "/activity", title: "Activity" },
-        { path: "/usage", title: "Usage & Cost" },
+        { path: "/usage", title: "Usage" },
         { path: "/playground", title: "Playground" },
       ]) {
         await page.goto(`${baseUrl}${corePage.path}`, { waitUntil: "networkidle" });
@@ -46,20 +49,19 @@ test("fresh Console guides users through only the retained core workflow", async
       }
 
       await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
-      await expect(page.getByText(/Create an API Key to issue an API key/)).toBeVisible();
+      await expect(page.getByRole("heading", { name: "No API keys yet" })).toBeVisible();
 
       await page.goto(`${baseUrl}/limits`, { waitUntil: "networkidle" });
-      await expect(page.getByText(/Create an API Key and enable limits/)).toBeVisible();
+      await expect(page.getByText(/Issue a key first/)).toBeVisible();
 
       await page.goto(`${baseUrl}/models`, { waitUntil: "networkidle" });
       await expect(
-        page.getByRole("heading", { name: "Virtual Models", exact: true }),
+        page.getByRole("heading", { level: 1, name: "Virtual Models", exact: true }),
       ).toBeVisible();
-      await expect(page.getByText(/Add a Provider and refresh its models/)).toBeVisible();
-      await page.getByRole("link", { name: "Create Virtual Model" }).click();
-      await page.getByRole("button", { name: "Add Model" }).click();
-      await expect(page.getByText("No Provider Models found.")).toBeVisible();
-      await expect(page.getByRole("link", { name: "Open Providers" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "No virtual models yet" })).toBeVisible();
+      // Without a provider there is nothing to route to, and the empty state
+      // says so rather than opening an editor that cannot be completed.
+      await expect(page.getByRole("link", { name: "Connect a provider first" })).toBeVisible();
 
       let detailAttempts = 0;
       const corsHeaders = {
@@ -139,23 +141,26 @@ test("fresh Console guides users through only the retained core workflow", async
         });
       });
       await page.goto(`${baseUrl}/playground`, { waitUntil: "networkidle" });
-      await page.getByLabel("1. API Key").fill("llmi_test_key");
-      await expect(page.getByLabel("3. Virtual Model").locator("option")).toHaveCount(2);
-      await page.getByLabel("3. Virtual Model").selectOption("audit-playground-vm");
-      await page.getByRole("button", { name: "Send" }).click();
+      await page.getByLabel("API key", { exact: true }).fill("llmi_test_key");
+      await page.getByRole("button", { name: "Send request" }).click();
       await expect(page.getByText("Playground retry verified")).toBeVisible();
-      const requestDetails = page.getByRole("region", { name: "Request and routing details" });
-      await expect(requestDetails).toContainText("playground-delayed-detail");
-      await expect(requestDetails).not.toContainText("provider-request-id");
-      await expect(requestDetails).toContainText("Delayed Provider / Delayed Model");
-      await expect(requestDetails).toContainText("cost first");
+      // The trace reports the gateway's own request id, not the provider's, and
+      // waits for the record instead of guessing at it.
+      await expect(page.getByText("playground-delayed-detail")).toBeVisible();
+      await expect(page.getByText("provider-request-id")).toHaveCount(0);
+      await expect(page.getByText("Delayed Provider · Delayed Model")).toBeVisible();
+      await expect(page.getByText("cost_first")).toBeVisible();
+      // The trace is polled: the first lookup found nothing and it tried again.
       expect(detailAttempts).toBeGreaterThanOrEqual(2);
 
+      // Below the desktop target the module row scrolls rather than collapsing
+      // behind a menu, so every module stays reachable.
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto(baseUrl, { waitUntil: "networkidle" });
-      await page.getByRole("button", { name: "Menu" }).click();
-      await expect(page.getByRole("navigation", { name: "Console sections" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Route your first request" })).toBeVisible();
+      await expect(page.getByRole("navigation", { name: "Console modules" })).toBeVisible();
+      await expect(page.getByText("Getting started")).toBeVisible();
+      await expect(page.getByText("1 · Connect a provider")).toBeVisible();
+      await expect(page.getByText("4 · Set limits, then verify")).toBeVisible();
 
       for (const removedPath of ["/runtime", "/settings", "/routing"]) {
         const response = await page.goto(`${baseUrl}${removedPath}`);

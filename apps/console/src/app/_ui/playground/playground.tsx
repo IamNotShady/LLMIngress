@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActionButton, Field, SelectInput, TextArea, TextInput } from "../controls";
 import { formatCompact, formatCost, formatLatency } from "../format";
 import { DetailRow, SectionTitle } from "../layout";
@@ -37,6 +37,7 @@ export type PlaygroundVirtualModel = {
 type RequestDetail = {
   latencyMs: number | null;
   providerDisplayName: string | null;
+  providerModelDisplayName: string | null;
   providerModelName: string | null;
   requestId: string;
   routePolicyStrategy: string | null;
@@ -76,8 +77,47 @@ export function Playground({
   const [temperature, setTemperature] = useState("0.7");
   const [toast, setToast] = useState<string | null>(null);
 
+  const [grantedModels, setGrantedModels] = useState<string[] | null>(null);
   const selected = virtualModels.find((entry) => entry.name === model);
   const base = gatewayBaseUrl.replace(/\/+$/, "");
+
+  // Which models this key may actually call is the gateway's answer, not the
+  // console's: the console can see every virtual model, but a key only reaches
+  // the ones it was granted.
+  useEffect(() => {
+    const secret = apiKey.trim();
+    if (!secret) {
+      setGrantedModels(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`${base}/v1/models`, {
+          headers: { authorization: `Bearer ${secret}` },
+        });
+        if (!response.ok || cancelled) {
+          return;
+        }
+        const payload = (await response.json()) as { data?: Array<{ id?: string }> };
+        const ids = (payload.data ?? [])
+          .map((entry) => entry.id)
+          .filter((id): id is string => Boolean(id));
+        if (!cancelled) {
+          setGrantedModels(ids);
+          setModel((current) => (ids.includes(current) ? current : (ids[0] ?? current)));
+        }
+      } catch {
+        // Leave the console's own list in place; sending will report the error.
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [apiKey, base]);
+
+  const modelOptions = grantedModels ?? virtualModels.map((entry) => entry.name);
 
   const send = async () => {
     if (!apiKey.trim()) {
@@ -111,11 +151,18 @@ export function Playground({
         },
         method: "POST",
       });
-      const requestId = response.headers.get("x-request-id");
+      // The gateway stamps its own id; x-request-id may be the provider's and
+      // would look up nothing in Activity.
+      const requestId = response.headers.get("x-llmingress-request-id");
       const raw = await response.text();
-      const responseText = input.stream
-        ? readPlaygroundStreamResponseText(raw)
-        : readPlaygroundResponseText(safeParse(raw));
+      // A stream request can still come back as one JSON body — an error page
+      // or a provider that ignored the flag — so the reader falls through
+      // rather than showing an empty response.
+      const streamed = input.stream ? readPlaygroundStreamResponseText(raw) : "";
+      const responseText =
+        streamed && streamed !== "No response text"
+          ? streamed
+          : readPlaygroundResponseText(safeParse(raw));
 
       // The gateway records the request asynchronously, so the trace is polled
       // rather than assumed to exist the moment the response lands.
@@ -175,6 +222,7 @@ export function Playground({
           >
             <TextInput
               type="password"
+              aria-label="API key"
               autoComplete="off"
               placeholder="llmi_…"
               value={apiKey}
@@ -185,13 +233,17 @@ export function Playground({
 
         <div className="mt-[14px]">
           <Field label="VIRTUAL MODEL" hint={virtualModelHint(selected)}>
-            <SelectInput value={model} onChange={(event) => setModel(event.target.value)}>
-              {virtualModels.length === 0 ? (
+            <SelectInput
+              aria-label="Virtual model"
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+            >
+              {modelOptions.length === 0 ? (
                 <option value="">no virtual model exists yet</option>
               ) : (
-                virtualModels.map((entry) => (
-                  <option key={entry.name} value={entry.name}>
-                    {entry.name}
+                modelOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
                   </option>
                 ))
               )}
@@ -244,7 +296,7 @@ export function Playground({
         <div className="mt-4 flex items-center gap-2">
           <ActionButton
             className="px-4 py-[6px] text-135"
-            disabled={sending || virtualModels.length === 0}
+            disabled={sending}
             onClick={() => void send()}
             tone="primary"
             type="button"
@@ -303,7 +355,9 @@ export function Playground({
                 value={
                   result.detail?.providerDisplayName
                     ? `${result.detail.providerDisplayName} · ${
-                        result.detail.providerModelName ?? "unknown model"
+                        result.detail.providerModelDisplayName ??
+                        result.detail.providerModelName ??
+                        "unknown model"
                       }`
                     : "no candidate recorded"
                 }
@@ -354,7 +408,7 @@ export function Playground({
 
 function virtualModelHint(model: PlaygroundVirtualModel | undefined): string {
   if (!model) {
-    return "Create a virtual model before sending a request.";
+    return "Paste a key to list the models it may call.";
   }
   return `routes over ${model.strategy}${
     model.endpointProtocol ? ` · serves ${model.endpointProtocol}` : ""

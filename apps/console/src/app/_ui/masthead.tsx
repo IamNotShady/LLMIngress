@@ -29,12 +29,10 @@ export function Masthead({
         </span>
         <span className="font-mono text-11 tracking-[.14em] text-dim">CONSOLE</span>
       </div>
-      {/* The module row keeps its full width and scrolls inside itself below the
-          desktop target, so the masthead never pushes the document sideways. */}
-      <nav
-        aria-label="Console modules"
-        className="flex h-[54px] min-w-0 items-stretch overflow-x-auto"
-      >
+      {/* The row keeps its full width; below the desktop target the masthead
+          itself scrolls, so every module stays reachable instead of collapsing
+          behind a menu. */}
+      <nav aria-label="Console modules" className="flex h-[54px] flex-none items-stretch">
         {consoleNavItems.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (

@@ -24,7 +24,7 @@ describe("console providers IA contract", () => {
 
   test("providers page has one representation: a list and its detail", () => {
     const page = read("(dashboard)/providers/page.tsx");
-    expect(page).toContain("grid-cols-[344px_1fr]");
+    expect(page).toContain("grid-cols-[344px_minmax(0,1fr)]");
     expect(page).toContain("<ProviderDetail");
     // No second summary grid duplicating the same providers above the list.
     expect(page).not.toMatch(/summary-card|provider-card-grid/);

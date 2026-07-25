@@ -349,6 +349,7 @@ function ApiKeyStateDialog({
       <ConfirmForm
         action="/api/api-keys"
         confirmLabel={enable ? "Enable key" : "Disable key"}
+        onSuccessHref={closeHref}
         hiddenFields={{ action: enable ? "enable" : "disable", id: apiKey.id }}
         tone="primary"
       >
@@ -391,6 +392,7 @@ function DeleteApiKeyDialog({
       <TypeNameToConfirm
         action="/api/api-keys"
         confirmLabel="Delete key"
+        onSuccessHref="/api-keys"
         hiddenFields={{ action: "delete", id: apiKey.id }}
         label="TYPE THE KEY NAME TO CONFIRM"
         name={apiKey.name}

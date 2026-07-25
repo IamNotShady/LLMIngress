@@ -16,6 +16,7 @@ export function TypeNameToConfirm({
   hiddenFields,
   label,
   name,
+  onSuccessHref,
 }: {
   action: string;
   children?: React.ReactNode;
@@ -23,13 +24,19 @@ export function TypeNameToConfirm({
   hiddenFields: Record<string, string>;
   label: string;
   name: string;
+  /** Where the operator lands once it is done — the object no longer exists. */
+  onSuccessHref: string;
 }) {
   const [typed, setTyped] = useState("");
   const inputId = useId();
   const armed = typed.trim() === name;
 
   return (
-    <MutationForm action={action} fallbackError="The delete was refused.">
+    <MutationForm
+      action={action}
+      fallbackError="The delete was refused."
+      onSuccessHref={onSuccessHref}
+    >
       {Object.entries(hiddenFields).map(([field, value]) => (
         <input key={field} type="hidden" name={field} value={value} />
       ))}
@@ -69,16 +76,24 @@ export function ConfirmForm({
   children,
   confirmLabel,
   hiddenFields,
+  onSuccessHref,
   tone = "danger",
 }: {
   action: string;
   children?: React.ReactNode;
   confirmLabel: string;
   hiddenFields: Record<string, string>;
+  /** Where the operator lands once the change is saved — usually the dialog closed. */
+  onSuccessHref: string;
   tone?: "danger" | "primary";
 }) {
   return (
-    <MutationForm action={action} className="mt-[18px]" fallbackError="The action was refused.">
+    <MutationForm
+      action={action}
+      className="mt-[18px]"
+      fallbackError="The action was refused."
+      onSuccessHref={onSuccessHref}
+    >
       <div className="flex flex-wrap items-center gap-2">
         {Object.entries(hiddenFields).map(([field, value]) => (
           <input key={field} type="hidden" name={field} value={value} />

@@ -14,23 +14,41 @@ export function MutationForm({
   children,
   className,
   fallbackError,
+  invalidFieldOnError,
   onSuccessHref,
 }: {
   action: string;
   children: ReactNode;
   className?: string;
   fallbackError: string;
+  /**
+   * Field the refusal is usually about — a name collision, a malformed value.
+   * It is marked aria-invalid so the message and the box to fix are connected
+   * for anyone who cannot see the banner above the form.
+   */
+  invalidFieldOnError?: string;
   onSuccessHref?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  const markField = (form: HTMLFormElement, invalid: boolean) => {
+    if (!invalidFieldOnError) {
+      return;
+    }
+    const field = form.elements.namedItem(invalidFieldOnError);
+    if (field instanceof HTMLElement) {
+      field.setAttribute("aria-invalid", invalid ? "true" : "false");
+    }
+  };
+
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
     setPending(true);
     setError(null);
+    markField(form, false);
     try {
       const response = await fetch(action, {
         body: new FormData(form),
@@ -47,8 +65,10 @@ export function MutationForm({
       }
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       setError(payload?.error ?? fallbackError);
+      markField(form, true);
     } catch {
       setError(fallbackError);
+      markField(form, true);
     } finally {
       setPending(false);
     }

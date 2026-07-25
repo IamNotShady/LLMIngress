@@ -350,6 +350,7 @@ function ProviderStateDialog({
       <ConfirmForm
         action="/api/providers"
         confirmLabel={enable ? "Enable provider" : "Disable provider"}
+        onSuccessHref={closeHref}
         hiddenFields={{ action: enable ? "enable" : "disable", id: provider.id }}
         tone="primary"
       >
@@ -393,6 +394,7 @@ function DeleteProviderDialog({
       <TypeNameToConfirm
         action="/api/providers"
         confirmLabel="Delete provider"
+        onSuccessHref="/providers"
         hiddenFields={{ action: "delete", id: provider.id }}
         label="TYPE THE PROVIDER NAME TO CONFIRM"
         name={provider.displayName}
@@ -435,6 +437,7 @@ function DeleteConnectionDialog({
       <ConfirmForm
         action={action}
         confirmLabel="Delete connection"
+        onSuccessHref={closeHref}
         hiddenFields={{ action: "delete", [idField]: connection.id, providerId: provider.id }}
       >
         <ActionLink href={closeHref}>Cancel</ActionLink>

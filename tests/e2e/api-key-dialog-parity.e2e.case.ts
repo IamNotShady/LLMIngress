@@ -21,24 +21,24 @@ async function pageOverflowPx(page: Page): Promise<number> {
   );
 }
 
-// Both dialogs must present the same blocks in the same shell. Returns the
-// Budget section text so the two dialogs can be compared against each other
-// without hard-coding the console's number formatting.
-async function expectSharedDetailLayout(dialog: Locator): Promise<string> {
-  await expect(dialog).toHaveClass(/api-key-view-dialog/);
-  await expect(dialog.locator(".api-key-view-column")).toHaveCount(2);
-  await expect(dialog.getByRole("heading", { name: "Budget / Limit" })).toBeVisible();
-  await expect(dialog.getByRole("heading", { name: "Endpoints" })).toBeVisible();
-  await expect(dialog.getByRole("heading", { name: "Integration guide" })).toBeVisible();
-  await expect(dialog.locator("dt").filter({ hasText: "Created" })).toHaveCount(1);
-  await expect(dialog.locator("dt").filter({ hasText: "Enabled" })).toHaveCount(1);
-  await expect(dialog.locator("dt").filter({ hasText: "Default model" })).toHaveCount(1);
-  await expect(dialog.getByRole("tab")).toHaveCount(8);
+// Both views must present the same blocks: what the key is configured for and
+// how to point an agent at it. Returns the configuration text and the first
+// guide's text so the two can be compared without hard-coding any formatting.
+async function readSharedBlocks(scope: Locator | Page): Promise<{
+  configuration: string;
+  guide: string;
+  platforms: string[];
+}> {
+  await expect(scope.getByText("CONFIGURATION", { exact: true })).toBeVisible();
+  await expect(scope.getByText(/^set up your agent$/i)).toBeVisible();
 
-  const budget = dialog.locator(".api-key-detail-section", { hasText: "Budget / Limit" });
-  // The limits were saved with the key, so nothing may render as unconfigured.
-  await expect(budget).not.toContainText("Not configured");
-  return (await budget.innerText()).trim();
+  const configuration = await scope
+    .locator("dl, [data-testid='api-key-configuration']")
+    .first()
+    .innerText();
+  const platforms = await scope.locator("[data-guide-tab]").allInnerTexts();
+  const guide = await scope.locator("[data-guide-panel]:visible").first().innerText();
+  return { configuration: configuration.trim(), guide: guide.trim(), platforms };
 }
 
 async function expectNoOverflow(page: Page, label: string): Promise<void> {
@@ -108,6 +108,8 @@ test("API key created and detail dialogs share one layout and differ only in the
         await expect(page.getByText("parity-vm").first()).toBeVisible();
         await expect(page.getByText(`${gatewayUrl}`).first()).toBeVisible();
         await expect(page.getByText("Stored hashed")).toBeVisible();
+        const created = await readSharedBlocks(page);
+        await expectNoOverflow(page, "created page");
 
         // --- The detail states the same configuration, with the prefix only.
         await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
@@ -118,7 +120,14 @@ test("API key created and detail dialogs share one layout and differ only in the
         await page.waitForLoadState("networkidle");
         await expect(page.getByText("Virtual Model access")).toBeVisible();
         await expect(page.getByText("parity-vm").first()).toBeVisible();
-        await expect(page.getByText(`OpenAI-compatible base ${gatewayUrl}/v1`)).toBeVisible();
+
+        const detail = await readSharedBlocks(page);
+        expect(detail.platforms).toEqual(created.platforms);
+        expect(detail.configuration).toBe(created.configuration);
+        // The guide is the same set-up, with the secret replaced by a
+        // placeholder — it was shown once and is stored hashed.
+        expect(detail.guide).toBe(created.guide.replaceAll(plaintext, "<YOUR_API_KEY>"));
+        await expectNoOverflow(page, "detail dialog");
 
         const shownPrefix = await page
           .getByText(/^llmi_/)

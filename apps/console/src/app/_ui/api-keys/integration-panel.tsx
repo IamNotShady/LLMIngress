@@ -54,6 +54,7 @@ export function IntegrationPanel({
           <Link
             key={entry.platform}
             role="tab"
+            data-guide-tab=""
             aria-selected={entry.platform === active.platform}
             href={buildHref(pathname, params, { guide: entry.platform })}
             className={`whitespace-nowrap px-3 py-[6px] font-mono text-13 ${
@@ -67,7 +68,10 @@ export function IntegrationPanel({
         ))}
       </div>
 
-      <div className="mt-[14px] grid grid-cols-2 items-start gap-6 overflow-x-auto">
+      <div
+        data-guide-panel=""
+        className="mt-[14px] grid grid-cols-2 items-start gap-6 overflow-x-auto"
+      >
         <div>
           <div className="font-mono text-115 font-medium tracking-[.08em] text-dim">
             {active.guide.title}

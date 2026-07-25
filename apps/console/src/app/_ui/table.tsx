@@ -102,6 +102,12 @@ export function Pagination({
   pageCount: number;
   rangeLabel: string;
 }) {
+  // One page of results needs no pager: the view already states its count, and
+  // two inert arrows read as "there is more" when there is not.
+  if (pageCount <= 1) {
+    return null;
+  }
+
   const hasPrev = page > 1;
   const hasNext = page < pageCount;
   const stepClass = "rounded-xs border border-btnbd bg-btnbg px-2 py-[2px]";

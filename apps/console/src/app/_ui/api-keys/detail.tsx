@@ -13,7 +13,7 @@ import { DetailRow, SectionTitle } from "../layout";
 import { buildHref, type SearchParams } from "../params";
 import { GridRow } from "../table";
 import { IntegrationPanel } from "./integration-panel";
-import { buildApiKeyLimitsView, formatLimitValue } from "./limits-view";
+import { buildApiKeyLimitsView, formatApiKeyLimitRules, formatLimitValue } from "./limits-view";
 
 const GRANT_COLUMNS = "190px 170px 136px 114px 1fr";
 
@@ -227,7 +227,7 @@ export function ApiKeyDetail({
           <div className="font-mono text-115 font-medium tracking-[.08em] text-dim">
             CONFIGURATION
           </div>
-          <div className="mt-[6px] border-t border-hair">
+          <div data-testid="api-key-configuration" className="mt-[6px] border-t border-hair">
             <DetailRow clip label="gateway" value={gatewayBaseUrl.replace(/\/+$/, "")} />
             <DetailRow
               clip
@@ -239,7 +239,7 @@ export function ApiKeyDetail({
               label="also granted"
               value={otherModelNames.length > 0 ? otherModelNames.join(", ") : "—"}
             />
-            <DetailRow label="limits" value={view.label} />
+            <DetailRow clip label="limits" value={formatApiKeyLimitRules(limits)} />
           </div>
         </div>
       </div>

@@ -14,7 +14,7 @@ import {
 } from "../support/console-app";
 
 const MODEL_COUNT = 23;
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 8;
 
 async function overflowPx(page: Page): Promise<number> {
   return page.evaluate(
@@ -83,39 +83,51 @@ test("route model picker paginates long model lists and resets on filter changes
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/models?virtualModelDialog=new`, { waitUntil: "networkidle" });
-        await page.getByRole("button", { name: "Add Model" }).click();
+        await page.goto(`${baseUrl}/models?dialog=new`, { waitUntil: "networkidle" });
 
-        const picker = page.locator(".vm-model-picker");
-        const rows = picker.locator(".vm-model-picker-table tbody tr");
-        const pagination = picker.locator(".list-pagination");
+        const editor = page.getByRole("dialog", { name: "New Virtual Model" });
+        const candidates = page.getByTestId("virtual-model-candidates");
+        const rows = candidates.getByRole("link");
+        const search = editor.getByLabel("Search candidate models");
+        const apply = editor.getByRole("button", { name: "Apply" });
+        const nextPage = editor.getByRole("link", { name: "Next →" });
+        const prevPage = editor.getByRole("link", { name: "← Prev" });
 
+        // The header count and the pagination range read off the same total, so
+        // an operator can tell how much of the list they are looking at.
+        await expect(editor.getByText(`${MODEL_COUNT} matches`)).toBeVisible();
         await expect(rows).toHaveCount(PAGE_SIZE);
-        await expect(picker).toContainText("Chat Model 01");
-        await expect(picker).not.toContainText("Chat Model 11");
-        await expect(pagination).toContainText("Page 1 of 3");
-        await expect(pagination).toContainText("1–10 of 23 models");
-        await expect(pagination.getByRole("button", { name: "Previous page" })).toBeDisabled();
+        await expect(candidates).toContainText("chat-01");
+        await expect(candidates).not.toContainText("chat-09");
+        await expect(editor.getByText(`1–${PAGE_SIZE} of ${MODEL_COUNT}`)).toBeVisible();
+        await expect(prevPage).toHaveCount(0);
 
-        await pagination.getByRole("button", { name: "Next page" }).click();
-        await expect(pagination).toContainText("Page 2 of 3");
-        await expect(picker).toContainText("Chat Model 11");
-        await expect(picker).not.toContainText("Chat Model 01");
+        await nextPage.click();
+        await expect(candidates).toContainText("chat-09");
+        await expect(candidates).not.toContainText("chat-01");
+        await expect(editor.getByText(`9–16 of ${MODEL_COUNT}`)).toBeVisible();
 
-        await pagination.getByRole("button", { name: "Next page" }).click();
-        await expect(pagination).toContainText("Page 3 of 3");
+        await nextPage.click();
         await expect(rows).toHaveCount(MODEL_COUNT - PAGE_SIZE * 2);
-        await expect(pagination.getByRole("button", { name: "Next page" })).toBeDisabled();
+        await expect(editor.getByText(`17–${MODEL_COUNT} of ${MODEL_COUNT}`)).toBeVisible();
+        await expect(nextPage).toHaveCount(0);
 
-        // Search resets to the first page; short result sets drop the footer.
-        await picker.getByLabel("Model name").fill("chat-2");
+        // A search starts from the first page — staying on page 3 of the old
+        // result set would show nothing and read as "no matches".
+        await search.fill("chat-2");
+        await apply.click();
+        await page.waitForLoadState("networkidle");
         await expect(rows).toHaveCount(4);
-        await expect(pagination).toHaveCount(0);
-        await expect(picker).toContainText("Chat Model 20");
+        await expect(candidates).toContainText("chat-20");
+        await expect(editor.getByText("4 matches")).toBeVisible();
+        // A result set that fits on one page hides the pager entirely.
+        await expect(editor.getByText(/of 4$/)).toHaveCount(0);
 
-        await picker.getByLabel("Model name").fill("");
-        await expect(pagination).toContainText("Page 1 of 3");
-        await expect(picker).toContainText("Chat Model 01");
+        await search.fill("");
+        await apply.click();
+        await page.waitForLoadState("networkidle");
+        await expect(editor.getByText(`1–${PAGE_SIZE} of ${MODEL_COUNT}`)).toBeVisible();
+        await expect(candidates).toContainText("chat-01");
 
         for (const viewport of [
           { width: 1280, height: 900 },

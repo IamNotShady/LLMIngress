@@ -63,6 +63,24 @@ export function buildApiKeyLimitsView(input: {
   };
 }
 
+/**
+ * The key's rules in one line, spelled out. The one-time creation screen and
+ * the key's detail both state what was configured, and they have to say it the
+ * same way — the detail is where an operator checks what they handed over.
+ */
+export function formatApiKeyLimitRules(limits: readonly ConsoleApiKeyLimit[]): string {
+  if (limits.length === 0) {
+    return "no rules — unlimited";
+  }
+  return limits
+    .map((limit) =>
+      limit.limitType === "budget"
+        ? `$${limit.limitValue} ${limit.period}`
+        : `${limit.limitValue} ${limit.limitType}`,
+    )
+    .join(" · ");
+}
+
 /** Unset ceilings are unlimited, which is not the same as zero. */
 export function formatLimitValue(value: number | null): string {
   return value === null ? "unlimited" : value.toLocaleString("en-US");

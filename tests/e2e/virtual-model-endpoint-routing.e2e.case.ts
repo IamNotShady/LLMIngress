@@ -79,56 +79,84 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
         await waitForConsole(baseUrl, consoleApp);
         await signInFromFirstRun(page, baseUrl);
 
-        await page.goto(`${baseUrl}/models?virtualModelDialog=new`, {
-          waitUntil: "networkidle",
-        });
+        await page.goto(`${baseUrl}/models?dialog=new`, { waitUntil: "networkidle" });
+
+        // The endpoint list offers only protocols the gateway serves — an
+        // embeddings route is not something this console can build.
         const endpointSelect = page.locator("#virtual-model-dialog-endpoint");
         await expect(endpointSelect.locator('option[value="embeddings"]')).toHaveCount(0);
+
+        // The endpoint choice decides which candidates are selectable, so it has
+        // to reach the candidate list rather than sit in the form until save.
         await endpointSelect.selectOption("messages");
-        await page.getByRole("button", { name: "Add Model" }).click();
-        const picker = page.locator(".vm-model-picker");
-        await expect(picker).toContainText("Claude Messages");
-        await expect(picker).not.toContainText("GPT Chat");
-        await expect(picker).not.toContainText("Codex Responses");
-        await expect(picker).not.toContainText("Embedding Only");
+        await page.waitForURL(/protocol=messages/);
 
-        // A provider filter that can't serve the endpoint explains itself
-        // instead of pointing at the Providers page.
-        await page.locator("#vm-model-provider-filter").selectOption("openai");
-        await expect(picker).toContainText("OpenAI doesn't support the Messages endpoint.");
-        await expect(picker).toContainText("set the Provider filter to All");
-        await page.locator("#vm-model-provider-filter").selectOption("all");
-        await expect(picker).toContainText("Claude Messages");
+        const editor = page.getByRole("dialog", { name: "New Virtual Model" });
+        const providerFilter = page.getByLabel("Filter candidates by provider");
+        const applyFilters = editor.getByRole("button", { name: "Apply" });
+        const candidates = page.getByTestId("virtual-model-candidates");
 
-        await picker.getByRole("button", { name: "Close" }).click();
+        const applyProvider = async (label: string) => {
+          await providerFilter.selectOption({ label });
+          await applyFilters.click();
+          await page.waitForLoadState("networkidle");
+        };
+
+        await applyProvider("Anthropic");
+        await expect(candidates.getByRole("link", { name: /claude-msg/ })).toBeVisible();
+
+        // A model whose provider cannot serve the endpoint says so on its own
+        // row and offers nothing to click — the operator is not sent away to
+        // another page to work out why it is missing.
+        await applyProvider("OpenAI");
+        await expect(candidates).toContainText("does not serve messages");
+        await expect(candidates.getByRole("link", { name: /gpt-chat/ })).toHaveCount(0);
+
+        // Switching the endpoint re-reads the same rows against the new protocol.
+        await endpointSelect.selectOption("chat_completions");
+        await page.waitForURL(/protocol=chat_completions/);
+        await expect(candidates.getByRole("link", { name: /gpt-chat/ })).toBeVisible();
+        // An embedding-only model serves no chat endpoint either way.
+        await expect(candidates.getByRole("link", { name: /embedding-only/ })).toHaveCount(0);
+
         await endpointSelect.selectOption("responses");
-        await page.getByRole("button", { name: "Add Model" }).click();
-        await expect(picker).toContainText("GPT Chat");
-        await expect(picker).toContainText("Codex Responses");
-        await expect(picker).not.toContainText("Claude Messages");
-        await expect(picker).not.toContainText("Embedding Only");
+        await page.waitForURL(/protocol=responses/);
+        await applyProvider("OpenAI Codex");
+        await candidates.getByRole("link", { name: /codex-resp/ }).click();
+        await expect(page.getByText("1 selected")).toBeVisible();
 
-        await picker.getByRole("button", { name: "Codex Responses" }).click();
-        await page.getByLabel("Virtual Model name", { exact: true }).fill("vm-endpoint-api");
-        await page.getByLabel("Description").fill("Duplicate model name");
-        await page.getByRole("button", { name: "Create", exact: true }).click();
-        await expect(page).toHaveURL(/virtualModelDialog=new/);
+        // Typing survives the candidate click: the draft is not thrown away by
+        // the navigation that adds a model to the list.
+        const nameField = page.getByLabel("NAME", { exact: false });
+        await nameField.fill("vm-endpoint-api");
+        await page.getByLabel("DESCRIPTION").fill("Duplicate model name");
+        await candidates.getByRole("link", { name: /codex-resp/ }).click();
+        await expect(nameField).toHaveValue("vm-endpoint-api");
+
+        await candidates.getByRole("link", { name: /codex-resp/ }).click();
+        await expect(page.getByText("1 selected")).toBeVisible();
+
+        // A refused save keeps the operator in the editor with everything they
+        // entered, and names the field to fix.
+        await page.getByRole("button", { name: "Create virtual model" }).click();
+        await expect(page).toHaveURL(/dialog=new/);
         await expect(page.getByRole("alert")).toBeVisible();
-        expect(browserErrors).toEqual([]);
         expect(mutationRequests).toContain(`${baseUrl}/api/virtual-models`);
         await expect(page.getByText("Virtual Model name already exists.")).toBeVisible();
-        await expect(page.getByLabel("Virtual Model name", { exact: true })).toHaveAttribute(
-          "aria-invalid",
-          "true",
-        );
+        await expect(nameField).toHaveAttribute("aria-invalid", "true");
+        await expect(nameField).toHaveValue("vm-endpoint-api");
+        // The refusal itself is an HTTP 409 the browser logs; nothing else may
+        // have gone wrong on the way.
+        expect(browserErrors.filter((entry) => !entry.includes("409"))).toEqual([]);
 
-        await page.goto(`${baseUrl}/models?virtualModelDelete=${seeded.virtualModelId}`, {
+        await page.goto(`${baseUrl}/models?selected=${seeded.virtualModelId}&dialog=delete`, {
           waitUntil: "networkidle",
         });
-        const deleteDialog = page.getByRole("dialog", { name: "Delete vm-endpoint-api?" });
-        await expect(deleteDialog).not.toContainText("Route Policy");
-        await deleteDialog.getByRole("button", { name: "Delete" }).click();
-        await expect(page).toHaveURL(`${baseUrl}/models`);
+        const deleteDialog = page.getByRole("dialog", { name: "Delete virtual model" });
+        await expect(deleteDialog).toContainText("vm-endpoint-api");
+        await deleteDialog.getByLabel("TYPE THE MODEL NAME TO CONFIRM").fill("vm-endpoint-api");
+        await deleteDialog.getByRole("button", { name: "Delete model" }).click();
+        await page.waitForURL(`${baseUrl}/models`);
         await expect(page.getByText("vm-endpoint-api", { exact: true })).toHaveCount(0);
 
         const routePolicyState = await withDedicatedPostgresClient(
@@ -177,34 +205,25 @@ test("route dialog shows exact context tokens and names the conflicting values w
         await waitForConsole(baseUrl, consoleApp);
         await signInFromFirstRun(page, baseUrl);
 
-        await page.goto(`${baseUrl}/models?virtualModelDialog=new`, {
-          waitUntil: "networkidle",
-        });
+        await page.goto(`${baseUrl}/models?dialog=new`, { waitUntil: "networkidle" });
         await page.locator("#virtual-model-dialog-endpoint").selectOption("chat_completions");
+        await page.waitForURL(/protocol=chat_completions/);
 
-        await page.getByRole("button", { name: "Add Model" }).click();
-        await page
-          .locator(".vm-model-picker")
-          .getByRole("button", { name: "Round Context Model" })
-          .click();
-        await page.getByRole("button", { name: "Add Model" }).click();
-        await page
-          .locator(".vm-model-picker")
-          .getByRole("button", { name: "Odd Context Model" })
-          .click();
+        const candidates = page.getByTestId("virtual-model-candidates");
+        await candidates.getByRole("link", { name: /round-context/ }).click();
+        await expect(page.getByText("1 selected")).toBeVisible();
+        await candidates.getByRole("link", { name: /odd-context/ }).click();
+        await expect(page.getByText("2 selected")).toBeVisible();
 
         // Two near-identical context windows must render as exact, distinct token
-        // counts in the candidates table — not both rounded to the same "~1M".
-        const candidates = page.locator(".vm-candidate-table");
-        await expect(
-          candidates.getByRole("cell", { name: "1,000,000", exact: true }),
-        ).toBeVisible();
-        await expect(
-          candidates.getByRole("cell", { name: "1,048,576", exact: true }),
-        ).toBeVisible();
+        // counts — not both rounded to the same "~1M", which would make the pair
+        // look interchangeable when a route rejects exactly this mismatch.
+        const selected = page.getByTestId("virtual-model-selected");
+        await expect(selected).toContainText("ctx 1,000,000");
+        await expect(selected).toContainText("ctx 1,048,576");
 
-        // The wide candidates table scrolls inside its own container; the page must
-        // not gain horizontal overflow at desktop or mobile checkpoints.
+        // The wide editor scrolls inside its own container; the page must not
+        // gain horizontal overflow at desktop or mobile checkpoints.
         for (const viewport of [
           { width: 1280, height: 800 },
           { width: 390, height: 844 },
@@ -222,10 +241,10 @@ test("route dialog shows exact context tokens and names the conflicting values w
 
         // Saving the mismatched pair surfaces the exact conflicting values rather
         // than a bare "must match for maxContextTokens". The comma-free "1000000"
-        // is unique to the error message (the table cell renders "1,000,000").
-        await page.getByLabel("Virtual Model name", { exact: true }).fill("vm-context-clarity");
-        await page.getByLabel("Description").fill("Two near-identical context windows");
-        await page.getByRole("button", { name: "Create", exact: true }).click();
+        // is unique to the error message (the selected list renders "1,000,000").
+        await page.getByLabel("NAME", { exact: false }).fill("vm-context-clarity");
+        await page.getByLabel("DESCRIPTION").fill("Two near-identical context windows");
+        await page.getByRole("button", { name: "Create virtual model" }).click();
 
         await expect(page.getByText("must agree on maxContextTokens")).toBeVisible();
         await expect(page.getByText("1000000", { exact: false })).toBeVisible();

@@ -6,6 +6,7 @@ import {
   buildIntegrationGuides,
   type IntegrationGuideEntry,
 } from "../../_ui/api-keys/integration-guide";
+import { formatApiKeyLimitRules } from "../../_ui/api-keys/limits-view";
 
 export function renderOneTimeApiKeyResponse(
   input: {
@@ -59,7 +60,7 @@ export function renderOneTimeApiKeyResponse(
         .filter((name) => name !== input.defaultVirtualModelName)
         .join(", ") || "—",
     ],
-    ["limits", formatLimitSummary(input.limits)],
+    ["limits", formatApiKeyLimitRules(input.limits)],
   ];
 
   return new NextResponse(
@@ -107,7 +108,7 @@ export function renderOneTimeApiKeyResponse(
             (entry, index) =>
               `<input type="radio" name="guide" id="tab-${escapeHtml(entry.platform)}" ${
                 index === 0 ? "checked" : ""
-              } /><label for="tab-${escapeHtml(entry.platform)}">${escapeHtml(entry.label)}</label>`,
+              } /><label data-guide-tab for="tab-${escapeHtml(entry.platform)}">${escapeHtml(entry.label)}</label>`,
           )
           .join("")}
         ${guides.map((entry) => renderGuidePanel(entry)).join("")}
@@ -162,28 +163,16 @@ dd{margin:0;text-align:right;overflow-wrap:anywhere}
 .panel ol{margin:0;padding-left:18px}
 .panel li{font:400 13px var(--mono);line-height:1.6;margin-bottom:7px}
 .panel h2{margin:0 0 5px;font:500 11.5px var(--mono);color:var(--dim);letter-spacing:.08em}
-pre{margin:0 0 10px;background:var(--track);border:1px solid var(--rule);border-radius:3px;padding:10px 12px;font:400 12px var(--mono);line-height:1.65;white-space:pre-wrap}
+pre{margin:0 0 10px;background:var(--track);border:1px solid var(--rule);border-radius:3px;padding:10px 12px;font:400 12px var(--mono);line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
 footer{display:flex;align-items:center;gap:8px;margin-top:20px;padding-top:14px;border-top:1px solid var(--hair)}
 footer a{display:inline-flex;align-items:center;border:1px solid var(--btnbd);background:var(--btnbg);color:var(--ink);border-radius:3px;font:500 13.5px var(--mono);padding:6px 12px;text-decoration:none}
 footer a.primary{border-color:transparent;background:var(--seg);color:var(--segfg);padding:6px 18px}
+@media (max-width:760px){body{padding:24px 16px}main{padding:20px 16px}.split,.panel{grid-template-columns:1fr}.tabs label{white-space:normal}}
 `;
 }
 
-function formatLimitSummary(limits: readonly ConsoleApiKeyLimit[]): string {
-  if (limits.length === 0) {
-    return "no rules — unlimited";
-  }
-  return limits
-    .map((limit) =>
-      limit.limitType === "budget"
-        ? `$${limit.limitValue} ${limit.period}`
-        : `${limit.limitValue} ${limit.limitType}`,
-    )
-    .join(" · ");
-}
-
 function renderGuidePanel(entry: IntegrationGuideEntry): string {
-  return `<div class="panel" id="panel-${escapeHtml(entry.platform)}">
+  return `<div class="panel" data-guide-panel id="panel-${escapeHtml(entry.platform)}">
         <div>
           <h2>${escapeHtml(entry.guide.title)}</h2>
           <ol>${entry.guide.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>

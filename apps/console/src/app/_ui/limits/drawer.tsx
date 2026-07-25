@@ -216,6 +216,7 @@ function DeleteRulesDialog({
       <ConfirmForm
         action="/api/api-key-limits"
         confirmLabel="Delete rules"
+        onSuccessHref={buildHref("/limits", params, { dialog: null })}
         hiddenFields={{ action: "deleteLimitRules", apiKeyId: apiKey.id }}
       >
         <ActionLink href={buildHref("/limits", params, { dialog: null })}>Cancel</ActionLink>

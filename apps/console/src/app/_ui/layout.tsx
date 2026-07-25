@@ -81,7 +81,7 @@ export function EmptyState({
     <div className="mt-4 border-t border-hair py-14 text-center">
       <h2 className="font-sans text-17 font-semibold text-ink">{title}</h2>
       <p className="mx-auto mt-2 max-w-[560px] font-mono text-13 leading-[1.7] text-dim">{body}</p>
-      {actions ? <div className="mt-4 flex justify-center gap-2">{actions}</div> : null}
+      {actions ? <div className="mt-4 flex flex-wrap justify-center gap-2">{actions}</div> : null}
     </div>
   );
 }

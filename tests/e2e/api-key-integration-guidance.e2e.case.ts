@@ -82,12 +82,26 @@ test("ApiKey dialogs show endpoint groups and integration tabs without the platf
         await expect(page.getByRole("heading", { level: 1, name: "API Keys" })).toBeVisible();
         await expect(page.locator("#api-key-filter-platform")).toHaveCount(0);
         await expect(page.getByText(`OpenAI-compatible base ${gatewayUrl}/v1`)).toBeVisible();
-        await expect(page.getByText("guide-routed-vm")).toBeVisible();
+        await expect(page.getByText("guide-routed-vm").first()).toBeVisible();
+
+        // The setup instructions stay available after creation, with the
+        // placeholder standing in for the secret that was shown once.
+        const tablist = page.getByRole("tablist", { name: "Integration platform" });
+        await expect(tablist.getByRole("tab")).toHaveCount(8);
+        await expect(page.getByText("<YOUR_API_KEY>").first()).toBeVisible();
+        await expect(page.getByText("llmi_guide_k").first()).toBeVisible();
+        await tablist.getByRole("tab", { name: "Claude Code" }).click();
+        await expect(page.getByText(/ANTHROPIC_BASE_URL=/)).toBeVisible();
+        // Only the prefix is on the page; the rest of the secret is not stored.
+        await expect(page.getByText("ANTHROPIC_AUTH_TOKEN='llmi_guide_k")).toHaveCount(0);
 
         // --- Creating a key hands over every platform's setup, with the real
         // secret substituted for the placeholder.
         await page.goto(`${baseUrl}/api-keys?dialog=new`, { waitUntil: "networkidle" });
-        await expect(page.getByLabel("Integration platform")).toHaveCount(0);
+        const createDialog = page.getByRole("dialog", { name: "New API Key" });
+        // A key is not created for one platform; the guides cover them all.
+        await expect(createDialog.getByRole("combobox", { name: /platform/i })).toHaveCount(0);
+        await expect(createDialog.getByLabel("Integration platform")).toHaveCount(0);
         await page.getByRole("link", { name: "Grant guide-routed-vm" }).click();
         await page.waitForURL((url) => url.searchParams.get("grantIds") !== null);
         await page.getByLabel("API key name").fill("guide-created-apiKey");

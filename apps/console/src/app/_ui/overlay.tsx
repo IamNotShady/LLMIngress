@@ -1,7 +1,63 @@
-import Link from "next/link";
-import type { ReactNode } from "react";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { type ReactNode, useEffect, useRef } from "react";
 
 type DialogWidth = 460 | 480 | 520 | 600 | 720 | 900 | 980;
+
+/**
+ * Opens a native modal so the browser owns the parts that are easy to get
+ * wrong: focus moves into it, Tab cannot leave it, Escape closes it, and focus
+ * returns to whatever opened it. Closing is a navigation, because the open
+ * state lives in the URL — that is what makes every dialog server-rendered
+ * with the selected object's values.
+ */
+function useModalDialog(closeHref: string) {
+  const router = useRouter();
+  const ref = useRef<HTMLDialogElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      return;
+    }
+    // Whatever was focused when the dialog rendered is what opened it — the
+    // row, the ✕-less action link — and is where focus belongs afterwards.
+    opener.current = document.activeElement as HTMLElement | null;
+    if (!element.open) {
+      element.showModal();
+      // showModal focuses the first tabbable node, which is the close control.
+      // A dialog opens for what it is about, so the first field takes focus.
+      element.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+    }
+    return () => {
+      element.close();
+      opener.current?.focus?.();
+    };
+  }, []);
+
+  const close = () => router.push(closeHref);
+
+  return {
+    /** Escape: the element stays open until the URL that holds it changes. */
+    onCancel: (event: React.SyntheticEvent<HTMLDialogElement>) => {
+      event.preventDefault();
+      close();
+    },
+    /**
+     * A click on the backdrop area outside the panel closes it too. Escape
+     * does the same from the keyboard, so this needs no key handler of its own.
+     */
+    onClick: (event: React.MouseEvent<HTMLDialogElement>) => {
+      if (event.target === ref.current) {
+        close();
+      }
+    },
+    onCloseClick: close,
+    ref,
+  };
+}
 
 /**
  * Modal dialog. Open state lives in the URL, so every dialog is server-rendered
@@ -24,19 +80,20 @@ export function Dialog({
   titleNote?: ReactNode;
   width: DialogWidth;
 }) {
+  const modal = useModalDialog(closeHref);
+
   return (
-    <>
-      <Link
-        href={closeHref}
-        aria-label="Close dialog"
-        className="fixed inset-0 z-70 bg-[rgba(20,17,12,.35)]"
-      />
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape is the keyboard equivalent, and the browser handles it on a native modal.
+    <dialog
+      ref={modal.ref}
+      onCancel={modal.onCancel}
+      onClick={modal.onClick}
+      aria-label={title}
+      className="fixed inset-0 m-0 size-full max-h-none max-w-none bg-transparent p-0 text-ink"
+    >
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
         style={{ width }}
-        className={`fixed left-1/2 top-16 z-71 max-h-[84vh] max-w-[calc(100vw-64px)] -translate-x-1/2 overflow-auto bg-bg px-[26px] py-[22px] ${
+        className={`mx-auto mt-16 max-h-[84vh] max-w-[calc(100vw-64px)] overflow-auto bg-bg px-[26px] py-[22px] ${
           danger ? "border border-red shadow-danger" : "border border-hair shadow-dialog"
         }`}
       >
@@ -48,17 +105,18 @@ export function Dialog({
             </span>
           ) : null}
           {titleNote ? <span className="font-mono text-12 text-faint">{titleNote}</span> : null}
-          <Link
-            href={closeHref}
+          <button
+            type="button"
+            onClick={modal.onCloseClick}
             aria-label="Close"
-            className="ml-auto font-mono text-17 font-medium text-dim"
+            className="ml-auto cursor-pointer border-0 bg-transparent font-mono text-17 font-medium text-dim"
           >
             ✕
-          </Link>
+          </button>
         </div>
         {children}
       </div>
-    </>
+    </dialog>
   );
 }
 
@@ -76,17 +134,18 @@ export function Drawer({
   title: string;
   trailing?: ReactNode;
 }) {
+  const modal = useModalDialog(closeHref);
+
   return (
-    <>
-      <Link
-        href={closeHref}
-        aria-label="Close drawer"
-        className="fixed inset-0 z-60 bg-[rgba(20,24,30,.35)]"
-      />
-      <aside
-        aria-label={title}
-        className="fixed inset-y-0 right-0 z-61 w-[520px] overflow-auto border-l border-hair bg-bg px-6 py-5 shadow-drawer"
-      >
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape is the keyboard equivalent, and the browser handles it on a native modal.
+    <dialog
+      ref={modal.ref}
+      onCancel={modal.onCancel}
+      onClick={modal.onClick}
+      aria-label={title}
+      className="fixed inset-0 m-0 size-full max-h-none max-w-none bg-transparent p-0 text-ink"
+    >
+      <aside className="ml-auto h-full w-[520px] max-w-[calc(100vw-24px)] overflow-auto border-l border-hair bg-bg px-6 py-5 shadow-drawer">
         <div className="flex items-center gap-[10px]">
           <div className="min-w-0">
             <div className="font-sans text-17 font-semibold text-ink">{title}</div>
@@ -95,17 +154,20 @@ export function Drawer({
             ) : null}
           </div>
           {trailing ? <span className="ml-auto flex-none">{trailing}</span> : null}
-          <Link
-            href={closeHref}
+          <button
+            type="button"
+            onClick={modal.onCloseClick}
             aria-label="Close"
-            className={`font-mono text-17 font-medium text-dim ${trailing ? "ml-3" : "ml-auto"}`}
+            className={`cursor-pointer border-0 bg-transparent font-mono text-17 font-medium text-dim ${
+              trailing ? "ml-3" : "ml-auto"
+            }`}
           >
             ✕
-          </Link>
+          </button>
         </div>
         {children}
       </aside>
-    </>
+    </dialog>
   );
 }
 

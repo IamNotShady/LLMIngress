@@ -58,7 +58,7 @@ export function ApiKeyDetail({
   return (
     <div className="min-w-0 pl-6 pt-[18px]">
       <div className="flex items-center gap-3">
-        <span className="font-sans text-19 font-semibold text-ink">{apiKey.name}</span>
+        <h2 className="m-0 font-sans text-19 font-semibold text-ink">{apiKey.name}</h2>
         <span className="font-mono text-13 text-dim">{apiKey.keyPrefix}</span>
         <span
           className={`flex items-center gap-[5px] font-mono text-125 font-medium ${

@@ -4,6 +4,7 @@ import { listConsoleProviderOAuthConnections } from "@llmingress/db/console-prov
 import { listConsoleProviderQuotaSummaries } from "@llmingress/db/console-provider-quota";
 import { listProviderTemplateSelectorGroups } from "@llmingress/db/console-provider-templates";
 import {
+  getProviderDependencyImpact,
   listConsoleProviderModelRefreshStatuses,
   listProviders,
 } from "@llmingress/db/console-providers";
@@ -12,9 +13,14 @@ import { getConsoleUsageSummary } from "@llmingress/db/console-usage";
 import { ActionLink } from "../../_ui/controls";
 import { EmptyState, PageShell, PageTitleRow } from "../../_ui/layout";
 import { buildHref, readIntParam, readParam, type SearchParams } from "../../_ui/params";
+import { countProviderAggregateHealthStatuses } from "../../_ui/provider-health";
 import { ProviderDetail } from "../../_ui/providers/detail";
 import { ProviderDialogs } from "../../_ui/providers/dialogs";
-import { buildProviderConnections, describeProviderHealth } from "../../_ui/providers/model";
+import {
+  buildProviderConnections,
+  describeConnectionHealth,
+  describeProviderHealth,
+} from "../../_ui/providers/model";
 import { PickRow } from "../../_ui/table";
 
 export default async function ProvidersPage({
@@ -51,6 +57,13 @@ export default async function ProvidersPage({
   const selected = providers.find((provider) => provider.id === requestedId) ?? providers[0];
   const selectedConnections = selected ? (connectionsByProvider.get(selected.id) ?? []) : [];
 
+  // What a delete would break is read only when the confirm is open: the same
+  // dependencies the API refuses on, so the dialog can say so before the click.
+  const dependencyImpact =
+    selected && readParam(params, "dialog") === "delete"
+      ? await getProviderDependencyImpact({ providerId: selected.id })
+      : null;
+
   const modelQuery = readParam(params, "modelQuery") ?? "";
   const availability = readParam(params, "availability") ?? "available";
   const modelPage = selected
@@ -63,13 +76,29 @@ export default async function ProvidersPage({
       })
     : null;
 
+  // A provider is healthy when any one of its connections is: the others are
+  // fallbacks, so one failing key does not take the provider out of service.
+  const providerHealth = countProviderAggregateHealthStatuses(
+    providers.flatMap((provider) =>
+      (connectionsByProvider.get(provider.id) ?? []).map((connection) => ({
+        enabled: connection.enabled,
+        providerId: provider.id,
+        status:
+          describeConnectionHealth(connection).tone === "green"
+            ? ("healthy" as const)
+            : ("unhealthy" as const),
+      })),
+    ),
+  );
+
   return (
     <PageShell label="Providers">
       <PageTitleRow
         title="Providers"
         meta={
           providers.length > 0
-            ? `${providers.length} providers · ${connectionCount} connections`
+            ? `${providers.length} providers · ${connectionCount} connections · ` +
+              `${providerHealth.healthy} healthy · ${providerHealth.unhealthy} unhealthy`
             : undefined
         }
         actions={
@@ -110,7 +139,11 @@ export default async function ProvidersPage({
                   })}
                   selected={provider.id === selected?.id}
                 >
+                  {/* Colour alone cannot carry the state: the dot names it. */}
                   <span
+                    role="img"
+                    aria-label={`${provider.displayName} ${providerHealth.text}`}
+                    title={providerHealth.text}
                     className={`size-[7px] flex-none rounded-full ${dotClass(providerHealth.tone)}`}
                   />
                   <span className="min-w-0 flex-1">
@@ -151,6 +184,7 @@ export default async function ProvidersPage({
 
       <ProviderDialogs
         connections={selectedConnections}
+        dependencyImpact={dependencyImpact}
         params={params}
         quotas={selected ? quotas.filter((quota) => quota.providerId === selected.id) : []}
         provider={selected}

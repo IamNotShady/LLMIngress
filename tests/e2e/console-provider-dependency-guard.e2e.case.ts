@@ -30,12 +30,18 @@ test("provider delete dialog shows real route-policy blockers and POST returns 4
       await waitForConsole(baseUrl, consoleApp);
       await signInFromFirstRun(page, baseUrl);
 
-      await page.goto(`${baseUrl}/providers?providerDelete=${ids.providerId}`);
-      const dialog = page.getByRole("dialog", { name: "Delete provider?" });
+      await page.goto(`${baseUrl}/providers?selected=${ids.providerId}&dialog=delete`);
+      const dialog = page.getByRole("dialog", { name: "Delete provider" });
       await expect(dialog).toBeVisible();
+
+      // The confirm names the route that holds the provider, says the save
+      // would be refused, and offers the two ways forward instead of a button
+      // that fails — the API returns 409 for exactly this state.
       await expect(dialog).toContainText("Dependency VM");
-      await expect(dialog).toContainText("Dependency ApiKey");
+      await expect(dialog).toContainText("would be refused");
+      await expect(dialog).toContainText("disable the provider");
       await expect(dialog.getByRole("button", { name: "Delete provider" })).toHaveCount(0);
+      await expect(dialog.getByRole("link", { name: "Open Virtual Models" })).toBeVisible();
 
       const response = await page.request.post(`${baseUrl}/api/providers`, {
         form: { action: "delete", id: ids.providerId },

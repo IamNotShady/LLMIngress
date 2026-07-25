@@ -120,6 +120,7 @@ test("ApiKey dialogs show endpoint groups and integration tabs without the platf
 
         // Both the one-time screen and the detail hold their layout at the
         // desktop target and on a phone.
+        await page.evaluate(() => document.fonts.ready);
         for (const viewport of [
           { width: 1280, height: 800 },
           { width: 390, height: 844 },

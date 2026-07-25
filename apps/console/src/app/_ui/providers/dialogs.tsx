@@ -1,7 +1,7 @@
 import { listDirectCreateEntries } from "@llmingress/config/provider-registry";
 import type { ConsoleProviderQuotaSummary } from "@llmingress/db/console-provider-quota";
 import type { ProviderTemplateSelectorGroup } from "@llmingress/db/console-provider-templates";
-import type { ConsoleProvider } from "@llmingress/db/console-providers";
+import type { ConsoleProvider, ProviderDependencyImpact } from "@llmingress/db/console-providers";
 import type { ConsoleUsageSummary } from "@llmingress/db/console-usage";
 import Link from "next/link";
 import { ConfirmForm, TypeNameToConfirm } from "../confirm-form";
@@ -21,6 +21,7 @@ import {
 
 export function ProviderDialogs({
   connections,
+  dependencyImpact,
   params,
   provider,
   quotas,
@@ -28,6 +29,7 @@ export function ProviderDialogs({
   usage,
 }: {
   connections: ProviderConnection[];
+  dependencyImpact: ProviderDependencyImpact | null;
   params: SearchParams;
   provider: ConsoleProvider | undefined;
   quotas: ConsoleProviderQuotaSummary[];
@@ -75,6 +77,7 @@ export function ProviderDialogs({
       <DeleteProviderDialog
         closeHref={closeHref}
         connections={connections}
+        dependencyImpact={dependencyImpact}
         provider={provider}
         usage={usage}
       />
@@ -363,15 +366,20 @@ function ProviderStateDialog({
 function DeleteProviderDialog({
   closeHref,
   connections,
+  dependencyImpact,
   provider,
   usage,
 }: {
   closeHref: string;
   connections: ProviderConnection[];
+  dependencyImpact: ProviderDependencyImpact | null;
   provider: ConsoleProvider;
   usage: ConsoleUsageSummary;
 }) {
   const breakdown = usage.providerBreakdowns.find((entry) => entry.id === provider.id);
+  // A route still pointing here is refused by the API, so the dialog says which
+  // routes hold it and offers the way out rather than a button that will fail.
+  const blockingRoutes = dependencyImpact?.routePolicies ?? [];
   return (
     <Dialog closeHref={closeHref} danger tag="permanent" title="Delete provider" width={520}>
       <DialogBody>
@@ -390,20 +398,45 @@ function DeleteProviderDialog({
           })}
         />
         <DetailRow label="activity history" value="kept, attributed to the name snapshot" />
+        {dependencyImpact ? (
+          <DetailRow
+            label="held by"
+            value={
+              blockingRoutes.length === 0
+                ? "no route — nothing depends on it"
+                : blockingRoutes.map((route) => route.virtualModelName).join(", ")
+            }
+          />
+        ) : null}
       </DialogImpact>
-      <TypeNameToConfirm
-        action="/api/providers"
-        confirmLabel="Delete provider"
-        onSuccessHref="/providers"
-        hiddenFields={{ action: "delete", id: provider.id }}
-        label="TYPE THE PROVIDER NAME TO CONFIRM"
-        name={provider.displayName}
-      >
-        <ActionLink href={closeHref}>Cancel</ActionLink>
-        <span className="ml-1 font-mono text-12 text-dim">
-          Disable instead — keeps config and removes it from routing
-        </span>
-      </TypeNameToConfirm>
+      {blockingRoutes.length > 0 ? (
+        <>
+          <DialogNote>
+            This cannot be deleted while a route still points at it — the save would be refused.
+            Remove {provider.displayName} from{" "}
+            {blockingRoutes.map((route) => route.virtualModelName).join(", ")} first, or disable the
+            provider to take it out of routing and keep its configuration.
+          </DialogNote>
+          <DialogActions>
+            <ActionLink href="/models">Open Virtual Models</ActionLink>
+            <ActionLink href={closeHref}>Cancel</ActionLink>
+          </DialogActions>
+        </>
+      ) : (
+        <TypeNameToConfirm
+          action="/api/providers"
+          confirmLabel="Delete provider"
+          onSuccessHref="/providers"
+          hiddenFields={{ action: "delete", id: provider.id }}
+          label="TYPE THE PROVIDER NAME TO CONFIRM"
+          name={provider.displayName}
+        >
+          <ActionLink href={closeHref}>Cancel</ActionLink>
+          <span className="ml-1 font-mono text-12 text-dim">
+            Disable instead — keeps config and removes it from routing
+          </span>
+        </TypeNameToConfirm>
+      )}
     </Dialog>
   );
 }

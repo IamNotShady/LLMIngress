@@ -149,6 +149,8 @@ function ApiKeyEditorDialog({
           <Field label="NAME" hint="Shown in Activity and Usage; the secret itself is never shown.">
             <TextInput
               name="name"
+              data-autofocus=""
+              id="api-key-name"
               aria-label="API key name"
               defaultValue={apiKey?.name ?? ""}
               required

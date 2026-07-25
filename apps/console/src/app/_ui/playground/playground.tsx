@@ -78,6 +78,7 @@ export function Playground({
   const [toast, setToast] = useState<string | null>(null);
 
   const [grantedModels, setGrantedModels] = useState<string[] | null>(null);
+  const [loadingModels, setLoadingModels] = useState(false);
   const selected = virtualModels.find((entry) => entry.name === model);
   const base = gatewayBaseUrl.replace(/\/+$/, "");
 
@@ -88,10 +89,12 @@ export function Playground({
     const secret = apiKey.trim();
     if (!secret) {
       setGrantedModels(null);
+      setLoadingModels(false);
       return;
     }
     let cancelled = false;
     const timer = setTimeout(async () => {
+      setLoadingModels(true);
       try {
         const response = await fetch(`${base}/v1/models`, {
           headers: { authorization: `Bearer ${secret}` },
@@ -109,11 +112,16 @@ export function Playground({
         }
       } catch {
         // Leave the console's own list in place; sending will report the error.
+      } finally {
+        if (!cancelled) {
+          setLoadingModels(false);
+        }
       }
     }, 300);
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      setLoadingModels(false);
     };
   }, [apiKey, base]);
 
@@ -232,7 +240,26 @@ export function Playground({
         </div>
 
         <div className="mt-[14px]">
-          <Field label="VIRTUAL MODEL" hint={virtualModelHint(selected)}>
+          <Field
+            label="VIRTUAL MODEL"
+            hint={
+              loadingModels
+                ? "Asking the gateway which models this key may call…"
+                : virtualModelHint(selected)
+            }
+          >
+            {loadingModels ? (
+              <output
+                aria-label="Loading models"
+                className="mb-[5px] flex items-center gap-2 font-mono text-125 text-faint"
+              >
+                <span
+                  aria-hidden="true"
+                  className="size-[9px] flex-none animate-spin rounded-full border border-hair border-t-accent"
+                />
+                loading…
+              </output>
+            ) : null}
             <SelectInput
               aria-label="Virtual model"
               value={model}

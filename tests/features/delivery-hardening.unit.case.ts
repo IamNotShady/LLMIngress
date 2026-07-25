@@ -6,8 +6,10 @@ const read = (path: string) => readFileSync(path, "utf8");
 describe("core delivery hardening", () => {
   it("uses one overlay contract for every modal and drawer", () => {
     const overlay = read("apps/console/src/app/_ui/overlay.tsx");
-    expect(overlay).toContain('role="dialog"');
-    expect(overlay).toContain('aria-modal="true"');
+    // Native modals: the browser owns focus, Tab and Escape, which is why the
+    // ARIA role is not hand-written here.
+    expect(overlay).toContain("<dialog");
+    expect(overlay).toContain("showModal()");
     // Open state is a URL, so closing is a navigation and every dialog is
     // server-rendered from the selected object rather than client state.
     expect(overlay).toContain("closeHref");
@@ -18,9 +20,10 @@ describe("core delivery hardening", () => {
       .filter((file) => file.endsWith(".tsx") && !file.endsWith("overlay.tsx"));
     for (const file of uiFiles) {
       const source = read(`apps/console/src/app/_ui/${file}`);
-      // No module builds its own scrim or dialog role.
+      // No module builds its own scrim, modal element or dialog role.
       expect(source, file).not.toContain('role="dialog"');
       expect(source, file).not.toContain("aria-modal");
+      expect(source, file).not.toContain("showModal");
     }
   });
 

@@ -196,6 +196,13 @@
   }
 }
 
+@layer base {
+  /* One scrim for both overlays; the browser owns the rest of the modal. */
+  dialog::backdrop {
+    background: rgba(20, 17, 12, 0.35);
+  }
+}
+
 @utility tabnum {
   font-variant-numeric: tabular-nums;
 }

@@ -49,7 +49,11 @@ export default async function ApiKeysPage({
         title="API Keys"
         meta={apiKeys.length > 0 ? `${apiKeys.length} keys · one secret per agent` : undefined}
         actions={
-          <ActionLink href={buildHref("/api-keys", params, { dialog: "new" })} tone="primary">
+          <ActionLink
+            id="api-key-create-dialog-trigger"
+            href={buildHref("/api-keys", params, { dialog: "new" })}
+            tone="primary"
+          >
             + New API Key
           </ActionLink>
         }

@@ -526,9 +526,18 @@ test("Console sidebar counts aggregate Provider health", async ({ browser }) => 
       try {
         await waitForConsole(baseUrl, consoleApp);
         await signInFromFirstRun(page, baseUrl);
-        await expect(page.getByRole("img", { name: "1 healthy providers" })).toBeVisible();
-        await expect(page.getByRole("img", { name: "1 unhealthy providers" })).toBeVisible();
-        await expect(page.getByRole("img", { name: "2 unhealthy providers" })).toHaveCount(0);
+        // A provider with one working key and one failing key is still serving,
+        // so it counts healthy; only the provider whose sole key failed does not.
+        await page.goto(`${baseUrl}/providers`, { waitUntil: "networkidle" });
+        await expect(page.getByText("1 healthy · 1 unhealthy")).toBeVisible();
+        // Not "2 unhealthy": the mixed provider is not counted as down.
+        await expect(page.getByText(/·\s*2 unhealthy/)).toHaveCount(0);
+        // The mixed provider's row says both things, in words rather than by
+        // colour alone.
+        await expect(
+          page.getByRole("img", { name: "Mixed Provider healthy · 1 failing" }),
+        ).toBeVisible();
+        await expect(page.getByRole("img", { name: "Failed Provider unhealthy" })).toBeVisible();
       } finally {
         await context.close();
       }

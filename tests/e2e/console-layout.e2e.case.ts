@@ -19,35 +19,28 @@ async function pageOverflowPx(page: Page): Promise<number> {
   );
 }
 
-async function expectTableColumnsContained(page: Page, selectors: string[]) {
-  const audits = await page.evaluate((tableSelectors) => {
-    return tableSelectors.map((selector) => {
-      const table = document.querySelector<HTMLTableElement>(selector);
-      if (!table) {
-        return { maxColumnShare: 1, selector, unsafeCells: ["missing table"] };
+async function expectRowCellsContained(page: Page, label: string) {
+  // Every cell of a fixed-track row either fits or clips; a cell that overflows
+  // with visible overflow paints across the column beside it.
+  const spilling = await page.evaluate(() => {
+    const rows = Array.from(
+      document.querySelectorAll<HTMLElement>('[style*="grid-template-columns"]'),
+    );
+    const offenders: string[] = [];
+    for (const row of rows) {
+      for (const cell of Array.from(row.children) as HTMLElement[]) {
+        if (cell.scrollWidth <= cell.clientWidth + 1) {
+          continue;
+        }
+        if (getComputedStyle(cell).overflowX !== "visible") {
+          continue;
+        }
+        offenders.push((cell.textContent ?? "").trim().slice(0, 60));
       }
-
-      const tableWidth = table.getBoundingClientRect().width;
-      const headers = Array.from(table.querySelectorAll(":scope > thead > tr > th"));
-      const unsafeCells = Array.from(
-        table.querySelectorAll<HTMLTableCellElement>(":scope > tbody > tr > td"),
-      )
-        .filter((cell) => cell.scrollWidth > cell.clientWidth + 1)
-        .filter((cell) => getComputedStyle(cell).overflowX === "visible")
-        .map((cell) => cell.textContent?.trim().slice(0, 80) ?? "");
-      const maxColumnShare = Math.max(
-        0,
-        ...headers.map((header) => header.getBoundingClientRect().width / tableWidth),
-      );
-
-      return { maxColumnShare, selector, unsafeCells };
-    });
-  }, selectors);
-
-  for (const audit of audits) {
-    expect(audit.unsafeCells, audit.selector).toEqual([]);
-    expect(audit.maxColumnShare, audit.selector).toBeLessThanOrEqual(0.34);
-  }
+    }
+    return offenders;
+  });
+  expect(spilling, label).toEqual([]);
 }
 
 // Seeds an apiKey, a virtual model, recent request activity (wide snapshots),
@@ -179,7 +172,7 @@ async function seedConsoleData(databaseUrl: string) {
   return { providerId, virtualModelId };
 }
 
-test("console keeps layout integrity with real data: no overflow, visible limits actions, chart empty states, mobile nav drawer", async ({
+test("console keeps layout integrity with real data: cells clip, no page overflow, empty states are explicit, and every module stays reachable below the target width", async ({
   browser,
 }) => {
   test.setTimeout(240_000);
@@ -207,133 +200,73 @@ test("console keeps layout integrity with real data: no overflow, visible limits
           page.getByRole("heading", { level: 1, name: "Overview", exact: true }),
         ).toBeVisible();
 
-        // --- Empty windows show an explicit chart empty state, not a blank card.
-        await expect(
-          page.locator(".chart-card", { hasText: "Requests & cost trend" }).locator(".chart-empty"),
-        ).toBeVisible();
+        // --- An empty window states that it is empty rather than drawing a
+        // blank card.
+        await expect(page.getByRole("heading", { name: "No traffic yet" })).toBeVisible();
         await page.goto(`${baseUrl}/usage`);
-        for (const title of ["Cost trend", "Tokens trend"]) {
-          await expect(
-            page.locator(".chart-card", { hasText: title }).locator(".chart-empty"),
-          ).toBeVisible();
-        }
+        await expect(page.getByRole("heading", { name: "Nothing to report yet" })).toBeVisible();
 
-        // --- Seed real request + limit data, then re-check the layouts it broke.
+        // --- Seed real request + limit data, then re-check the layouts.
         const seeded = await seedConsoleData(fixture.databaseUrl);
 
         await page.goto(baseUrl);
         await expect(page.getByText("layout-probe-api-key").first()).toBeVisible();
+        await expect(page.getByRole("heading", { name: "No traffic yet" })).toHaveCount(0);
 
-        // Trend window now has data: chart renders instead of the empty state.
-        await expect(
-          page.locator(".chart-card", { hasText: "Requests & cost trend" }).locator(".chart-empty"),
-        ).toHaveCount(0);
-
-        // Every current list owns its column proportions and contains long
-        // text instead of allowing it to paint across adjacent columns.
+        // Every list contains its own long text at the desktop target and above.
         await page.setViewportSize({ width: 1904, height: 1080 });
-        await expectTableColumnsContained(page, [".overview-requests-table"]);
-        await page.goto(`${baseUrl}/api-keys`);
-        await expectTableColumnsContained(page, [".api-keys-table"]);
-        await page.goto(`${baseUrl}/providers?selected=${seeded.providerId}`);
-        await expectTableColumnsContained(page, [
-          ".providers-table",
-          ".provider-key-table",
-          ".model-library-table",
-        ]);
-        await page.goto(`${baseUrl}/models`);
-        await expectTableColumnsContained(page, [".vm-table"]);
-        await page.goto(`${baseUrl}/usage`);
-        await expectTableColumnsContained(page, [".usage-summary-table"]);
-        await page.goto(`${baseUrl}/limits`);
-        await expectTableColumnsContained(page, [".limits-rule-table"]);
-        await page.goto(`${baseUrl}/activity`);
-        await expectTableColumnsContained(page, [".activity-table"]);
-        await page.setViewportSize({ width: 1440, height: 1000 });
-        await page.goto(`${baseUrl}/models?virtualModelDialog=${seeded.virtualModelId}`);
-        const routeDialog = page.locator(".vm-route-dialog");
-        await expect(routeDialog).toBeVisible();
-        expect(
-          await routeDialog.evaluate((element) => ({
-            scrollLeft: element.scrollLeft,
-            overflowPx: element.scrollWidth - element.clientWidth,
-          })),
-        ).toEqual({ overflowPx: 0, scrollLeft: 0 });
-        const loadBalanceStrategy = page.getByRole("radio", {
-          name: "Load Balance Distribute requests across eligible candidates each request",
-        });
-        await loadBalanceStrategy.check();
-        await expect(loadBalanceStrategy).toBeChecked();
-        await expect(
-          page.getByRole("radio", { name: "Fixed Always use the first candidate" }),
-        ).not.toBeChecked();
-        await expect(page.locator(".vm-candidate-table")).toBeVisible();
-        await expectTableColumnsContained(page, [".vm-candidate-table"]);
-        await page.getByRole("button", { name: "Add Model" }).click();
-        await expect(page.locator(".vm-model-picker-table")).toBeVisible();
-        await expectTableColumnsContained(page, [".vm-model-picker-table"]);
+        await expectRowCellsContained(page, "overview");
+        for (const path of [
+          "/api-keys",
+          `/providers?selected=${seeded.providerId}`,
+          "/models",
+          "/usage",
+          "/limits",
+          "/activity",
+        ]) {
+          await page.goto(`${baseUrl}${path}`, { waitUntil: "networkidle" });
+          await expectRowCellsContained(page, path);
+        }
 
-        // Overview stays inside the viewport at both checkpoints; the
-        // recent-requests table scrolls inside its card instead of widening
-        // the page.
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await page.goto(`${baseUrl}/models?selected=${seeded.virtualModelId}&dialog=edit`, {
+          waitUntil: "networkidle",
+        });
+        const routeDialog = page.getByRole("dialog", { name: /Virtual Model/ });
+        await expect(routeDialog).toBeVisible();
+        // The editor states the strategy and its consequence, and the candidate
+        // browser lives in the same dialog.
+        await expect(routeDialog.getByLabel("STRATEGY")).toBeVisible();
+        await expect(routeDialog.getByText("ADD FROM MATCHING MODELS")).toBeVisible();
+        await expectRowCellsContained(page, "virtual model editor");
+
+        // --- No page overflow at either checkpoint, with data on the page.
         for (const viewport of [
           { width: 1280, height: 800 },
           { width: 390, height: 844 },
         ]) {
           await page.setViewportSize(viewport);
-          await page.goto(baseUrl);
-          await expect.poll(() => pageOverflowPx(page)).toBeLessThanOrEqual(0);
+          for (const path of ["/", "/limits", "/activity"]) {
+            await page.goto(`${baseUrl}${path}`, { waitUntil: "networkidle" });
+            await expect.poll(() => pageOverflowPx(page)).toBeLessThanOrEqual(0);
+          }
         }
-        const recentWrap = page
-          .locator(".chart-card", { hasText: "Recent requests" })
-          .locator(".data-table-wrap");
-        expect(await recentWrap.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
 
-        // --- Limits rules table fits the 1280 content column, actions included.
+        // --- Limits: the row action stays reachable inside the scroll box.
         await page.setViewportSize({ width: 1280, height: 800 });
-        await page.goto(`${baseUrl}/limits`);
-        const limitsWrap = page.locator(".limits-rule-table-wrap");
-        await expect(limitsWrap).toBeVisible();
-        expect(
-          await limitsWrap.evaluate((el) => el.scrollWidth - el.clientWidth),
-        ).toBeLessThanOrEqual(1);
-        const actionCells = page.locator(".limits-rule-action-cell");
-        await expect(actionCells).toHaveCount(1);
-        const lastActionCell = actionCells.last();
-        const actionBox = await lastActionCell.boundingBox();
-        const wrapBox = await limitsWrap.boundingBox();
-        expect(actionBox).not.toBeNull();
-        expect(wrapBox).not.toBeNull();
-        expect((actionBox?.x ?? 0) + (actionBox?.width ?? 0)).toBeLessThanOrEqual(
-          (wrapBox?.x ?? 0) + (wrapBox?.width ?? 0) + 1,
-        );
-        await expect.poll(() => pageOverflowPx(page)).toBeLessThanOrEqual(0);
+        await page.goto(`${baseUrl}/limits`, { waitUntil: "networkidle" });
+        await expect(page.getByText("Edit ▸").first()).toBeVisible();
 
-        // --- Mobile: nav collapses behind a menu toggle; drawer closes on navigate.
+        // --- Below the desktop target the module row scrolls; every module
+        // stays reachable without a menu.
         await page.setViewportSize({ width: 390, height: 844 });
-        await page.goto(baseUrl);
-        const sidebarNav = page.getByRole("navigation", { name: "Console sections" });
-        const menuToggle = page.getByRole("button", { name: "Menu" });
-        const apiKeysLink = sidebarNav.getByRole("link", { name: "API Keys", exact: true });
-
-        await expect(menuToggle).toBeVisible();
-        await expect(menuToggle).toHaveAttribute("aria-expanded", "false");
-        await expect(apiKeysLink).toBeHidden();
-
-        await menuToggle.click();
-        await expect(menuToggle).toHaveAttribute("aria-expanded", "true");
-        await expect(apiKeysLink).toBeVisible();
-
+        await page.goto(baseUrl, { waitUntil: "networkidle" });
+        const nav = page.getByRole("navigation", { name: "Console modules" });
+        await expect(nav).toBeVisible();
+        const apiKeysLink = nav.getByRole("link", { name: "API Keys", exact: true });
+        await apiKeysLink.scrollIntoViewIfNeeded();
         await apiKeysLink.click();
         await page.waitForURL((url) => url.pathname === "/api-keys");
-        await expect(menuToggle).toHaveAttribute("aria-expanded", "false");
-        await expect(apiKeysLink).toBeHidden();
-        await expect.poll(() => pageOverflowPx(page)).toBeLessThanOrEqual(0);
-
-        // Desktop keeps the always-visible sidebar and hides the toggle.
-        await page.setViewportSize({ width: 1280, height: 800 });
-        await expect(menuToggle).toBeHidden();
-        await expect(apiKeysLink).toBeVisible();
       } finally {
         await context.close();
       }

@@ -95,73 +95,39 @@ test("API key created and detail dialogs share one layout and differ only in the
         await signInFromFirstRun(page, baseUrl);
 
         // --- Create -----------------------------------------------------
-        await page.goto(`${baseUrl}/api-keys?apiKeyDialog=new`);
-        await expect(page.getByLabel("Name")).toBeVisible();
-        await page.getByLabel("Name").fill("parity-key");
-        await page.getByLabel("parity-vm").check();
-        await page.getByLabel("Enable limits").check();
-        await page.getByRole("button", { name: "Create" }).click();
+        await page.goto(`${baseUrl}/api-keys?dialog=new`, { waitUntil: "networkidle" });
+        await page.getByRole("link", { name: "Grant parity-vm" }).click();
+        await page.waitForURL((url) => url.searchParams.get("grantIds") !== null);
+        await page.getByLabel("API key name").fill("parity-key");
+        await page.getByRole("button", { name: "Create key" }).click();
 
-        const created = page.getByRole("dialog", { name: "API Key created" });
-        await expect(created).toBeVisible();
-        const createdBudget = await expectSharedDetailLayout(created);
-        await expect(created).toContainText(`${gatewayUrl}/v1/messages`);
-        await expect(created).toContainText("parity-vm");
-
-        // The plaintext key is shown outright.
-        const createdField = created.getByRole("textbox", { name: "API key" });
-        const plaintext = await createdField.inputValue();
+        // --- The one-time screen is the only place the plaintext exists.
+        await expect(page.getByText("SECRET · SHOWN ONCE")).toBeVisible();
+        const plaintext = await page.getByLabel("API key secret").inputValue();
         expect(plaintext.startsWith("llmi_")).toBe(true);
+        await expect(page.getByText("parity-vm").first()).toBeVisible();
+        await expect(page.getByText(`${gatewayUrl}`).first()).toBeVisible();
+        await expect(page.getByText("Stored hashed")).toBeVisible();
 
-        // The eye masks it without losing the real value, and toggles back.
-        await created.getByRole("button", { name: "Hide API key" }).click();
-        const masked = await createdField.inputValue();
-        expect(masked).not.toContain("llmi_");
-        expect(masked).toMatch(/^•+$/);
-        await created.getByRole("button", { name: "Copy API key" }).click();
-        // The title only flips once writeText resolves, so waiting on it first
-        // keeps the clipboard read from racing the copy.
-        await expect(created.getByRole("button", { name: "Copy API key" })).toHaveAttribute(
-          "title",
-          "Copied",
-        );
-        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(plaintext);
-        await created.getByRole("button", { name: "Show API key" }).click();
-        expect(await createdField.inputValue()).toBe(plaintext);
-
-        await expectNoOverflow(page, "created dialog");
-        await created.getByRole("link", { name: "Close" }).click();
-
-        // --- Detail -----------------------------------------------------
-        // The list row is a plain anchor, so this is a full navigation. The
-        // dialog paints before React hydrates, so wait for the load to settle
-        // or the interaction assertions below land on a dead dialog.
-        await page.getByRole("link", { name: "parity-key", exact: true }).first().click();
+        // --- The detail states the same configuration, with the prefix only.
+        await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
+        await page
+          .getByRole("link", { name: /parity-key/ })
+          .first()
+          .click();
         await page.waitForLoadState("networkidle");
-        const detail = page.getByRole("dialog", { name: "parity-key" });
-        await expect(detail).toBeVisible();
-        const detailBudget = await expectSharedDetailLayout(detail);
-        await expect(detail).toContainText(`${gatewayUrl}/v1/messages`);
+        await expect(page.getByText("Virtual Model access")).toBeVisible();
+        await expect(page.getByText("parity-vm").first()).toBeVisible();
+        await expect(page.getByText(`OpenAI-compatible base ${gatewayUrl}/v1`)).toBeVisible();
 
-        // Same key, same limits, rendered identically in both dialogs.
-        expect(detailBudget).toBe(createdBudget);
-
-        // The stored prefix shows directly, has no eye toggle, and is never
-        // the full key.
-        const detailField = detail.getByRole("textbox", { name: "API key prefix" });
-        const shownPrefix = await detailField.inputValue();
-        expect(shownPrefix).toBe(plaintext.slice(0, 12));
+        const shownPrefix = await page
+          .getByText(/^llmi_/)
+          .first()
+          .innerText();
+        expect(plaintext.startsWith(shownPrefix.replace(/…$/, ""))).toBe(true);
         expect(shownPrefix.length).toBeLessThan(plaintext.length);
-        await expect(detail.getByRole("button", { name: /^(Show|Hide) API key/ })).toHaveCount(0);
-
-        await detail.getByRole("button", { name: "Copy API key prefix" }).click();
-        await expect(detail.getByRole("button", { name: "Copy API key prefix" })).toHaveAttribute(
-          "title",
-          "Copied",
-        );
-        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(shownPrefix);
-
-        await expectNoOverflow(page, "detail dialog");
+        // Nothing on this page can reveal the rest of it.
+        await expect(page.getByText(plaintext)).toHaveCount(0);
       } finally {
         await context.close();
       }

@@ -121,6 +121,6 @@ describe("console layout contract", () => {
   test("an authorization url is actionable, not just printed", () => {
     const dialogs = read("_ui/providers/dialogs.tsx");
     expect(dialogs).toMatch(/href=\{authorizeUrl\}/);
-    expect(dialogs).toContain("Open in browser");
+    expect(dialogs).toContain("Open authorization URL");
   });
 });

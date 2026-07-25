@@ -3,6 +3,7 @@ import type { ConsoleProviderHealthSummary } from "@llmingress/db/console-provid
 import type { ProviderApiKeyMetadata } from "@llmingress/db/console-provider-keys";
 import type { ConsoleProvider } from "@llmingress/db/console-providers";
 import type { ProviderOAuthMetadata } from "@llmingress/db/providers";
+import { endpointPathByProtocol } from "../api-keys/integration-guide";
 import { aggregateProviderConnectionHealthStatus } from "../provider-health";
 
 /**
@@ -153,8 +154,12 @@ export function describeProviderCapabilities(providerKey: string): {
   if (!entry) {
     return { endpoints: [], quotaNote: "quota probe: unknown template" };
   }
-  const endpoints = Object.entries(entry.endpoints ?? {}).map(([protocol, endpoint]) => ({
-    path: `${endpoint.method} ${endpoint.path}`,
+  // The chip states the route a client calls on the gateway, not the provider's
+  // own relative path — that is what a virtual model has to match.
+  const endpoints = Object.keys(entry.endpoints ?? {}).map((protocol) => ({
+    path: `POST ${
+      endpointPathByProtocol[protocol as keyof typeof endpointPathByProtocol] ?? `/v1/${protocol}`
+    }`,
     protocol,
   }));
   const quota = entry.behavior?.quotaSource;
@@ -169,4 +174,72 @@ export function describeProviderCapabilities(providerKey: string): {
 /** Subscription plans are not metered — their requests carry no cost at all. */
 export function providerIsMetered(provider: ConsoleProvider): boolean {
   return provider.providerType === "api_key";
+}
+
+/**
+ * Everything the Add Provider dialog can create. Most providers are templates,
+ * but OpenAI and Anthropic are registered as direct entries with a fixed base
+ * url — they belong in the same picker, or they cannot be added at all.
+ */
+export type AddProviderChoice = {
+  baseUrl: string;
+  displayName: string;
+  id: string;
+  mode: "direct" | "template";
+  providerKey: string;
+  providerType: string;
+};
+
+export type AddProviderGroup = {
+  id: string;
+  label: string;
+  items: AddProviderChoice[];
+};
+
+export function listAddProviderGroups(
+  templateGroups: ReadonlyArray<{
+    id: string;
+    label: string;
+    templates: ReadonlyArray<{
+      displayName: string;
+      fixedBaseUrl?: string;
+      id: string;
+      providerKey: string;
+      providerType: string;
+    }>;
+  }>,
+  directEntries: ReadonlyArray<{
+    creation: { fixedBaseUrl?: string } | Record<string, unknown>;
+    displayName: string;
+    providerKey: string;
+    providerType: string;
+  }>,
+): AddProviderGroup[] {
+  return templateGroups.map((group) => ({
+    id: group.id,
+    items: [
+      ...group.templates.map((template) => ({
+        baseUrl: template.fixedBaseUrl ?? "",
+        displayName: template.displayName,
+        id: template.id,
+        mode: "template" as const,
+        providerKey: template.providerKey,
+        providerType: template.providerType,
+      })),
+      ...(group.id === "remote_api_key"
+        ? directEntries.map((entry) => ({
+            baseUrl:
+              typeof (entry.creation as { fixedBaseUrl?: string }).fixedBaseUrl === "string"
+                ? ((entry.creation as { fixedBaseUrl?: string }).fixedBaseUrl ?? "")
+                : "",
+            displayName: entry.displayName,
+            id: entry.providerKey,
+            mode: "direct" as const,
+            providerKey: entry.providerKey,
+            providerType: entry.providerType,
+          }))
+        : []),
+    ].sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    label: group.label,
+  }));
 }

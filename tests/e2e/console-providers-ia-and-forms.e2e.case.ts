@@ -274,22 +274,19 @@ test("provider create dialog shows registry-derived supported endpoints", async 
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?dialog=new`, { waitUntil: "networkidle" });
+        // OpenAI serves chat completions and responses, never messages.
+        const openai = await readTemplate(page, baseUrl, "API Keys", "OpenAI");
+        expect(openai.endpoints).toEqual(["chat_completions", "responses"]);
+        expect(openai.endpoints).not.toContain("messages");
 
+        // The Claude Code subscription serves messages only.
+        const claudeCode = await readTemplate(page, baseUrl, "Subscription", "Claude Code");
+        expect(claudeCode.endpoints).toEqual(["messages"]);
+
+        // The chip states the protocol and the path it maps to, so a route can
+        // be checked against the provider without leaving the dialog.
         const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-        // OpenAI is the default direct choice: Chat Completions + Responses, never Messages.
-        await expect(endpointChips).toHaveText(["Chat Completions", "Responses"]);
-        await expect(endpointChips.filter({ hasText: "Messages" })).toHaveCount(0);
-
-        // Switch to the Claude Code subscription template: Messages only.
-        await dialog.getByRole("tab", { name: "Subscription" }).click();
-        await dialog
-          .getByLabel("Provider type", { exact: true })
-          .selectOption({ label: "Claude Code" });
-        await expect(endpointChips).toHaveText(["Messages"]);
+        await expect(dialog.getByText("POST /v1/messages")).toBeVisible();
 
         for (const viewport of [
           { width: 1280, height: 900 },

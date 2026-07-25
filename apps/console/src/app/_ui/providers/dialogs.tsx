@@ -1,7 +1,5 @@
-import type {
-  ProviderTemplateSelectorGroup,
-  ProviderTemplateSelectorItem,
-} from "@llmingress/db/console-provider-templates";
+import { listDirectCreateEntries } from "@llmingress/config/provider-registry";
+import type { ProviderTemplateSelectorGroup } from "@llmingress/db/console-provider-templates";
 import type { ConsoleProvider } from "@llmingress/db/console-providers";
 import type { ConsoleUsageSummary } from "@llmingress/db/console-usage";
 import Link from "next/link";
@@ -12,7 +10,12 @@ import { DetailRow } from "../layout";
 import { Dialog, DialogActions, DialogBody, DialogImpact, DialogNote } from "../overlay";
 import { buildHref, readParam, type SearchParams } from "../params";
 import { DeviceCodePoller } from "./device-poller";
-import { describeProviderCapabilities, type ProviderConnection, providerIsMetered } from "./model";
+import {
+  describeProviderCapabilities,
+  listAddProviderGroups,
+  type ProviderConnection,
+  providerIsMetered,
+} from "./model";
 
 export function ProviderDialogs({
   connections,
@@ -130,9 +133,10 @@ function AddProviderDialog({
   groups: ProviderTemplateSelectorGroup[];
   params: SearchParams;
 }) {
+  const choiceGroups = listAddProviderGroups(groups, listDirectCreateEntries());
   const activeGroupId = readParam(params, "dialogTab") ?? "remote_api_key";
-  const group = groups.find((entry) => entry.id === activeGroupId) ?? groups[0];
-  const templates: ProviderTemplateSelectorItem[] = group?.templates ?? [];
+  const group = choiceGroups.find((entry) => entry.id === activeGroupId) ?? choiceGroups[0];
+  const templates = group?.items ?? [];
   const selectedId = readParam(params, "template") ?? templates[0]?.id;
   const template = templates.find((entry) => entry.id === selectedId) ?? templates[0];
 
@@ -143,7 +147,7 @@ function AddProviderDialog({
         aria-label="Provider template groups"
         className="mt-4 flex border-b border-hair"
       >
-        {groups.map((entry) => (
+        {choiceGroups.map((entry) => (
           <Link
             key={entry.id}
             role="tab"
@@ -161,7 +165,7 @@ function AddProviderDialog({
           >
             {entry.label}
             <span aria-hidden="true" className="font-mono text-12 text-faint">
-              {entry.templates.length}
+              {entry.items.length}
             </span>
           </Link>
         ))}
@@ -199,8 +203,21 @@ function AddProviderDialog({
 
       {template ? (
         <form action="/api/providers" method="post">
-          <input type="hidden" name="action" value="createFromTemplate" />
-          <input type="hidden" name="templateId" value={template.id} />
+          {/* OpenAI and Anthropic are registered directly rather than as
+              templates, so they are created by provider key instead. */}
+          <input
+            type="hidden"
+            name="action"
+            value={template.mode === "direct" ? "create" : "createFromTemplate"}
+          />
+          {template.mode === "direct" ? (
+            <>
+              <input type="hidden" name="providerKey" value={template.providerKey} />
+              <input type="hidden" name="providerType" value={template.providerType} />
+            </>
+          ) : (
+            <input type="hidden" name="templateId" value={template.id} />
+          )}
           <div className="mt-[18px] grid grid-cols-2 gap-3">
             <Field label="DISPLAY NAME">
               <TextInput
@@ -216,8 +233,7 @@ function AddProviderDialog({
                 key={`${template.id}-base`}
                 aria-label="Provider base URL"
                 name="baseUrl"
-                defaultValue={template.fixedBaseUrl ?? ""}
-                placeholder={template.baseUrlPlaceholder ?? ""}
+                defaultValue={template.baseUrl}
               />
             </Field>
           </div>

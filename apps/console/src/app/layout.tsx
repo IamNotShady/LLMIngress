@@ -1,19 +1,22 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { DM_Mono, Open_Sans } from "next/font/google";
 import type { ReactNode } from "react";
+import { THEME_BOOTSTRAP_SCRIPT } from "./_ui/theme";
 
-const sans = Geist({
+const sans = Open_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
-  variable: "--font-geist-sans",
+  variable: "--font-open-sans",
   display: "swap",
 });
 
-const mono = Geist_Mono({
+// DM Mono ships no weight above 500; asking for 600 makes the browser
+// synthesise a fake bold, so 500 is the ceiling everywhere in this console.
+const mono = DM_Mono({
   subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-geist-mono",
+  weight: ["300", "400", "500"],
+  variable: "--font-dm-mono",
   display: "swap",
 });
 
@@ -27,7 +30,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" data-theme="dark" className={`${sans.variable} ${mono.variable}`}>
+    <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Stamps data-theme before first paint so a stored preference never flashes. */}
+        <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: the theme bootstrap must run before paint
+          dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   );

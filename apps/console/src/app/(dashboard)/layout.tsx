@@ -1,12 +1,14 @@
-import { gatewayPublicBaseUrl } from "@llmingress/config";
+import { gatewayPublicBaseUrl, loadBootstrapRuntimeConfig } from "@llmingress/config";
+import { countConsoleActivities } from "@llmingress/db/console-activity";
 import { readConsoleAuthState, sessionCookieName } from "@llmingress/db/console-auth";
 import { listConsoleProviderHealthSummaries } from "@llmingress/db/console-provider-health";
+import { getConsoleRuntimeStatus } from "@llmingress/db/console-runtime-status";
+import { loadEncryptionKey } from "@llmingress/security/encryption-key";
 import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 import { FirstRunSetup, Login } from "../_components/auth-screens";
-import { Sidebar } from "../_components/sidebar";
-import { Topbar } from "../_components/topbar";
-import { countProviderAggregateHealthStatuses } from "../_lib/provider-health";
+import { ConsoleFooter } from "../_ui/footer";
+import { Masthead } from "../_ui/masthead";
 
 // Auth guard + persistent shell for every console module. When the console is
 // not initialized or the visitor is signed out, the matching auth screen is
@@ -22,26 +24,41 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     return <Login />;
   }
 
-  const providerHealthSummaries = await listConsoleProviderHealthSummaries();
-  const providerHealthCounts = countProviderAggregateHealthStatuses(providerHealthSummaries);
+  const [healthSummaries, failedRequestCount, runtime] = await Promise.all([
+    listConsoleProviderHealthSummaries(),
+    countConsoleActivities({
+      filters: { status: "failed", from: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    }),
+    getConsoleRuntimeStatus(),
+  ]);
 
   return (
-    <div className="app-shell">
-      <Sidebar
-        gatewayUrlLabel={formatRuntimeAddress(getGatewayBaseUrl())}
-        providerHealthyCount={providerHealthCounts.healthy}
-        providerUnhealthyCount={providerHealthCounts.unhealthy}
+    <div className="min-h-screen bg-bg pb-[42px] text-ink">
+      <Masthead
+        gatewayAddress={formatRuntimeAddress(gatewayPublicBaseUrl())}
+        unhealthyConnectionCount={
+          // provider_health_summary only stores rows that are not healthy.
+          healthSummaries.filter((summary) => summary.status === "unhealthy").length
+        }
+        failedRequestCount={failedRequestCount}
       />
-      <div className="app-main">
-        <Topbar />
-        {children}
-      </div>
+      {children}
+      <ConsoleFooter
+        encryptionReady={isEncryptionReady()}
+        runtime={runtime}
+        version={process.env.LLMINGRESS_VERSION?.trim() || "dev"}
+      />
     </div>
   );
 }
 
-function getGatewayBaseUrl(): string {
-  return gatewayPublicBaseUrl();
+function isEncryptionReady(): boolean {
+  try {
+    loadEncryptionKey(loadBootstrapRuntimeConfig().encryptionKeySource);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function formatRuntimeAddress(value: string): string {

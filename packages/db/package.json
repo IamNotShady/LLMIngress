@@ -100,6 +100,10 @@
       "types": "./src/console-route-policies.ts",
       "default": "./src/console-route-policies.ts"
     },
+    "./console-runtime-status": {
+      "types": "./src/console-runtime-status.ts",
+      "default": "./src/console-runtime-status.ts"
+    },
     "./console-usage": {
       "types": "./src/console-usage.ts",
       "default": "./src/console-usage.ts"

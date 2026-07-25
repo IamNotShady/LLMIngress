@@ -38,6 +38,24 @@ export function formatRelative(value: Date | null | undefined, now: Date = new D
   return `${Math.floor(seconds / 86_400)}d ago`;
 }
 
+/** "in 6d" / "in 4h" — the mirror of formatRelative for a moment still ahead. */
+export function formatUntil(value: Date | null | undefined, now: Date = new Date()): string {
+  if (!value) {
+    return "—";
+  }
+  const seconds = Math.max(0, Math.round((value.getTime() - now.getTime()) / 1000));
+  if (seconds < 60) {
+    return "in under a minute";
+  }
+  if (seconds < 3600) {
+    return `in ${Math.floor(seconds / 60)}m`;
+  }
+  if (seconds < 86_400) {
+    return `in ${Math.floor(seconds / 3600)}h`;
+  }
+  return `in ${Math.floor(seconds / 86_400)}d`;
+}
+
 export function formatCount(value: number): string {
   return value.toLocaleString("en-US");
 }

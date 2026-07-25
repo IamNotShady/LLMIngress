@@ -31,6 +31,8 @@ export type ApiKeyLimitFormInput = {
   budgetPeriod?: string | null;
   budgetUsd?: string | number | null;
   concurrency?: string | number | null;
+  /** One policy per key: the Limits drawer offers a single control for it. */
+  enforcementPolicy?: string | null;
   rpm?: string | number | null;
   tokenLimit?: string | number | null;
   tpm?: string | number | null;
@@ -118,10 +120,11 @@ export function normalizeApiKeyLimitRulesInput(
   input: Omit<ApiKeyLimitFormInput, "apiKeyId">,
 ): ApiKeyLimitRuleInput[] {
   const budgetPeriod = normalizeBudgetPeriod(input.budgetPeriod);
+  const enforcementPolicy = normalizeEnforcementPolicy(input.enforcementPolicy);
 
   return [
     {
-      enforcementPolicy: "block",
+      enforcementPolicy,
       limitType: "budget",
       limitValue: normalizePositiveNumber(input.budgetUsd, "Budget USD limit"),
       manualBypass: false,
@@ -129,7 +132,7 @@ export function normalizeApiKeyLimitRulesInput(
       unit: "usd",
     },
     {
-      enforcementPolicy: "block",
+      enforcementPolicy,
       limitType: "rpm",
       limitValue: normalizePositiveNumber(input.rpm, "RPM limit"),
       manualBypass: false,
@@ -137,7 +140,7 @@ export function normalizeApiKeyLimitRulesInput(
       unit: "requests",
     },
     {
-      enforcementPolicy: "block",
+      enforcementPolicy,
       limitType: "tpm",
       limitValue: normalizePositiveNumber(input.tpm, "TPM limit"),
       manualBypass: false,
@@ -145,7 +148,7 @@ export function normalizeApiKeyLimitRulesInput(
       unit: "tokens",
     },
     {
-      enforcementPolicy: "block",
+      enforcementPolicy,
       limitType: "concurrency",
       limitValue: normalizePositiveNumber(
         input.concurrency ?? defaultApiKeyLimitFormValues.concurrency,
@@ -156,7 +159,7 @@ export function normalizeApiKeyLimitRulesInput(
       unit: "requests",
     },
     {
-      enforcementPolicy: "block",
+      enforcementPolicy,
       limitType: "token",
       limitValue: normalizePositiveNumber(input.tokenLimit, "Token limit"),
       manualBypass: false,
@@ -164,6 +167,20 @@ export function normalizeApiKeyLimitRulesInput(
       unit: "tokens",
     },
   ];
+}
+
+function normalizeEnforcementPolicy(
+  value: string | null | undefined,
+): ApiKeyLimitEnforcementPolicy {
+  const normalized = (value ?? "block").trim();
+  if (normalized === "block" || normalized === "warn_only") {
+    return normalized;
+  }
+  throw consoleValidationError(
+    "Limit enforcement must be block or warn_only.",
+    "api_key_limit_enforcement_invalid",
+    { field: "enforcementPolicy" },
+  );
 }
 
 export function formatApiKeyLimitSummaries(

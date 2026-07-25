@@ -682,3 +682,25 @@ function requireApiKeyVirtualModelAccess(
   }
   return access;
 }
+
+/**
+ * Switch enforcement off without touching the stored rules. Disabling limits and
+ * deleting them are different operations: only the second loses configuration.
+ */
+export async function setApiKeyLimitsEnabled(input: {
+  databaseUrl?: string;
+  enabled: boolean;
+  id: string;
+}): Promise<void> {
+  await withPooledPostgresClient(input.databaseUrl, async (client) => {
+    const result = await client.query(
+      `update api_keys
+         set limits_enabled = $2, updated_at = now()
+       where id = $1::uuid and deleted_at is null`,
+      [input.id, input.enabled],
+    );
+    if (result.rowCount === 0) {
+      throw consoleNotFoundError("API key not found.", "api_key_not_found");
+    }
+  });
+}

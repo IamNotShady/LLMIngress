@@ -38,9 +38,7 @@ test("empty dashboard views render the shared EmptyState with no overflow", asyn
         await expect(page.getByRole("heading", { name: "No providers yet" })).toBeVisible();
         // The empty state says what a provider is for and offers the way in.
         await expect(page.getByText("A provider is where requests actually go")).toBeVisible();
-        await expect(
-          page.getByRole("link", { name: "+ Add Provider" }).first(),
-        ).toBeVisible();
+        await expect(page.getByRole("link", { name: "+ Add Provider" }).first()).toBeVisible();
 
         await page.goto(`${baseUrl}/models`);
         await expect(page.getByRole("heading", { name: "No virtual models yet" })).toBeVisible();

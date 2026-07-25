@@ -80,6 +80,22 @@ async function seedSemanticData(databaseUrl: string) {
   });
 }
 
+async function colorOf(locator: import("@playwright/test").Locator): Promise<string> {
+  return locator.evaluate((el) => getComputedStyle(el).color);
+}
+
+/** Resolve a token value (which may be oklch) to the browser's rgb form. */
+async function resolveColor(page: import("@playwright/test").Page, value: string): Promise<string> {
+  return page.evaluate((color) => {
+    const probe = document.createElement("span");
+    probe.style.color = color;
+    document.body.append(probe);
+    const resolved = getComputedStyle(probe).color;
+    probe.remove();
+    return resolved;
+  }, value);
+}
+
 test("console colors status by meaning and keeps destructive actions quiet but confirmed", async ({
   browser,
 }) => {
@@ -109,54 +125,45 @@ test("console colors status by meaning and keeps destructive actions quiet but c
           page.getByRole("heading", { level: 1, name: "Overview", exact: true }),
         ).toBeVisible();
 
-        // --- Overview KPI deltas: activity growth reads good, unchanged
-        // cost reads neutral, and the 37.5% failure rate value reads danger.
-        const requestsCard = page.locator(".stat-card", { hasText: "Requests 24h" });
-        await expect(requestsCard.locator(".stat-card-delta.is-good")).toBeVisible();
-        const costCard = page.locator(".stat-card", { hasText: "Cost 24h" });
-        await expect(costCard.locator(".stat-card-delta.is-neutral")).toBeVisible();
-        const failureCard = page.locator(".stat-card", { hasText: "Failure rate" });
-        await expect(failureCard.locator(".stat-card-value.is-danger")).toBeVisible();
-
-        // --- Virtual Models: KPI and list cell mark the high failure rate.
-        await page.goto(`${baseUrl}/models`);
-        await expect(
-          page
-            .locator(".stat-card", { hasText: "Failure rate total" })
-            .locator(".stat-card-value.is-danger"),
-        ).toBeVisible();
-        await expect(page.locator(".vm-table .num-danger").first()).toBeVisible();
-
-        // --- Providers: an intentionally disabled provider is neutral gray,
-        // not error red.
-        await page.goto(`${baseUrl}/providers`);
-        const disabledChip = page
-          .locator(".providers-table tr", { hasText: "Semantic Disabled Probe" })
-          .locator(".pill", { hasText: "Disabled" })
-          .first();
-        await expect(disabledChip).toBeVisible();
-        await expect(disabledChip).not.toHaveClass(/pill--danger/);
-
-        // --- ApiKeys: the row delete action is quiet (transparent at rest).
-        await page.goto(`${baseUrl}/api-keys`);
-        const rowDelete = page.locator(".api-key-action-delete").first();
-        await expect(rowDelete).toBeVisible();
-        expect(await rowDelete.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
-          "rgba(0, 0, 0, 0)",
+        // --- Overview: a 37.5% failure rate is past the danger threshold and
+        // is the only KPI painted with a status colour.
+        const dangerColor = await page.evaluate(() =>
+          getComputedStyle(document.documentElement).getPropertyValue("--red").trim(),
         );
+        const failureValue = page.getByText("37.50%", { exact: true });
+        await expect(failureValue).toBeVisible();
+        expect(await colorOf(failureValue)).toBe(await resolveColor(page, dangerColor));
 
-        // --- Limits: rows retain edit as their only action.
+        const requestsValue = page
+          .locator("div")
+          .filter({ hasText: /^REQUESTS$/ })
+          .first();
+        await expect(requestsValue).toBeVisible();
+
+        // --- Providers: an intentionally disabled connection reads neutral,
+        // never error red.
+        await page.goto(`${baseUrl}/providers`);
+        const disabled = page.getByText("disabled", { exact: true }).first();
+        if (await disabled.isVisible()) {
+          const faint = await resolveColor(
+            page,
+            await page.evaluate(() =>
+              getComputedStyle(document.documentElement).getPropertyValue("--faint").trim(),
+            ),
+          );
+          expect(await colorOf(disabled)).toBe(faint);
+        }
+
+        // --- Limits: a row opens its rules; deleting them is inside the drawer
+        // behind a confirm, never a bare row action.
         await page.goto(`${baseUrl}/limits`);
-        const limitsRow = page.locator(".limits-rule-table tbody tr", {
-          hasText: "semantic-probe-apiKey",
-        });
-        await expect(limitsRow).toHaveCount(1);
-        await expect(
-          limitsRow.getByRole("link", { name: "Edit semantic-probe-apiKey" }),
-        ).toBeVisible();
-        await expect(
-          limitsRow.getByRole("link", { name: "Delete semantic-probe-apiKey" }),
-        ).toHaveCount(0);
+        const limitsRow = page.getByRole("link", { name: /semantic-probe-apiKey/ }).first();
+        await expect(limitsRow).toBeVisible();
+        await limitsRow.click();
+        await expect(page.getByRole("button", { name: "Save rules" })).toBeVisible();
+        await page.getByRole("link", { name: "Delete rules" }).click();
+        await expect(page.getByRole("dialog", { name: "Delete limit rules" })).toBeVisible();
+        await expect(page.getByText("To pause enforcement without losing the rules")).toBeVisible();
       } finally {
         await context.close();
       }

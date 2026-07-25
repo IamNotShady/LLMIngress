@@ -9,13 +9,7 @@ import { listVirtualModels } from "@llmingress/db/console-virtual-models";
 import { ActivityDrawer } from "../../_ui/activity/drawer";
 import { ACTIVITY_WINDOWS, activityStatusTone, readActivityWindow } from "../../_ui/activity/model";
 import { ActionLink, filterControlClass } from "../../_ui/controls";
-import {
-  formatClock,
-  formatCompact,
-  formatCost,
-  formatCount,
-  formatLatency,
-} from "../../_ui/format";
+import { formatClock, formatCost, formatCount, formatLatency } from "../../_ui/format";
 import { EmptyState, PageShell, PageTitleRow } from "../../_ui/layout";
 import { buildHref, readIntParam, readParam, type SearchParams } from "../../_ui/params";
 import { formatRange, GridRow, Pagination } from "../../_ui/table";
@@ -233,11 +227,13 @@ export default async function ActivityPage({
                   {activity.providerModelName ? ` · ${activity.providerModelName}` : ""}
                 </span>
                 <span className="text-dim cell-clip">{activity.protocol}</span>
+                {/* One request's token counts are exact: abbreviating an
+                    individual value loses the precision the row exists for. */}
                 <span className="text-right tabnum">
-                  {activity.inputTokens === null ? "—" : formatCompact(activity.inputTokens)}
+                  {activity.inputTokens === null ? "—" : formatCount(activity.inputTokens)}
                 </span>
                 <span className="text-right tabnum">
-                  {activity.outputTokens === null ? "—" : formatCompact(activity.outputTokens)}
+                  {activity.outputTokens === null ? "—" : formatCount(activity.outputTokens)}
                 </span>
                 <span className="text-right tabnum">{formatLatency(activity.latencyMs)}</span>
                 <span className="text-right tabnum">{formatCost(activity.totalCostUsd)}</span>

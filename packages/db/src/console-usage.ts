@@ -27,11 +27,24 @@ export type ConsoleUsageDimensionBreakdown = {
 
 export type ConsoleUsageTrendPoint = {
   bucketStart: Date;
+  cachedInputTokens: number;
+  /** Requests whose status is 'failed' — canceled requests are neither. */
+  failureCount: number;
   inputTokens: number;
   outputTokens: number;
+  reasoningTokens: number;
   requestCount: number;
   totalCostUsd: string | null;
   totalTokens: number;
+};
+
+/** One route candidate's share of a virtual model's traffic in the window. */
+export type ConsoleVirtualModelCandidateTraffic = {
+  failureCount: number;
+  providerModelId: string;
+  requestCount: number;
+  /** 0–1 of the virtual model's requests in the window; 0 when it saw none. */
+  share: number;
 };
 
 export type ConsoleUsageSummary = {
@@ -92,8 +105,11 @@ type UsageDimensionBreakdownRow = {
 
 type UsageTrendRow = {
   bucket_start: Date | string;
+  cached_input_tokens: string | null;
+  failure_count: number;
   input_tokens: string | null;
   output_tokens: string | null;
+  reasoning_tokens: string | null;
   request_count: number;
   total_cost_usd: string | null;
   total_tokens: string | null;
@@ -358,8 +374,12 @@ export async function getConsoleUsageSummary(input: {
       `
           select date_trunc('${bucketUnit}', request_activity.started_at) as bucket_start,
                  count(request_activity.id)::integer as request_count,
+                 count(request_activity.id) filter (where request_activity.status = 'failed')::integer
+                   as failure_count,
                  coalesce(sum(request_usage.input_tokens), 0)::text as input_tokens,
+                 coalesce(sum(request_usage.cached_input_tokens), 0)::text as cached_input_tokens,
                  coalesce(sum(request_usage.output_tokens), 0)::text as output_tokens,
+                 coalesce(sum(request_usage.reasoning_tokens), 0)::text as reasoning_tokens,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                    as total_cost_usd
@@ -395,12 +415,31 @@ export async function getConsoleUsageSummary(input: {
   });
 }
 
+const usageWindowMs: Record<ConsoleUsageWindow, number> = {
+  "24h": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+  "30d": 30 * 24 * 60 * 60 * 1000,
+};
+
 export async function getConsolePrevious24HourKpis(
   input: { databaseUrl?: string; now?: Date } = {},
 ): Promise<ConsoleUsageKpis> {
+  return getConsolePreviousWindowKpis({ ...input, window: "24h" });
+}
+
+/**
+ * KPIs for the window immediately before the one on screen, so the Overview can
+ * show a period-over-period delta for whichever window is selected.
+ */
+export async function getConsolePreviousWindowKpis(input: {
+  databaseUrl?: string;
+  now?: Date;
+  window: ConsoleUsageWindow;
+}): Promise<ConsoleUsageKpis> {
   const now = input.now ?? new Date();
-  const end = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+  const span = usageWindowMs[input.window];
+  const end = new Date(now.getTime() - span);
+  const start = new Date(end.getTime() - span);
 
   return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<UsageSummaryRow>(
@@ -431,6 +470,51 @@ export async function getConsolePrevious24HourKpis(
       totalCostUsd: row?.total_cost_usd ?? null,
       totalTokens: readInteger(row?.total_tokens),
     };
+  });
+}
+
+/**
+ * Traffic per route candidate of one virtual model. modelBreakdowns aggregates a
+ * provider model across every virtual model that routes to it, which would
+ * overstate a candidate shared by two routes; this groups by the pair instead.
+ */
+export async function listConsoleVirtualModelCandidateTraffic(input: {
+  databaseUrl?: string;
+  now?: Date;
+  virtualModelId: string;
+  window: ConsoleUsageWindow;
+}): Promise<ConsoleVirtualModelCandidateTraffic[]> {
+  const now = input.now ?? new Date();
+  const start = new Date(now.getTime() - usageWindowMs[input.window]);
+
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
+    const result = await client.query<{
+      failure_count: number;
+      provider_model_id: string;
+      request_count: number;
+    }>(
+      `
+        select request_activity.provider_model_id::text as provider_model_id,
+               count(request_activity.id)::integer as request_count,
+               count(request_activity.id) filter (where request_activity.status = 'failed')::integer
+                 as failure_count
+        from request_activity
+        where request_activity.virtual_model_id = $1
+          and request_activity.provider_model_id is not null
+          and request_activity.started_at >= $2
+          and request_activity.started_at <= $3
+        group by request_activity.provider_model_id
+      `,
+      [input.virtualModelId, start.toISOString(), now.toISOString()],
+    );
+
+    const total = result.rows.reduce((sum, row) => sum + row.request_count, 0);
+    return result.rows.map((row) => ({
+      failureCount: row.failure_count,
+      providerModelId: row.provider_model_id,
+      requestCount: row.request_count,
+      share: total > 0 ? row.request_count / total : 0,
+    }));
   });
 }
 
@@ -469,8 +553,11 @@ function rowToConsoleUsageDimensionBreakdown(
 function rowToConsoleUsageTrendPoint(row: UsageTrendRow): ConsoleUsageTrendPoint {
   return {
     bucketStart: row.bucket_start instanceof Date ? row.bucket_start : new Date(row.bucket_start),
+    cachedInputTokens: readInteger(row.cached_input_tokens),
+    failureCount: row.failure_count,
     inputTokens: readInteger(row.input_tokens),
     outputTokens: readInteger(row.output_tokens),
+    reasoningTokens: readInteger(row.reasoning_tokens),
     requestCount: row.request_count,
     totalCostUsd: row.total_cost_usd,
     totalTokens: readInteger(row.total_tokens),

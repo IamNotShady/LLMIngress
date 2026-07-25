@@ -23,6 +23,11 @@ export type ConsoleApiKey = NormalizedApiKeyFormInput & {
   enabled: boolean;
   id: string;
   keyPrefix: string;
+  /**
+   * Derived from the key's most recent request — api_keys has no such column,
+   * so a key that has never served traffic reports null.
+   */
+  lastUsedAt: Date | null;
   limitsEnabled: boolean;
   requestAttributionCount: number;
   updatedAt: Date;
@@ -72,6 +77,7 @@ type ApiKeyRow = {
   enabled: boolean;
   id: string;
   key_prefix: string;
+  last_used_at?: Date | string | null;
   limits_enabled: boolean;
   name: string;
   request_attribution_count: number;
@@ -155,7 +161,12 @@ export async function listApiKeys(databaseUrl?: string): Promise<ConsoleApiKey[]
                  select count(*)::integer
                  from request_activity
                  where request_activity.api_key_id = api_keys.id
-               ) as request_attribution_count
+               ) as request_attribution_count,
+               (
+                 select max(request_activity.started_at)
+                 from request_activity
+                 where request_activity.api_key_id = api_keys.id
+               ) as last_used_at
         from api_keys
         where api_keys.deleted_at is null
         order by api_keys.name
@@ -588,6 +599,7 @@ function rowToConsoleApiKey(row: ApiKeyRow): ConsoleApiKey {
     enabled: row.enabled,
     id: row.id,
     keyPrefix: row.key_prefix,
+    lastUsedAt: row.last_used_at ? new Date(row.last_used_at) : null,
     limitsEnabled: row.limits_enabled,
     name: row.name,
     requestAttributionCount: row.request_attribution_count,

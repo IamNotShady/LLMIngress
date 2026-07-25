@@ -152,6 +152,7 @@ export default async function ProvidersPage({
       <ProviderDialogs
         connections={selectedConnections}
         params={params}
+        quotas={selected ? quotas.filter((quota) => quota.providerId === selected.id) : []}
         provider={selected}
         templateGroups={templateGroups}
         usage={usage}

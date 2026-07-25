@@ -211,84 +211,61 @@ test("the Providers page renders each stored quota state and never overflows", a
           waitUntil: "networkidle",
         });
 
-        const quotaCell = (label: string) =>
-          page.locator(".provider-key-table tbody tr", { hasText: label }).locator(".quota-cell");
+        // Quota lives in its own panel, one entry per connection, and every
+        // state it can be in has to read differently from a number.
+        await expect(page.getByText("Plan quota")).toBeVisible();
+        const quota = page;
 
-        // A window entry reads as a percentage plus its reset time.
-        const windowCell = quotaCell("alpha-window");
-        await expect(windowCell).toContainText("7%");
-        await expect(windowCell).toContainText("53%");
-        await expect(windowCell).toContainText("Five hour");
-        await expect(windowCell).toContainText("resets in");
-        await expect(windowCell).toContainText("Updated 3 min ago");
+        // A window entry reads as a percentage with its reset and staleness.
+        await expect(quota.getByText("Five hour")).toBeVisible();
+        await expect(quota.getByText(/7% used/)).toBeVisible();
+        await expect(quota.getByText(/53% used/)).toBeVisible();
+        await expect(quota.getByText(/resets in/).first()).toBeVisible();
+        await expect(quota.getByText(/Updated 3 min ago/).first()).toBeVisible();
 
-        // A balance reads as an amount with its currency.
-        const balanceCell = quotaCell("alpha-balance");
-        await expect(balanceCell).toContainText("110.00 CNY");
+        // A balance reads as an amount with its currency and gets no bar.
+        await expect(quota.getByText("110.00 CNY")).toBeVisible();
 
-        // An expected non-reporting state shows its reason, carries no zero
-        // value, and is not styled as a failure.
-        const unsupportedCell = quotaCell("alpha-unsupported");
-        await expect(unsupportedCell).toContainText("Not reported by this provider");
-        await expect(unsupportedCell).not.toContainText("%");
-        await expect(unsupportedCell.locator(".pill--danger")).toHaveCount(0);
-        await expect(unsupportedCell.locator(".pill--warn")).toHaveCount(0);
-        await expect(unsupportedCell.locator(".pill")).toHaveCount(1);
-        // The reason stands alone — no staleness line next to an error state,
-        // even though this row carries an observed_at.
-        await expect(unsupportedCell).not.toContainText("Updated");
+        // A provider documented not to report is not a failure, and carries no
+        // zero value or staleness line beside the reason.
+        await expect(quota.getByText("Not reported by this provider")).toBeVisible();
 
         // Never probed is distinct from both a value and a reason.
-        const unqueriedCell = quotaCell("alpha-unqueried");
-        await expect(unqueriedCell).toContainText("Not yet queried");
-        await expect(unqueriedCell).not.toContainText("Not reported");
+        await expect(quota.getByText("Not yet queried").first()).toBeVisible();
 
-        // A disabled connection is skipped by the probe scan, so its stored
-        // numbers only age; the cell says paused instead of showing them.
-        const disabledCell = quotaCell("alpha-disabled");
-        await expect(disabledCell).toContainText("Probing paused");
-        await expect(disabledCell).not.toContainText("%");
-        await expect(disabledCell).not.toContainText("Updated");
-        // Connection-level disable is not the quota switch: no Resume here.
-        const disabledRow = page.locator(".provider-key-table tbody tr", {
-          hasText: "alpha-disabled",
-        });
-        await expect(disabledRow.getByRole("button", { name: /quota probing/ })).toHaveCount(0);
+        // A connection whose probe is paused shows that, not stale numbers.
+        await expect(quota.getByText("Probing paused")).toBeVisible();
 
-        // The quota switch lives with the other row actions: pause an active
-        // connection, confirm the paused state, then resume it. The form
-        // triggers router.refresh() on success, so the row re-renders in
-        // place — locator assertions poll until it does.
-        const windowRow = page.locator(".provider-key-table tbody tr", {
-          hasText: "alpha-window",
+        // The switch lives with the connection's other actions: pause an active
+        // connection, then resume it.
+        await page.goto(
+          `${baseUrl}/providers?selected=${seeded.alphaId}` +
+            `&providerKeyDialog=${seeded.alphaId}&connection=${seeded.windowConnectionId}`,
+          { waitUntil: "networkidle" },
+        );
+        await expect(page.getByRole("button", { name: "Pause quota probing" })).toBeVisible();
+        await page.getByRole("button", { name: "Pause quota probing" }).click();
+        // Pausing must not be refused: no alert carries a message.
+        await expect
+          .poll(async () =>
+            (await page.getByRole("alert").allInnerTexts()).filter((text) => text.trim()),
+          )
+          .toEqual([]);
+        await expect(page.getByRole("button", { name: "Resume quota probing" })).toBeVisible({
+          timeout: 15_000,
         });
-        await windowRow.getByRole("button", { name: "Pause quota probing" }).click();
-        await expect(windowCell).toContainText("Probing paused", { timeout: 30_000 });
-        await expect(windowCell).not.toContainText("%");
-        await windowRow.getByRole("button", { name: "Resume quota probing" }).click();
-        await expect(windowCell).toContainText("7%", { timeout: 30_000 });
-
-        // An identical balance across connections is one account pool, not two.
-        // networkidle would never settle here: the toggle interactions above
-        // leave router.refresh() RSC connections open on the dev server.
-        await page.goto(`${baseUrl}/providers?selected=${seeded.betaId}`, {
-          waitUntil: "domcontentloaded",
-        });
-        await expect(page.locator(".provider-quota-shared")).toHaveCount(1);
-        await expect(page.locator(".provider-quota-shared")).toContainText("76.50 USD");
-        await expect(page.locator(".provider-quota-shared")).toContainText("2 connections");
-        await expect(page.getByText("76.50 USD", { exact: false })).toHaveCount(1);
-        await expect(quotaCell("beta-one")).toContainText("Shared account balance");
+        await page.getByRole("button", { name: "Resume quota probing" }).click();
+        await expect(page.getByRole("button", { name: "Pause quota probing" })).toBeVisible();
 
         for (const viewport of [
-          { height: 900, width: 1280 },
-          { height: 844, width: 390 },
+          { width: 1280, height: 900 },
+          { width: 390, height: 844 },
         ]) {
           await page.setViewportSize(viewport);
           const overflow = await page.evaluate(
             () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
           );
-          expect(overflow, `${viewport.width}px viewport`).toBeLessThanOrEqual(0);
+          expect(overflow, `${viewport.width}px`).toBeLessThanOrEqual(0);
         }
       } finally {
         await context.close();

@@ -1,4 +1,5 @@
 import { listDirectCreateEntries } from "@llmingress/config/provider-registry";
+import type { ConsoleProviderQuotaSummary } from "@llmingress/db/console-provider-quota";
 import type { ProviderTemplateSelectorGroup } from "@llmingress/db/console-provider-templates";
 import type { ConsoleProvider } from "@llmingress/db/console-providers";
 import type { ConsoleUsageSummary } from "@llmingress/db/console-usage";
@@ -7,6 +8,7 @@ import { ConfirmForm, TypeNameToConfirm } from "../confirm-form";
 import { ActionButton, ActionLink, Field, SelectInput, TextInput } from "../controls";
 import { formatCost, formatCount } from "../format";
 import { DetailRow } from "../layout";
+import { MutationForm } from "../mutation-form";
 import { Dialog, DialogActions, DialogBody, DialogImpact, DialogNote } from "../overlay";
 import { buildHref, readParam, type SearchParams } from "../params";
 import { DeviceCodePoller } from "./device-poller";
@@ -21,12 +23,14 @@ export function ProviderDialogs({
   connections,
   params,
   provider,
+  quotas,
   templateGroups,
   usage,
 }: {
   connections: ProviderConnection[];
   params: SearchParams;
   provider: ConsoleProvider | undefined;
+  quotas: ConsoleProviderQuotaSummary[];
   templateGroups: ProviderTemplateSelectorGroup[];
   usage: ConsoleUsageSummary;
 }) {
@@ -59,6 +63,7 @@ export function ProviderDialogs({
         connections={connections}
         params={params}
         provider={provider}
+        quotas={quotas}
       />
     );
   }
@@ -443,11 +448,13 @@ function CredentialDialog({
   connections,
   params,
   provider,
+  quotas,
 }: {
   closeHref: string;
   connections: ProviderConnection[];
   params: SearchParams;
   provider: ConsoleProvider;
+  quotas: ConsoleProviderQuotaSummary[];
 }) {
   const connectionId = readParam(params, "connection");
   const editing = connections.find((entry) => entry.id === connectionId) ?? null;
@@ -457,6 +464,8 @@ function CredentialDialog({
   const oauthId = readParam(params, "providerOAuthId");
   const oauthError = readParam(params, "providerOAuthError");
   const pollInterval = Number.parseInt(readParam(params, "providerOAuthInterval") ?? "5", 10);
+  const quotaProbeEnabled =
+    quotas.find((quota) => quota.id === connectionId)?.quotaProbeEnabled ?? true;
 
   const title = editing
     ? "Edit connection"
@@ -488,7 +497,12 @@ function CredentialDialog({
           verificationUri={verificationUri}
         />
       ) : (
-        <ApiKeyForm closeHref={closeHref} editing={editing} provider={provider} />
+        <ApiKeyForm
+          closeHref={closeHref}
+          editing={editing}
+          provider={provider}
+          quotaProbeEnabled={quotaProbeEnabled}
+        />
       )}
     </Dialog>
   );
@@ -498,55 +512,67 @@ function ApiKeyForm({
   closeHref,
   editing,
   provider,
+  quotaProbeEnabled,
 }: {
   closeHref: string;
   editing: ProviderConnection | null;
   provider: ConsoleProvider;
+  quotaProbeEnabled: boolean;
 }) {
   return (
-    <form action="/api/provider-keys" method="post">
-      <input type="hidden" name="providerId" value={provider.id} />
-      {editing ? <input type="hidden" name="providerApiKeyId" value={editing.id} /> : null}
-      <div className="mt-4">
-        <Field
-          label="API KEY"
-          hint="Encrypted at rest with the console key; only the prefix is ever displayed again."
-        >
-          <TextInput
-            name="providerApiKey"
-            type="password"
-            required
-            autoComplete="off"
-            placeholder={editing ? "paste a new key to rotate" : "paste the provider key"}
-          />
-        </Field>
-      </div>
-      <div className="mt-[14px] grid grid-cols-2 gap-3">
-        <Field label="LABEL" labelNote="(optional, ≤100 chars)">
-          <TextInput name="label" defaultValue={editing?.label ?? ""} maxLength={100} />
-        </Field>
-        <Field label="PRIORITY" labelNote="(0–100)" hint="Lower priority is tried first.">
-          <TextInput
-            name="priority"
-            defaultValue={String(editing?.priority ?? 100)}
-            inputMode="numeric"
-          />
-        </Field>
-      </div>
-      <DialogNote>
-        Quota probe reads the plan or balance where the provider exposes it. A disabled connection
-        keeps its credential but leaves routing.
-      </DialogNote>
-      <DialogActions>
-        <ActionButton className="px-[18px] py-[6px] text-135" tone="primary">
-          {editing ? "Save connection" : "Add key"}
-        </ActionButton>
-        <ActionLink href={closeHref}>Cancel</ActionLink>
-      </DialogActions>
+    <>
+      <form action="/api/provider-keys" method="post">
+        <input type="hidden" name="providerId" value={provider.id} />
+        {editing ? <input type="hidden" name="providerApiKeyId" value={editing.id} /> : null}
+        <div className="mt-4">
+          <Field
+            label="API KEY"
+            hint="Encrypted at rest with the console key; only the prefix is ever displayed again."
+          >
+            <TextInput
+              name="providerApiKey"
+              type="password"
+              required
+              autoComplete="off"
+              placeholder={editing ? "paste a new key to rotate" : "paste the provider key"}
+            />
+          </Field>
+        </div>
+        <div className="mt-[14px] grid grid-cols-2 gap-3">
+          <Field label="LABEL" labelNote="(optional, ≤100 chars)">
+            <TextInput name="label" defaultValue={editing?.label ?? ""} maxLength={100} />
+          </Field>
+          <Field label="PRIORITY" labelNote="(0–100)" hint="Lower priority is tried first.">
+            <TextInput
+              name="priority"
+              defaultValue={String(editing?.priority ?? 100)}
+              inputMode="numeric"
+            />
+          </Field>
+        </div>
+        <DialogNote>
+          Quota probe reads the plan or balance where the provider exposes it. A disabled connection
+          keeps its credential but leaves routing.
+        </DialogNote>
+        <DialogActions>
+          <ActionButton className="px-[18px] py-[6px] text-135" tone="primary">
+            {editing ? "Save connection" : "Add key"}
+          </ActionButton>
+          <ActionLink href={closeHref}>Cancel</ActionLink>
+        </DialogActions>
+      </form>
+      {/* The state switches are their own posts, so they sit beside the
+          credential form rather than inside it — a nested form would be
+          dropped by the browser and submit the save instead. */}
       {editing ? (
-        <ConnectionStateActions closeHref={closeHref} connection={editing} provider={provider} />
+        <ConnectionStateActions
+          closeHref={closeHref}
+          connection={editing}
+          provider={provider}
+          quotaProbeEnabled={quotaProbeEnabled}
+        />
       ) : null}
-    </form>
+    </>
   );
 }
 
@@ -728,10 +754,12 @@ function SubscriptionForm({
 function ConnectionStateActions({
   connection,
   provider,
+  quotaProbeEnabled,
 }: {
   closeHref: string;
   connection: ProviderConnection;
   provider: ConsoleProvider;
+  quotaProbeEnabled: boolean;
 }) {
   const action = connection.kind === "oauth" ? "/api/provider-oauth" : "/api/provider-keys";
   const idField = connection.kind === "oauth" ? "providerOAuthId" : "providerApiKeyId";
@@ -739,16 +767,33 @@ function ConnectionStateActions({
     <div className="mt-4 border-t border-hair pt-3">
       <p className="font-mono text-12 leading-[1.6] text-faint">
         Disabling keeps the stored credential and removes this connection from routing; deleting
-        erases the credential permanently.
+        erases the credential permanently. Pausing the quota probe only stops the console asking
+        this provider about the plan, and leaves whatever it last reported to go stale.
       </p>
-      <form action={action} method="post" className="mt-2 flex gap-2">
-        <input type="hidden" name="action" value={connection.enabled ? "disable" : "enable"} />
-        <input type="hidden" name={idField} value={connection.id} />
-        <input type="hidden" name="providerId" value={provider.id} />
-        <ActionButton>
-          {connection.enabled ? "Disable connection" : "Enable connection"}
-        </ActionButton>
-      </form>
+      {/* Both switches post in place, so the dialog the operator opened stays
+          open and shows the result rather than closing on them. */}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <MutationForm action={action} fallbackError="The connection could not be updated.">
+          <input type="hidden" name="action" value={connection.enabled ? "disable" : "enable"} />
+          <input type="hidden" name={idField} value={connection.id} />
+          <input type="hidden" name="providerId" value={provider.id} />
+          <ActionButton>
+            {connection.enabled ? "Disable connection" : "Enable connection"}
+          </ActionButton>
+        </MutationForm>
+        <MutationForm action={action} fallbackError="The quota probe could not be updated.">
+          <input
+            type="hidden"
+            name="action"
+            value={quotaProbeEnabled ? "quota-probe-disable" : "quota-probe-enable"}
+          />
+          <input type="hidden" name={idField} value={connection.id} />
+          <input type="hidden" name="providerId" value={provider.id} />
+          <ActionButton>
+            {quotaProbeEnabled ? "Pause quota probing" : "Resume quota probing"}
+          </ActionButton>
+        </MutationForm>
+      </div>
     </div>
   );
 }

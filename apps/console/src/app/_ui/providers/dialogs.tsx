@@ -96,7 +96,7 @@ function EndpointChips({ providerKey }: { providerKey: string }) {
         </span>
         <span className="ml-auto whitespace-nowrap font-mono text-12 text-faint">{quotaNote}</span>
       </div>
-      <div className="mt-2 flex flex-wrap gap-[6px]">
+      <div aria-label="Supported endpoints" className="mt-2 flex flex-wrap gap-[6px]">
         {endpoints.length === 0 ? (
           <span className="font-mono text-12 text-faint">
             No routable endpoint is declared for this template.
@@ -138,10 +138,16 @@ function AddProviderDialog({
 
   return (
     <Dialog closeHref={closeHref} title="Add Provider" width={720}>
-      <div className="mt-4 flex border-b border-hair">
+      <div
+        role="tablist"
+        aria-label="Provider template groups"
+        className="mt-4 flex border-b border-hair"
+      >
         {groups.map((entry) => (
           <Link
             key={entry.id}
+            role="tab"
+            aria-selected={entry.id === group?.id}
             href={buildHref("/providers", params, {
               dialog: "new",
               dialogTab: entry.id,
@@ -154,7 +160,9 @@ function AddProviderDialog({
             }`}
           >
             {entry.label}
-            <span className="font-mono text-12 text-faint">{entry.templates.length}</span>
+            <span aria-hidden="true" className="font-mono text-12 text-faint">
+              {entry.templates.length}
+            </span>
           </Link>
         ))}
         <span className="ml-auto self-center font-mono text-12 text-faint">
@@ -162,10 +170,11 @@ function AddProviderDialog({
         </span>
       </div>
 
-      <div className="mt-[14px] grid grid-cols-4 gap-2">
+      <div className="mt-[14px] grid grid-cols-4 gap-2 overflow-x-auto">
         {templates.map((entry) => (
           <Link
             key={entry.id}
+            aria-pressed={entry.id === template?.id}
             href={buildHref("/providers", params, {
               dialog: "new",
               dialogTab: group?.id ?? "remote_api_key",
@@ -177,7 +186,10 @@ function AddProviderDialog({
                 : "border-btnbd"
             }`}
           >
-            <span className="grid size-[18px] flex-none place-items-center rounded-[2px] bg-track font-mono text-12 font-medium text-dim">
+            <span
+              aria-hidden="true"
+              className="grid size-[18px] flex-none place-items-center rounded-[2px] bg-track font-mono text-12 font-medium text-dim"
+            >
               {entry.displayName.slice(0, 1).toUpperCase()}
             </span>
             <span className="font-mono text-13 text-ink cell-clip">{entry.displayName}</span>
@@ -193,6 +205,7 @@ function AddProviderDialog({
             <Field label="DISPLAY NAME">
               <TextInput
                 key={`${template.id}-name`}
+                aria-label="Provider display name"
                 name="displayName"
                 defaultValue={template.displayName}
                 required
@@ -201,6 +214,7 @@ function AddProviderDialog({
             <Field label="BASE URL" labelNote="(template default)">
               <TextInput
                 key={`${template.id}-base`}
+                aria-label="Provider base URL"
                 name="baseUrl"
                 defaultValue={template.fixedBaseUrl ?? ""}
                 placeholder={template.baseUrlPlaceholder ?? ""}

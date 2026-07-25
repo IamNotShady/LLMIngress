@@ -57,6 +57,34 @@ async function seedIaData(databaseUrl: string) {
   return providerId;
 }
 
+/**
+ * Open the Add Provider dialog on a template and read back what the registry
+ * says about it: the default base url and the endpoint protocols it serves.
+ */
+async function readTemplate(
+  page: import("@playwright/test").Page,
+  baseUrl: string,
+  group: "API Keys" | "Local" | "Subscription",
+  templateName: string,
+): Promise<{ baseUrlValue: string; endpoints: string[] }> {
+  await page.goto(`${baseUrl}/providers?dialog=new`, { waitUntil: "networkidle" });
+  const dialog = page.getByRole("dialog", { name: "Add Provider" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("tab", { name: group, exact: true }).click();
+  await dialog.getByRole("link", { name: templateName, exact: true }).click();
+  await expect(dialog.getByRole("link", { name: templateName, exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const endpoints = await dialog
+    .locator('[aria-label="Supported endpoints"] > span > span:first-child')
+    .allInnerTexts();
+  return {
+    baseUrlValue: await dialog.getByLabel("Provider base URL").inputValue(),
+    endpoints,
+  };
+}
+
 test("providers page shows one provider representation with a searchable capped model library; api_keys KPIs and settings forms behave on mobile", async ({
   browser,
 }) => {
@@ -246,7 +274,7 @@ test("provider create dialog shows registry-derived supported endpoints", async 
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
+        await page.goto(`${baseUrl}/providers?dialog=new`, { waitUntil: "networkidle" });
 
         const dialog = page.getByRole("dialog", { name: "Add Provider" });
         await expect(dialog).toBeVisible();
@@ -305,34 +333,25 @@ test("Add Provider API Keys group carries the Batch 1 GLM, Qwen, and Kimi paste-
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
-
-        const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-
-        // Both new providers live in the API Keys template group (remote_api_key),
-        // which uses the editable paste-key base URL, never the local-private mode.
-        await dialog.getByRole("tab", { name: "API Keys" }).click();
-        const providerType = dialog.getByLabel("Provider type", { exact: true });
-        const baseUrlField = dialog.getByLabel("Provider base URL", { exact: true });
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-
-        // GLM Coding Plan: /api/coding/paas/v4 base, OpenAI chat_completions only.
-        await providerType.selectOption({ label: "GLM Coding Plan" });
-        await expect(baseUrlField).toHaveValue("https://api.z.ai/api/coding/paas/v4");
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
-
-        // Qwen Token Plan: token-plan base, chat_completions only (no Responses).
-        await providerType.selectOption({ label: "Qwen Token Plan" });
-        await expect(baseUrlField).toHaveValue(
-          "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
-        );
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
-
-        // Kimi Coding Plan: /coding/v1 base (Anthropic protocol), Messages only.
-        await providerType.selectOption({ label: "Kimi Coding Plan" });
-        await expect(baseUrlField).toHaveValue("https://api.kimi.com/coding/v1");
-        await expect(endpointChips).toHaveText(["Messages"]);
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "GLM Coding Plan");
+          expect(template.baseUrlValue, "GLM Coding Plan").toBe(
+            "https://api.z.ai/api/coding/paas/v4",
+          );
+          expect(template.endpoints, "GLM Coding Plan").toEqual(["chat_completions"]);
+        }
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "Qwen Token Plan");
+          expect(template.baseUrlValue, "Qwen Token Plan").toBe(
+            "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+          );
+          expect(template.endpoints, "Qwen Token Plan").toEqual(["chat_completions"]);
+        }
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "Kimi Coding Plan");
+          expect(template.baseUrlValue, "Kimi Coding Plan").toBe("https://api.kimi.com/coding/v1");
+          expect(template.endpoints, "Kimi Coding Plan").toEqual(["messages"]);
+        }
 
         for (const viewport of [
           { width: 1280, height: 900 },
@@ -342,23 +361,29 @@ test("Add Provider API Keys group carries the Batch 1 GLM, Qwen, and Kimi paste-
           expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
         }
 
-        // Creating one of the templates must land on a provider whose
-        // credential section is the api_key paste branch — the "Add API key"
-        // link whose dialog flow is exercised elsewhere in this suite.
+        // Creating one of the templates lands on a provider whose credential
+        // section is the api_key paste branch.
         await page.setViewportSize({ width: 1280, height: 900 });
-        await providerType.selectOption({ label: "Kimi Coding Plan" });
-        await dialog
-          .getByLabel("Provider display name", { exact: true })
-          .fill("Kimi Coding Plan E2E");
-        await dialog.locator("button[type=submit]").click();
+        await page.goto(`${baseUrl}/providers?dialog=new`, { waitUntil: "networkidle" });
+        const createDialog = page.getByRole("dialog", { name: "Add Provider" });
+        await createDialog.getByRole("tab", { name: "API Keys", exact: true }).click();
+        await createDialog.getByRole("link", { name: "Kimi Coding Plan", exact: true }).click();
+        await createDialog.getByLabel("Provider display name").fill("Kimi Coding Plan E2E");
+        await createDialog.getByRole("button", { name: "Create" }).click();
         await expect(page.getByRole("dialog", { name: "Add Provider" })).toHaveCount(0);
-        // Create redirects to the bare /providers list (rows collapsed);
-        // expanding the new row reveals the api_key credential section.
         await page
-          .locator(".providers-table a.table-row-link", { hasText: "Kimi Coding Plan E2E" })
+          .getByRole("link", { name: /Kimi Coding Plan E2E/ })
           .first()
           .click();
-        await expect(page.getByRole("link", { name: "Add API key" })).toHaveCount(1);
+        await expect(page.getByRole("link", { name: "+ Add key" })).toBeVisible();
+
+        for (const viewport of [
+          { width: 1280, height: 900 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
+        }
       } finally {
         await context.close();
       }
@@ -392,48 +417,35 @@ test("Add Provider API Keys group carries the Batch 3 paste-key templates", asyn
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
 
-        const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-
-        // All four Batch 3 providers live in the API Keys template group
-        // (remote_api_key), the editable paste-key base URL mode.
-        await dialog.getByRole("tab", { name: "API Keys" }).click();
-        const providerType = dialog.getByLabel("Provider type", { exact: true });
-        const baseUrlField = dialog.getByLabel("Provider base URL", { exact: true });
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-
-        // Command Code: dual endpoints — Chat Completions + Messages chips, in
-        // registry endpoint-key order, prefilled /provider/v1 base.
-        await providerType.selectOption({ label: "Command Code" });
-        await expect(baseUrlField).toHaveValue("https://api.commandcode.ai/provider/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions", "Messages"]);
-
-        // NousResearch: OpenAI chat_completions only.
-        await providerType.selectOption({ label: "NousResearch" });
-        await expect(baseUrlField).toHaveValue("https://inference-api.nousresearch.com/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
-
-        // ClinePass: OpenAI chat_completions only, /api/v1 base.
-        await providerType.selectOption({ label: "ClinePass" });
-        await expect(baseUrlField).toHaveValue("https://api.cline.bot/api/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
-
-        // BytePlus ModelArk: OpenAI chat_completions only on the /v3 base
-        // (chat-only; no Messages chip).
-        await providerType.selectOption({ label: "BytePlus ModelArk" });
-        await expect(baseUrlField).toHaveValue(
-          "https://ark.ap-southeast.bytepluses.com/api/coding/v3",
-        );
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
-
-        for (const viewport of [
-          { width: 1280, height: 900 },
-          { width: 390, height: 844 },
+        // Each Batch 3 provider lives in the API Keys group with an editable
+        // paste-key base url, and serves exactly the protocols the registry
+        // declares — in registry endpoint-key order.
+        for (const template of [
+          {
+            baseUrl: "https://api.commandcode.ai/provider/v1",
+            endpoints: ["chat_completions", "messages"],
+            label: "Command Code",
+          },
+          {
+            baseUrl: "https://inference-api.nousresearch.com/v1",
+            endpoints: ["chat_completions"],
+            label: "NousResearch",
+          },
+          {
+            baseUrl: "https://api.cline.bot/api/v1",
+            endpoints: ["chat_completions"],
+            label: "ClinePass",
+          },
+          {
+            baseUrl: "https://ark.ap-southeast.bytepluses.com/api/coding/v3",
+            endpoints: ["chat_completions"],
+            label: "BytePlus ModelArk",
+          },
         ]) {
-          await page.setViewportSize(viewport);
-          expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
+          const read = await readTemplate(page, baseUrl, "API Keys", template.label);
+          expect(read.baseUrlValue, template.label).toBe(template.baseUrl);
+          expect(read.endpoints, template.label).toEqual(template.endpoints);
         }
       } finally {
         await context.close();
@@ -470,19 +482,9 @@ test("Add Provider API Keys group carries the Batch 4 inference cloud templates"
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
-
-        const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-
         // All seven Batch 4 inference clouds live in the API Keys template group
         // (remote_api_key), the editable paste-key base URL mode, each OpenAI
         // chat_completions-only (a single Chat Completions chip).
-        await dialog.getByRole("tab", { name: "API Keys" }).click();
-        const providerType = dialog.getByLabel("Provider type", { exact: true });
-        const baseUrlField = dialog.getByLabel("Provider base URL", { exact: true });
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-
         const batch4Templates = [
           { baseUrl: "https://api.groq.com/openai/v1", label: "Groq" },
           { baseUrl: "https://api.cerebras.ai/v1", label: "Cerebras" },
@@ -494,9 +496,9 @@ test("Add Provider API Keys group carries the Batch 4 inference cloud templates"
         ];
 
         for (const template of batch4Templates) {
-          await providerType.selectOption({ label: template.label });
-          await expect(baseUrlField, template.label).toHaveValue(template.baseUrl);
-          await expect(endpointChips, template.label).toHaveText(["Chat Completions"]);
+          const read = await readTemplate(page, baseUrl, "API Keys", template.label);
+          expect(read.baseUrlValue, template.label).toBe(template.baseUrl);
+          expect(read.endpoints, template.label).toEqual(["chat_completions"]);
         }
 
         for (const viewport of [
@@ -541,34 +543,23 @@ test("Add Provider API Keys group carries the Batch 5 token-plan templates", asy
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
-
-        const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-
-        // All three Batch 5 token-plan providers live in the API Keys template
-        // group (remote_api_key), the editable paste-key base URL mode.
-        await dialog.getByRole("tab", { name: "API Keys" }).click();
-        const providerType = dialog.getByLabel("Provider type", { exact: true });
-        const baseUrlField = dialog.getByLabel("Provider base URL", { exact: true });
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-
-        // OpenCode Go: dual endpoints — Chat Completions + Messages chips, in
-        // registry endpoint-key order, prefilled /zen/go/v1 base.
-        await providerType.selectOption({ label: "OpenCode Go" });
-        await expect(baseUrlField).toHaveValue("https://opencode.ai/zen/go/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions", "Messages"]);
-
-        // Xiaomi MiMo Token Plan: OpenAI chat_completions only, default sgp base.
-        await providerType.selectOption({ label: "Xiaomi MiMo Token Plan" });
-        await expect(baseUrlField).toHaveValue("https://token-plan-sgp.xiaomimimo.com/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
-
-        // Mistral Vibe: OpenAI chat_completions only, sharing the standard
-        // mistral base as a distinct paste-key template.
-        await providerType.selectOption({ label: "Mistral Vibe" });
-        await expect(baseUrlField).toHaveValue("https://api.mistral.ai/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "OpenCode Go");
+          expect(template.baseUrlValue, "OpenCode Go").toBe("https://opencode.ai/zen/go/v1");
+          expect(template.endpoints, "OpenCode Go").toEqual(["chat_completions", "messages"]);
+        }
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "Xiaomi MiMo Token Plan");
+          expect(template.baseUrlValue, "Xiaomi MiMo Token Plan").toBe(
+            "https://token-plan-sgp.xiaomimimo.com/v1",
+          );
+          expect(template.endpoints, "Xiaomi MiMo Token Plan").toEqual(["chat_completions"]);
+        }
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "Mistral Vibe");
+          expect(template.baseUrlValue, "Mistral Vibe").toBe("https://api.mistral.ai/v1");
+          expect(template.endpoints, "Mistral Vibe").toEqual(["chat_completions"]);
+        }
 
         for (const viewport of [
           { width: 1280, height: 900 },
@@ -610,20 +601,13 @@ test("Add Provider API Keys group carries the Batch 7 bedrock template", async (
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
-
-        const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-
-        await dialog.getByRole("tab", { name: "API Keys" }).click();
-        const providerType = dialog.getByLabel("Provider type", { exact: true });
-        const baseUrlField = dialog.getByLabel("Provider base URL", { exact: true });
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-
-        // AWS Bedrock: OpenAI chat_completions only, mantle us-east-1 base prefilled.
-        await providerType.selectOption({ label: "AWS Bedrock" });
-        await expect(baseUrlField).toHaveValue("https://bedrock-mantle.us-east-1.api.aws/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "AWS Bedrock");
+          expect(template.baseUrlValue, "AWS Bedrock").toBe(
+            "https://bedrock-mantle.us-east-1.api.aws/v1",
+          );
+          expect(template.endpoints, "AWS Bedrock").toEqual(["chat_completions"]);
+        }
 
         for (const viewport of [
           { width: 1280, height: 900 },
@@ -871,7 +855,7 @@ test("Grok subscription: a Chat Completions chip in the Subscription group and a
 
         // --- Add Provider: Grok lives in the Subscription group with a single
         // Chat Completions chip (Feature A ships only the chat face).
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
+        await page.goto(`${baseUrl}/providers?dialog=new`, { waitUntil: "networkidle" });
         const dialog = page.getByRole("dialog", { name: "Add Provider" });
         await expect(dialog).toBeVisible();
         await dialog.getByRole("tab", { name: "Subscription" }).click();

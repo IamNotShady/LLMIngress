@@ -38,9 +38,12 @@ export default async function ActivityPage({
   };
   const page = readIntParam(params, "page", 1);
 
-  const [rows, total, apiKeys, virtualModels, providers] = await Promise.all([
+  const [rows, total, recordedTotal, apiKeys, virtualModels, providers] = await Promise.all([
     listConsoleActivities({ filters, limit: PAGE_SIZE, page }),
     countConsoleActivities({ filters }),
+    // Unfiltered, so an empty view can tell "nothing recorded yet" apart from
+    // "nothing in this window" — the default window is itself a filter.
+    countConsoleActivities({}),
     listApiKeys(),
     listVirtualModels(),
     listProviders(),
@@ -52,15 +55,7 @@ export default async function ActivityPage({
     ? await getConsoleActivityDetail({ requestId: selectedRequestId })
     : null;
 
-  const anyFilterSet = Boolean(
-    filters.apiKeyId ||
-      filters.protocol ||
-      filters.providerId ||
-      filters.requestIdQuery ||
-      filters.status ||
-      filters.virtualModelId ||
-      windowKey !== "24h",
-  );
+  const consoleHasNeverServed = recordedTotal === 0;
 
   return (
     <PageShell label="Activity">
@@ -182,7 +177,7 @@ export default async function ActivityPage({
         </GridRow>
 
         {rows.length === 0 ? (
-          anyFilterSet ? (
+          !consoleHasNeverServed ? (
             <div className="border-b border-rule2 py-9 text-center">
               <div className="font-sans text-15 font-semibold text-ink">
                 No requests match these filters

@@ -77,7 +77,7 @@ async function readTemplate(
     "true",
   );
   const endpoints = await dialog
-    .locator('[aria-label="Supported endpoints"] > span > span:first-child')
+    .locator('[aria-label="Supported endpoints"] > li > span:first-child')
     .allInnerTexts();
   return {
     baseUrlValue: await dialog.getByLabel("Provider base URL").inputValue(),
@@ -135,7 +135,9 @@ test("providers page shows one provider representation with a searchable capped 
         await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-needle`, {
           waitUntil: "networkidle",
         });
-        await expect(page.getByText("1–1 of 1")).toBeVisible();
+        // One page of results states its count and drops the pager.
+        await expect(page.getByText("1 matching")).toBeVisible();
+        await expect(page.getByText("1–1 of 1")).toHaveCount(0);
         await expect(page.getByText("ia-needle-model")).toBeVisible();
         expect(new URL(page.url()).searchParams.get("modelQuery")).toBe("ia-needle");
         expect(hydrationErrors).toEqual([]);

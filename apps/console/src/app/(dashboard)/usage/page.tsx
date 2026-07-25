@@ -15,7 +15,7 @@ import {
   formatPercent,
 } from "../../_ui/format";
 import { EmptyState, PageShell } from "../../_ui/layout";
-import { buildHref, readParam, type SearchParams } from "../../_ui/params";
+import { readParam, type SearchParams } from "../../_ui/params";
 import {
   DataQualityPanel,
   DistributionTable,

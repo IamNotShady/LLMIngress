@@ -30,10 +30,13 @@ export function ActivityDrawer({
       title={activity.requestId}
       trailing={
         <span
-          className={`rounded-xs border border-ambbd bg-ambbg px-[9px] py-[3px] font-mono text-125 font-medium ${activityStatusTone(
-            activity.status,
-          )}`}
+          className={`flex items-center gap-[6px] rounded-xs border px-[9px] py-[3px] font-mono text-125 font-medium ${
+            activity.status === "failed"
+              ? `border-ambbd bg-ambbg ${activityStatusTone(activity.status)}`
+              : `border-rule bg-track ${activityStatusTone(activity.status)}`
+          }`}
         >
+          <StatusDot tone={attemptTone(activity.status)} />
           {activity.httpStatus ?? activity.status}
           {activity.errorCode ? ` ${activity.errorCode}` : ""}
         </span>

@@ -138,24 +138,20 @@ async function seedProviderApiKeyInteractionData(databaseUrl: string) {
   return { failureKeyId, lifecycleKeyId, providerId };
 }
 
+// The timestamp is the one cell that must never be cut: a clipped clock reads
+// as a different time. Long free-text cells beside it clip instead.
 async function expectActivityTimeCellContained(page: Page) {
-  const metrics = await page
-    .locator(".activity-table tbody tr", { hasText: "gw_audit_old_request" })
-    .evaluate((row) => {
-      const [timeCell, requestCell] = Array.from(row.querySelectorAll("td"));
-      const timeStyle = getComputedStyle(timeCell);
-      return {
-        requestCellOverflow: getComputedStyle(requestCell).overflow,
-        timeCellClientWidth: timeCell.clientWidth,
-        timeCellOverflow: timeStyle.overflow,
-        timeCellScrollWidth: timeCell.scrollWidth,
-      };
-    });
+  const row = page.getByRole("link", { name: /gw_audit_old_request/ }).first();
+  const metrics = await row.evaluate((element) => {
+    const [timeCell, requestCell] = Array.from(element.children) as HTMLElement[];
+    return {
+      requestCellOverflow: getComputedStyle(requestCell).overflow,
+      timeCellClientWidth: timeCell.clientWidth,
+      timeCellScrollWidth: timeCell.scrollWidth,
+    };
+  });
   expect(metrics.requestCellOverflow).toBe("hidden");
-  expect(
-    metrics.timeCellScrollWidth <= metrics.timeCellClientWidth ||
-      metrics.timeCellOverflow === "hidden",
-  ).toBe(true);
+  expect(metrics.timeCellScrollWidth).toBeLessThanOrEqual(metrics.timeCellClientWidth);
 }
 
 test("console audit fixes keep time windows honest and prevent activity timestamp overlap", async ({
@@ -168,7 +164,7 @@ test("console audit fixes keep time windows honest and prevent activity timestam
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    const seeded = await seedAuditData(fixture.databaseUrl);
+    await seedAuditData(fixture.databaseUrl);
 
     const consoleApp = startConsoleProcess({
       databaseUrl: fixture.databaseUrl,
@@ -217,6 +213,7 @@ test("console audit fixes keep time windows honest and prevent activity timestam
 
         await page.goto(`${baseUrl}/activity?window=7d`, { waitUntil: "networkidle" });
         await expect(page.getByRole("link", { name: /gw_audit_old_request/ })).toBeVisible();
+        await expectActivityTimeCellContained(page);
         await page.goto(`${baseUrl}/activity`, { waitUntil: "networkidle" });
         await expect(page.getByRole("link", { name: /gw_audit_old_request/ })).toHaveCount(0);
         await expect(page.getByText("No requests match these filters")).toBeVisible();
@@ -259,7 +256,7 @@ test("console audit fixes keep time windows honest and prevent activity timestam
   }
 });
 
-test("Provider API key actions refresh immediately and render real failures in a toast", async ({
+test("a connection state change and its deletion are driven from the connection dialog, which reports refusals in place", async ({
   browser,
 }) => {
   test.setTimeout(240_000);
@@ -297,13 +294,19 @@ test("Provider API key actions refresh immediately and render real failures in a
           waitUntil: "networkidle",
         });
 
-        const lifecycleRow = page.locator(".provider-key-table tbody tr", {
-          hasText: "Lifecycle key",
-        });
-        await lifecycleRow.getByRole("button", { name: "Disable API key" }).click();
-        await expect(lifecycleRow).toContainText("Disabled");
-        await expect(lifecycleRow.getByRole("button", { name: "Enable API key" })).toBeVisible();
-        await expect(page.getByText("Provider API key update failed.")).toHaveCount(0);
+        // A connection's state lives with the connection, in the dialog that
+        // holds its credential — the row itself only reports.
+        await page.goto(
+          `${baseUrl}/providers?selected=${seeded.providerId}` +
+            `&providerKeyDialog=${seeded.providerId}&connection=${seeded.lifecycleKeyId}`,
+          { waitUntil: "networkidle" },
+        );
+        const dialog = page.getByRole("dialog", { name: "Edit connection" });
+        await dialog.getByRole("button", { name: "Disable connection" }).click();
+
+        // The dialog stays open on the connection it was opened for and reports
+        // the new state, rather than closing and leaving the operator to look.
+        await expect(dialog.getByRole("button", { name: "Enable connection" })).toBeVisible();
         await expect
           .poll(async () => {
             const result = await fixture.query<{ enabled: boolean }>(
@@ -313,10 +316,11 @@ test("Provider API key actions refresh immediately and render real failures in a
             return result.rows[0]?.enabled;
           })
           .toBe(false);
+        // (Scoped to the dialog: `next dev` injects its own alert region.)
+        await expect(dialog.getByRole("alert")).toHaveCount(0);
 
-        await lifecycleRow.getByRole("button", { name: "Enable API key" }).click();
-        await expect(lifecycleRow.getByRole("button", { name: "Disable API key" })).toBeVisible();
-        await expect(lifecycleRow).not.toContainText("Disabled");
+        await dialog.getByRole("button", { name: "Enable connection" }).click();
+        await expect(dialog.getByRole("button", { name: "Disable connection" })).toBeVisible();
         await expect
           .poll(async () => {
             const result = await fixture.query<{ enabled: boolean }>(
@@ -327,12 +331,16 @@ test("Provider API key actions refresh immediately and render real failures in a
           })
           .toBe(true);
 
-        await lifecycleRow.getByRole("link", { name: "Delete API key" }).click();
-        const deleteDialog = page.getByRole("dialog", { name: "Delete API key?" });
-        await deleteDialog.getByRole("button", { name: "Delete key" }).click();
+        // Deleting says what is lost, then closes back onto the provider.
+        await page.goto(
+          `${baseUrl}/providers?selected=${seeded.providerId}` +
+            `&dialog=deleteConnection&connection=${seeded.lifecycleKeyId}`,
+          { waitUntil: "networkidle" },
+        );
+        const deleteDialog = page.getByRole("dialog", { name: "Delete connection" });
+        await expect(deleteDialog).toContainText("cannot be recovered");
+        await deleteDialog.getByRole("button", { name: "Delete connection" }).click();
         await expect(deleteDialog).toBeHidden();
-        await expect(lifecycleRow).toHaveCount(0);
-        await expect(page).toHaveURL(`${baseUrl}/providers?selected=${seeded.providerId}`);
         await expect
           .poll(async () => {
             const result = await fixture.query<{ deleted: boolean }>(
@@ -343,41 +351,37 @@ test("Provider API key actions refresh immediately and render real failures in a
           })
           .toBe(true);
 
-        const failureRow = page.locator(".provider-key-table tbody tr", {
-          hasText: "Failure key",
-        });
-        await expect(failureRow).toBeVisible();
+        // A refusal belongs where the operator was working, not in a toast: the
+        // connection is gone from under them, and the dialog says so and stays.
+        await page.goto(
+          `${baseUrl}/providers?selected=${seeded.providerId}` +
+            `&providerKeyDialog=${seeded.providerId}&connection=${seeded.failureKeyId}`,
+          { waitUntil: "networkidle" },
+        );
+        const failureDialog = page.getByRole("dialog", { name: "Edit connection" });
         await fixture.query("delete from provider_api_keys where id = $1", [seeded.failureKeyId]);
-        await failureRow.getByRole("button", { name: "Disable API key" }).click();
+        await failureDialog.getByRole("button", { name: "Disable connection" }).click();
 
-        const toast = page.locator(".console-mutation-toast");
-        await expect(toast).toBeVisible();
-        await expect(toast).toHaveAttribute("role", "alert");
-        await expect(failureRow.getByRole("alert")).toHaveCount(0);
-        const desktopToast = await toast.evaluate((element) => {
-          const rect = element.getBoundingClientRect();
-          const style = getComputedStyle(element);
-          return {
-            bottom: rect.bottom,
-            left: rect.left,
-            position: style.position,
-            right: rect.right,
-            top: rect.top,
-            zIndex: style.zIndex,
-          };
-        });
-        expect(desktopToast.position).toBe("fixed");
-        expect(desktopToast.zIndex).toBe("70");
-        expect(desktopToast.top).toBeGreaterThanOrEqual(0);
-        expect(desktopToast.right).toBeLessThanOrEqual(1280);
+        const refusal = failureDialog.getByRole("alert");
+        await expect(refusal).toBeVisible();
+        await expect(refusal).toContainText(/could not be updated|not found/i);
+        // Nothing destructive or refused reports through a toast.
+        await expect(page.getByRole("status")).toHaveCount(0);
 
-        await page.setViewportSize({ height: 844, width: 390 });
-        const mobileToast = await toast.boundingBox();
-        expect(mobileToast).not.toBeNull();
-        expect(mobileToast?.x ?? -1).toBeGreaterThanOrEqual(0);
-        expect((mobileToast?.x ?? 0) + (mobileToast?.width ?? 0)).toBeLessThanOrEqual(390);
-        await toast.getByRole("button", { name: "Dismiss error" }).click();
-        await expect(toast).toBeHidden();
+        for (const viewport of [
+          { width: 1280, height: 800 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          await expect
+            .poll(() =>
+              page.evaluate(
+                () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+              ),
+            )
+            .toBeLessThanOrEqual(0);
+        }
+
         expect(
           browserErrors.filter(
             (message) => !message.startsWith("Failed to load resource: the server responded with"),

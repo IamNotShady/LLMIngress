@@ -1,14 +1,16 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { formatCost } from "../../apps/console/src/app/_ui/format";
 import {
-  formatConsoleCompactCount,
-  formatConsoleCount,
-  formatConsoleTimestamp,
-  formatConsoleUsd,
-  MISSING_VALUE,
-} from "../../packages/db/src/console-format";
+  formatClock,
+  formatCompact,
+  formatCost,
+  formatCount,
+  formatStamp,
+} from "../../apps/console/src/app/_ui/format";
+import { formatConsoleUsd } from "../../packages/db/src/console-format";
+
+const MISSING_VALUE = "—";
 
 const rootDir = process.cwd();
 const appDir = join(rootDir, "apps/console/src/app");
@@ -34,22 +36,20 @@ describe("shared console formatters", () => {
   });
 
   test("counts are full locale numbers; compact only for KPI cards", () => {
-    expect(formatConsoleCount(null)).toBe(MISSING_VALUE);
-    expect(formatConsoleCount(92535)).toBe("92,535");
-    expect(formatConsoleCount(0)).toBe("0");
-    expect(formatConsoleCompactCount(92535)).toBe("92.5K");
-    expect(formatConsoleCompactCount(1_250_000)).toBe("1.3M");
-    expect(formatConsoleCompactCount(999)).toBe("999");
-    expect(formatConsoleCompactCount(null)).toBe(MISSING_VALUE);
+    expect(formatCount(92535)).toBe("92,535");
+    expect(formatCount(0)).toBe("0");
+    expect(formatCompact(92535)).toBe("92.5k");
+    expect(formatCompact(1_250_000)).toBe("1.3M");
+    expect(formatCompact(999)).toBe("999");
   });
 
-  test("timestamps outside the current day carry a date qualifier", () => {
-    const now = new Date("2026-07-03T22:00:00");
-    expect(formatConsoleTimestamp(new Date("2026-07-03T21:48:19"), now)).toBe("21:48:19");
-    expect(formatConsoleTimestamp(new Date("2026-06-26T21:48:19"), now)).toBe("Jun 26 21:48:19");
-    expect(formatConsoleTimestamp(new Date("2025-12-31T09:05:00"), now)).toBe(
-      "Dec 31, 2025 09:05:00",
-    );
+  test("timestamps read in UTC, to the minute in a row and to the second in a detail", () => {
+    const at = new Date("2026-07-03T21:48:19Z");
+    expect(formatClock(at)).toBe("21:48");
+    expect(formatStamp(at)).toBe("2026-07-03 21:48:19 UTC");
+    // A missing moment is an em dash, never a zero clock.
+    expect(formatClock(null)).toBe(MISSING_VALUE);
+    expect(formatStamp(null)).toBe(MISSING_VALUE);
   });
 });
 

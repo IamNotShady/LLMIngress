@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { formatConsoleTimestamp } from "../../packages/db/src/console-format";
 import {
   createTestPostgresFixture,
   runMigrations,
@@ -148,6 +147,15 @@ test("console formats counts, costs, missing values and timestamps consistently 
         await expect(failed).toContainText("—");
         const body = await page.locator("body").innerText();
         expect(body).not.toMatch(/N\/A|Unavailable/);
+
+        // --- One instant reads the same on the row and in its detail: the row
+        // to the minute, the drawer to the second, both in UTC.
+        const stamp = formatterData.oldStartedAt.toISOString();
+        await expect(older).toContainText(stamp.slice(11, 16));
+        await older.click();
+        await expect(
+          page.getByText(`${stamp.slice(0, 10)} ${stamp.slice(11, 19)} UTC`),
+        ).toBeVisible();
 
         // --- Usage KPIs: no eight-decimal noise anywhere.
         await page.goto(`${baseUrl}/usage`);

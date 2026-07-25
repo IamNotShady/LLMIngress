@@ -245,12 +245,9 @@ test("the Providers page renders each stored quota state and never overflows", a
         );
         await expect(page.getByRole("button", { name: "Pause quota probing" })).toBeVisible();
         await page.getByRole("button", { name: "Pause quota probing" }).click();
-        // Pausing must not be refused: no alert carries a message.
-        await expect
-          .poll(async () =>
-            (await page.getByRole("alert").allInnerTexts()).filter((text) => text.trim()),
-          )
-          .toEqual([]);
+        // Pausing must not be refused. (Scoped to the dialog: `next dev`
+        // injects an alert region of its own into every page.)
+        await expect(page.getByRole("dialog").first().getByRole("alert")).toHaveCount(0);
         await expect(page.getByRole("button", { name: "Resume quota probing" })).toBeVisible({
           timeout: 15_000,
         });

@@ -117,6 +117,28 @@ test("ApiKey dialogs show endpoint groups and integration tabs without the platf
 
         await page.getByText("Other", { exact: true }).click();
         await expect(page.getByText(`Use ${gatewayUrl} as the Gateway URL.`)).toBeVisible();
+
+        // Both the one-time screen and the detail hold their layout at the
+        // desktop target and on a phone.
+        for (const viewport of [
+          { width: 1280, height: 800 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          await expect
+            .poll(() => pageOverflowPx(page), { message: `created @ ${viewport.width}px` })
+            .toBeLessThanOrEqual(0);
+        }
+        await page.goto(`${baseUrl}/api-keys?selected=${apiKeyId}`, { waitUntil: "networkidle" });
+        for (const viewport of [
+          { width: 1280, height: 800 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          await expect
+            .poll(() => pageOverflowPx(page), { message: `detail @ ${viewport.width}px` })
+            .toBeLessThanOrEqual(0);
+        }
       } finally {
         await context.close();
       }

@@ -5,7 +5,7 @@ import type { ConsoleProvider } from "@llmingress/db/console-providers";
 import type { ConsoleUsageSummary } from "@llmingress/db/console-usage";
 import Link from "next/link";
 import { ConfirmForm, TypeNameToConfirm } from "../confirm-form";
-import { ActionButton, ActionLink, Field, SelectInput, TextInput } from "../controls";
+import { ActionButton, ActionLink, Field, TextInput } from "../controls";
 import { formatCost, formatCount } from "../format";
 import { DetailRow } from "../layout";
 import { MutationForm } from "../mutation-form";
@@ -104,23 +104,23 @@ function EndpointChips({ providerKey }: { providerKey: string }) {
         </span>
         <span className="ml-auto whitespace-nowrap font-mono text-12 text-faint">{quotaNote}</span>
       </div>
-      <div aria-label="Supported endpoints" className="mt-2 flex flex-wrap gap-[6px]">
+      <ul aria-label="Supported endpoints" className="mt-2 flex list-none flex-wrap gap-[6px] p-0">
         {endpoints.length === 0 ? (
-          <span className="font-mono text-12 text-faint">
+          <li className="font-mono text-12 text-faint">
             No routable endpoint is declared for this template.
-          </span>
+          </li>
         ) : (
           endpoints.map((endpoint) => (
-            <span
+            <li
               key={endpoint.protocol}
               className="flex items-center gap-[7px] rounded-xs border border-btnbd bg-btnbg px-[9px] py-[3px] font-mono text-12 text-ink"
             >
               <span className="font-medium">{endpoint.protocol}</span>
               <span className="text-dim">{endpoint.path}</span>
-            </span>
+            </li>
           ))
         )}
-      </div>
+      </ul>
       <DialogNote>
         A virtual model built on this provider must use one of these endpoint protocols — candidates
         whose protocol it does not serve are not selectable.
@@ -639,12 +639,12 @@ function SubscriptionForm({
             <div id="device-user-code-label" className="font-mono text-12 text-dim">
               Your code
             </div>
-            <div
+            <output
               aria-labelledby="device-user-code-label"
-              className="mt-1 font-mono text-26 font-medium tracking-[.16em] text-ink"
+              className="mt-1 block font-mono text-26 font-medium tracking-[.16em] text-ink"
             >
               {userCode}
-            </div>
+            </output>
           </div>
           <div className="ml-auto text-right">
             <div className="font-mono text-12 text-dim">verification url</div>

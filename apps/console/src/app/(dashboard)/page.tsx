@@ -14,7 +14,7 @@ import {
 import { listVirtualModels } from "@llmingress/db/console-virtual-models";
 import Link from "next/link";
 import { ChartLegend, StackedBarChart } from "../_ui/charts";
-import { ActionLink, Meter, StatusDot } from "../_ui/controls";
+import { Meter, StatusDot } from "../_ui/controls";
 import {
   failureRateTone,
   failureRateToneClass,

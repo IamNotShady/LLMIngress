@@ -28,7 +28,10 @@ export const POST = withConsoleAuth(async (request) => {
       return NextResponse.json({ jobId: result.jobId, ok: true, reused: result.reused });
     }
     return NextResponse.redirect(
-      new URL(`/providers?selected=${encodeURIComponent(providerId)}`, request.url),
+      new URL(
+        `/providers?selected=${encodeURIComponent(providerId)}&toast=${encodeURIComponent("Connection re-check queued")}&toastMeta=${encodeURIComponent("Health updates once the probe returns — nothing about the credential changed.")}`,
+        request.url,
+      ),
       303,
     );
   } catch (error) {

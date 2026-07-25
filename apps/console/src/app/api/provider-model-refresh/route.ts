@@ -14,7 +14,7 @@ export const POST = withConsoleAuth(async (request) => {
     }
     return NextResponse.redirect(
       new URL(
-        `/providers?modelRefreshProviderId=${encodeURIComponent(input.providerId)}&selected=${encodeURIComponent(input.providerId)}`,
+        `/providers?modelRefreshProviderId=${encodeURIComponent(input.providerId)}&selected=${encodeURIComponent(input.providerId)}&toast=${encodeURIComponent("Model refresh queued")}&toastMeta=${encodeURIComponent("The worker re-reads this provider's model list; the table updates when it finishes.")}`,
         request.url,
       ),
       { status: 303 },

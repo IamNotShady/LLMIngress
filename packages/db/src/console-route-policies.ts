@@ -368,17 +368,24 @@ export async function listProviderModelOptions(
 }
 
 export async function listProviderModelPage(input: {
+  availability?: string | null;
   databaseUrl?: string;
   page?: number;
+  pageSize?: number;
   providerId: string;
   query?: string | null;
 }): Promise<ConsoleProviderModelPage> {
   const requestedPage =
     Number.isInteger(input.page) && Number(input.page) > 0 ? Number(input.page) : 1;
   const query = input.query?.trim() || null;
+  // "all" is the absence of a filter, not a stored availability value.
+  const availability =
+    input.availability && input.availability !== "all" ? input.availability : null;
+  const pageSize =
+    Number.isInteger(input.pageSize) && Number(input.pageSize) > 0 ? Number(input.pageSize) : 50;
 
   return withPooledPostgresClient(input.databaseUrl, async (client) => {
-    const values = [input.providerId, query] as const;
+    const values = [input.providerId, query, availability] as const;
     const filters = `
       provider_models.provider_id = $1::uuid
       and provider_models.deleted_at is null
@@ -389,6 +396,7 @@ export async function listProviderModelPage(input: {
         or provider_models.model_id ilike '%' || $2 || '%'
         or provider_models.display_name ilike '%' || $2 || '%'
       )
+      and ($3::text is null or provider_models.availability = $3)
     `;
     const countResult = await client.query<{ total: number }>(
       `
@@ -400,17 +408,17 @@ export async function listProviderModelPage(input: {
       values,
     );
     const total = countResult.rows[0]?.total ?? 0;
-    const pageCount = Math.max(1, Math.ceil(total / 50));
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(requestedPage, pageCount);
     const result = await client.query<ProviderModelOptionRow>(
       `
         ${providerModelOptionsSelectSql()}
         where ${filters}
         order by lower(provider_models.display_name), provider_models.model_id, provider_models.id
-        limit 50
-        offset $3
+        limit $4
+        offset $5
       `,
-      [...values, (page - 1) * 50],
+      [...values, pageSize, (page - 1) * pageSize],
     );
 
     return {

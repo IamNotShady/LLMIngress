@@ -762,3 +762,85 @@ function uniqueBy<T>(items: T[], key: (item: T) => string): T[] {
     return true;
   });
 }
+
+/** Latest model_refresh outcome per provider, for the refresh-failure banner. */
+export type ConsoleProviderModelRefreshStatus = {
+  failure: {
+    at: Date | null;
+    errorCode: string | null;
+    errorMessage: string | null;
+  } | null;
+  lastSucceededAt: Date | null;
+  /** Newest provider_models.updated_at — when the listed models last changed. */
+  modelsUpdatedAt: Date | null;
+  providerId: string;
+};
+
+export async function listConsoleProviderModelRefreshStatuses(
+  input: { databaseUrl?: string } = {},
+): Promise<ConsoleProviderModelRefreshStatus[]> {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
+    const result = await client.query<{
+      failed_at: Date | null;
+      failure_error_code: string | null;
+      failure_error_message: string | null;
+      last_succeeded_at: Date | null;
+      models_updated_at: Date | null;
+      provider_id: string;
+    }>(
+      `
+        with refresh_jobs as (
+          select (payload ->> 'providerId') as provider_id,
+                 status,
+                 error_code,
+                 error_message,
+                 coalesce(completed_at, updated_at) as finished_at
+          from jobs
+          where job_type = 'model_refresh'
+            and status in ('succeeded', 'failed')
+            and payload ->> 'providerId' is not null
+        ),
+        latest as (
+          select distinct on (provider_id)
+                 provider_id, status, error_code, error_message, finished_at
+          from refresh_jobs
+          order by provider_id, finished_at desc
+        )
+        select providers.id::text as provider_id,
+               (
+                 select max(provider_models.updated_at)
+                 from provider_models
+                 where provider_models.provider_id = providers.id
+                   and provider_models.deleted_at is null
+               ) as models_updated_at,
+               (
+                 select max(finished_at)
+                 from refresh_jobs
+                 where refresh_jobs.provider_id = providers.id::text
+                   and refresh_jobs.status = 'succeeded'
+               ) as last_succeeded_at,
+               case when latest.status = 'failed' then latest.finished_at end as failed_at,
+               case when latest.status = 'failed' then latest.error_code end as failure_error_code,
+               case when latest.status = 'failed' then latest.error_message end as failure_error_message
+        from providers
+        left join latest on latest.provider_id = providers.id::text
+        where providers.deleted_at is null
+      `,
+    );
+
+    return result.rows.map((row) => ({
+      // Only the newest attempt matters: a later success clears the banner.
+      failure:
+        row.failure_error_code || row.failed_at
+          ? {
+              at: row.failed_at,
+              errorCode: row.failure_error_code,
+              errorMessage: row.failure_error_message,
+            }
+          : null,
+      lastSucceededAt: row.last_succeeded_at,
+      modelsUpdatedAt: row.models_updated_at,
+      providerId: row.provider_id,
+    }));
+  });
+}

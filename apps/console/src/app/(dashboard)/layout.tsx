@@ -5,10 +5,11 @@ import { listConsoleProviderHealthSummaries } from "@llmingress/db/console-provi
 import { getConsoleRuntimeStatus } from "@llmingress/db/console-runtime-status";
 import { loadEncryptionKey } from "@llmingress/security/encryption-key";
 import { cookies } from "next/headers";
-import type { ReactNode } from "react";
+import { type ReactNode, Suspense } from "react";
 import { FirstRunSetup, Login } from "../_components/auth-screens";
 import { ConsoleFooter } from "../_ui/footer";
 import { Masthead } from "../_ui/masthead";
+import { ToastHost } from "../_ui/toast";
 
 // Auth guard + persistent shell for every console module. When the console is
 // not initialized or the visitor is signed out, the matching auth screen is
@@ -43,6 +44,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         failedRequestCount={failedRequestCount}
       />
       {children}
+      <Suspense fallback={null}>
+        <ToastHost />
+      </Suspense>
       <ConsoleFooter
         encryptionReady={isEncryptionReady()}
         runtime={runtime}

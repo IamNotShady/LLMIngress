@@ -965,6 +965,74 @@ test("a refused form states why in the dialog it was submitted from", async ({ b
   }
 });
 
+test("a local provider's endpoint is offered as an endpoint, not as a credential", async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_local_provider_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = randomUUID();
+    await fixture.query(
+      `insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+       values ($1, 'local', 'ollama', 'Ollama (local)', 'http://127.0.0.1:11434/v1', true)`,
+      [providerId],
+    );
+
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await signInFromFirstRun(page, baseUrl);
+        await page.goto(`${baseUrl}/providers?selected=${providerId}`, {
+          waitUntil: "networkidle",
+        });
+
+        // The row in its connections table is the provider's own base url, not a
+        // stored credential: there is no second endpoint to add, and Delete here
+        // would mean deleting the provider, which its own Delete already does.
+        await expect(page.getByText("a server on your own network")).toBeVisible();
+        await expect(page.getByRole("link", { name: /Add endpoint/ })).toHaveCount(0);
+        const connections = page.getByText("http://127.0.0.1:11434/v1").first();
+        await expect(connections).toBeVisible();
+        const rowActions = page.getByRole("link", { name: "Edit", exact: true });
+        await expect(rowActions.first()).toBeVisible();
+
+        // The delete URL is still reachable by hand, and says what it can and
+        // cannot do rather than posting at a table that holds nothing for it.
+        await page.goto(
+          `${baseUrl}/providers?selected=${providerId}&dialog=deleteConnection&connection=${providerId}`,
+          { waitUntil: "networkidle" },
+        );
+        const dialog = page.getByRole("dialog", { name: "Local endpoint" });
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toContainText("is a local provider");
+        await expect(dialog.getByRole("link", { name: "Delete the provider" })).toBeVisible();
+        // Nothing on this screen posts at the provider-keys table, which holds
+        // no row for a local provider and answered "not found".
+        await expect(dialog.getByRole("button", { name: /delete/i })).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 function escapeRegExp(value: string): string {
   return value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

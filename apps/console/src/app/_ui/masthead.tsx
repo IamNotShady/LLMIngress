@@ -41,13 +41,18 @@ export function Masthead({
             <span
               key={item.href}
               className={`flex items-center gap-[6px] px-[13px] font-sans text-14 ${
-                active ? "font-semibold text-ink shadow-[inset_0_-2px_0_var(--accent)]" : "text-dim"
+                active ? "shadow-[inset_0_-2px_0_var(--accent)]" : ""
               }`}
             >
+              {/* The colour stays on the anchor: a bare one falls through to the
+                  stylesheet's accent link colour, which turned the whole module
+                  row blue. */}
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className="flex h-[54px] items-center"
+                className={`flex h-[54px] items-center ${
+                  active ? "font-semibold text-ink" : "text-dim"
+                }`}
               >
                 {item.label}
               </Link>

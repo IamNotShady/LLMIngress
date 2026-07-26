@@ -99,10 +99,11 @@ export const POST = withConsoleAuth(async (request) => {
     }
   } catch (error) {
     // Creating is the one action that cannot post through MutationForm — its
-    // success response is the one-time secret page — so its refusal comes back
-    // to the dialog with the message and the name, instead of replacing the
-    // console with an error body.
-    if (action === "create" && !request.headers.get("accept")?.includes("application/json")) {
+    // success response is the one-time secret page — so a browser's refusal
+    // comes back to the dialog with the message and the name, instead of
+    // replacing the console with an error body. Only a browser: a caller that
+    // did not ask for a page gets the refusal as JSON, with its status.
+    if (action === "create" && request.headers.get("accept")?.includes("text/html")) {
       const verdict = classifyConsoleActionError(error, "The key could not be created.");
       if (verdict.status !== 500) {
         const back = new URL("/api-keys", request.url);

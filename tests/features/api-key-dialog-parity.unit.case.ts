@@ -1,10 +1,25 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+import { PLAYGROUND_KEY_HANDOFF } from "../../apps/console/src/app/_ui/playground/handoff.ts";
+import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page.ts";
 
 const rootDir = process.cwd();
 const appDir = join(rootDir, "apps/console/src/app");
 const source = (file: string) => readFileSync(join(appDir, file), "utf8");
+
+const renderCreatedPage = () =>
+  renderOneTimeApiKeyResponse({
+    createdAt: new Date("2026-07-26T00:00:00.000Z"),
+    defaultVirtualModelName: "contract-vm",
+    enabled: true,
+    keyPrefix: "llmi_contract",
+    limits: [],
+    name: "contract-key",
+    plaintext: "llmi_contract_secret_value",
+    virtualModelName: "contract-vm",
+    virtualModels: [],
+  }).text();
 
 describe("api key presentation contract", () => {
   test("the plaintext secret appears only on the one-time page", () => {
@@ -34,6 +49,41 @@ describe("api key presentation contract", () => {
       expect(tag).toMatch(/^<script>\$\{[A-Za-z]+\(\)\}<\/script>$/);
     }
     expect(createdPage).toContain("function escapeHtml");
+  });
+
+  test("every copy button on the one-time page points at a value that is there", async () => {
+    const html = await renderCreatedPage();
+    const targets = [...html.matchAll(/data-copy="#([^"]+)"/g)].map((match) => match[1]);
+    // The secret and both Codex snippets, at least — a button that points at
+    // nothing looks identical to one that works until it is pressed.
+    expect(targets.length).toBeGreaterThanOrEqual(3);
+    for (const target of targets) {
+      expect(html, target).toContain(`id="${target}"`);
+    }
+    // Outside the <pre>, or the word "Copy" is copied with the snippet.
+    expect(html).not.toMatch(/<pre[^>]*>[^<]*<button/);
+  });
+
+  test("the one-time page resolves the theme the way the console does", async () => {
+    const html = await renderCreatedPage();
+    // It is rendered by the route handler, outside the layout that stamps the
+    // attribute, so it carries the same bootstrap and the same rule: a stored
+    // choice wins, and only without one does the system preference decide.
+    expect(html).toContain("llmingress-console-theme");
+    expect(html).toContain(':root[data-theme="dark"]');
+    expect(html).toContain(':root:not([data-theme="light"])');
+  });
+
+  test("Test in Playground hands the secret over without putting it in a URL", async () => {
+    const html = await renderCreatedPage();
+    expect(html).toMatch(/<a href="\/playground" data-handoff="#secret">/);
+    expect(html).toContain(PLAYGROUND_KEY_HANDOFF);
+    // The link itself stays clean: the value rides in sessionStorage.
+    expect(html).not.toContain("/playground?");
+
+    const playground = source("_ui/playground/playground.tsx");
+    expect(playground).toContain("sessionStorage.getItem(PLAYGROUND_KEY_HANDOFF)");
+    expect(playground).toContain("sessionStorage.removeItem(PLAYGROUND_KEY_HANDOFF)");
   });
 
   test("the created page and the detail view state the same configuration facts", () => {

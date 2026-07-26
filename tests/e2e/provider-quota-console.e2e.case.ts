@@ -236,23 +236,46 @@ test("the Providers page renders each stored quota state and never overflows", a
         // A connection whose probe is paused shows that, not stale numbers.
         await expect(quota.getByText("Probing paused")).toBeVisible();
 
-        // The switch lives with the connection's other actions: pause an active
-        // connection, then resume it.
+        // Whether the console asks a provider about the plan is part of what the
+        // connection is, so it is saved with the connection rather than toggled
+        // beside it: pause an active connection, then resume it.
         await page.goto(
           `${baseUrl}/providers?selected=${seeded.alphaId}` +
             `&providerKeyDialog=${seeded.alphaId}&connection=${seeded.windowConnectionId}`,
           { waitUntil: "networkidle" },
         );
-        await expect(page.getByRole("button", { name: "Pause quota probing" })).toBeVisible();
-        await page.getByRole("button", { name: "Pause quota probing" }).click();
-        // Pausing must not be refused. (Scoped to the dialog: `next dev`
-        // injects an alert region of its own into every page.)
-        await expect(page.getByRole("dialog").first().getByRole("alert")).toHaveCount(0);
-        await expect(page.getByRole("button", { name: "Resume quota probing" })).toBeVisible({
-          timeout: 15_000,
-        });
-        await page.getByRole("button", { name: "Resume quota probing" }).click();
-        await expect(page.getByRole("button", { name: "Pause quota probing" })).toBeVisible();
+        const connectionDialog = page.getByRole("dialog").first();
+        const saveConnection = async (probing: "true" | "false") => {
+          await expect(connectionDialog.getByLabel("QUOTA PROBE")).toHaveValue(
+            probing === "false" ? "true" : "false",
+          );
+          await connectionDialog.getByLabel("QUOTA PROBE").selectOption(probing);
+          // The save is a fetch, not a form post: reading the row back before it
+          // lands is reading the value that was already there.
+          const saved = page.waitForResponse(
+            (response) =>
+              response.url().includes("/api/provider-keys") &&
+              response.request().method() === "POST",
+          );
+          await connectionDialog.getByRole("button", { name: "Save connection" }).click();
+          expect((await saved).status()).toBeLessThan(400);
+          // Saving must not be refused. (Scoped to the dialog: `next dev`
+          // injects an alert region of its own into every page.)
+          await expect(connectionDialog.getByRole("alert")).toHaveCount(0);
+        };
+        const reopenConnection = () =>
+          page.goto(
+            `${baseUrl}/providers?selected=${seeded.alphaId}` +
+              `&providerKeyDialog=${seeded.alphaId}&connection=${seeded.windowConnectionId}`,
+            { waitUntil: "networkidle" },
+          );
+
+        await saveConnection("false");
+        await reopenConnection();
+        await expect(connectionDialog.getByLabel("QUOTA PROBE")).toHaveValue("false");
+        await saveConnection("true");
+        await reopenConnection();
+        await expect(connectionDialog.getByLabel("QUOTA PROBE")).toHaveValue("true");
 
         for (const viewport of [
           { width: 1280, height: 900 },

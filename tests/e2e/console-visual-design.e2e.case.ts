@@ -78,6 +78,40 @@ test("console serves the light-default token skin in both themes with no overflo
           expect(channel).toBe(255);
         }
 
+        // The module row is text in the ink and dim tokens. An anchor with no
+        // colour of its own falls through to the stylesheet's link colour,
+        // which turned the whole masthead accent-blue.
+        const nav = page.getByRole("navigation", { name: "Console modules" });
+        const inkRgb = await backgroundRgb(page, null).then(() =>
+          page.evaluate(() => {
+            const probe = document.createElement("span");
+            probe.className = "text-ink";
+            document.body.append(probe);
+            const value = getComputedStyle(probe).color;
+            probe.remove();
+            return value;
+          }),
+        );
+        const accentRgb = await page.evaluate(() => {
+          const probe = document.createElement("span");
+          probe.style.color = "var(--accent)";
+          document.body.append(probe);
+          const value = getComputedStyle(probe).color;
+          probe.remove();
+          return value;
+        });
+        const activeColor = await nav
+          .getByRole("link", { name: "Overview", exact: true })
+          .evaluate((el) => getComputedStyle(el).color);
+        expect(activeColor).toBe(inkRgb);
+        for (const label of ["Providers", "Usage"]) {
+          const color = await nav
+            .getByRole("link", { name: label, exact: true })
+            .evaluate((el) => getComputedStyle(el).color);
+          expect(color, label).not.toBe(accentRgb);
+          expect(color, label).not.toBe(activeColor);
+        }
+
         // Open Sans is the rendered UI font; DM Mono carries the data.
         expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain(
           "Open Sans",

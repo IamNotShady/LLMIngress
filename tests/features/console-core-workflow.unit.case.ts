@@ -10,9 +10,12 @@ describe("Console core workflow", () => {
     expect(setup).toContain("2 · Create a virtual model");
     expect(setup).toContain("3 · Issue an API key");
     expect(setup).toContain("4 · Set limits, then verify");
-    for (const href of ["/providers", "/models", "/api-keys", "/limits", "/playground"]) {
+    for (const href of ["/providers", "/models", "/api-keys", "/playground"]) {
       expect(setup, href).toContain(`href: "${href}"`);
     }
+    // The limits step opens the keys it is about: the ones with no rules while
+    // any exist, and the whole list once they all have some.
+    expect(setup).toContain('counts.unlimitedKeyCount > 0 ? "/limits?state=off" : "/limits"');
   });
 
   it("derives each step from the tables rather than storing progress", () => {

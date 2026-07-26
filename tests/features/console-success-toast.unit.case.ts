@@ -12,7 +12,19 @@ describe("console success toast", () => {
     // interrupts a screen reader the way an alert would.
     expect(src).toMatch(/<output/);
     expect(src).toMatch(/const TOAST_MS = 4000/);
-    expect(src).toMatch(/setTimeout\(\(\) => setDismissed\(true\), TOAST_MS\)/);
+    expect(src).toMatch(/setTimeout\(\(\) => setToast\(null\), TOAST_MS\)/);
+  });
+
+  test("a toast is announced as an event rather than parked in the URL", () => {
+    const src = read("_ui/toast.tsx");
+    // A toast is something that just happened, not somewhere the operator is.
+    // In the query string it outlives its action, survives a reload, and every
+    // later link has to remember to strip it.
+    expect(src).toContain("export function announceToast");
+    expect(src).toContain("new CustomEvent<ConsoleToast>(TOAST_EVENT");
+    // The no-JavaScript path still works: a server redirect can carry one.
+    expect(src).toContain('params.get("toast")');
+    expect(read("_ui/mutation-form.tsx")).toContain("announceToast(answer.toast)");
   });
 
   test("the host is mounted once, on the shell every module shares", () => {

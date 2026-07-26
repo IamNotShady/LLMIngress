@@ -66,10 +66,17 @@ describe("apiKey management contract", () => {
       "html",
     );
     const html = await response.text();
-    expect(html).not.toContain("<script>");
     expect(html).not.toContain("<img src=x");
     expect(html).toContain("&lt;script&gt;");
     expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+    // The page carries its own scripts — the theme bootstrap and the copy
+    // buttons — so "no script tags" is no longer the test. What must hold is
+    // that none of them contains anything the caller supplied.
+    for (const tag of html.match(/<script[\s\S]*?<\/script>/g) ?? []) {
+      expect(tag).not.toContain("alert");
+      expect(tag).not.toContain("llmi_");
+      expect(tag).not.toContain("xss-probe");
+    }
   });
 
   it("does not read or enforce ApiKey limits when the ApiKey switch is off", async () => {

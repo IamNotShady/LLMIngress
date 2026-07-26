@@ -44,10 +44,17 @@ const PAGES: Array<[string, string]> = [
   ["drawer-limits", "/limits"],
   ["drawer-activity", "/activity"],
   ["dialog-add-provider", "/providers?dialog=new"],
+  // Both credential dialogs in their edit shape, where new and edit are easy
+  // to confuse: a token connection and a key connection.
+  ["dialog-edit-token", "/providers?selected=__CLAUDE__&providerKeyDialog=__CLAUDE__&connection=__OAUTH__"],
+  ["dialog-edit-key", "/providers?selected=__OPENROUTER__&providerKeyDialog=__OPENROUTER__&connection=__ORMAIN__"],
   ["dialog-virtual-model", "/models?dialog=edit"],
 ];
 
 let failingProviderId = "";
+let subscriptionProviderId = "";
+let oauthConnectionId = "";
+let apiKeyConnectionId = "";
 
 async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>) {
   const id = () => randomUUID();
@@ -65,6 +72,7 @@ async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture
   );
 
   failingProviderId = providers.openrouter;
+  subscriptionProviderId = providers.claudeCode;
 
   const models: Record<string, string> = {};
   const modelRows = [
@@ -100,6 +108,8 @@ async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture
 
   // Two connections on openrouter, one failing; one oauth token on claude-code.
   const conns = { orMain: id(), orBackup: id(), oauth: id() };
+  oauthConnectionId = conns.oauth;
+  apiKeyConnectionId = conns.orMain;
   await fixture.query(
     `insert into provider_api_keys (id, provider_id, label, key_prefix, key_id, encrypted_key, priority, enabled)
      values ($1, $3, 'or-main', 'sk-or-a1b2…', 'k1', '{}'::jsonb, 10, true),
@@ -367,7 +377,11 @@ async function main() {
         localStorage.setItem("llmingress-console-theme", value);
       }, theme);
       for (const [name, rawPath] of PAGES) {
-        const path = rawPath.replace("__OPENROUTER__", failingProviderId);
+        const path = rawPath
+          .replace(/__OPENROUTER__/g, failingProviderId)
+          .replace(/__CLAUDE__/g, subscriptionProviderId)
+          .replace(/__OAUTH__/g, oauthConnectionId)
+          .replace(/__ORMAIN__/g, apiKeyConnectionId);
         visiting = `${name} ${theme}`;
         await page.goto(`${baseUrl}${path}`);
         if (name === "drawer-limits") {

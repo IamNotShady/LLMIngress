@@ -394,6 +394,42 @@ export async function setProviderOAuthConnectionEnabled(input: {
   });
 }
 
+/**
+ * The label and routing priority of an authorized connection. The credential
+ * itself is not editable — a token is replaced by authorizing again, not by
+ * typing — so this is what "save" means on an existing OAuth connection.
+ */
+export async function updateProviderOAuthConnectionSettings(input: {
+  databaseUrl?: string;
+  label: string | null;
+  priority: number;
+  providerOAuthId: string;
+}): Promise<ProviderOAuthMetadata> {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
+    const result = await client.query<ProviderOAuthRow>(
+      `
+        update provider_oauth
+        set label = $2,
+            priority = $3,
+            updated_at = now()
+        where id = $1
+          and deleted_at is null
+        returning id::text,
+                  provider_id::text,
+                  label,
+                  priority,
+                  enabled,
+                  token_expires_at,
+                  created_at,
+                  updated_at,
+                  completed_at
+      `,
+      [input.providerOAuthId, input.label, input.priority],
+    );
+    return toProviderOAuthMetadata(requireProviderOAuthRow(result.rows[0]));
+  });
+}
+
 export async function setProviderOAuthQuotaProbeEnabled(input: {
   databaseUrl?: string;
   providerOAuthId: string;

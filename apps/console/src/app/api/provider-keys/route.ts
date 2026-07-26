@@ -4,6 +4,7 @@ import {
   saveProviderApiKey,
   setProviderApiKeyEnabled,
   setProviderApiKeyQuotaProbeEnabled,
+  updateProviderApiKeySettings,
 } from "@llmingress/db/console-provider-keys";
 import {
   enqueueProviderConnectionProbeJob,
@@ -55,13 +56,28 @@ export const POST = withConsoleAuth(async (request) => {
     }
 
     const providerId = readRequiredText(form, "providerId");
+    const providerApiKeyId = readText(form, "providerApiKeyId");
+    const pastedKey = readText(form, "providerApiKey");
+
+    // Saving an existing connection without a new key changes only what the
+    // console owns about it. Demanding a secret to rename a connection would
+    // mean rotating a working credential to fix a typo.
+    if (providerApiKeyId && !pastedKey) {
+      const updated = await updateProviderApiKeySettings({
+        label: readText(form, "label") ?? null,
+        priority: readNumber(form, "priority") ?? 100,
+        providerApiKeyId,
+      });
+      return providerApiKeyMutationResponse(request, updated.providerId);
+    }
+
     const plaintext = readRequiredText(form, "providerApiKey");
     const result = await saveProviderApiKey({
       label: readText(form, "label"),
       encryptionKeySource: readConsoleEncryptionKeySource(),
       plaintext,
       priority: readNumber(form, "priority"),
-      providerApiKeyId: readText(form, "providerApiKeyId"),
+      providerApiKeyId,
       providerId,
     });
     await enqueueProviderConnectionProbeJob({

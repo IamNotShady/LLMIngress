@@ -644,8 +644,10 @@ function CredentialDialog({
           closeHref={closeHref}
           editing={editing}
           oauthId={oauthId}
+          params={params}
           pollInterval={Number.isFinite(pollInterval) ? pollInterval : 5}
           provider={provider}
+          quotaProbeEnabled={quotaProbeEnabled}
           userCode={userCode}
           verificationUri={verificationUri}
         />
@@ -687,14 +689,20 @@ function ApiKeyForm({
         <div className="mt-4">
           <Field
             label="API KEY"
-            hint="Encrypted at rest with the console key; only the prefix is ever displayed again."
+            hint={
+              editing
+                ? "Leave empty to keep the stored key — paste one only to rotate it. Encrypted at rest; only the prefix is ever displayed again."
+                : "Encrypted at rest with the console key; only the prefix is ever displayed again."
+            }
           >
             <TextInput
               name="providerApiKey"
               type="password"
-              required
+              required={!editing}
               autoComplete="off"
-              placeholder={editing ? "paste a new key to rotate" : "paste the provider key"}
+              placeholder={
+                editing ? "leave empty to keep the current key" : "paste the provider key"
+              }
             />
           </Field>
         </div>
@@ -776,8 +784,10 @@ function SubscriptionForm({
   closeHref,
   editing,
   oauthId,
+  params,
   pollInterval,
   provider,
+  quotaProbeEnabled,
   userCode,
   verificationUri,
 }: {
@@ -785,8 +795,10 @@ function SubscriptionForm({
   closeHref: string;
   editing: ProviderConnection | null;
   oauthId: string | undefined;
+  params: SearchParams;
   pollInterval: number;
   provider: ConsoleProvider;
+  quotaProbeEnabled: boolean;
   userCode: string | undefined;
   verificationUri: string | undefined;
 }) {
@@ -890,32 +902,58 @@ function SubscriptionForm({
     );
   }
 
+  // Editing an authorized connection saves what the console owns about it. It
+  // must not start an authorization: that creates a second connection rather
+  // than changing the one the operator opened.
+  const saving = Boolean(editing);
   return (
-    <MutationForm action="/api/provider-oauth" fallbackError="Authorization could not be started.">
-      <input type="hidden" name="action" value="start" />
-      <input type="hidden" name="providerId" value={provider.id} />
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <Field label="LABEL" labelNote="(optional)">
-          <TextInput name="label" defaultValue={editing?.label ?? ""} maxLength={100} />
-        </Field>
-        <Field label="PRIORITY" hint="Lower priority is tried first.">
-          <TextInput
-            name="priority"
-            defaultValue={String(editing?.priority ?? 100)}
-            inputMode="numeric"
-          />
-        </Field>
-      </div>
-      <DialogNote>
-        Subscription plans are not metered — requests routed through this token record no cost.
-      </DialogNote>
-      <DialogActions>
-        <ActionButton size="dialog" tone="primary">
-          Start authorization
-        </ActionButton>
-        <ActionLink href={closeHref}>Cancel</ActionLink>
-      </DialogActions>
-    </MutationForm>
+    <>
+      <MutationForm
+        action="/api/provider-oauth"
+        fallbackError={
+          saving ? "The connection could not be saved." : "Authorization could not be started."
+        }
+      >
+        <input type="hidden" name="action" value={saving ? "update" : "start"} />
+        {editing ? (
+          <input type="hidden" name="providerOAuthId" value={editing.id} />
+        ) : (
+          <input type="hidden" name="providerId" value={provider.id} />
+        )}
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <Field label="LABEL" labelNote="(optional)">
+            <TextInput name="label" defaultValue={editing?.label ?? ""} maxLength={100} />
+          </Field>
+          <Field label="PRIORITY" hint="Lower priority is tried first.">
+            <TextInput
+              name="priority"
+              defaultValue={String(editing?.priority ?? 100)}
+              inputMode="numeric"
+            />
+          </Field>
+        </div>
+        <DialogNote>
+          {saving
+            ? "The token itself cannot be edited — an expired one is replaced by authorizing again from the provider."
+            : "Subscription plans are not metered — requests routed through this token record no cost."}
+        </DialogNote>
+        <DialogActions>
+          <ActionButton size="dialog" tone="primary">
+            {saving ? "Save connection" : "Start authorization"}
+          </ActionButton>
+          <ActionLink href={closeHref}>Cancel</ActionLink>
+        </DialogActions>
+      </MutationForm>
+      {editing ? (
+        <ConnectionStateActions
+          closeHref={closeHref}
+          connection={editing}
+          params={params}
+          provider={provider}
+          quotaProbeEnabled={quotaProbeEnabled}
+        />
+      ) : null}
+    </>
   );
 }
 

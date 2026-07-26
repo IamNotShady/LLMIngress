@@ -12,6 +12,7 @@ import {
   readProviderOAuthRuntimeConnection,
   setProviderOAuthConnectionEnabled,
   setProviderOAuthQuotaProbeEnabled,
+  updateProviderOAuthConnectionSettings,
 } from "@llmingress/db/providers";
 import {
   buildProviderOAuthAuthorizeUrl,
@@ -359,6 +360,7 @@ export {
   deleteProviderOAuthConnection,
   setProviderOAuthConnectionEnabled,
   setProviderOAuthQuotaProbeEnabled,
+  updateProviderOAuthConnectionSettings,
 };
 
 function encryptProviderOAuthToken(input: {

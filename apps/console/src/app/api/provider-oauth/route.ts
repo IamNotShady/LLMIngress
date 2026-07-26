@@ -6,6 +6,7 @@ import {
   setProviderOAuthConnectionEnabled,
   setProviderOAuthQuotaProbeEnabled,
   startProviderOAuthConnection,
+  updateProviderOAuthConnectionSettings,
 } from "@llmingress/db/console-provider-oauth";
 import {
   enqueueProviderConnectionProbeJob,
@@ -64,6 +65,18 @@ export const POST = withConsoleAuth(async (request) => {
         });
       }
       return NextResponse.json({ message: result.message, status: result.status });
+    }
+
+    // Saving an authorized connection edits what the console owns about it —
+    // its label and its routing priority. Starting an authorization from the
+    // edit dialog would have created a second connection instead.
+    if (action === "update") {
+      const result = await updateProviderOAuthConnectionSettings({
+        label: readNullableText(form, "label") ?? null,
+        priority: readNumber(form, "priority") ?? 100,
+        providerOAuthId: readRequiredText(form, "providerOAuthId"),
+      });
+      return redirectToProvider(result.providerId);
     }
 
     if (action === "delete") {

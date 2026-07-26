@@ -310,6 +310,40 @@ export async function deleteProviderApiKey(input: {
   return { providerId };
 }
 
+/**
+ * The label and routing priority of a stored key. Rotating the secret is a
+ * separate act — an operator changing a label should not have to produce a new
+ * credential to do it.
+ */
+export async function updateProviderApiKeySettings(input: {
+  databaseUrl?: string;
+  label: string | null;
+  priority: number;
+  providerApiKeyId: string;
+}): Promise<{ id: string; providerId: string }> {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
+    const result = await client.query<{ id: string; provider_id: string }>(
+      `
+        update provider_api_keys
+        set label = $2,
+            priority = $3,
+            updated_at = now()
+        where id = $1
+          and deleted_at is null
+        returning id::text, provider_id::text
+      `,
+      [input.providerApiKeyId, input.label, input.priority],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw consoleNotFoundError("Provider API key was not found.", "provider_api_key_not_found", {
+        providerApiKeyId: input.providerApiKeyId,
+      });
+    }
+    return { id: row.id, providerId: row.provider_id };
+  });
+}
+
 export async function setProviderApiKeyQuotaProbeEnabled(input: {
   databaseUrl?: string;
   providerApiKeyId: string;

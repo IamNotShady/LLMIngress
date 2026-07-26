@@ -209,3 +209,90 @@ test("the Overview caps every list it draws, and says what it is not showing", a
     await fixture.dispose();
   }
 });
+
+test("the Overview's failures are the selected window's failures", async ({ browser }) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_overview_window_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await withDedicatedPostgresClient(fixture.databaseUrl, async (client) => {
+      const apiKeyId = randomUUID();
+      const virtualModelId = randomUUID();
+      await client.query(
+        `insert into virtual_models (id, name, description, enabled)
+         values ($1, 'window-vm', 'Window VM', true)`,
+        [virtualModelId],
+      );
+      await client.query(
+        `insert into api_keys (id, name, key_prefix, key_hash, enabled)
+         values ($1, 'window-key', 'llmi_window', gen_random_uuid()::text, true)`,
+        [apiKeyId],
+      );
+      // One failure inside the default window, one from three days ago.
+      for (const failure of [
+        { ageDays: 0, code: "today_failure" },
+        { ageDays: 3, code: "old_failure" },
+      ]) {
+        await client.query(
+          `insert into request_activity (
+             id, request_id, api_key_id, virtual_model_id, api_key_prefix, protocol, model,
+             stream, status, http_status, error_code, latency_ms, started_at, completed_at,
+             api_key_name_snapshot, virtual_model_name_snapshot
+           )
+           values ($1, $2, $3, $4, 'llmi_window', 'chat_completions', 'window-vm', false,
+                   'failed', 500, $5, 120,
+                   now() - make_interval(days => $6), now() - make_interval(days => $6),
+                   'window-key', 'window-vm')`,
+          [
+            randomUUID(),
+            `window-${randomUUID()}`,
+            apiKeyId,
+            virtualModelId,
+            failure.code,
+            failure.ageDays,
+          ],
+        );
+      }
+    });
+
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await signInFromFirstRun(page, baseUrl);
+
+        // The panel sits under a chart of the last 24 hours and says so: a
+        // failure from three days ago is not part of what this page describes,
+        // and the sentence under the list used to claim a horizon the query
+        // never applied.
+        await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+        const failures = page.getByTestId("overview-recent-failures");
+        await expect(failures.getByText("500 today_failure")).toBeVisible();
+        await expect(failures.getByText("500 old_failure")).toHaveCount(0);
+        await expect(failures.getByText("in the selected window")).toBeVisible();
+
+        // Widening the window brings it in, which is what makes the sentence
+        // true rather than decorative.
+        await page.goto(`${baseUrl}/?window=7d`, { waitUntil: "networkidle" });
+        await expect(failures.getByText("500 old_failure")).toBeVisible();
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});

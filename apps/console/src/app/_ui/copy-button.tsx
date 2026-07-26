@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { copyText } from "./copy-text";
 
 /**
  * Copies a value the operator would otherwise retype by hand — a device code, an
- * authorization url. It says it worked, because a copy that silently failed and
- * a copy that worked look identical, and the next thing the operator does is
+ * authorization url. It says what happened, because a copy that silently failed
+ * and a copy that worked look identical, and the next thing the operator does is
  * paste somewhere this console cannot see.
  */
 /** Sized by prop, not by an override: a class would depend on stylesheet order. */
@@ -27,31 +28,30 @@ export function CopyButton({
   size?: keyof typeof sizeClass;
   value: string;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [outcome, setOutcome] = useState<"copied" | "failed" | null>(null);
 
   useEffect(() => {
-    if (!copied) {
+    if (!outcome) {
       return;
     }
-    const timer = setTimeout(() => setCopied(false), 2000);
+    const timer = setTimeout(() => setOutcome(null), 2000);
     return () => clearTimeout(timer);
-  }, [copied]);
+  }, [outcome]);
 
   return (
     <button
       type="button"
       onClick={() => {
-        void navigator.clipboard
-          ?.writeText(value)
-          .then(() => setCopied(true))
-          .catch(() => setCopied(false));
+        void copyText(value).then((copied) => setOutcome(copied ? "copied" : "failed"));
         if (href) {
           window.open(href, "_blank", "noreferrer");
         }
       }}
-      className={`cursor-pointer whitespace-nowrap rounded-xs border border-btnbd bg-btnbg font-mono font-medium text-ink ${sizeClass[size]}`}
+      className={`cursor-pointer whitespace-nowrap rounded-xs border border-btnbd bg-btnbg font-mono font-medium ${
+        outcome === "failed" ? "text-redtx" : "text-ink"
+      } ${sizeClass[size]}`}
     >
-      {copied ? "copied" : children}
+      {outcome === "failed" ? "copy failed" : outcome === "copied" ? "copied" : children}
     </button>
   );
 }

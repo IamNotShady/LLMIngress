@@ -94,12 +94,18 @@ test("ApiKey dialogs show endpoint groups and integration tabs without the platf
 
         const tablist = setupDialog.getByRole("tablist", { name: "Integration platform" });
         await expect(tablist.getByRole("tab")).toHaveCount(8);
-        // The secret is stored hashed, so the snippets carry the prefix and the
-        // dialog says what to do about it rather than looking complete.
+        // The secret is stored hashed, so the snippets carry a placeholder. The
+        // prefix would make a complete-looking line holding a truncated key —
+        // copied from beside its own Copy button, it fails as a wrong secret
+        // rather than as a line that was never filled in.
         await expect(
-          setupDialog.getByText("export LLMINGRESS_API_KEY='llmi_guide_k'"),
+          setupDialog.getByText("export LLMINGRESS_API_KEY='<YOUR_API_KEY>'"),
         ).toBeVisible();
-        await expect(setupDialog.getByText(/snippets show the prefix only/)).toBeVisible();
+        await expect(setupDialog.getByText("export LLMINGRESS_API_KEY='llmi_guide_k'")).toHaveCount(
+          0,
+        );
+        // Which key it is still says so, in the note rather than in the snippet.
+        await expect(setupDialog.getByText(/key starting llmi_guide_k/)).toBeVisible();
         await tablist.getByRole("tab", { name: "Claude Code" }).click();
         await expect(page.getByText(/ANTHROPIC_BASE_URL=/)).toBeVisible();
 

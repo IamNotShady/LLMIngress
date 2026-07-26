@@ -119,15 +119,12 @@ export const POST = withConsoleAuth(async (request) => {
       });
     }
 
+    // The console posts this form through MutationForm, which needs nothing
+    // back but the outcome. The secret the operator pasted is stored encrypted
+    // and read again only as a prefix; answering with it would put it in the
+    // page's scripts, where nothing asked for it and nothing can account for it.
     if (request.headers.get("accept")?.includes("application/json")) {
-      return NextResponse.json(
-        {
-          action: result.action,
-          apiKey: plaintext.trim(),
-          keyPrefix: result.metadata.keyPrefix,
-        },
-        { headers: { "cache-control": "no-store" } },
-      );
+      return providerApiKeyMutationResponse(request, providerId);
     }
 
     return new NextResponse(

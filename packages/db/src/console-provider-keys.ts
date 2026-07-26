@@ -334,7 +334,14 @@ export async function updateProviderApiKeySettings(input: {
           and deleted_at is null
         returning enabled, id::text, provider_id::text
       `,
-      [input.providerApiKeyId, input.label, input.priority, input.enabled],
+      // The same rules as the paste path: renaming a connection is not a way
+      // past the label length or the 0-100 integer the column stores.
+      [
+        input.providerApiKeyId,
+        normalizeOptionalLabel(input.label),
+        normalizePriority(input.priority),
+        input.enabled,
+      ],
     );
     const row = result.rows[0];
     if (!row) {

@@ -12,7 +12,13 @@ import { listProviderModelPage } from "@llmingress/db/console-route-policies";
 import { getConsoleUsageSummary } from "@llmingress/db/console-usage";
 import { ActionLink } from "../../_ui/controls";
 import { EmptyState, PageShell, PageTitleRow } from "../../_ui/layout";
-import { buildHref, readIntParam, readParam, type SearchParams } from "../../_ui/params";
+import {
+  buildHref,
+  readIntParam,
+  readPageSizeParam,
+  readParam,
+  type SearchParams,
+} from "../../_ui/params";
 import { countProviderAggregateHealthStatuses } from "../../_ui/provider-health";
 import { ProviderDetail } from "../../_ui/providers/detail";
 import { ProviderDialogs } from "../../_ui/providers/dialogs";
@@ -70,7 +76,7 @@ export default async function ProvidersPage({
     ? await listProviderModelPage({
         availability,
         page: readIntParam(params, "modelPage", 1),
-        pageSize: readIntParam(params, "modelPageSize", 20),
+        pageSize: readPageSizeParam(params, "modelPageSize", 20),
         providerId: selected.id,
         query: modelQuery || null,
       })

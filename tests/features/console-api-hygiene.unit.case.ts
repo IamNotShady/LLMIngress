@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { ConsoleOperationError } from "@llmingress/db/console-operation-error";
 import { describe, expect, it } from "vitest";
 import { classifyConsoleActionError } from "../../apps/console/src/app/api/_error-classify";
+import { classifyAndLogConsoleActionError } from "../../apps/console/src/app/api/_errors";
 import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page";
 
 const guardedRoutes = [
@@ -102,6 +103,25 @@ describe("console api hygiene", () => {
     });
     expect(payload.guides).toHaveLength(8);
     expect(payload).not.toHaveProperty("integrationPlatform");
+  });
+
+  it("keeps an unexpected failure behind an id wherever it is shown", () => {
+    // A refusal rendered into a dialog and a refusal returned as JSON are the
+    // same event: the id is minted and logged once, here, so the operator can
+    // quote it and the log holds the cause. A validation refusal has no id — it
+    // is not a fault to look up, it is a field to fix.
+    const unexpected = classifyAndLogConsoleActionError(
+      new Error("connection refused"),
+      "fallback",
+    );
+    expect(unexpected).toMatchObject({ code: "internal_error", message: "fallback", status: 500 });
+    expect(unexpected.errorId).toMatch(/^[0-9a-f-]{36}$/);
+
+    const validation = classifyAndLogConsoleActionError(
+      new ConsoleOperationError("validation", "name is required.", { code: "name_required" }),
+      "fallback",
+    );
+    expect(validation.errorId).toBeUndefined();
   });
 
   it("sanitizes action errors before surfacing them, on every route", () => {

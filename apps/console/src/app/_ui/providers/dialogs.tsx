@@ -60,6 +60,16 @@ export function ProviderDialogs({
   if (!provider) {
     return null;
   }
+  // A link that names a connection has to find it. Falling back to "add one"
+  // would ask for a new credential under a title that reads like an edit of the
+  // connection that is gone.
+  const namedConnectionId = readParam(params, "connection");
+  const namedConnection = namedConnectionId
+    ? (connections.find((entry) => entry.id === namedConnectionId) ?? null)
+    : null;
+  if (namedConnectionId && !namedConnection) {
+    return <MissingConnectionDialog closeHref={closeHref} />;
+  }
   if (credentialProviderId === provider.id) {
     return (
       <CredentialDialog
@@ -91,7 +101,7 @@ export function ProviderDialogs({
     );
   }
   if (dialog === "deleteConnection") {
-    const connection = connections.find((entry) => entry.id === readParam(params, "connection"));
+    const connection = namedConnection ?? undefined;
     if (connection?.kind === "local") {
       return (
         <LocalConnectionDeleteDialog
@@ -467,16 +477,17 @@ function DeleteProviderDialog({
 }
 
 /**
- * The URL names a connection that is not there any more — deleted in another
- * tab, or by someone else. Rendering nothing would leave the operator looking
- * at a page that ignored their click, so it says what happened.
+ * The URL names a connection this provider does not have — deleted in another
+ * tab, or a link carrying someone else's connection. Rendering nothing would
+ * leave the operator looking at a page that ignored their click, so it says
+ * what it knows, which is not that anything was deleted.
  */
 function MissingConnectionDialog({ closeHref }: { closeHref: string }) {
   return (
     <Dialog closeHref={closeHref} title="Connection not found" width={460}>
       <DialogBody>
-        This connection no longer exists — it was deleted since this page was opened. Nothing was
-        changed.
+        This provider has no connection with that id — it was deleted, or the link named a
+        connection of another provider. Nothing was changed.
       </DialogBody>
       <DialogActions>
         <ActionLink href={closeHref} tone="primary">

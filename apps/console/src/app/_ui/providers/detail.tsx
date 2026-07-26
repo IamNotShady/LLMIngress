@@ -24,7 +24,7 @@ import {
 import { DetailRow, SectionTitle } from "../layout";
 import { formatModelContextTokens } from "../model-capability-format";
 import { MutationForm } from "../mutation-form";
-import { buildHref, readIntParam, readParam, type SearchParams } from "../params";
+import { buildHref, readPageSizeParam, readParam, type SearchParams } from "../params";
 import { PlanQuotaPanel } from "../quota-panel";
 import { formatRange, GridRow, Pagination } from "../table";
 import {
@@ -64,9 +64,9 @@ export function ProviderDetail({
 
   const modelQuery = readParam(params, "modelQuery") ?? "";
   const availability = readParam(params, "availability") ?? "available";
-  // Bounded on purpose: the page size is a URL parameter, and an unbounded one
-  // lets a single request materialise the whole model table.
-  const pageSize = Math.min(100, Math.max(1, readIntParam(params, "modelPageSize", 20)));
+  // The same bound the page applies before it queries: what this renders is a
+  // page of models, and its controls have to name the page that was fetched.
+  const pageSize = readPageSizeParam(params, "modelPageSize", 20);
 
   return (
     <div className="min-w-0 pl-6 pt-[18px]">

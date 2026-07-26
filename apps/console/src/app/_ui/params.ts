@@ -16,6 +16,20 @@ export function readIntParam(params: SearchParams, key: string, fallback: number
 }
 
 /**
+ * A page size arrives in the URL, so it is bounded where it is read rather than
+ * where it is displayed: the query is what a hand-written 100000 would make
+ * materialise the whole table for.
+ */
+export function readPageSizeParam(
+  params: SearchParams,
+  key: string,
+  fallback: number,
+  max = 100,
+): number {
+  return Math.min(max, readIntParam(params, key, fallback));
+}
+
+/**
  * Preserve the rest of the query string so a navigation never silently drops a
  * filter. Toast parameters are always dropped — a toast belongs to the action
  * that produced it, not to every later link.

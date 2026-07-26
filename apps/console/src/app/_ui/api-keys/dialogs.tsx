@@ -25,6 +25,7 @@ import { SyncedSearchInput } from "../synced-search";
 import { SyncedSelect } from "../synced-select";
 import { formatRange } from "../table";
 import { ApiKeyEditorForm } from "./editor-form";
+import { grantParamChanges, readDefaultGrantId, readGrantIds } from "./grant-params";
 import { IntegrationPanel } from "./integration-panel";
 import {
   BUDGET_PERIOD_OPTIONS,
@@ -47,6 +48,24 @@ const GRANT_PAGE_SIZE = 8;
 /** One line, in one place: a wrapped copy is a copy that can drift. */
 const ROTATE_NOTE =
   "the llmi_ secret cannot be shown or changed — delete the key and issue a new one to rotate it";
+
+/** Why the save is unavailable, next to the button that is unavailable. */
+const NO_GRANT_NOTE = "grant at least one Virtual Model — a key with none can call nothing";
+
+/**
+ * What a refused creation carries back so the dialog can be reopened as it was
+ * left. They belong to that one round trip: closing the dialog drops them.
+ */
+const DRAFT_PARAMS = [
+  "draft_budgetPeriod",
+  "draft_budgetUsd",
+  "draft_concurrency",
+  "draft_enableLimits",
+  "draft_enforcementPolicy",
+  "draft_rpm",
+  "draft_tokenLimit",
+  "draft_tpm",
+] as const;
 
 export function ApiKeyDialogs({
   apiKey,
@@ -82,6 +101,7 @@ export function ApiKeyDialogs({
     grantQuery: null,
     grantShow: null,
     keyName: null,
+    ...Object.fromEntries(DRAFT_PARAMS.map((param) => [param, null])),
   });
 
   if (dialog === "new") {
@@ -162,26 +182,33 @@ function ApiKeyEditorDialog({
 
   // Grants and the default live in the URL, so toggling one is a plain link and
   // the dialog stays server-rendered from the selected key's real values.
-  const grantParam = readParam(params, "grantIds");
-  const selectedGrantIds =
-    grantParam === undefined
-      ? grants.map((grant) => grant.virtualModelId)
-      : grantParam.split(",").filter(Boolean);
-  const defaultParam = readParam(params, "defaultGrant");
-  const defaultGrantId =
-    defaultParam ?? grants.find((grant) => grant.isDefault)?.virtualModelId ?? "";
+  const selectedGrantIds = readGrantIds(
+    params,
+    grants.map((grant) => grant.virtualModelId),
+  );
+  const defaultGrantId = readDefaultGrantId(
+    params,
+    grants.find((grant) => grant.isDefault)?.virtualModelId ?? "",
+  );
 
   const view = buildApiKeyLimitsView({
     budgetPeriod: undefined,
     limits,
     limitsEnabled: apiKey?.limitsEnabled ?? true,
   });
+  // A refused creation comes back through the URL, carrying what was typed: one
+  // field was wrong, and retyping the other six is the console losing work it
+  // was handed. An existing key has its own saved values to show instead.
+  const draft = (field: string) => readParam(params, `draft_${field}`);
+  const limitField = (field: string, saved: number | null, fresh: number | null) =>
+    draft(field) ?? limitFieldValue(saved, editing ? null : fresh);
   const pathname = "/api-keys";
   const withGrants = (ids: string[], nextDefault?: string) =>
-    buildHref(pathname, params, {
-      defaultGrant: nextDefault ?? (ids.includes(defaultGrantId) ? defaultGrantId : ""),
-      grantIds: ids.join(","),
-    });
+    buildHref(
+      pathname,
+      params,
+      grantParamChanges(ids, nextDefault ?? (ids.includes(defaultGrantId) ? defaultGrantId : "")),
+    );
 
   // A console with many virtual models would otherwise put a scroll of rows
   // between the name and the limits. Searching, filtering and paging narrow the
@@ -372,7 +399,11 @@ function ApiKeyEditorDialog({
               name="enableLimits"
               value="true"
               aria-label="Enable limits"
-              defaultChecked={apiKey ? apiKey.limitsEnabled : true}
+              defaultChecked={
+                draft("enableLimits")
+                  ? draft("enableLimits") === "true"
+                  : (apiKey?.limitsEnabled ?? true)
+              }
               className="size-[13px] flex-none accent-accent"
             />
           </div>
@@ -381,14 +412,15 @@ function ApiKeyEditorDialog({
               <span className="flex items-center gap-[6px] [&>select]:w-[110px] [&>select]:flex-none">
                 <TextInput
                   name="budgetUsd"
-                  defaultValue={limitFieldValue(view.budgetLimit, editing ? null : 25)}
+                  aria-label="Budget USD"
+                  defaultValue={limitField("budgetUsd", view.budgetLimit, 25)}
                   inputMode="decimal"
                   placeholder="unlimited"
                 />
                 <SelectInput
                   name="budgetPeriod"
                   aria-label="Budget period"
-                  defaultValue={view.budgetPeriod ?? "month"}
+                  defaultValue={draft("budgetPeriod") ?? view.budgetPeriod ?? "month"}
                 >
                   {BUDGET_PERIOD_OPTIONS.map((period) => (
                     <option key={period.value} value={period.value}>
@@ -401,7 +433,7 @@ function ApiKeyEditorDialog({
             <Field label="RPM" hint="requests per minute">
               <TextInput
                 name="rpm"
-                defaultValue={limitFieldValue(view.rpm, editing ? null : 120)}
+                defaultValue={limitField("rpm", view.rpm, 120)}
                 inputMode="numeric"
                 placeholder="unlimited"
               />
@@ -409,7 +441,7 @@ function ApiKeyEditorDialog({
             <Field label="TPM" hint="tokens per minute (input + output)">
               <TextInput
                 name="tpm"
-                defaultValue={limitFieldValue(view.tpm, editing ? null : 50_000)}
+                defaultValue={limitField("tpm", view.tpm, 50_000)}
                 inputMode="numeric"
                 placeholder="unlimited"
               />
@@ -417,7 +449,7 @@ function ApiKeyEditorDialog({
             <Field label="TOKENS / REQUEST" hint="max tokens a single request may use">
               <TextInput
                 name="tokenLimit"
-                defaultValue={limitFieldValue(view.tokensPerRequest, editing ? null : 16_384)}
+                defaultValue={limitField("tokenLimit", view.tokensPerRequest, 16_384)}
                 inputMode="numeric"
                 placeholder="unlimited"
               />
@@ -425,7 +457,7 @@ function ApiKeyEditorDialog({
             <Field label="CONCURRENCY" hint="in-flight requests at the same time">
               <TextInput
                 name="concurrency"
-                defaultValue={limitFieldValue(view.concurrency, editing ? null : 4)}
+                defaultValue={limitField("concurrency", view.concurrency, 4)}
                 inputMode="numeric"
                 placeholder="unlimited"
               />
@@ -434,7 +466,7 @@ function ApiKeyEditorDialog({
               <SelectInput
                 name="enforcementPolicy"
                 aria-label="Enforcement policy"
-                defaultValue={view.enforcement}
+                defaultValue={draft("enforcementPolicy") ?? view.enforcement}
               >
                 <option value="block">block</option>
                 <option value="warn_only">warn_only</option>
@@ -447,7 +479,9 @@ function ApiKeyEditorDialog({
               {editing ? "Save" : "Create key"}
             </ActionButton>
             <ActionLink href={closeHref}>Cancel</ActionLink>
-            {editing ? (
+            {selectedGrantIds.length === 0 ? (
+              <span className="ml-1 font-mono text-12 text-ambtx">{NO_GRANT_NOTE}</span>
+            ) : editing ? (
               <span className="ml-1 font-mono text-12 text-faint">{ROTATE_NOTE}</span>
             ) : null}
           </DialogActions>

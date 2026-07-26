@@ -3,7 +3,10 @@ import { expect, test } from "@playwright/test";
 import {
   listApiKeyLimitRuntimeSnapshots,
   listApiKeyLimits,
+  listConsoleCurrentBudgetPeriods,
   listSavedApiKeyLimits,
+  normalizeApiKeyLimitFormInput,
+  saveApiKeyLimitRules,
 } from "../../packages/db/src/console-api-key-limits";
 import {
   type ApiKeyLimitRuleInput,
@@ -219,6 +222,113 @@ test("Limits list and runtime metrics include only enabled ApiKeys with Limits e
     await expect(listApiKeyLimitRuntimeSnapshots(fixture.databaseUrl)).resolves.toMatchObject([
       { apiKeyId: visibleApiKeyId, currentRpm: 5 },
     ]);
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("a budget window is reported only for the period the key's rule is written in", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_budget_window_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const dailyRuleKeyId = randomUUID();
+    const noRuleKeyId = randomUUID();
+    const now = new Date("2026-07-26T12:00:00.000Z");
+
+    await withDedicatedPostgresClient(fixture.databaseUrl, async (client) => {
+      await client.query(
+        `insert into api_keys (id, name, key_prefix, key_hash, enabled, limits_enabled)
+         values ($1, 'switched-to-daily', left(gen_random_uuid()::text, 12), gen_random_uuid()::text, true, true),
+                ($2, 'no-budget-rule', left(gen_random_uuid()::text, 12), gen_random_uuid()::text, true, true)`,
+        [dailyRuleKeyId, noRuleKeyId],
+      );
+      // The rule says daily; the only window that exists is the monthly one the
+      // key ran under before the period was changed.
+      await client.query(
+        `insert into api_key_limits (id, api_key_id, limit_type, period, limit_value, unit)
+         values ($1, $2, 'budget', 'day', 5, 'usd')`,
+        [randomUUID(), dailyRuleKeyId],
+      );
+      await client.query(
+        `insert into budget_periods (
+           id, api_key_id, period_type, period_start, period_end, cost_used_usd, tokens_used
+         ) values ($1, $2, 'month', $4, $5, 87.5, 1000),
+                  ($3, $6, 'month', $4, $5, 12.5, 500)`,
+        [
+          randomUUID(),
+          dailyRuleKeyId,
+          randomUUID(),
+          new Date("2026-07-01T00:00:00.000Z"),
+          new Date("2026-08-01T00:00:00.000Z"),
+          noRuleKeyId,
+        ],
+      );
+    });
+
+    // Pairing a month of spend with a daily ceiling renders as far over budget
+    // for a key that may not have spent anything today.
+    const periods = await listConsoleCurrentBudgetPeriods({
+      databaseUrl: fixture.databaseUrl,
+      now,
+    });
+    expect(periods.map((period) => period.apiKeyId)).toEqual([noRuleKeyId]);
+    expect(periods[0]).toMatchObject({ costUsedUsd: "12.50000000", periodType: "month" });
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("a limit field the operator cleared is removed, not kept at its old ceiling", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_limit_clearing_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const apiKeyId = randomUUID();
+    await withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
+      client.query(
+        `insert into api_keys (id, name, key_prefix, key_hash, enabled, limits_enabled)
+         values ($1, 'cleared-limits', left(gen_random_uuid()::text, 12), gen_random_uuid()::text, true, true)`,
+        [apiKeyId],
+      ),
+    );
+    const save = (fields: Omit<Parameters<typeof normalizeApiKeyLimitFormInput>[0], "apiKeyId">) =>
+      saveApiKeyLimitRules({
+        databaseUrl: fixture.databaseUrl,
+        limits: normalizeApiKeyLimitFormInput({ apiKeyId, ...fields }),
+      });
+    const savedTypes = async () =>
+      (await listSavedApiKeyLimits(fixture.databaseUrl)).map((limit) => limit.limitType).sort();
+
+    await save({
+      budgetPeriod: "month",
+      budgetUsd: "100",
+      concurrency: "50",
+      rpm: "600",
+      tokenLimit: "200000",
+      tpm: "1000000",
+    });
+    await expect(savedTypes()).resolves.toEqual(["budget", "concurrency", "rpm", "token", "tpm"]);
+
+    // The drawer says "Leave a field empty for unlimited". A blank RPM is not a
+    // rule that was left alone — it is the rule being taken away, and whatever
+    // survives the save is what the gateway goes on enforcing.
+    await save({
+      budgetPeriod: "month",
+      budgetUsd: "100",
+      concurrency: "50",
+      rpm: "",
+      tokenLimit: "200000",
+      tpm: "1000000",
+    });
+    await expect(savedTypes()).resolves.toEqual(["budget", "concurrency", "token", "tpm"]);
+
+    await save({ budgetPeriod: "month" });
+    await expect(savedTypes()).resolves.toEqual([]);
   } finally {
     await fixture.dispose();
   }

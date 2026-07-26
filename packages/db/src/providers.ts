@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { withPooledPostgresClient, withPostgresTransaction } from "@llmingress/db/client";
 import { clearProviderConnectionHealthWithClient } from "@llmingress/db/provider-health";
 import { clearProviderQuotaWithClient } from "@llmingress/db/provider-quota";
-import { consoleNotFoundError } from "./console-operation-error.ts";
+import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 
 export type {
   PostgresQueryClient,
@@ -426,7 +426,14 @@ export async function updateProviderOAuthConnectionSettings(input: {
                   updated_at,
                   completed_at
       `,
-      [input.providerOAuthId, input.label, input.priority, input.enabled],
+      // Same rules as authorizing one: the credential differs, the label and
+      // the routing order do not.
+      [
+        input.providerOAuthId,
+        normalizeProviderOAuthLabel(input.label),
+        normalizeProviderOAuthPriority(input.priority),
+        input.enabled,
+      ],
     );
     return toProviderOAuthMetadata(requireProviderOAuthRow(result.rows[0]));
   });
@@ -633,10 +640,15 @@ function toProviderOAuthRuntimeConnection(
   };
 }
 
+// A value the operator typed is refused as a validation error, so the console
+// renders it in the dialog it was typed in rather than answering 500.
 function normalizeProviderOAuthLabel(value: string | null | undefined): string | null {
   const label = value?.trim();
   if (label && label.length > 100) {
-    throw new Error("Provider OAuth connection label must be at most 100 characters.");
+    throw consoleValidationError(
+      "Provider OAuth connection label must be at most 100 characters.",
+      "provider_oauth_label_too_long",
+    );
   }
   return label || null;
 }
@@ -646,7 +658,10 @@ function normalizeProviderOAuthPriority(value: number | undefined): number {
     return 100;
   }
   if (!Number.isInteger(value) || value < 0 || value > 100) {
-    throw new Error("Provider OAuth connection priority must be between 0 and 100.");
+    throw consoleValidationError(
+      "Provider OAuth connection priority must be between 0 and 100.",
+      "provider_oauth_priority_invalid",
+    );
   }
   return value;
 }

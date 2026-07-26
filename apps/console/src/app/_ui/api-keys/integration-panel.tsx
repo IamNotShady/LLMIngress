@@ -3,12 +3,17 @@ import { CopyButton } from "../copy-button";
 import { buildHref, readParam, type SearchParams } from "../params";
 import { buildIntegrationGuides, type IntegrationPlatform } from "./integration-guide";
 
+/** What stands where the secret would be: unmistakably not a value. */
+const KEY_PLACEHOLDER = "<YOUR_API_KEY>";
+
 /**
  * The same setup the one-time screen hands over, available again from the key
  * it belongs to. The secret is the only difference: it was shown once and is
- * stored hashed, so the snippets here carry the prefix and say so — an operator
- * who pastes one unchanged gets a 401, which is a better failure than a snippet
- * that looks complete and quietly authenticates as nothing.
+ * stored hashed, so these snippets carry a placeholder rather than the prefix.
+ * A prefix makes a syntactically complete line holding a truncated secret —
+ * copied and run, it fails as a wrong key instead of as a line that was never
+ * filled in, and there is a Copy button right beside it. Which key this is
+ * belongs in the note under the snippets, not in the snippets.
  */
 export function IntegrationPanel({
   gatewayBaseUrl,
@@ -18,13 +23,13 @@ export function IntegrationPanel({
   pathname,
 }: {
   gatewayBaseUrl: string;
-  /** Stands in for the secret in every snippet. */
+  /** Named in the note, so the operator knows which key to paste. */
   keyPrefix: string;
   model: string;
   params: SearchParams;
   pathname: string;
 }) {
-  const guides = buildIntegrationGuides({ apiKey: keyPrefix, gatewayBaseUrl, model });
+  const guides = buildIntegrationGuides({ apiKey: KEY_PLACEHOLDER, gatewayBaseUrl, model });
   const selectedPlatform = (readParam(params, "guide") ??
     guides[0]?.platform) as IntegrationPlatform;
   const active = guides.find((entry) => entry.platform === selectedPlatform) ?? guides[0];
@@ -105,8 +110,9 @@ export function IntegrationPanel({
       </div>
 
       <p className="mt-4 rounded-xs border border-ambbd bg-ambbg px-3 py-[10px] font-mono text-13 leading-[1.6] text-ambtx">
-        The secret is stored hashed, so snippets show the prefix only — paste your own copy in place
-        of {keyPrefix}, or delete this key and issue a new one.
+        The secret was shown once and is stored hashed, so the snippets carry {KEY_PLACEHOLDER} —
+        put your own copy of the key starting {keyPrefix} in its place, or delete this key and issue
+        a new one.
       </p>
     </div>
   );

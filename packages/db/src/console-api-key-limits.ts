@@ -275,14 +275,10 @@ export async function replaceApiKeyLimitRulesWithClient(
   apiKeyId: string,
   rules: readonly ApiKeyLimitRuleInput[],
 ): Promise<void> {
-  await client.query(
-    `
-      delete from api_key_limits
-      where api_key_id = $1
-        and limit_type = any($2::text[])
-    `,
-    [apiKeyId, rules.map((rule) => rule.limitType)],
-  );
+  // Every caller submits the whole rule set, and a field left empty is a
+  // ceiling being taken away rather than one left alone — deleting only the
+  // types being written back would keep enforcing the ones just cleared.
+  await client.query("delete from api_key_limits where api_key_id = $1", [apiKeyId]);
 
   for (const rule of rules) {
     await client.query(
@@ -599,8 +595,11 @@ export async function listConsoleCurrentBudgetPeriods(
          and api_key_limits.limit_type = 'budget'
          and api_key_limits.enabled = true
         where budget_periods.period_start <= $1 and budget_periods.period_end > $1
+          -- A key whose rule has no window yet reports no window: pairing last
+          -- month's spend with today's ceiling reads as far over budget.
+          and (api_key_limits.period is null
+               or api_key_limits.period = budget_periods.period_type)
         order by budget_periods.api_key_id,
-                 (api_key_limits.period = budget_periods.period_type) desc nulls last,
                  budget_periods.period_start desc
       `,
       [now.toISOString()],

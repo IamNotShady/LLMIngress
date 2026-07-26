@@ -10,6 +10,7 @@ import {
   type ConsoleUsageWindow,
   getConsolePreviousWindowKpis,
   getConsoleUsageSummary,
+  getUsageWindowStart,
 } from "@llmingress/db/console-usage";
 import { listVirtualModels } from "@llmingress/db/console-virtual-models";
 import Link from "next/link";
@@ -26,7 +27,6 @@ import {
   formatDelta,
   formatLatency,
   formatPercent,
-  formatRelative,
 } from "../_ui/format";
 import { EmptyState, PageShell, SectionTitle } from "../_ui/layout";
 import { MutationForm } from "../_ui/mutation-form";
@@ -52,6 +52,7 @@ const FAILURE_COLUMNS = "54px 1fr 118px";
 const CONNECTION_HEALTH_ROWS = 4;
 const PLAN_QUOTA_ROWS = 2;
 const BREAKDOWN_ROWS = 8;
+const FAILURE_ROWS = 5;
 
 /**
  * The three panels in the middle band are one row of the page, so they end
@@ -99,7 +100,12 @@ export default async function OverviewPage({
     listConsoleProviderQuotaSummaries(),
     listProviderApiKeyMetadata(),
     listConsoleProviderOAuthConnections(),
-    listConsoleActivities({ filters: { status: "failed" }, limit: 5 }),
+    // The same window every other number on this page is measured over: a
+    // failure from outside it is not part of what the page is describing.
+    listConsoleActivities({
+      filters: { from: getUsageWindowStart(now, window), status: "failed" },
+      limit: FAILURE_ROWS,
+    }),
   ]);
 
   const connections = providers.flatMap((provider) =>
@@ -353,7 +359,7 @@ export default async function OverviewPage({
               <div className={`mt-2 border-t border-hair ${BAND_BODY_HEIGHT}`}>
                 {recentFailures.length === 0 ? (
                   <p className="py-3 font-mono text-13 text-dim">
-                    No failed request in the retention window.
+                    No failed request in this window.
                   </p>
                 ) : (
                   recentFailures.map((activity) => (
@@ -371,9 +377,7 @@ export default async function OverviewPage({
                 )}
               </div>
               <p className="mt-2 font-mono text-12 leading-[1.6] text-faint">
-                Newest first, from the last{" "}
-                {formatRelative(usage.trend[0]?.bucketStart ?? now, now)}
-                {" of recorded activity."}
+                The {FAILURE_ROWS} newest failures in the selected window — → Activity for the rest.
               </p>
             </div>
           </div>

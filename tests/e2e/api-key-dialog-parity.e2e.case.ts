@@ -131,11 +131,14 @@ test("API key created and detail dialogs share one layout and differ only in the
         const detail = await readSharedGuide(setup);
         expect(detail.platforms).toEqual(created.platforms);
         expect(detail.steps).toBe(created.steps);
-        // The same snippets, with the prefix standing in for the secret that
-        // was shown once and is stored hashed.
+        // The same snippets, with a placeholder standing in for the secret that
+        // was shown once and is stored hashed. Not the prefix: that would make a
+        // complete-looking line carrying a truncated key, beside a Copy button,
+        // and it would fail as a wrong secret rather than as a blank.
         expect(detail.snippets).toEqual(
-          created.snippets.map((snippet) => snippet.replaceAll(plaintext, shownPrefix)),
+          created.snippets.map((snippet) => snippet.replaceAll(plaintext, "<YOUR_API_KEY>")),
         );
+        expect(detail.snippets.join("\n")).not.toContain(shownPrefix.replace(/…$/, ""));
         await expectNoOverflow(page, "setup dialog");
 
         expect(plaintext.startsWith(shownPrefix.replace(/…$/, ""))).toBe(true);

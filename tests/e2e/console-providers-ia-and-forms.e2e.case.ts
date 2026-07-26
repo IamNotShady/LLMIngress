@@ -1033,6 +1033,86 @@ test("a local provider's endpoint is offered as an endpoint, not as a credential
   }
 });
 
+test("the connection dialog keeps the pasted secret out of its answer, and says when a connection is gone", async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_connection_dialog_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const secret = "sk-console-dialog-secret-000001";
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = randomUUID();
+    await fixture.query(
+      `insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+       values ($1, 'api_key', 'openai', 'Dialog Provider', 'https://provider.test/v1', true)`,
+      [providerId],
+    );
+
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await signInFromFirstRun(page, baseUrl);
+        await page.goto(
+          `${baseUrl}/providers?selected=${providerId}&providerKeyDialog=${providerId}`,
+          { waitUntil: "networkidle" },
+        );
+
+        // --- The secret goes one way. It is stored encrypted and shown again
+        // only as a prefix; handing it back to page scripts that have no use
+        // for it puts it somewhere the console cannot account for.
+        await page.getByPlaceholder("paste the provider key").fill(secret);
+        const saved = page.waitForResponse(
+          (response) =>
+            response.url().includes("/api/provider-keys") && response.request().method() === "POST",
+        );
+        await page.getByRole("button", { name: "Add key" }).click();
+        const response = await saved;
+        expect(response.status()).toBe(204);
+        expect(await response.text()).not.toContain(secret);
+        await expect(page.getByText(secret)).toHaveCount(0);
+
+        // --- A link to a connection that is not on this provider says so. It
+        // used to open as "Add API key", asking for a new credential under a
+        // title that reads like an edit of the one that is gone.
+        const strangerId = randomUUID();
+        await page.goto(
+          `${baseUrl}/providers?selected=${providerId}&providerKeyDialog=${providerId}&connection=${strangerId}`,
+          { waitUntil: "networkidle" },
+        );
+        await expect(page.getByRole("dialog", { name: "Connection not found" })).toBeVisible();
+        await expect(page.getByRole("dialog", { name: "Add API key" })).toHaveCount(0);
+
+        await page.goto(
+          `${baseUrl}/providers?selected=${providerId}&dialog=deleteConnection&connection=${strangerId}`,
+          { waitUntil: "networkidle" },
+        );
+        await expect(page.getByRole("dialog", { name: "Connection not found" })).toBeVisible();
+        // It does not assert a deletion it cannot know about: the link may have
+        // named a connection of another provider, which is still there.
+        await expect(page.getByText("it was deleted since this page was opened")).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 function escapeRegExp(value: string): string {
   return value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

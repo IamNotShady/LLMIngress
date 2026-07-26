@@ -80,7 +80,7 @@ export function Playground({
   const [streamText, setStreamText] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("You are a concise coding assistant.");
   const [temperature, setTemperature] = useState("0.7");
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ note: string; text: string } | null>(null);
 
   const [grantedModels, setGrantedModels] = useState<string[] | null>(null);
   const [loadingModels, setLoadingModels] = useState(false);
@@ -207,20 +207,10 @@ export function Playground({
         readPlaygroundResponseText(parsed);
 
       // The gateway records the request asynchronously, so the trace is polled
-      // rather than assumed to exist the moment the response lands.
-      const detail = requestId
-        ? await retryPlaygroundRequestDetail<RequestDetail>(async () => {
-            const lookup = await fetch(
-              `/api/playground/result?requestId=${encodeURIComponent(requestId)}`,
-              { headers: { accept: "application/json" } },
-            );
-            if (!lookup.ok) {
-              return null;
-            }
-            const payload = (await lookup.json()) as { detail: RequestDetail | null };
-            return payload.detail;
-          })
-        : null;
+      // rather than assumed to exist the moment the response lands. The trace
+      // is an extra: failing to read it must not lose the answer, which exists
+      // nowhere else once this handler returns.
+      const detail = requestId ? await readRequestDetail(requestId).catch(() => null) : null;
 
       setResult({
         detail,
@@ -229,10 +219,21 @@ export function Playground({
         requestId,
         responseText,
       });
-      setToast(response.ok ? "Request sent through the gateway" : "Gateway returned an error");
+      // A key the gateway did not accept was never attributed to a key, so it
+      // counted against no limit and reached no Activity row.
+      const accepted = response.status !== 401 && response.status !== 403;
+      setToast({
+        note: accepted
+          ? "It counted toward the key's limits and appears in Activity."
+          : "The gateway did not accept this key, so nothing was counted or recorded.",
+        text: response.ok ? "Request sent through the gateway" : "Gateway returned an error",
+      });
       setTimeout(() => setToast(null), 4000);
     } catch (error) {
       setStatus(formatPlaygroundFetchError("sending the request", error));
+      // A stream that stopped is not a stream: the live pane would otherwise
+      // keep saying it is being written for the rest of the session.
+      setStreamText("");
     } finally {
       setSending(false);
     }
@@ -476,15 +477,30 @@ export function Playground({
       {toast ? (
         <output className="fixed bottom-14 right-6 z-95 flex w-[420px] max-w-[calc(100vw-48px)] items-start gap-3 rounded-sm border border-hair border-l-[3px] border-l-accent bg-btnbg px-[14px] py-[11px] shadow-drawer">
           <span className="min-w-0 flex-1 font-mono text-13 leading-[1.5] text-ink">
-            {toast}
-            <span className="mt-[3px] block font-mono text-125 text-faint">
-              It counted toward the key's limits and appears in Activity.
-            </span>
+            {toast.text}
+            <span className="mt-[3px] block font-mono text-125 text-faint">{toast.note}</span>
           </span>
         </output>
       ) : null}
     </div>
   );
+}
+
+/** The recorded trace for a request the gateway has just answered. */
+function readRequestDetail(requestId: string): Promise<RequestDetail | null> {
+  return retryPlaygroundRequestDetail<RequestDetail>(async () => {
+    const lookup = await fetch(
+      `/api/playground/result?requestId=${encodeURIComponent(requestId)}`,
+      {
+        headers: { accept: "application/json" },
+      },
+    );
+    if (!lookup.ok) {
+      return null;
+    }
+    const payload = (await lookup.json()) as { detail: RequestDetail | null };
+    return payload.detail;
+  });
 }
 
 /**

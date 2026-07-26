@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createServer, type Server } from "node:http";
+import { createServer, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { expect, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
@@ -16,6 +16,8 @@ import {
 // between two particular frames.
 const FRAME_GAP_MS = 1200;
 const FRAMES = ["first ", "second ", "third"];
+/** Asking for this model gets a stream that is cut off after one frame. */
+const CUT_MODEL = "cut-stream-vm";
 
 /**
  * A gateway that writes its answer a piece at a time, the way a real one does.
@@ -31,7 +33,16 @@ function startStreamingGateway(): Promise<{ close: () => Promise<void>; url: str
     }
     if (request.url?.startsWith("/v1/models")) {
       response.writeHead(200, { ...corsHeaders(), "content-type": "application/json" });
-      response.end(JSON.stringify({ data: [{ id: "stream-vm" }] }));
+      response.end(JSON.stringify({ data: [{ id: "stream-vm" }, { id: CUT_MODEL }] }));
+      return;
+    }
+    // A key the gateway does not accept: nothing is counted against limits and
+    // nothing reaches Activity, because there is no key to attribute it to.
+    if (request.url?.startsWith("/v1/responses")) {
+      response.writeHead(401, { ...corsHeaders(), "content-type": "application/json" });
+      response.end(
+        JSON.stringify({ error: { code: "invalid_api_key", message: "Unknown API key." } }),
+      );
       return;
     }
     // The endpoint this virtual model is not routed to answers the way the
@@ -54,6 +65,30 @@ function startStreamingGateway(): Promise<{ close: () => Promise<void>; url: str
       return;
     }
 
+    let requestBody = "";
+    request.on("data", (chunk) => {
+      requestBody += String(chunk);
+    });
+    request.on("end", () => {
+      // A stream that stops in the middle: the socket closes after one frame,
+      // which is what a dropped connection looks like to the reader.
+      if (requestBody.includes(CUT_MODEL)) {
+        response.writeHead(200, {
+          ...corsHeaders(),
+          "content-type": "text/event-stream",
+          "x-llmingress-request-id": "playground-cut-request",
+        });
+        response.write(
+          `data: ${JSON.stringify({ choices: [{ delta: { content: "half " } }] })}\n\n`,
+        );
+        setTimeout(() => response.destroy(), 200);
+        return;
+      }
+      streamFrames(response);
+    });
+  });
+
+  function streamFrames(response: ServerResponse): void {
     response.writeHead(200, {
       ...corsHeaders(),
       "cache-control": "no-cache",
@@ -72,8 +107,10 @@ function startStreamingGateway(): Promise<{ close: () => Promise<void>; url: str
       }
       response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: frame } }] })}\n\n`);
     }, FRAME_GAP_MS);
-    request.on("close", () => clearInterval(timer));
-  });
+    // The request stream ends as soon as its body is read, so the timer follows
+    // the response: it stops when the answer is finished or the client leaves.
+    response.on("close", () => clearInterval(timer));
+  }
 
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
@@ -151,6 +188,26 @@ test("the Playground shows a streamed answer while it is still being written", a
           ),
         ).toBeVisible();
         await expect(page.getByText("No response text")).toHaveCount(0);
+
+        // --- A key the gateway did not accept counted against nothing. The
+        // toast used to promise Activity would show it, which sends the
+        // operator looking for a request that was never recorded.
+        await page.getByRole("button", { name: "responses", exact: true }).click();
+        await page.getByRole("button", { name: "Send request" }).click();
+        await expect(page.getByText("401 error")).toBeVisible({ timeout: 20_000 });
+        await expect(page.getByText("Gateway returned an error")).toBeVisible();
+        await expect(page.getByText("It counted toward the key's limits")).toHaveCount(0);
+        await expect(page.getByText("did not accept this key")).toBeVisible();
+
+        // --- A stream that stops in the middle stops saying it is streaming.
+        // The pane used to sit on "streaming…" for the rest of the session,
+        // with the error only in the small line under the controls.
+        await page.getByRole("button", { name: "chat_completions", exact: true }).click();
+        await page.getByLabel("Virtual model").selectOption(CUT_MODEL);
+        await page.getByRole("button", { name: "Send request" }).click();
+        await expect(page.getByText("Could not reach Gateway")).toBeVisible({ timeout: 20_000 });
+        await expect(page.getByText("streaming…")).toHaveCount(0);
+        await expect(page.getByTestId("playground-stream")).toHaveCount(0);
       } finally {
         await context.close();
       }

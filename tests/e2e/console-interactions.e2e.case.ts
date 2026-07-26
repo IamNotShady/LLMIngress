@@ -241,8 +241,10 @@ test("console audit fixes keep time windows honest and prevent activity timestam
         await expect(page.getByRole("link", { name: "★ default" })).toBeVisible();
 
         // Revoking the grant that was the default drops the default with it.
+        // "none" rather than an empty value: an empty parameter reads as absent,
+        // and absent is answered by falling back to what the key already has.
         await page.getByRole("link", { name: "Revoke audit-probe-vm" }).click();
-        await page.waitForURL((url) => url.searchParams.get("defaultGrant") === "");
+        await page.waitForURL((url) => url.searchParams.get("defaultGrant") === "none");
         await expect(page.getByRole("link", { name: "★ default" })).toHaveCount(0);
         await expect(page.getByRole("button", { name: "Create key" })).toBeDisabled();
       } finally {

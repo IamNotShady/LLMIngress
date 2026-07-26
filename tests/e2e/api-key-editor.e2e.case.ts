@@ -145,6 +145,112 @@ test("the API key editor browses grants, keeps the typed name, and saves the lim
         expect(unlimited.rows[0]?.limits_enabled).toBe(false);
         expect(unlimited.rows[0]?.rules).toBe("0");
 
+        // --- A refused creation comes back as the dialog, holding what was
+        // typed. Creating cannot post through the in-place path — its success
+        // response is the one-time secret — so the whole draft travels in the
+        // URL, and losing it means retyping six fields to fix one.
+        await page.goto(`${baseUrl}/api-keys?dialog=new`, { waitUntil: "networkidle" });
+        await page
+          .getByRole("link", { name: /^Grant / })
+          .first()
+          .click();
+        await page.waitForURL((url) => url.searchParams.get("grantIds") !== null);
+        await page.getByLabel("API key name").fill("editor-refused-key");
+        await page.getByLabel("Budget USD", { exact: true }).fill("not-a-number");
+        await page.getByLabel("Enforcement policy").selectOption("warn_only");
+        await page.getByRole("textbox", { name: "RPM", exact: false }).fill("777");
+        await page.getByRole("button", { name: "Create key" }).click();
+
+        const refusedDialog = page.getByRole("dialog", { name: "New API Key" });
+        await expect(refusedDialog.getByRole("alert")).toBeVisible();
+        await expect(page.getByLabel("API key name")).toHaveValue("editor-refused-key");
+        await expect(page.getByRole("textbox", { name: "RPM", exact: false })).toHaveValue("777");
+        await expect(page.getByLabel("Enforcement policy")).toHaveValue("warn_only");
+        await expect(refusedDialog.getByRole("link", { name: /^Revoke / })).toHaveCount(1);
+        // Nothing was created under the name that was refused.
+        const refused = await withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
+          client.query(`select 1 from api_keys where name = 'editor-refused-key'`),
+        );
+        expect(refused.rows).toEqual([]);
+
+        // --- Revoking a grant has to mean revoking it. What the operator
+        // unchecked travels in the URL, and an empty parameter cannot say
+        // "none" — the last revocation used to read as "the URL said nothing"
+        // and hand back every grant the key already had.
+        const probe = await withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
+          client.query<{ id: string }>(
+            `select id::text as id from api_keys where name = 'editor-probe-key'`,
+          ),
+        );
+        const probeId = probe.rows[0]?.id as string;
+        const editorUrl = (query = "") =>
+          `${baseUrl}/api-keys?selected=${probeId}&dialog=edit${query}`;
+        const editor = page.getByRole("dialog", { name: "Edit API key" });
+        const savedAccess = () =>
+          withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
+            client.query<{ default_name: string | null; grants: number }>(
+              `select (select count(*)::integer from api_key_virtual_models
+                       where api_key_id = api_keys.id) as grants,
+                      (select name from virtual_models
+                       where id = api_keys.default_virtual_model_id) as default_name
+               from api_keys where id = $1`,
+              [probeId],
+            ),
+          );
+
+        await page.goto(editorUrl("&grantQuery=bulk-vm-01"), { waitUntil: "networkidle" });
+        await expect(editor).toBeVisible();
+        await editor.getByRole("link", { name: "Grant editor-bulk-vm-01" }).click();
+        await expect(editor.getByRole("link", { name: "Revoke editor-bulk-vm-01" })).toBeVisible();
+        await editor.getByRole("link", { name: "☆ set default" }).click();
+        await expect(editor.getByRole("link", { name: "★ default" })).toBeVisible();
+        await editor.getByRole("button", { name: "Save", exact: true }).click();
+        await page.waitForURL((url) => url.searchParams.get("dialog") === null);
+        expect((await savedAccess()).rows[0]).toEqual({
+          default_name: "editor-bulk-vm-01",
+          grants: 2,
+        });
+
+        // Revoking the model that was the default leaves the rest granted and
+        // the key with no default — not the default it just lost.
+        await page.goto(editorUrl("&grantShow=granted"), { waitUntil: "networkidle" });
+        await editor.getByRole("link", { name: "Revoke editor-bulk-vm-01" }).click();
+        await expect(editor.getByRole("link", { name: "Revoke editor-bulk-vm-01" })).toHaveCount(0);
+        await expect(editor.getByRole("link", { name: "★ default" })).toHaveCount(0);
+        await expect(editor.getByRole("link", { name: "Revoke editor-solo-vm" })).toBeVisible();
+        await editor.getByRole("button", { name: "Save", exact: true }).click();
+        await page.waitForURL((url) => url.searchParams.get("dialog") === null);
+        expect((await savedAccess()).rows[0]).toEqual({ default_name: null, grants: 1 });
+
+        // --- The editor's limit fields carry the same promise as the drawer:
+        // a field left empty is unlimited, so clearing the budget removes the
+        // rule instead of saving the ceiling that is still in the database.
+        await page.goto(editorUrl(), { waitUntil: "networkidle" });
+        await editor.getByLabel("Budget USD", { exact: true }).fill("");
+        await editor.getByRole("button", { name: "Save", exact: true }).click();
+        await page.waitForURL((url) => url.searchParams.get("dialog") === null);
+        const remaining = await withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
+          client.query<{ limit_type: string }>(
+            `select limit_type from api_key_limits where api_key_id = $1 order by limit_type`,
+            [probeId],
+          ),
+        );
+        expect(remaining.rows.map((row) => row.limit_type)).toEqual([
+          "concurrency",
+          "rpm",
+          "token",
+          "tpm",
+        ]);
+
+        // Revoking the last one holds: the boxes stay empty, and the save it
+        // would take is refused here rather than by the database.
+        await page.goto(editorUrl("&grantShow=granted"), { waitUntil: "networkidle" });
+        await editor.getByRole("link", { name: "Revoke editor-solo-vm" }).click();
+        await expect(editor.getByRole("link", { name: /^Revoke / })).toHaveCount(0);
+        await expect(editor.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+        await expect(editor.getByText("grant at least one Virtual Model")).toBeVisible();
+        expect((await savedAccess()).rows[0]).toEqual({ default_name: null, grants: 1 });
+
         // --- Closing the editor leaves nothing of the draft behind: the
         // browser's own filters are not the list's filters.
         await page.goto(`${baseUrl}/api-keys?dialog=new&grantQuery=solo&grantShow=granted`, {

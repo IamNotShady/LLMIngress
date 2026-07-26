@@ -620,14 +620,9 @@ function buildUsageScope(
   return { values, whereSql: clauses.join("\n            and ") };
 }
 
-function getUsageWindowStart(now: Date, window: ConsoleUsageWindow): Date {
-  const durationMs = {
-    "24h": 24 * 60 * 60 * 1000,
-    "30d": 30 * 24 * 60 * 60 * 1000,
-    "7d": 7 * 24 * 60 * 60 * 1000,
-  }[window];
-
-  return new Date(now.getTime() - durationMs);
+/** Where a window begins — exported so a page can filter by the same edge. */
+export function getUsageWindowStart(now: Date, window: ConsoleUsageWindow): Date {
+  return new Date(now.getTime() - usageWindowMs[window]);
 }
 
 function readInteger(value: string | null | undefined): number {

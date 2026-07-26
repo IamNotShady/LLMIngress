@@ -89,7 +89,6 @@ test("route model picker paginates long model lists and resets on filter changes
         const candidates = page.getByTestId("virtual-model-candidates");
         const rows = candidates.getByRole("link");
         const search = editor.getByLabel("Search candidate models");
-        const apply = editor.getByRole("button", { name: "Apply" });
         const nextPage = editor.getByRole("link", { name: "Next →" });
         const prevPage = editor.getByRole("link", { name: "← Prev" });
 
@@ -112,11 +111,11 @@ test("route model picker paginates long model lists and resets on filter changes
         await expect(editor.getByText(`17–${MODEL_COUNT} of ${MODEL_COUNT}`)).toBeVisible();
         await expect(nextPage).toHaveCount(0);
 
-        // A search starts from the first page — staying on page 3 of the old
-        // result set would show nothing and read as "no matches".
+        // Typing is the search: it settles and the list re-reads, with no
+        // button in between. It also starts from the first page — staying on
+        // page 3 of the old result set would show nothing and read as "no
+        // matches".
         await search.fill("chat-2");
-        await apply.click();
-        await page.waitForLoadState("networkidle");
         await expect(rows).toHaveCount(4);
         await expect(candidates).toContainText("chat-20");
         await expect(editor.getByText("4 matches")).toBeVisible();
@@ -124,8 +123,6 @@ test("route model picker paginates long model lists and resets on filter changes
         await expect(editor.getByText(/of 4$/)).toHaveCount(0);
 
         await search.fill("");
-        await apply.click();
-        await page.waitForLoadState("networkidle");
         await expect(editor.getByText(`1–${PAGE_SIZE} of ${MODEL_COUNT}`)).toBeVisible();
         await expect(candidates).toContainText("chat-01");
 

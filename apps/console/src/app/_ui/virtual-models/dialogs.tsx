@@ -14,14 +14,7 @@ import type {
 } from "@llmingress/db/console-virtual-models";
 import Link from "next/link";
 import { TypeNameToConfirm } from "../confirm-form";
-import {
-  ActionButton,
-  ActionLink,
-  Field,
-  FilterButton,
-  filterControlClass,
-  TextInput,
-} from "../controls";
+import { ActionButton, ActionLink, Field, filterControlClass, TextInput } from "../controls";
 import { formatCost, formatCount, formatPricePair } from "../format";
 import { DetailRow } from "../layout";
 import { formatModelContextTokens } from "../model-capability-format";
@@ -29,6 +22,7 @@ import { MutationForm } from "../mutation-form";
 import { Dialog, DialogActions, DialogBody, DialogImpact, DialogNote } from "../overlay";
 import { buildHref, readParam, type SearchParams } from "../params";
 import { providerIsMetered } from "../providers/model";
+import { SyncedSearchInput } from "../synced-search";
 import { SyncedSelect } from "../synced-select";
 import { formatRange, Pagination } from "../table";
 import {
@@ -39,10 +33,6 @@ import {
 } from "./candidate-providers";
 import { EditorNav } from "./editor-nav";
 import { strategyRouteNote } from "./strategy";
-
-/** The candidate filters submit as GET while the editor posts, so they own a
- * separate form element and the controls associate with it by id. */
-const CANDIDATE_FILTER_FORM_ID = "virtual-model-candidate-filters";
 
 const PRESERVED_EDITOR_FIELDS = ["name", "description"] as const;
 
@@ -298,17 +288,6 @@ export async function VirtualModelDialogs({
           </DialogActions>
         </MutationForm>
       </EditorNav>
-      <form id={CANDIDATE_FILTER_FORM_ID} method="get" action="/models" hidden>
-        {passthroughFields(params, [
-          "selected",
-          "dialog",
-          "candidates",
-          "protocol",
-          "editorStrategy",
-          "editor_name",
-          "editor_description",
-        ])}
-      </form>
     </Dialog>
   );
 }
@@ -366,26 +345,35 @@ function CandidateBrowser({
               ))}
             </SyncedSelect>
           </span>
-          <input
-            form={CANDIDATE_FILTER_FORM_ID}
-            name="candidateQuery"
-            defaultValue={readParam(params, "candidateQuery") ?? ""}
-            placeholder="search model id…"
+          <SyncedSearchInput
             aria-label="Search candidate models"
             className={`${filterControlClass} w-[170px]`}
+            href={buildHref("/models", params, {
+              candidatePage: null,
+              candidateQuery: "__value__",
+            })}
+            name="candidateQuery"
+            placeholder="search model id…"
+            preserveFields={PRESERVED_EDITOR_FIELDS}
+            value={readParam(params, "candidateQuery") ?? ""}
           />
-          <select
-            form={CANDIDATE_FILTER_FORM_ID}
-            name="candidateAvailability"
-            defaultValue={readParam(params, "candidateAvailability") ?? "available"}
-            aria-label="Filter candidates by availability"
-            className={filterControlClass}
-          >
-            <option value="available">Availability: available</option>
-            <option value="all">all</option>
-            <option value="deprecated">deprecated</option>
-          </select>
-          <FilterButton form={CANDIDATE_FILTER_FORM_ID}>Apply</FilterButton>
+          <span className="block w-[232px] flex-none">
+            <SyncedSelect
+              aria-label="Filter candidates by availability"
+              className={filterControlClass}
+              href={buildHref("/models", params, {
+                candidateAvailability: "__value__",
+                candidatePage: null,
+              })}
+              name="candidateAvailability"
+              preserveFields={PRESERVED_EDITOR_FIELDS}
+              value={readParam(params, "candidateAvailability") ?? "available"}
+            >
+              <option value="available">Availability: available</option>
+              <option value="all">all</option>
+              <option value="deprecated">deprecated</option>
+            </SyncedSelect>
+          </span>
         </span>
         <span className="ml-auto whitespace-nowrap font-mono text-12 text-faint">
           {candidatePage ? `${formatCount(candidatePage.total)} matches` : null}
@@ -490,14 +478,6 @@ function swap(ids: readonly string[], from: number, to: number): string[] {
   next[from] = target;
   next[to] = moved;
   return next;
-}
-
-/** Keeps dialog state alive across the browser's own GET submissions. */
-function passthroughFields(params: SearchParams, keys: string[]) {
-  return keys.map((key) => {
-    const value = readParam(params, key);
-    return value === undefined ? null : <input key={key} type="hidden" name={key} value={value} />;
-  });
 }
 
 function DeleteVirtualModelDialog({

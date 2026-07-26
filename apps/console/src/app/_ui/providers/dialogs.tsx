@@ -92,18 +92,30 @@ export function ProviderDialogs({
     const connection = connections.find((entry) => entry.id === readParam(params, "connection"));
     return connection ? (
       <DeleteConnectionDialog closeHref={closeHref} connection={connection} provider={provider} />
-    ) : null;
+    ) : (
+      <MissingConnectionDialog closeHref={closeHref} />
+    );
   }
   if (dialog === "disableConnection" || dialog === "enableConnection") {
     const connection = connections.find((entry) => entry.id === readParam(params, "connection"));
+    // Cancelling or confirming returns to the credential dialog this was
+    // launched from, so the operator lands back on the connection they were
+    // working on and sees its new state.
+    const backToConnection = buildHref("/providers", params, {
+      connection: connection?.id ?? null,
+      dialog: null,
+      providerKeyDialog: provider.id,
+    });
     return connection ? (
       <ConnectionStateDialog
-        closeHref={closeHref}
+        closeHref={backToConnection}
         connection={connection}
         enable={dialog === "enableConnection"}
         provider={provider}
       />
-    ) : null;
+    ) : (
+      <MissingConnectionDialog closeHref={closeHref} />
+    );
   }
   return null;
 }
@@ -456,6 +468,27 @@ function DeleteProviderDialog({
           </span>
         </TypeNameToConfirm>
       )}
+    </Dialog>
+  );
+}
+
+/**
+ * The URL names a connection that is not there any more — deleted in another
+ * tab, or by someone else. Rendering nothing would leave the operator looking
+ * at a page that ignored their click, so it says what happened.
+ */
+function MissingConnectionDialog({ closeHref }: { closeHref: string }) {
+  return (
+    <Dialog closeHref={closeHref} title="Connection not found" width={460}>
+      <DialogBody>
+        This connection no longer exists — it was deleted since this page was opened. Nothing was
+        changed.
+      </DialogBody>
+      <DialogActions>
+        <ActionLink href={closeHref} tone="primary">
+          Back to the provider
+        </ActionLink>
+      </DialogActions>
     </Dialog>
   );
 }

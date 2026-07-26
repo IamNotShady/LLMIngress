@@ -302,11 +302,15 @@ test("a connection state change and its deletion are driven from the connection 
           { waitUntil: "networkidle" },
         );
         const dialog = page.getByRole("dialog", { name: "Edit connection" });
-        await dialog.getByRole("button", { name: "Disable connection" }).click();
+        // Taking a connection out of routing is a change to live traffic, so it
+        // confirms first and says what stops and what is kept.
+        await dialog.getByRole("link", { name: "Disable connection" }).click();
+        const disableConfirm = page.getByRole("dialog", { name: "Disable connection" });
+        await expect(disableConfirm).toContainText("credential is kept");
+        await disableConfirm.getByRole("button", { name: "Disable connection" }).click();
 
-        // The dialog stays open on the connection it was opened for and reports
-        // the new state, rather than closing and leaving the operator to look.
-        await expect(dialog.getByRole("button", { name: "Enable connection" })).toBeVisible();
+        // Back on the connection it was opened for, reporting the new state.
+        await expect(dialog.getByRole("link", { name: "Enable connection" })).toBeVisible();
         await expect
           .poll(async () => {
             const result = await fixture.query<{ enabled: boolean }>(
@@ -319,8 +323,12 @@ test("a connection state change and its deletion are driven from the connection 
         // (Scoped to the dialog: `next dev` injects its own alert region.)
         await expect(dialog.getByRole("alert")).toHaveCount(0);
 
-        await dialog.getByRole("button", { name: "Enable connection" }).click();
-        await expect(dialog.getByRole("button", { name: "Disable connection" })).toBeVisible();
+        await dialog.getByRole("link", { name: "Enable connection" }).click();
+        await page
+          .getByRole("dialog", { name: "Enable connection" })
+          .getByRole("button", { name: "Enable connection" })
+          .click();
+        await expect(dialog.getByRole("link", { name: "Disable connection" })).toBeVisible();
         await expect
           .poll(async () => {
             const result = await fixture.query<{ enabled: boolean }>(
@@ -351,8 +359,8 @@ test("a connection state change and its deletion are driven from the connection 
           })
           .toBe(true);
 
-        // A refusal belongs where the operator was working, not in a toast: the
-        // connection is gone from under them, and the dialog says so and stays.
+        // A connection that disappears from under the operator is stated, not
+        // ignored: the click has somewhere to land and says nothing changed.
         await page.goto(
           `${baseUrl}/providers?selected=${seeded.providerId}` +
             `&providerKeyDialog=${seeded.providerId}&connection=${seeded.failureKeyId}`,
@@ -360,11 +368,11 @@ test("a connection state change and its deletion are driven from the connection 
         );
         const failureDialog = page.getByRole("dialog", { name: "Edit connection" });
         await fixture.query("delete from provider_api_keys where id = $1", [seeded.failureKeyId]);
-        await failureDialog.getByRole("button", { name: "Disable connection" }).click();
+        await failureDialog.getByRole("link", { name: "Disable connection" }).click();
 
-        const refusal = failureDialog.getByRole("alert");
-        await expect(refusal).toBeVisible();
-        await expect(refusal).toContainText(/could not be updated|not found/i);
+        const gone = page.getByRole("dialog", { name: "Connection not found" });
+        await expect(gone).toBeVisible();
+        await expect(gone).toContainText("Nothing was changed");
         // Nothing destructive or refused reports through a toast.
         await expect(page.getByRole("status")).toHaveCount(0);
 

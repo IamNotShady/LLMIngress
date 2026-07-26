@@ -798,7 +798,6 @@ export async function getConsoleUsageBreakouts(input: {
       fallback: {
         failedAfterLastCandidate: fallback.rows[0]?.failed_after_last_candidate ?? 0,
         recoveredOnRetry: fallback.rows[0]?.recovered_on_retry ?? 0,
-
       },
       protocols: protocols.rows.map((row) => ({
         avgLatencyMs: readOptionalNumber(row.avg_latency_ms),

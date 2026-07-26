@@ -7,6 +7,7 @@ import {
   type IntegrationGuideEntry,
 } from "../../_ui/api-keys/integration-guide";
 import { formatApiKeyLimitRules } from "../../_ui/api-keys/limits-view";
+import { PLAYGROUND_KEY_HANDOFF } from "../../_ui/playground/handoff";
 import {
   standaloneCopyScript,
   standaloneThemeCss,
@@ -129,10 +130,11 @@ export function renderOneTimeApiKeyResponse(
 
       <footer>
         <a class="primary" href="/api-keys">Done</a>
-        <a href="/playground">Test in Playground</a>
+        <a href="/playground" data-handoff="#secret">Test in Playground</a>
       </footer>
     </main>
     <script>${standaloneCopyScript()}</script>
+    <script>${playgroundHandoffScript()}</script>
   </body>
 </html>`,
     {
@@ -186,6 +188,23 @@ footer a{display:inline-flex;align-items:center;border:1px solid var(--btnbd);ba
 footer a.primary{border-color:transparent;background:var(--seg);color:var(--segfg);padding:6px 18px}
 @media (max-width:760px){body{padding:24px 16px}main{padding:20px 16px}.split,.panel{grid-template-columns:minmax(0,1fr)}.tabs label{white-space:normal;padding:6px 8px}.secret{padding:10px}}
 `;
+}
+
+/**
+ * Carries the secret to the Playground so the operator can send a request with
+ * the key they just made. It rides in sessionStorage rather than the link — see
+ * PLAYGROUND_KEY_HANDOFF — and the navigation itself is left alone.
+ */
+function playgroundHandoffScript(): string {
+  return `(function(){
+document.addEventListener("click",function(event){
+var link=event.target&&event.target.closest?event.target.closest("[data-handoff]"):null;
+if(!link){return}
+var node=document.querySelector(link.getAttribute("data-handoff"));
+if(!node){return}
+try{sessionStorage.setItem(${JSON.stringify(PLAYGROUND_KEY_HANDOFF)},typeof node.value==="string"?node.value:node.textContent||"")}catch(e){}
+});
+})()`;
 }
 
 function renderGuidePanel(entry: IntegrationGuideEntry): string {

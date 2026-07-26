@@ -5,6 +5,7 @@ import { ActionButton, Field, SelectInput, TextArea, TextInput } from "../contro
 import { formatCompact, formatCost, formatLatency } from "../format";
 import { DetailRow, SectionTitle } from "../layout";
 import { Spinner } from "../spinner";
+import { PLAYGROUND_KEY_HANDOFF } from "./handoff";
 import {
   buildPlaygroundChatRequest,
   buildPlaygroundMessagesRequest,
@@ -82,6 +83,22 @@ export function Playground({
   const [loadingModels, setLoadingModels] = useState(false);
   const selected = virtualModels.find((entry) => entry.name === model);
   const base = gatewayBaseUrl.replace(/\/+$/, "");
+
+  // A key that has just been created arrives here already pasted: it is the one
+  // moment its plaintext exists, and asking the operator to copy it back out of
+  // a screen they have already left is asking them to lose it.
+  useEffect(() => {
+    let handed = "";
+    try {
+      handed = window.sessionStorage.getItem(PLAYGROUND_KEY_HANDOFF) ?? "";
+      window.sessionStorage.removeItem(PLAYGROUND_KEY_HANDOFF);
+    } catch {
+      return;
+    }
+    if (handed) {
+      setApiKey(handed);
+    }
+  }, []);
 
   // Which models this key may actually call is the gateway's answer, not the
   // console's: the console can see every virtual model, but a key only reaches

@@ -139,6 +139,21 @@ test("ApiKey dialogs show endpoint groups and integration tabs without the platf
             .poll(() => pageOverflowPx(page), { message: `created @ ${viewport.width}px` })
             .toBeLessThanOrEqual(0);
         }
+        // --- The secret the page was created with follows the operator into
+        // the Playground, so the one moment it exists is not spent copying it
+        // back out of a screen they have already left.
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.getByRole("link", { name: "Test in Playground" }).click();
+        await page.waitForURL(/\/playground$/);
+        await expect(page.getByLabel("API key", { exact: true })).toHaveValue(apiKey);
+        // It travels in sessionStorage, never in the URL, and is consumed once.
+        expect(page.url()).not.toContain(apiKey);
+        expect(
+          await page.evaluate(() => sessionStorage.getItem("llmingress-playground-key")),
+        ).toBeNull();
+        await page.reload({ waitUntil: "networkidle" });
+        await expect(page.getByLabel("API key", { exact: true })).toHaveValue("");
+
         await page.goto(`${baseUrl}/api-keys?selected=${apiKeyId}`, { waitUntil: "networkidle" });
         for (const viewport of [
           { width: 1280, height: 800 },

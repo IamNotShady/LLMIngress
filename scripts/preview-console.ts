@@ -47,6 +47,10 @@ const PAGES: Array<[string, string]> = [
   // Both credential dialogs in their edit shape, where new and edit are easy
   // to confuse: a token connection and a key connection.
   ["dialog-edit-token", "/providers?selected=__CLAUDE__&providerKeyDialog=__CLAUDE__&connection=__OAUTH__"],
+  // The two OAuth flows in the shape the operator meets them: a device code
+  // waiting to be entered, and an authorization url waiting for its callback.
+  ["dialog-device-code", "/providers?selected=__CLAUDE__&providerKeyDialog=__CLAUDE__&connection=new&providerOAuthUserCode=GQTN-8FDX&providerOAuthVerificationUri=https%3A%2F%2Fplatform.minimax.io%2Fdevice&providerOAuthInterval=5&providerOAuthId=__OAUTH__&providerOAuthExpiresAt=__EXPIRES__"],
+  ["dialog-auth-code", "/providers?selected=__CLAUDE__&providerKeyDialog=__CLAUDE__&connection=new&providerAuthorizeUrl=https%3A%2F%2Fclaude.ai%2Foauth%2Fauthorize%3Fclient_id%3Dllmingress%26response_type%3Dcode%26code_challenge%3DE9Melhoa2Owvfr&providerOAuthId=__OAUTH__&providerOAuthExpiresAt=__EXPIRES__"],
   ["dialog-add-key", "/providers?selected=__OPENROUTER__&providerKeyDialog=__OPENROUTER__&connection=new"],
   ["dialog-edit-key", "/providers?selected=__OPENROUTER__&providerKeyDialog=__OPENROUTER__&connection=__ORMAIN__"],
   ["dialog-virtual-model", "/models?dialog=edit"],
@@ -56,6 +60,7 @@ let failingProviderId = "";
 let subscriptionProviderId = "";
 let oauthConnectionId = "";
 let apiKeyConnectionId = "";
+let codeExpiresAt = "";
 
 async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>) {
   const id = () => randomUUID();
@@ -110,6 +115,7 @@ async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture
   // Two connections on openrouter, one failing; one oauth token on claude-code.
   const conns = { orMain: id(), orBackup: id(), oauth: id() };
   oauthConnectionId = conns.oauth;
+  codeExpiresAt = new Date(Date.now() + 9 * 60 * 1000 + 42 * 1000).toISOString();
   apiKeyConnectionId = conns.orMain;
   await fixture.query(
     `insert into provider_api_keys (id, provider_id, label, key_prefix, key_id, encrypted_key, priority, enabled)
@@ -382,7 +388,8 @@ async function main() {
           .replace(/__OPENROUTER__/g, failingProviderId)
           .replace(/__CLAUDE__/g, subscriptionProviderId)
           .replace(/__OAUTH__/g, oauthConnectionId)
-          .replace(/__ORMAIN__/g, apiKeyConnectionId);
+          .replace(/__ORMAIN__/g, apiKeyConnectionId)
+          .replace(/__EXPIRES__/g, encodeURIComponent(codeExpiresAt));
         visiting = `${name} ${theme}`;
         await page.goto(`${baseUrl}${path}`);
         if (name === "drawer-limits") {

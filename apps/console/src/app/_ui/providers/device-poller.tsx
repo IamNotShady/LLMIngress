@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 /**
  * Device-code authorization completes at the provider, not here, so the console
@@ -9,10 +9,20 @@ import { useEffect, useState } from "react";
  * the page once the token lands.
  */
 export function DeviceCodePoller({
+  children,
+  formId,
   intervalSeconds,
   oauthId,
   providerId,
 }: {
+  /** Trailing content of the status row — the code's expiry countdown. */
+  children?: ReactNode;
+  /**
+   * The settings form on the same screen. The operator sets the label, priority
+   * and state while they wait, so once the provider confirms, those values are
+   * submitted rather than thrown away by the refresh.
+   */
+  formId?: string;
   intervalSeconds: number;
   oauthId: string;
   providerId: string;
@@ -49,7 +59,17 @@ export function DeviceCodePoller({
           // rather than hammering an authorization that will never arrive.
           if (payload?.status === "complete") {
             setState("authorized");
-            router.refresh();
+            // The provider confirmed, so the connection now exists for real:
+            // save what the operator set while they were waiting. Submitting
+            // the form navigates, so no refresh is needed on that path.
+            const settings = formId
+              ? (document.getElementById(formId) as HTMLFormElement | null)
+              : null;
+            if (settings) {
+              settings.requestSubmit();
+            } else {
+              router.refresh();
+            }
             return;
           }
           if (payload?.status === "error" || payload?.status === "expired") {
@@ -76,7 +96,7 @@ export function DeviceCodePoller({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [intervalSeconds, oauthId, providerId, router]);
+  }, [formId, intervalSeconds, oauthId, providerId, router]);
 
   const tone = state === "authorized" ? "bg-green" : state === "failed" ? "bg-red" : "bg-amber";
   const message =
@@ -90,6 +110,7 @@ export function DeviceCodePoller({
     <div className="mt-3 flex items-center gap-[9px]">
       <span className={`size-[7px] flex-none rounded-full ${tone}`} />
       <span className="font-mono text-13 text-ink">{message}</span>
+      {state === "waiting" ? children : null}
     </div>
   );
 }

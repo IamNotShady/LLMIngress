@@ -32,17 +32,33 @@ export const POST = withConsoleAuth(async (request) => {
         priority: readNumber(form, "priority"),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
-      await enqueueProviderConnectionProbeJob({
-        providerConnectionId: result.id,
-        providerId: result.providerId,
-        resetHealth: true,
-        source: "oauth_ready",
+      // The state the operator chose while authorizing belongs to the
+      // connection that now exists — the same fields the device flow saves
+      // when the provider confirms.
+      const enabled = readText(form, "enabled") !== "false";
+      await updateProviderOAuthConnectionSettings({
+        enabled,
+        label: readNullableText(form, "label") ?? null,
+        priority: readNumber(form, "priority") ?? result.priority,
+        providerOAuthId: result.id,
       });
-      await enqueueProviderModelRefreshJob({
-        providerId: result.providerId,
-        source: "oauth_ready",
-        trigger: "system",
+      await setProviderOAuthQuotaProbeEnabled({
+        providerOAuthId: result.id,
+        quotaProbeEnabled: readText(form, "quotaProbeEnabled") !== "false",
       });
+      if (enabled) {
+        await enqueueProviderConnectionProbeJob({
+          providerConnectionId: result.id,
+          providerId: result.providerId,
+          resetHealth: true,
+          source: "oauth_ready",
+        });
+        await enqueueProviderModelRefreshJob({
+          providerId: result.providerId,
+          source: "oauth_ready",
+          trigger: "system",
+        });
+      }
       return redirectToProvider(result.providerId);
     }
 
@@ -144,6 +160,7 @@ export const POST = withConsoleAuth(async (request) => {
             deviceVerificationUri: result.verificationUri,
           }
         : { authorizeUrl: result.authorizeUrl }),
+      expiresAt: result.expiresAt,
       label: result.connection.label,
       priority: result.connection.priority,
       providerId: result.connection.providerId,
@@ -187,6 +204,7 @@ function redirectToProviderOAuthDialog(
     deviceVerificationUri?: string;
     error?: string;
     errorCode?: string;
+    expiresAt?: Date;
     label?: string | null;
     priority?: number;
     providerId: string;
@@ -207,6 +225,9 @@ function redirectToProviderOAuthDialog(
   }
   if (input.deviceInterval !== undefined) {
     url.searchParams.set("providerOAuthInterval", String(input.deviceInterval));
+  }
+  if (input.expiresAt) {
+    url.searchParams.set("providerOAuthExpiresAt", input.expiresAt.toISOString());
   }
   if (input.error) {
     url.searchParams.set("providerOAuthError", input.error);

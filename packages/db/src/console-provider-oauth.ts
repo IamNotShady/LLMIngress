@@ -56,10 +56,13 @@ export type StartProviderOAuthConnectionResult =
   | {
       authorizeUrl: string;
       connection: ProviderOAuthMetadata;
+      /** When the provider stops accepting this request. */
+      expiresAt: Date;
       flowType: "authorization_code";
     }
   | {
       connection: ProviderOAuthMetadata;
+      expiresAt: Date;
       flowType: "device_code";
       intervalSeconds: number;
       userCode: string;
@@ -127,12 +130,13 @@ export async function startProviderOAuthConnection(
   const pkce = createPkcePair();
   // Claude Code's Anthropic OAuth flow expects state to match the PKCE verifier.
   const pendingState = providerKey === "claude_code" ? pkce.codeVerifier : pkce.state;
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
   const connection = await createProviderOAuthPendingConnection({
     databaseUrl: input.databaseUrl,
     label: input.label,
     pendingCodeChallenge: pkce.codeChallenge,
     pendingCodeVerifier: pkce.codeVerifier,
-    pendingExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    pendingExpiresAt: expiresAt,
     pendingState,
     priority: input.priority,
     providerId: provider.id,
@@ -145,6 +149,7 @@ export async function startProviderOAuthConnection(
       state: pendingState,
     }),
     connection,
+    expiresAt,
     flowType: "authorization_code",
   };
 }
@@ -166,13 +171,14 @@ async function startProviderOAuthDeviceConnection(
     providerKey: input.provider.providerKey,
     state: pkce.state,
   });
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
   const connection = await createProviderOAuthDevicePendingConnection({
     databaseUrl: input.databaseUrl,
     intervalSeconds: userCode.intervalSeconds,
     label: input.label,
     pendingCodeChallenge: pkce.codeChallenge,
     pendingCodeVerifier: pkce.codeVerifier,
-    pendingExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    pendingExpiresAt: expiresAt,
     pendingState: pkce.state,
     priority: input.priority,
     providerId: input.provider.id,
@@ -182,6 +188,7 @@ async function startProviderOAuthDeviceConnection(
 
   return {
     connection,
+    expiresAt,
     flowType: "device_code",
     intervalSeconds: userCode.intervalSeconds,
     userCode: userCode.userCode,

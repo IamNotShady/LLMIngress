@@ -29,6 +29,7 @@ export function MutationForm({
   children,
   className,
   fallbackError,
+  formId,
   invalidFieldOnError,
   onSuccessHref,
 }: {
@@ -36,6 +37,8 @@ export function MutationForm({
   children: ReactNode;
   className?: string;
   fallbackError: string;
+  /** Set when something outside the form submits it — see the device poller. */
+  formId?: string;
   /**
    * Field the refusal is usually about — a name collision, a malformed value.
    * It is marked aria-invalid so the message and the box to fix are connected
@@ -95,7 +98,7 @@ export function MutationForm({
   };
 
   return (
-    <form action={action} method="post" onSubmit={onSubmit} className={className}>
+    <form id={formId} action={action} method="post" onSubmit={onSubmit} className={className}>
       {error ? (
         <p
           role="alert"

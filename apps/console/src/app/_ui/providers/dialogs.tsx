@@ -6,12 +6,14 @@ import type { ConsoleUsageSummary } from "@llmingress/db/console-usage";
 import Link from "next/link";
 import { ConfirmForm, TypeNameToConfirm } from "../confirm-form";
 import { ActionButton, ActionLink, Field, SelectInput, TextInput } from "../controls";
+import { CopyButton } from "../copy-button";
 import { formatCost, formatCount } from "../format";
 import { DetailRow } from "../layout";
 import { MutationForm } from "../mutation-form";
 import { Dialog, DialogActions, DialogBody, DialogImpact, DialogNote } from "../overlay";
 import { buildHref, readParam, type SearchParams } from "../params";
 import { DeviceCodePoller } from "./device-poller";
+import { ExpiryCountdown } from "./expiry-countdown";
 import {
   describeProviderCapabilities,
   listAddProviderGroups,
@@ -543,7 +545,14 @@ function CredentialDialog({
         : "Add API key";
 
   return (
-    <Dialog closeHref={closeHref} title={title} titleNote={provider.displayName} width={600}>
+    <Dialog
+      closeHref={closeHref}
+      title={title}
+      titleNote={provider.displayName}
+      // An authorization screen carries a code and a verification url side by
+      // side; at the width the key form uses, the url would be cut.
+      width={provider.providerType === "subscription" ? 720 : 600}
+    >
       {oauthError ? (
         <p className="mt-3 rounded-xs border border-ambbd bg-ambbg px-3 py-2 font-mono text-125 text-redtx">
           {oauthError}
@@ -557,6 +566,7 @@ function CredentialDialog({
           authorizeUrl={authorizeUrl}
           closeHref={closeHref}
           editing={editing}
+          expiresAt={readParam(params, "providerOAuthExpiresAt")}
           oauthId={oauthId}
           pollInterval={Number.isFinite(pollInterval) ? pollInterval : 5}
           provider={provider}
@@ -637,6 +647,27 @@ function ApiKeyForm({
   );
 }
 
+/** What the connection is called and where it sits in the order. */
+/** The device screen's fields are submitted by the poller once the provider confirms. */
+const DEVICE_SETTINGS_FORM_ID = "provider-oauth-device-settings";
+
+function ConnectionIdentityFields({ editing }: { editing: ProviderConnection | null }) {
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-3">
+      <Field label="LABEL" labelNote="(optional, ≤100 chars)">
+        <TextInput name="label" defaultValue={editing?.label ?? ""} maxLength={100} />
+      </Field>
+      <Field label="PRIORITY" labelNote="(0–100)">
+        <TextInput
+          name="priority"
+          defaultValue={String(editing?.priority ?? 100)}
+          inputMode="numeric"
+        />
+      </Field>
+    </div>
+  );
+}
+
 /**
  * Whether a connection routes, and whether the console asks its provider about
  * the plan. Both are part of what a connection *is*, so they are saved with it
@@ -705,6 +736,7 @@ function SubscriptionForm({
   authorizeUrl,
   closeHref,
   editing,
+  expiresAt,
   oauthId,
   pollInterval,
   provider,
@@ -715,6 +747,7 @@ function SubscriptionForm({
   authorizeUrl: string | undefined;
   closeHref: string;
   editing: ProviderConnection | null;
+  expiresAt: string | undefined;
   oauthId: string | undefined;
   pollInterval: number;
   provider: ConsoleProvider;
@@ -722,16 +755,30 @@ function SubscriptionForm({
   userCode: string | undefined;
   verificationUri: string | undefined;
 }) {
+  // Both flows show what the connection will be called and how it will route
+  // beside the authorization itself, as one screen — the operator sets them
+  // while they wait rather than on a step that disappears behind them.
   if (userCode && oauthId) {
     return (
-      <div>
+      <MutationForm
+        action="/api/provider-oauth"
+        fallbackError="The connection could not be saved."
+        formId={DEVICE_SETTINGS_FORM_ID}
+      >
+        <input type="hidden" name="action" value="update" />
+        <input type="hidden" name="providerOAuthId" value={oauthId} />
+        <ConnectionIdentityFields editing={editing} />
+        <ConnectionStateFields enabled={editing?.enabled ?? true} probing={quotaProbeEnabled} />
         <div className="mt-[18px] border-b border-hair pb-[5px] font-mono text-115 font-medium tracking-[.08em] text-dim">
           DEVICE CODE FLOW · ENTER THE CODE AT THE PROVIDER
         </div>
         <div className="mt-3 flex items-center gap-4 rounded-xs border border-rule bg-track px-4 py-[14px]">
-          <div>
-            <div id="device-user-code-label" className="font-mono text-12 text-dim">
-              Your code
+          <div className="flex-none">
+            <div
+              id="device-user-code-label"
+              className="whitespace-nowrap font-mono text-12 text-dim"
+            >
+              enter this code at the provider
             </div>
             <output
               aria-labelledby="device-user-code-label"
@@ -740,31 +787,38 @@ function SubscriptionForm({
               {userCode}
             </output>
           </div>
-          <div className="ml-auto text-right">
+          <div className="ml-auto min-w-0 text-right">
             <div className="font-mono text-12 text-dim">verification url</div>
-            <div className="mt-1 font-mono text-135 text-ink">{verificationUri}</div>
-            {verificationUri ? (
-              <a
-                href={verificationUri}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-block rounded-xs border border-btnbd bg-btnbg px-[10px] py-1 font-mono text-135 font-medium text-ink"
-              >
-                Open verification page
-              </a>
-            ) : null}
+            <div className="mt-1 font-mono text-135 text-ink cell-clip">{verificationUri}</div>
+            <div className="mt-2">
+              <CopyButton href={verificationUri} value={userCode}>
+                Open · copy code
+              </CopyButton>
+            </div>
           </div>
         </div>
         <DeviceCodePoller
+          formId={DEVICE_SETTINGS_FORM_ID}
           intervalSeconds={pollInterval}
           oauthId={oauthId}
           providerId={provider.id}
-        />
+        >
+          {expiresAt ? <ExpiryCountdown expiresAt={expiresAt} label="code" /> : null}
+        </DeviceCodePoller>
         <DialogNote>
           The token is stored encrypted and refreshed automatically; the console never sees your
           account password.
         </DialogNote>
-      </div>
+        <DialogActions>
+          <ActionButton disabled size="dialog" tone="primary">
+            Waiting…
+          </ActionButton>
+          <ActionLink href={closeHref}>Cancel</ActionLink>
+          <span className="ml-1 font-mono text-125 leading-[1.5] text-faint">
+            these settings are saved when the provider confirms
+          </span>
+        </DialogActions>
+      </MutationForm>
     );
   }
 
@@ -779,6 +833,8 @@ function SubscriptionForm({
         <input type="hidden" name="providerId" value={provider.id} />
         <input type="hidden" name="providerOAuthId" value={oauthId} />
         <input type="hidden" name="providerAuthorizeUrl" value={authorizeUrl} />
+        <ConnectionIdentityFields editing={editing} />
+        <ConnectionStateFields enabled={editing?.enabled ?? true} probing={quotaProbeEnabled} />
         <div className="mt-[18px] border-b border-hair pb-[5px] font-mono text-115 font-medium tracking-[.08em] text-dim">
           AUTHORIZATION CODE FLOW · STEP 1 OF 2
         </div>
@@ -787,14 +843,17 @@ function SubscriptionForm({
           <div className="mt-[5px] break-all font-mono text-13 leading-[1.5] text-ink">
             {authorizeUrl}
           </div>
-          <a
-            href={authorizeUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-[10px] inline-block rounded-xs border border-btnbd bg-btnbg px-[10px] py-1 font-mono text-135 font-medium text-ink"
-          >
-            Open authorization URL
-          </a>
+          <div className="mt-[10px] flex gap-2">
+            <a
+              href={authorizeUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="whitespace-nowrap rounded-xs border border-btnbd bg-btnbg px-[10px] py-1 font-mono text-135 font-medium text-ink"
+            >
+              Open in browser
+            </a>
+            <CopyButton value={authorizeUrl}>Copy url</CopyButton>
+          </div>
         </div>
         <div className="mt-4 border-b border-hair pb-[5px] font-mono text-115 font-medium tracking-[.08em] text-dim">
           STEP 2 OF 2 · PASTE WHAT THE PROVIDER RETURNS
@@ -811,6 +870,11 @@ function SubscriptionForm({
               placeholder="callback url or authorization code"
             />
           </Field>
+        </div>
+        <div className="mt-3 flex items-center gap-[9px]">
+          <span className="size-[7px] flex-none rounded-full bg-amber" />
+          <span className="font-mono text-13 text-ink">pending · awaiting the callback value</span>
+          {expiresAt ? <ExpiryCountdown expiresAt={expiresAt} label="request" /> : null}
         </div>
         <DialogActions>
           <ActionButton size="dialog" tone="primary">

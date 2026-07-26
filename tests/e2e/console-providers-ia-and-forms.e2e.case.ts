@@ -156,9 +156,9 @@ test("providers page shows one provider representation with a searchable capped 
         const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
         expect(pageHeight).toBeLessThan(4500);
 
-        // --- Deleting a provider that a route still uses is refused, and the
-        // refusal is stated in the dialog rather than replacing the page.
-        await addProviderDeleteRaceBlocker(fixture.databaseUrl, providerId);
+        // --- A route created after the confirm was opened still refuses the
+        // delete, and the refusal is stated in the dialog rather than replacing
+        // the page with an error body.
         await page.goto(`${baseUrl}/providers?selected=${providerId}&dialog=delete`, {
           waitUntil: "networkidle",
         });
@@ -167,10 +167,19 @@ test("providers page shows one provider representation with a searchable capped 
         await deleteDialog
           .getByLabel("TYPE THE PROVIDER NAME TO CONFIRM")
           .fill("IA Probe Provider");
+        await addProviderDeleteRaceBlocker(fixture.databaseUrl, providerId);
         await deleteDialog.getByRole("button", { name: "Delete provider" }).click();
         await expect(
           deleteDialog.getByText("Provider is still used by active route policies."),
         ).toBeVisible();
+
+        // Reopened, the confirm knows about the route and does not offer a
+        // delete it cannot carry out.
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&dialog=delete`, {
+          waitUntil: "networkidle",
+        });
+        await expect(deleteDialog).toContainText("would be refused");
+        await expect(deleteDialog.getByRole("button", { name: "Delete provider" })).toHaveCount(0);
 
         // --- The virtual model editor says Create when creating.
         await page.goto(`${baseUrl}/models?dialog=new`, { waitUntil: "networkidle" });

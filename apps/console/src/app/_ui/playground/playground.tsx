@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ActionButton, Field, SelectInput, TextArea, TextInput } from "../controls";
 import { formatCompact, formatCost, formatLatency } from "../format";
 import { DetailRow, SectionTitle } from "../layout";
+import { Spinner } from "../spinner";
 import {
   buildPlaygroundChatRequest,
   buildPlaygroundMessagesRequest,
@@ -248,18 +249,7 @@ export function Playground({
                 : virtualModelHint(selected)
             }
           >
-            {loadingModels ? (
-              <output
-                aria-label="Loading models"
-                className="mb-[5px] flex items-center gap-2 font-mono text-125 text-faint"
-              >
-                <span
-                  aria-hidden="true"
-                  className="size-[9px] flex-none animate-spin rounded-full border border-hair border-t-accent"
-                />
-                loading…
-              </output>
-            ) : null}
+            {loadingModels ? <Spinner className="mb-[5px]" label="Loading models" /> : null}
             <SelectInput
               aria-label="Virtual model"
               value={model}
@@ -330,7 +320,11 @@ export function Playground({
           >
             {sending ? "Sending…" : "Send request"}
           </ActionButton>
-          <span className="font-mono text-125 text-faint">counts toward key limits & usage</span>
+          {sending ? (
+            <Spinner label="Sending the request" />
+          ) : (
+            <span className="font-mono text-125 text-faint">counts toward key limits & usage</span>
+          )}
         </div>
         {status ? (
           <p className="mt-3 rounded-xs border border-ambbd bg-ambbg px-[10px] py-2 font-mono text-125 text-redtx">

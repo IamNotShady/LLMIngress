@@ -121,7 +121,9 @@ test("Playground omits blank optional numeric parameters from Gateway requests",
         // the console's own records would not say what that key may reach.
         await page.getByLabel("API key", { exact: true }).fill("llmi_test");
         await expect(
-          page.getByLabel("Virtual model", { exact: true }).locator("option[value='virtual-model']"),
+          page
+            .getByLabel("Virtual model", { exact: true })
+            .locator("option[value='virtual-model']"),
         ).toHaveCount(1);
 
         await page.getByRole("button", { name: "messages", exact: true }).click();

@@ -22,4 +22,3 @@ export function formatConsoleUsd(value: string | number | null | undefined): str
   }
   return `$${numeric.toLocaleString("en-US", { maximumSignificantDigits: 3 })}`;
 }
-

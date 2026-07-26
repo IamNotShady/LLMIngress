@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
@@ -18,14 +18,18 @@ describe("console in-flight feedback", () => {
     expect(src).toMatch(/note/);
   });
 
-  test("no animation runs without honouring reduced motion", () => {
-    const css = read("globals.css");
-    const animations = css.match(/animation:/g) ?? [];
-    if (animations.length > 0) {
-      expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
+  test("the one spinner is shared, named, and drops its motion when asked", () => {
+    const spinner = read("_ui/spinner.tsx");
+    // A spinner that does not say what it is waiting on tells nobody anything.
+    expect(spinner).toMatch(/aria-label=\{label\}/);
+    expect(spinner).toMatch(/motion-reduce:animate-none/);
+
+    // Nothing else spins: one primitive, used where a wait is client-side.
+    const uiFiles = readdirSync(join(appDir, "_ui"), { recursive: true })
+      .map(String)
+      .filter((file) => file.endsWith(".tsx") && !file.endsWith("spinner.tsx"));
+    for (const file of uiFiles) {
+      expect(read(`_ui/${file}`), file).not.toMatch(/animate-spin/);
     }
-    // The console's only motion is the theme knob, which is a 150ms position
-    // transition rather than a looping animation.
-    expect(css).not.toMatch(/@keyframes/);
   });
 });

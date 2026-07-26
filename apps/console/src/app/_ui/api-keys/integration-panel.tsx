@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CopyButton } from "../copy-button";
 import { SectionTitle } from "../layout";
 import { buildHref, readParam, type SearchParams } from "../params";
 import {
@@ -87,8 +88,15 @@ export function IntegrationPanel({
         <div className="flex flex-col gap-[10px]">
           {active.guide.codeBlocks.map((block) => (
             <div key={block.label}>
-              <div className="font-mono text-115 font-medium tracking-[.08em] text-dim">
-                {block.label}
+              {/* Same row, same label, as the one-time screen — the two are
+                  compared side by side and have to stay identical. */}
+              <div className="flex items-center gap-2">
+                <div className="font-mono text-115 font-medium tracking-[.08em] text-dim">
+                  {block.label}
+                </div>
+                <CopyButton size="row" value={block.code}>
+                  copy
+                </CopyButton>
               </div>
               <pre className="mt-[5px] whitespace-pre-wrap rounded-xs border border-rule bg-track px-3 py-[10px] font-mono text-12 leading-[1.65] text-ink">
                 {block.code}

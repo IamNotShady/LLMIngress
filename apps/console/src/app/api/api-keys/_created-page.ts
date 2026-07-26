@@ -7,7 +7,11 @@ import {
   type IntegrationGuideEntry,
 } from "../../_ui/api-keys/integration-guide";
 import { formatApiKeyLimitRules } from "../../_ui/api-keys/limits-view";
-import { standaloneThemeCss, standaloneThemeHead } from "../_standalone-theme";
+import {
+  standaloneCopyScript,
+  standaloneThemeCss,
+  standaloneThemeHead,
+} from "../_standalone-theme";
 
 export function renderOneTimeApiKeyResponse(
   input: {
@@ -82,11 +86,16 @@ export function renderOneTimeApiKeyResponse(
       </header>
       <div class="split">
         <section aria-label="Secret">
-          <p class="label">SECRET · SHOWN ONCE</p>
+          <!-- On the label line, not inside the box: a button in there cuts off
+               the tail of the one secret this page exists to show. -->
+          <div class="blockhead">
+            <p class="label">SECRET · SHOWN ONCE</p>
+            <button type="button" class="copy" data-copy="#secret">copy</button>
+          </div>
           <div class="secret">
             <input id="secret" readonly value="${escapeHtml(apiKey)}" aria-label="API key secret" />
           </div>
-          <p class="warn">Stored hashed — it cannot be shown again. Select the value and copy it before closing.</p>
+          <p class="warn">Stored hashed — it cannot be shown again. Copy it before closing.</p>
         </section>
         <section aria-label="Configuration">
           <p class="label">CONFIGURATION</p>
@@ -122,6 +131,7 @@ export function renderOneTimeApiKeyResponse(
         <a href="/playground">Test in Playground</a>
       </footer>
     </main>
+    <script>${standaloneCopyScript()}</script>
   </body>
 </html>`,
     {
@@ -149,6 +159,7 @@ h1{margin:0;font:600 18px var(--sans)}
 .split{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;margin-top:16px;align-items:start}
 .secret{display:flex;align-items:center;gap:10px;margin-top:6px;background:var(--track);border:1px solid var(--ambbd);border-radius:3px;padding:12px 14px}
 .secret input{flex:1;min-width:0;width:100%;min-width:0;border:0;background:transparent;color:var(--ink);font:500 15px var(--mono)}
+.secret .copy{font-size:13.5px;padding:4px 10px}
 .warn{margin:6px 0 0;font:400 12.5px var(--mono);color:var(--ambtx)}
 dl{display:block;margin:6px 0 0;border-top:1px solid var(--hair)}
 dl div{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--rule2);font:400 12.5px var(--mono)}
@@ -162,6 +173,8 @@ dd{margin:0;text-align:right;overflow-wrap:anywhere}
 .panel ol{margin:0;padding-left:18px}
 .panel li{font:400 13px var(--mono);line-height:1.6;margin-bottom:7px}
 .panel h2{margin:0 0 5px;font:500 11.5px var(--mono);color:var(--dim);letter-spacing:.08em}
+.blockhead{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.blockhead h2{margin:0}
 pre{margin:0 0 10px;background:var(--track);border:1px solid var(--rule);border-radius:3px;padding:10px 12px;font:400 12px var(--mono);line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
 footer{display:flex;align-items:center;gap:8px;margin-top:20px;padding-top:14px;border-top:1px solid var(--hair)}
 footer a{display:inline-flex;align-items:center;border:1px solid var(--btnbd);background:var(--btnbg);color:var(--ink);border-radius:3px;font:500 13.5px var(--mono);padding:6px 12px;text-decoration:none}
@@ -178,9 +191,16 @@ function renderGuidePanel(entry: IntegrationGuideEntry): string {
         </div>
         <div>
           ${entry.guide.codeBlocks
-            .map(
-              (block) => `<h2>${escapeHtml(block.label)}</h2><pre>${escapeHtml(block.code)}</pre>`,
-            )
+            .map((block, index) => {
+              // The key's detail renders the same label row, so an operator who
+              // comes back later finds the snippet in the same shape.
+              const id = `code-${escapeHtml(entry.platform)}-${index}`;
+              return `<div class="blockhead"><h2>${escapeHtml(
+                block.label,
+              )}</h2><button type="button" class="copy" data-copy="#${id}">copy</button></div><pre id="${id}">${escapeHtml(
+                block.code,
+              )}</pre>`;
+            })
             .join("")}
         </div>
       </div>`;

@@ -14,7 +14,11 @@ import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { consoleActionErrorResponse } from "../_errors";
 import { readNumber, readRequiredText, readText } from "../_form";
-import { standaloneThemeCss, standaloneThemeHead } from "../_standalone-theme";
+import {
+  standaloneCopyScript,
+  standaloneThemeCss,
+  standaloneThemeHead,
+} from "../_standalone-theme";
 
 export const POST = withConsoleAuth(async (request) => {
   try {
@@ -184,7 +188,8 @@ function renderOneTimeProviderKeyPage(input: {
       dl div { padding: 10px 0; border-bottom: 1px solid var(--rule2); }
       dt { font: 500 11.5px var(--mono); color: var(--dim); letter-spacing: .08em; }
       dd { margin: 6px 0 0; font: 400 13.5px var(--mono); color: var(--ink); overflow-wrap: anywhere; }
-      code { display: block; border: 1px solid var(--ambbd); border-radius: 3px; background: var(--track); padding: 12px 14px; font: 500 15px var(--mono); }
+      code { display: block; border: 1px solid var(--ambbd); border-radius: 3px; background: var(--track); padding: 12px 14px; font: 500 15px var(--mono); overflow-wrap: anywhere; }
+      .actions { display: flex; margin-top: 8px; }
       a { display: inline-flex; align-items: center; border: 1px solid transparent; border-radius: 3px; background: var(--seg); color: var(--segfg); font: 500 13.5px var(--mono); padding: 6px 18px; text-decoration: none; }
     </style>
   </head>
@@ -194,7 +199,10 @@ function renderOneTimeProviderKeyPage(input: {
       <dl>
         <div>
           <dt>PROVIDER API KEY · SHOWN ONCE</dt>
-          <dd><code>${escapeHtml(input.plaintext)}</code></dd>
+          <dd>
+            <code id="provider-key">${escapeHtml(input.plaintext)}</code>
+            <span class="actions"><button type="button" class="copy" data-copy="#provider-key">copy</button></span>
+          </dd>
         </div>
         <div>
           <dt>PREFIX</dt>
@@ -203,6 +211,7 @@ function renderOneTimeProviderKeyPage(input: {
       </dl>
       <a href="/providers">Back to Providers</a>
     </main>
+    <script>${standaloneCopyScript()}</script>
   </body>
 </html>`;
 }

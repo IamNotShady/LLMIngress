@@ -13,6 +13,7 @@ export function assertGatewayVirtualModelCapabilityContract(
   const result = resolveVirtualModelCapabilityContract(
     routePolicy.candidates.map((candidate) => ({
       id: candidate.providerModelId,
+      label: `${candidate.providerKey} - ${candidate.modelId}`,
       inputModalities: candidate.inputModalities,
       maxContextTokens: candidate.contextWindow ?? null,
       maxOutputTokens: candidate.maxOutputTokens,

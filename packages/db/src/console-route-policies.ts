@@ -750,6 +750,7 @@ async function assertRoutePolicyCandidateCapabilityContract(
   const result = resolveVirtualModelCapabilityContract(
     candidates.map((candidate) => ({
       id: candidate.id,
+      label: candidate.optionLabel,
       inputModalities: candidate.inputModalities,
       maxContextTokens: candidate.contextWindow,
       maxOutputTokens: candidate.maxOutputTokens,

@@ -105,6 +105,65 @@ describe("virtual model capability contract", () => {
     }
   });
 
+  it("reports every capability the candidates disagree on, not only the first", () => {
+    const result = resolveVirtualModelCapabilityContract([
+      { ...completeCandidate, id: "candidate-wide", label: "Nous - Aion 2.0 (aion-2.0)" },
+      {
+        ...completeCandidate,
+        id: "candidate-narrow",
+        label: "Grok - Grok 4.5 (grok-4.5)",
+        inputModalities: ["text"],
+        maxContextTokens: 500_000,
+      },
+    ]);
+
+    expect(result).toMatchObject({
+      code: "route_policy_candidate_capability_mismatch",
+      details: {
+        field: "inputModalities",
+        mismatches: [{ field: "inputModalities" }, { field: "maxContextTokens" }],
+      },
+      ok: false,
+    });
+    if (!result.ok) {
+      // Both differences in one message: the operator fixes the pair once
+      // instead of saving, being told about modalities, and coming back to
+      // discover the context windows never matched either.
+      expect(result.message).toContain("must agree on inputModalities and maxContextTokens");
+      expect(result.message).toContain(
+        "inputModalities: Nous - Aion 2.0 (aion-2.0) has text, image",
+      );
+      expect(result.message).toContain("Grok - Grok 4.5 (grok-4.5) has text.");
+      expect(result.message).toContain("maxContextTokens: Nous - Aion 2.0 (aion-2.0) has 128000");
+      expect(result.message).toContain("Grok - Grok 4.5 (grok-4.5) has 500000.");
+    }
+  });
+
+  it("names the two candidates that disagree, falling back to the id without a label", () => {
+    const result = resolveVirtualModelCapabilityContract([
+      { ...completeCandidate, id: "candidate-a", label: "OpenRouter - GPT-5 (openai/gpt-5)" },
+      { ...completeCandidate, id: "candidate-unlabelled", maxOutputTokens: 4_096 },
+    ]);
+
+    if (!result.ok) {
+      expect(result.message).toBe(
+        "Route policy candidates must agree on maxOutputTokens, but they differ: " +
+          "OpenRouter - GPT-5 (openai/gpt-5) has 8192; candidate-unlabelled has 4096.",
+      );
+      expect(result.details).toMatchObject({
+        mismatches: [
+          {
+            label: "candidate-unlabelled",
+            providerModelId: "candidate-unlabelled",
+            referenceLabel: "OpenRouter - GPT-5 (openai/gpt-5)",
+            referenceProviderModelId: "candidate-a",
+          },
+        ],
+      });
+    }
+    expect(result.ok).toBe(false);
+  });
+
   it("validates request capabilities against the resolved Virtual Model contract", () => {
     const contract: VirtualModelCapabilityContract = {
       inputModalities: ["text"],

@@ -58,6 +58,13 @@ export function SyncedSearchInput({
       placeholder={placeholder}
       value={typed}
       onChange={(event) => setTyped(event.target.value)}
+      // The box applies itself, so Enter has nothing to do here — and inside an
+      // editor it would submit the form the operator is still filling in.
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+        }
+      }}
       className={className}
     />
   );

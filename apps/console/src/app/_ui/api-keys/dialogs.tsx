@@ -8,15 +8,40 @@ import type {
 } from "@llmingress/db/console-virtual-models";
 import Link from "next/link";
 import { ConfirmForm, TypeNameToConfirm } from "../confirm-form";
-import { ActionButton, ActionLink, Field, SelectInput, TextInput } from "../controls";
+import {
+  ActionButton,
+  ActionLink,
+  Field,
+  filterControlClass,
+  SelectInput,
+  TextInput,
+} from "../controls";
+import { EditorNav } from "../editor-nav";
 import { formatCost, formatCount, formatDateOnly } from "../format";
 import { DetailRow } from "../layout";
 import { Dialog, DialogActions, DialogBody, DialogImpact, DialogNote } from "../overlay";
 import { buildHref, readParam, type SearchParams } from "../params";
+import { SyncedSearchInput } from "../synced-search";
+import { SyncedSelect } from "../synced-select";
+import { formatRange } from "../table";
 import { ApiKeyEditorForm } from "./editor-form";
-import { buildApiKeyLimitsView, ENFORCEMENT_NOTE, limitFieldValue } from "./limits-view";
+import {
+  BUDGET_PERIOD_OPTIONS,
+  buildApiKeyLimitsView,
+  ENFORCEMENT_NOTE,
+  limitFieldValue,
+} from "./limits-view";
 
-const BUDGET_PERIODS = ["day", "week", "month"] as const;
+const GRANT_FILTERS = [
+  { label: "Show: all", value: "all" },
+  { label: "granted only", value: "granted" },
+  { label: "not granted", value: "ungranted" },
+] as const;
+
+/** The name is typed here, and every filter click re-renders from the server. */
+const PRESERVED_EDITOR_FIELDS = ["name"] as const;
+
+const GRANT_PAGE_SIZE = 8;
 
 export function ApiKeyDialogs({
   apiKey,
@@ -36,10 +61,19 @@ export function ApiKeyDialogs({
   virtualModels: ConsoleVirtualModel[];
 }) {
   const dialog = readParam(params, "dialog");
+  // Closing drops the whole draft: the grants picked but not saved, the name
+  // typed but not saved, the browser's own filters. What is left behind is the
+  // list the operator was looking at before they opened it.
   const closeHref = buildHref("/api-keys", params, {
     defaultGrant: null,
     dialog: null,
+    editor_name: null,
+    formError: null,
     grantIds: null,
+    grantPage: null,
+    grantQuery: null,
+    grantShow: null,
+    keyName: null,
   });
 
   if (dialog === "new") {
@@ -129,6 +163,35 @@ function ApiKeyEditorDialog({
       grantIds: ids.join(","),
     });
 
+  // A console with many virtual models would otherwise put a scroll of rows
+  // between the name and the limits. Searching, filtering and paging narrow the
+  // rows on screen; what is granted lives in the URL, so a grant made on page
+  // one is still granted while page two is being read.
+  const grantQuery = readParam(params, "grantQuery") ?? "";
+  const grantShow = readParam(params, "grantShow") ?? "all";
+  const needle = grantQuery.trim().toLowerCase();
+  const matching = virtualModels.filter((model) => {
+    if (needle && !model.name.toLowerCase().includes(needle)) {
+      return false;
+    }
+    if (grantShow === "granted") {
+      return selectedGrantIds.includes(model.id);
+    }
+    if (grantShow === "ungranted") {
+      return !selectedGrantIds.includes(model.id);
+    }
+    return true;
+  });
+  const pageCount = Math.max(1, Math.ceil(matching.length / GRANT_PAGE_SIZE));
+  const grantPage = Math.min(
+    Math.max(1, Number.parseInt(readParam(params, "grantPage") ?? "1", 10) || 1),
+    pageCount,
+  );
+  const visibleModels = matching.slice(
+    (grantPage - 1) * GRANT_PAGE_SIZE,
+    grantPage * GRANT_PAGE_SIZE,
+  );
+
   return (
     <Dialog
       closeHref={closeHref}
@@ -138,184 +201,291 @@ function ApiKeyEditorDialog({
       }
       width={editing ? 720 : 900}
     >
-      <ApiKeyEditorForm
-        closeHref={closeHref}
-        editing={Boolean(editing)}
-        formError={readParam(params, "formError")}
-      >
-        <input type="hidden" name="action" value={editing ? "saveAll" : "create"} />
-        {apiKey ? <input type="hidden" name="id" value={apiKey.id} /> : null}
-        {selectedGrantIds.map((id) => (
-          <input key={id} type="hidden" name="allowedVirtualModelIds" value={id} />
-        ))}
-        <input type="hidden" name="defaultVirtualModelId" value={defaultGrantId} />
+      <EditorNav>
+        <ApiKeyEditorForm
+          closeHref={closeHref}
+          editing={Boolean(editing)}
+          formError={readParam(params, "formError")}
+        >
+          <input type="hidden" name="action" value={editing ? "saveAll" : "create"} />
+          {apiKey ? <input type="hidden" name="id" value={apiKey.id} /> : null}
+          {selectedGrantIds.map((id) => (
+            <input key={id} type="hidden" name="allowedVirtualModelIds" value={id} />
+          ))}
+          <input type="hidden" name="defaultVirtualModelId" value={defaultGrantId} />
 
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <Field label="NAME" hint="Shown in Activity and Usage; the secret itself is never shown.">
-            <TextInput
-              name="name"
-              data-autofocus=""
-              id="api-key-name"
-              aria-label="API key name"
-              defaultValue={readParam(params, "keyName") ?? apiKey?.name ?? ""}
-              required
-            />
-          </Field>
-          {editing ? (
-            <Field label="STATE" hint="Disabling stops traffic and keeps the configuration.">
-              <TextInput defaultValue={apiKey?.enabled ? "enabled" : "disabled"} disabled />
-            </Field>
-          ) : null}
-        </div>
-
-        <div className="mt-4 flex items-baseline gap-[10px] border-b border-hair pb-[5px]">
-          <span className="font-mono text-115 font-medium tracking-[.08em] text-dim">
-            VIRTUAL MODEL GRANTS
-          </span>
-          <span className="ml-auto font-mono text-12 text-faint">
-            the default is used when a client sends no model
-          </span>
-        </div>
-        {virtualModels.length === 0 ? (
-          <p className="py-4 font-mono text-13 text-dim">
-            No virtual model exists yet — create one before issuing a key.
-          </p>
-        ) : (
-          virtualModels.map((model) => {
-            const policy = policyByVirtualModelId.get(model.id);
-            const granted = selectedGrantIds.includes(model.id);
-            const isDefault = defaultGrantId === model.id;
-            const toggled = granted
-              ? selectedGrantIds.filter((id) => id !== model.id)
-              : [...selectedGrantIds, model.id];
-            return (
-              <div
-                key={model.id}
-                className="flex items-center gap-[10px] border-b border-rule2 py-2 font-mono text-13 text-ink"
-              >
-                <Link
-                  href={withGrants(toggled, granted && isDefault ? "" : undefined)}
-                  aria-label={`${granted ? "Revoke" : "Grant"} ${model.name}`}
-                  className={`grid size-[13px] flex-none place-items-center rounded-[2px] border font-mono text-[10px] ${
-                    granted ? "border-accent bg-accent text-segfg" : "border-btnbd bg-btnbg"
-                  }`}
-                >
-                  {granted ? "✓" : ""}
-                </Link>
-                <span
-                  className={`min-w-0 flex-1 cell-clip ${granted ? "font-medium" : "text-dim"}`}
-                >
-                  {model.name}
-                </span>
-                <span className="whitespace-nowrap text-dim">
-                  {policy ? `${policy.endpointProtocol} · ${policy.strategy}` : "no route yet"}
-                </span>
-                {granted ? (
-                  <Link
-                    href={withGrants(selectedGrantIds, model.id)}
-                    className={`whitespace-nowrap ${isDefault ? "text-ambtx" : "text-faint"}`}
-                  >
-                    {isDefault ? "★ default" : "☆ set default"}
-                  </Link>
-                ) : (
-                  <span className="whitespace-nowrap text-faint">☆</span>
-                )}
-              </div>
-            );
-          })
-        )}
-
-        <div className="mt-4 flex items-center gap-[10px]">
-          <span className="flex-none whitespace-nowrap font-mono text-115 font-medium tracking-[.08em] text-dim">
-            ENABLE LIMITS
-          </span>
-          <span className="block w-[130px] flex-none">
-            <SelectInput
-              name="enableLimits"
-              aria-label="Enable limits"
-              defaultValue={apiKey ? String(apiKey.limitsEnabled) : "true"}
-            >
-              <option value="true">on</option>
-              <option value="false">off</option>
-            </SelectInput>
-          </span>
-          <span className="min-w-0 flex-1 font-mono text-12 text-faint">
-            Off keeps the rules below and enforces none of them.
-          </span>
-        </div>
-        <div className="mt-[10px] grid grid-cols-3 gap-3">
-          <Field label="BUDGET USD / PERIOD" hint="spend cap per period · blocks past it">
-            <span className="flex items-center gap-[6px] [&>select]:w-[110px] [&>select]:flex-none">
+          <div className={editing ? "mt-4 grid grid-cols-2 gap-4" : "mt-4"}>
+            <Field label="NAME">
               <TextInput
-                name="budgetUsd"
-                defaultValue={limitFieldValue(view.budgetLimit, editing ? null : 25)}
-                inputMode="decimal"
-                placeholder="unlimited"
+                name="name"
+                data-autofocus=""
+                id="api-key-name"
+                aria-label="API key name"
+                defaultValue={
+                  readParam(params, "editor_name") ??
+                  readParam(params, "keyName") ??
+                  apiKey?.name ??
+                  ""
+                }
+                required
               />
-              <SelectInput
-                name="budgetPeriod"
-                aria-label="Budget period"
-                defaultValue={view.budgetPeriod ?? "month"}
+            </Field>
+            {editing ? (
+              <Field label="STATE" hint="Disabling stops traffic and keeps the configuration.">
+                <TextInput defaultValue={apiKey?.enabled ? "enabled" : "disabled"} disabled />
+              </Field>
+            ) : null}
+          </div>
+
+          <div className="mt-4 flex items-center gap-[10px]">
+            <span className="flex-none whitespace-nowrap font-mono text-115 font-medium tracking-[.08em] text-dim">
+              VIRTUAL MODEL GRANTS
+            </span>
+            <SyncedSearchInput
+              aria-label="Search virtual models"
+              // Shrinkable, so the narrower edit dialog squeezes the search box
+              // rather than pushing the pager off the row.
+              className={`${filterControlClass} w-[150px]`}
+              href={buildHref(pathname, params, { grantPage: null, grantQuery: "__value__" })}
+              name="grantQuery"
+              placeholder="search model name…"
+              preserveFields={PRESERVED_EDITOR_FIELDS}
+              value={grantQuery}
+            />
+            <span className="block w-[150px] flex-none">
+              <SyncedSelect
+                aria-label="Filter virtual models by grant"
+                className={filterControlClass}
+                href={buildHref(pathname, params, { grantPage: null, grantShow: "__value__" })}
+                name="grantShow"
+                preserveFields={PRESERVED_EDITOR_FIELDS}
+                value={grantShow}
               >
-                {BUDGET_PERIODS.map((period) => (
-                  <option key={period} value={period}>
-                    {period}
+                {GRANT_FILTERS.map((filter) => (
+                  <option key={filter.value} value={filter.value}>
+                    {filter.label}
                   </option>
                 ))}
-              </SelectInput>
+              </SyncedSelect>
             </span>
-          </Field>
-          <Field label="RPM" hint="requests per minute">
-            <TextInput
-              name="rpm"
-              defaultValue={limitFieldValue(view.rpm, editing ? null : 120)}
-              inputMode="numeric"
-              placeholder="unlimited"
+            <GrantPager
+              page={grantPage}
+              pageCount={pageCount}
+              params={params}
+              rangeLabel={formatRange({
+                page: grantPage,
+                pageSize: GRANT_PAGE_SIZE,
+                total: matching.length,
+              })}
             />
-          </Field>
-          <Field label="TPM" hint="tokens per minute (input + output)">
-            <TextInput
-              name="tpm"
-              defaultValue={limitFieldValue(view.tpm, editing ? null : 50_000)}
-              inputMode="numeric"
-              placeholder="unlimited"
-            />
-          </Field>
-          <Field label="TOKENS / REQUEST" hint="max tokens a single request may use">
-            <TextInput
-              name="tokenLimit"
-              defaultValue={limitFieldValue(view.tokensPerRequest, editing ? null : 16_384)}
-              inputMode="numeric"
-              placeholder="unlimited"
-            />
-          </Field>
-          <Field label="CONCURRENCY" hint="in-flight requests at the same time">
-            <TextInput
-              name="concurrency"
-              defaultValue={limitFieldValue(view.concurrency, editing ? null : 4)}
-              inputMode="numeric"
-              placeholder="unlimited"
-            />
-          </Field>
-          <Field label="ENFORCEMENT" hint={ENFORCEMENT_NOTE}>
-            <TextInput defaultValue={view.enforcement} disabled className="opacity-55" />
-            <input type="hidden" name="enforcementPolicy" value={view.enforcement} />
-          </Field>
-        </div>
+          </div>
 
-        <DialogActions>
-          <ActionButton size="dialog" disabled={selectedGrantIds.length === 0} tone="primary">
-            {editing ? "Save" : "Create key"}
-          </ActionButton>
-          <ActionLink href={closeHref}>Cancel</ActionLink>
-          <span className="ml-1 font-mono text-12 text-faint">
-            {editing
-              ? "the llmi_ secret cannot be shown or changed — delete the key and issue a new one to rotate it"
-              : "the secret is shown once, on the next screen"}
-          </span>
-        </DialogActions>
-      </ApiKeyEditorForm>
+          <div className="mt-2 flex items-baseline gap-[10px] border-b border-hair pb-[5px]">
+            <span className="font-mono text-115 font-medium tracking-[.08em] text-dim">MODEL</span>
+            <span className="ml-auto font-mono text-12 text-faint">
+              {editing
+                ? "the default is used when a client sends no model"
+                : "star one as the default"}
+            </span>
+          </div>
+          {virtualModels.length === 0 ? (
+            <p className="py-4 font-mono text-13 text-dim">
+              No virtual model exists yet — create one before issuing a key.
+            </p>
+          ) : visibleModels.length === 0 ? (
+            <p className="py-4 font-mono text-13 text-dim">
+              No virtual model matches that search and filter.
+            </p>
+          ) : (
+            visibleModels.map((model) => {
+              const policy = policyByVirtualModelId.get(model.id);
+              const granted = selectedGrantIds.includes(model.id);
+              const isDefault = defaultGrantId === model.id;
+              const toggled = granted
+                ? selectedGrantIds.filter((id) => id !== model.id)
+                : [...selectedGrantIds, model.id];
+              return (
+                <div
+                  key={model.id}
+                  className="flex items-center gap-[10px] border-b border-rule2 py-2 font-mono text-13 text-ink"
+                >
+                  <Link
+                    href={withGrants(toggled, granted && isDefault ? "" : undefined)}
+                    aria-label={`${granted ? "Revoke" : "Grant"} ${model.name}`}
+                    className={`grid size-[13px] flex-none place-items-center rounded-[2px] border font-mono text-[10px] ${
+                      granted ? "border-accent bg-accent text-segfg" : "border-btnbd bg-btnbg"
+                    }`}
+                  >
+                    {granted ? "✓" : ""}
+                  </Link>
+                  <span
+                    className={`min-w-0 flex-1 cell-clip ${granted ? "font-medium" : "text-dim"}`}
+                  >
+                    {model.name}
+                  </span>
+                  <span className="whitespace-nowrap text-dim">
+                    {policy ? `${policy.endpointProtocol} · ${policy.strategy}` : "no route yet"}
+                  </span>
+                  {granted ? (
+                    <Link
+                      href={withGrants(selectedGrantIds, model.id)}
+                      className={`whitespace-nowrap ${isDefault ? "text-ambtx" : "text-faint"}`}
+                    >
+                      {isDefault ? "★ default" : "☆ set default"}
+                    </Link>
+                  ) : (
+                    <span className="whitespace-nowrap text-faint">☆</span>
+                  )}
+                </div>
+              );
+            })
+          )}
+
+          {/* Unchecked posts nothing, which the route reads as off — the rules
+            below are still saved, and none of them are enforced. */}
+          <div className="mt-4 flex items-center gap-[10px]">
+            <span className="flex-none whitespace-nowrap font-mono text-115 font-medium tracking-[.08em] text-dim">
+              ENABLE LIMITS
+            </span>
+            <input
+              type="checkbox"
+              name="enableLimits"
+              value="true"
+              aria-label="Enable limits"
+              defaultChecked={apiKey ? apiKey.limitsEnabled : true}
+              className="size-[13px] flex-none accent-accent"
+            />
+          </div>
+          <div className="mt-[10px] grid grid-cols-3 gap-3">
+            <Field label="BUDGET USD / PERIOD" hint="spend cap per period · blocks past it">
+              <span className="flex items-center gap-[6px] [&>select]:w-[110px] [&>select]:flex-none">
+                <TextInput
+                  name="budgetUsd"
+                  defaultValue={limitFieldValue(view.budgetLimit, editing ? null : 25)}
+                  inputMode="decimal"
+                  placeholder="unlimited"
+                />
+                <SelectInput
+                  name="budgetPeriod"
+                  aria-label="Budget period"
+                  defaultValue={view.budgetPeriod ?? "month"}
+                >
+                  {BUDGET_PERIOD_OPTIONS.map((period) => (
+                    <option key={period.value} value={period.value}>
+                      {period.label}
+                    </option>
+                  ))}
+                </SelectInput>
+              </span>
+            </Field>
+            <Field label="RPM" hint="requests per minute">
+              <TextInput
+                name="rpm"
+                defaultValue={limitFieldValue(view.rpm, editing ? null : 120)}
+                inputMode="numeric"
+                placeholder="unlimited"
+              />
+            </Field>
+            <Field label="TPM" hint="tokens per minute (input + output)">
+              <TextInput
+                name="tpm"
+                defaultValue={limitFieldValue(view.tpm, editing ? null : 50_000)}
+                inputMode="numeric"
+                placeholder="unlimited"
+              />
+            </Field>
+            <Field label="TOKENS / REQUEST" hint="max tokens a single request may use">
+              <TextInput
+                name="tokenLimit"
+                defaultValue={limitFieldValue(view.tokensPerRequest, editing ? null : 16_384)}
+                inputMode="numeric"
+                placeholder="unlimited"
+              />
+            </Field>
+            <Field label="CONCURRENCY" hint="in-flight requests at the same time">
+              <TextInput
+                name="concurrency"
+                defaultValue={limitFieldValue(view.concurrency, editing ? null : 4)}
+                inputMode="numeric"
+                placeholder="unlimited"
+              />
+            </Field>
+            <Field label="ENFORCEMENT" hint={ENFORCEMENT_NOTE}>
+              <SelectInput
+                name="enforcementPolicy"
+                aria-label="Enforcement policy"
+                defaultValue={view.enforcement}
+              >
+                <option value="block">block</option>
+                <option value="warn_only">warn_only</option>
+              </SelectInput>
+            </Field>
+          </div>
+
+          <DialogActions>
+            <ActionButton size="dialog" disabled={selectedGrantIds.length === 0} tone="primary">
+              {editing ? "Save" : "Create key"}
+            </ActionButton>
+            <ActionLink href={closeHref}>Cancel</ActionLink>
+            {editing ? (
+              <span className="ml-1 font-mono text-12 text-faint">
+                the llmi_ secret cannot be shown or changed — delete the key and issue a new one to
+                rotate it
+              </span>
+            ) : null}
+          </DialogActions>
+        </ApiKeyEditorForm>
+      </EditorNav>
     </Dialog>
+  );
+}
+
+/**
+ * The grants pager, in the section header rather than under the rows: it reads
+ * as part of the browser's controls, and the rows below stay a plain list. Both
+ * arrows are always drawn so the row does not change width at the ends.
+ */
+function GrantPager({
+  page,
+  pageCount,
+  params,
+  rangeLabel,
+}: {
+  page: number;
+  pageCount: number;
+  params: SearchParams;
+  rangeLabel: string;
+}) {
+  const stepClass = "rounded-xs border border-btnbd bg-btnbg px-2 py-[2px]";
+  const stepHref = (target: number) =>
+    buildHref("/api-keys", params, { grantPage: String(target) });
+
+  return (
+    <span className="ml-auto flex flex-none items-center gap-2 whitespace-nowrap font-mono text-12 text-dim">
+      <span>{rangeLabel}</span>
+      {page > 1 ? (
+        <Link
+          aria-label="Previous page of models"
+          href={stepHref(page - 1)}
+          className={`${stepClass} text-ink`}
+        >
+          ←
+        </Link>
+      ) : (
+        <span className={`${stepClass} text-faint`}>←</span>
+      )}
+      {page < pageCount ? (
+        <Link
+          aria-label="Next page of models"
+          href={stepHref(page + 1)}
+          className={`${stepClass} text-ink`}
+        >
+          →
+        </Link>
+      ) : (
+        <span className={`${stepClass} text-faint`}>→</span>
+      )}
+    </span>
   );
 }
 

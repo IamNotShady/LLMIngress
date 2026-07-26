@@ -42,6 +42,9 @@ const PAGES: Array<[string, string]> = [
   ["usage", "/usage"],
   ["playground", "/playground"],
   ["dialog-new-key", "/api-keys?dialog=new"],
+  // The same editor in its narrower edit shape, where its toolbar has the
+  // least room to fit.
+  ["dialog-edit-api-key", "/api-keys?selected=__KEY__&dialog=edit"],
   ["drawer-limits", "/limits"],
   ["drawer-activity", "/activity"],
   ["dialog-add-provider", "/providers?dialog=new"],
@@ -66,6 +69,7 @@ let oauthConnectionId = "";
 let apiKeyConnectionId = "";
 let codeExpiresAt = "";
 let localProviderId = "";
+let consoleApiKeyId = "";
 
 async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>) {
   const id = () => randomUUID();
@@ -210,6 +214,7 @@ async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture
     keys.cursor,
     vms.fast,
   ]);
+  consoleApiKeyId = keys.cursor;
   await fixture.query(
     `insert into api_key_limits (id, api_key_id, limit_type, period, limit_value, unit, enabled, enforcement_policy) values
        (gen_random_uuid(), $1, 'budget', 'month', 50, 'usd', true, 'block'),
@@ -396,7 +401,8 @@ async function main() {
           .replace(/__OAUTH__/g, oauthConnectionId)
           .replace(/__ORMAIN__/g, apiKeyConnectionId)
           .replace(/__EXPIRES__/g, encodeURIComponent(codeExpiresAt))
-          .replace(/__OLLAMA__/g, localProviderId);
+          .replace(/__OLLAMA__/g, localProviderId)
+          .replace(/__KEY__/g, consoleApiKeyId);
         visiting = `${name} ${theme}`;
         await page.goto(`${baseUrl}${path}`);
         if (name === "drawer-limits") {

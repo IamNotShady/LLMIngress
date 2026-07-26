@@ -1,14 +1,16 @@
 import type { ConsoleBudgetPeriod } from "@llmingress/db/console-api-key-limits";
 import type { ConsoleApiKey } from "@llmingress/db/console-api-keys";
-import { type ApiKeyLimitsView, ENFORCEMENT_NOTE } from "../api-keys/limits-view";
+import {
+  type ApiKeyLimitsView,
+  BUDGET_PERIOD_OPTIONS,
+  ENFORCEMENT_NOTE,
+} from "../api-keys/limits-view";
 import { ConfirmForm } from "../confirm-form";
 import { ActionButton, ActionLink, Field, Meter, SelectInput, TextInput } from "../controls";
 import { formatCost, formatDateOnly, formatUntil } from "../format";
 import { MutationForm } from "../mutation-form";
 import { Dialog, DialogBody, DialogNote, Drawer } from "../overlay";
 import { buildHref, readParam, type SearchParams } from "../params";
-
-const BUDGET_PERIODS = ["day", "week", "month"] as const;
 
 export function LimitsDrawer({
   apiKey,
@@ -116,9 +118,9 @@ export function LimitsDrawer({
           </Field>
           <Field label="PERIOD" hint="window the budget resets on">
             <SelectInput name="budgetPeriod" defaultValue={view.budgetPeriod ?? "month"}>
-              {BUDGET_PERIODS.map((period) => (
-                <option key={period} value={period}>
-                  {period}
+              {BUDGET_PERIOD_OPTIONS.map((period) => (
+                <option key={period.value} value={period.value}>
+                  {period.label}
                 </option>
               ))}
             </SelectInput>

@@ -15,6 +15,7 @@ import type {
 import Link from "next/link";
 import { TypeNameToConfirm } from "../confirm-form";
 import { ActionButton, ActionLink, Field, filterControlClass, TextInput } from "../controls";
+import { EditorNav } from "../editor-nav";
 import { formatCost, formatCount, formatPricePair } from "../format";
 import { DetailRow } from "../layout";
 import { formatModelContextTokens } from "../model-capability-format";
@@ -31,7 +32,6 @@ import {
   ROUTE_PROTOCOLS,
   readRouteProtocol,
 } from "./candidate-providers";
-import { EditorNav } from "./editor-nav";
 import { strategyRouteNote } from "./strategy";
 
 const PRESERVED_EDITOR_FIELDS = ["name", "description"] as const;

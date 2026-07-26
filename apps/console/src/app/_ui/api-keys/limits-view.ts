@@ -99,5 +99,15 @@ export function formatLimitValue(value: number | null): string {
   return value === null ? "unlimited" : value.toLocaleString("en-US");
 }
 
-export const ENFORCEMENT_NOTE =
-  "block rejects the request · warn_only records the breach and lets it through";
+export const ENFORCEMENT_NOTE = "block rejects · warn_only records and passes";
+
+/**
+ * Stored as day/week/month, said the way an operator says it. One list, because
+ * the key's dialog and the Limits drawer set the same column and would read as
+ * two different settings if they named the periods differently.
+ */
+export const BUDGET_PERIOD_OPTIONS = [
+  { label: "monthly", value: "month" },
+  { label: "weekly", value: "week" },
+  { label: "daily", value: "day" },
+] as const;

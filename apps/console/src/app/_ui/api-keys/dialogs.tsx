@@ -25,6 +25,7 @@ import { SyncedSearchInput } from "../synced-search";
 import { SyncedSelect } from "../synced-select";
 import { formatRange } from "../table";
 import { ApiKeyEditorForm } from "./editor-form";
+import { IntegrationPanel } from "./integration-panel";
 import {
   BUDGET_PERIOD_OPTIONS,
   buildApiKeyLimitsView,
@@ -43,8 +44,13 @@ const PRESERVED_EDITOR_FIELDS = ["name"] as const;
 
 const GRANT_PAGE_SIZE = 8;
 
+/** One line, in one place: a wrapped copy is a copy that can drift. */
+const ROTATE_NOTE =
+  "the llmi_ secret cannot be shown or changed — delete the key and issue a new one to rotate it";
+
 export function ApiKeyDialogs({
   apiKey,
+  gatewayBaseUrl,
   grants,
   limits,
   params,
@@ -53,6 +59,7 @@ export function ApiKeyDialogs({
   virtualModels,
 }: {
   apiKey: ConsoleApiKey | undefined;
+  gatewayBaseUrl: string;
   grants: ConsoleApiKeyVirtualModelGrant[];
   limits: ConsoleApiKeyLimit[];
   params: SearchParams;
@@ -70,6 +77,7 @@ export function ApiKeyDialogs({
     editor_name: null,
     formError: null,
     grantIds: null,
+    guide: null,
     grantPage: null,
     grantQuery: null,
     grantShow: null,
@@ -99,6 +107,18 @@ export function ApiKeyDialogs({
         params={params}
         routePolicies={routePolicies}
         virtualModels={virtualModels}
+      />
+    );
+  }
+  if (dialog === "guide") {
+    return (
+      <AgentSetupDialog
+        apiKey={apiKey}
+        closeHref={closeHref}
+        gatewayBaseUrl={gatewayBaseUrl}
+        grants={grants.filter((grant) => grant.apiKeyId === apiKey.id)}
+        params={params}
+        routePolicies={routePolicies}
       />
     );
   }
@@ -428,10 +448,7 @@ function ApiKeyEditorDialog({
             </ActionButton>
             <ActionLink href={closeHref}>Cancel</ActionLink>
             {editing ? (
-              <span className="ml-1 font-mono text-12 text-faint">
-                the llmi_ secret cannot be shown or changed — delete the key and issue a new one to
-                rotate it
-              </span>
+              <span className="ml-1 font-mono text-12 text-faint">{ROTATE_NOTE}</span>
             ) : null}
           </DialogActions>
         </ApiKeyEditorForm>
@@ -486,6 +503,63 @@ function GrantPager({
         <span className={`${stepClass} text-faint`}>→</span>
       )}
     </span>
+  );
+}
+
+/**
+ * How to point an agent at this key. It is a dialog rather than a slab under
+ * the detail: eight platforms of instructions dwarfed the key's own state, and
+ * an operator reads exactly one of them, once.
+ */
+function AgentSetupDialog({
+  apiKey,
+  closeHref,
+  gatewayBaseUrl,
+  grants,
+  params,
+  routePolicies,
+}: {
+  apiKey: ConsoleApiKey;
+  closeHref: string;
+  gatewayBaseUrl: string;
+  grants: ConsoleApiKeyVirtualModelGrant[];
+  params: SearchParams;
+  routePolicies: ConsoleRoutePolicy[];
+}) {
+  const nameByVirtualModelId = new Map(
+    routePolicies.map((policy) => [policy.virtualModelId, policy.virtualModelName]),
+  );
+  const grantName = (grant: ConsoleApiKeyVirtualModelGrant) =>
+    nameByVirtualModelId.get(grant.virtualModelId) ?? "unknown model";
+  const defaultModel = grants.find((grant) => grant.isDefault);
+  const defaultModelName = defaultModel ? grantName(defaultModel) : null;
+  const firstGranted = grants[0];
+
+  return (
+    <Dialog
+      closeHref={closeHref}
+      title="Set up an agent"
+      titleNote={`${apiKey.name} · gateway ${gatewayBaseUrl
+        .replace(/^https?:\/\//, "")
+        .replace(/\/+$/, "")} · default model ${
+        defaultModelName ?? "none — clients must send a model"
+      }`}
+      width={900}
+    >
+      <div className="mt-4">
+        <IntegrationPanel
+          gatewayBaseUrl={gatewayBaseUrl}
+          keyPrefix={apiKey.keyPrefix}
+          model={
+            defaultModelName ??
+            (firstGranted ? grantName(firstGranted) : null) ??
+            "your-virtual-model"
+          }
+          params={params}
+          pathname="/api-keys"
+        />
+      </div>
+    </Dialog>
   );
 }
 

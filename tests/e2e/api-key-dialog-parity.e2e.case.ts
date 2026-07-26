@@ -21,24 +21,19 @@ async function pageOverflowPx(page: Page): Promise<number> {
   );
 }
 
-// Both views must present the same blocks: what the key is configured for and
-// how to point an agent at it. Returns the configuration text and the first
-// guide's text so the two can be compared without hard-coding any formatting.
-async function readSharedBlocks(scope: Locator | Page): Promise<{
-  configuration: string;
-  guide: string;
+// Both views hand over the same setup: the same platforms, and the same
+// snippets for the one on screen. Returns them without hard-coding formatting,
+// so the comparison survives a restyle of either side.
+async function readSharedGuide(scope: Locator | Page): Promise<{
   platforms: string[];
+  snippets: string[];
+  steps: string;
 }> {
-  await expect(scope.getByText("CONFIGURATION", { exact: true })).toBeVisible();
-  await expect(scope.getByText(/^set up your agent$/i)).toBeVisible();
-
-  const configuration = await scope
-    .locator("dl, [data-testid='api-key-configuration']")
-    .first()
-    .innerText();
   const platforms = await scope.locator("[data-guide-tab]").allInnerTexts();
-  const guide = await scope.locator("[data-guide-panel]:visible").first().innerText();
-  return { configuration: configuration.trim(), guide: guide.trim(), platforms };
+  const panel = scope.locator("[data-guide-panel]:visible").first();
+  const snippets = await panel.locator("pre").allInnerTexts();
+  const steps = await panel.locator("ol").first().innerText();
+  return { platforms, snippets: snippets.map((entry) => entry.trim()), steps: steps.trim() };
 }
 
 async function expectNoOverflow(page: Page, label: string): Promise<void> {
@@ -108,10 +103,11 @@ test("API key created and detail dialogs share one layout and differ only in the
         await expect(page.getByText("parity-vm").first()).toBeVisible();
         await expect(page.getByText(`${gatewayUrl}`).first()).toBeVisible();
         await expect(page.getByText("Stored hashed")).toBeVisible();
-        const created = await readSharedBlocks(page);
+        await expect(page.getByText("CONFIGURATION", { exact: true })).toBeVisible();
+        const created = await readSharedGuide(page);
         await expectNoOverflow(page, "created page");
 
-        // --- The detail states the same configuration, with the prefix only.
+        // --- The key's own dialog hands over the same setup, with the prefix.
         await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
         await page
           .getByRole("link", { name: /parity-key/ })
@@ -121,18 +117,27 @@ test("API key created and detail dialogs share one layout and differ only in the
         await expect(page.getByText("Virtual Model access")).toBeVisible();
         await expect(page.getByText("parity-vm").first()).toBeVisible();
 
-        const detail = await readSharedBlocks(page);
-        expect(detail.platforms).toEqual(created.platforms);
-        expect(detail.configuration).toBe(created.configuration);
-        // The guide is the same set-up, with the secret replaced by a
-        // placeholder — it was shown once and is stored hashed.
-        expect(detail.guide).toBe(created.guide.replaceAll(plaintext, "<YOUR_API_KEY>"));
-        await expectNoOverflow(page, "detail dialog");
-
         const shownPrefix = await page
           .getByText(/^llmi_/)
           .first()
           .innerText();
+
+        await page.getByRole("link", { name: "Set up an agent" }).click();
+        const setup = page.getByRole("dialog", { name: "Set up an agent" });
+        // No grant was starred, so the dialog says so and falls back to the one
+        // model the key does have — the same one the created page named.
+        await expect(setup).toContainText("parity-key");
+        await expect(setup).toContainText("default model none");
+        const detail = await readSharedGuide(setup);
+        expect(detail.platforms).toEqual(created.platforms);
+        expect(detail.steps).toBe(created.steps);
+        // The same snippets, with the prefix standing in for the secret that
+        // was shown once and is stored hashed.
+        expect(detail.snippets).toEqual(
+          created.snippets.map((snippet) => snippet.replaceAll(plaintext, shownPrefix)),
+        );
+        await expectNoOverflow(page, "setup dialog");
+
         expect(plaintext.startsWith(shownPrefix.replace(/…$/, ""))).toBe(true);
         expect(shownPrefix.length).toBeLessThan(plaintext.length);
         // Nothing on this page can reveal the rest of it.

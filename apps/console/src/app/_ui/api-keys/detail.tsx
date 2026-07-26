@@ -12,8 +12,7 @@ import { formatCompact, formatCost, formatCount, formatDateOnly, formatRelative 
 import { DetailRow, SectionTitle } from "../layout";
 import { buildHref, type SearchParams } from "../params";
 import { GridRow } from "../table";
-import { IntegrationPanel } from "./integration-panel";
-import { buildApiKeyLimitsView, formatApiKeyLimitRules, formatLimitValue } from "./limits-view";
+import { buildApiKeyLimitsView, formatLimitValue } from "./limits-view";
 
 const GRANT_COLUMNS = "190px 170px 136px 114px 1fr";
 
@@ -48,13 +47,6 @@ export function ApiKeyDetail({
   const policyByVirtualModelId = new Map(
     routePolicies.map((policy) => [policy.virtualModelId, policy]),
   );
-  const grantName = (grant: ConsoleApiKeyVirtualModelGrant) =>
-    policyByVirtualModelId.get(grant.virtualModelId)?.virtualModelName ?? "unknown model";
-  const defaultModelName = grants.find((grant) => grant.isDefault)
-    ? grantName(grants.find((grant) => grant.isDefault) as ConsoleApiKeyVirtualModelGrant)
-    : null;
-  const otherModelNames = grants.filter((grant) => !grant.isDefault).map(grantName);
-
   return (
     <div className="min-w-0 pl-6 pt-[18px]">
       <div className="flex items-center gap-3">
@@ -70,6 +62,7 @@ export function ApiKeyDetail({
         </span>
         <div className="ml-auto flex items-center gap-2">
           <ActionLink href={href({ dialog: "edit" })}>Edit</ActionLink>
+          <ActionLink href={href({ dialog: "guide" })}>Set up an agent</ActionLink>
           <ActionLink href="/playground">Test in Playground</ActionLink>
           <ActionLink href={href({ dialog: apiKey.enabled ? "disable" : "enable" })}>
             {apiKey.enabled ? "Disable" : "Enable"}
@@ -208,48 +201,6 @@ export function ApiKeyDetail({
           </p>
         </div>
       </div>
-
-      <div className="mt-5 grid grid-cols-[minmax(0,1fr)_300px] items-start gap-6 overflow-x-auto">
-        <div>
-          <div className="font-mono text-115 font-medium tracking-[.08em] text-dim">
-            SECRET · STORED HASHED
-          </div>
-          <div className="mt-[6px] flex items-center gap-[10px] rounded-xs border border-rule bg-track px-[14px] py-3">
-            <span className="min-w-0 flex-1 break-all font-mono text-15 font-medium text-ink">
-              {apiKey.keyPrefix}
-            </span>
-          </div>
-          <p className="mt-[6px] font-mono text-125 text-faint">
-            Only the prefix is kept. To rotate, delete this key and issue a new one.
-          </p>
-        </div>
-        <div>
-          <div className="font-mono text-115 font-medium tracking-[.08em] text-dim">
-            CONFIGURATION
-          </div>
-          <div data-testid="api-key-configuration" className="mt-[6px] border-t border-hair">
-            <DetailRow clip label="gateway" value={gatewayBaseUrl.replace(/\/+$/, "")} />
-            <DetailRow
-              clip
-              label="default model"
-              value={defaultModelName ?? "none — clients must send a model"}
-            />
-            <DetailRow
-              clip
-              label="also granted"
-              value={otherModelNames.length > 0 ? otherModelNames.join(", ") : "—"}
-            />
-            <DetailRow clip label="limits" value={formatApiKeyLimitRules(limits)} />
-          </div>
-        </div>
-      </div>
-
-      <IntegrationPanel
-        gatewayBaseUrl={gatewayBaseUrl}
-        model={defaultModelName ?? otherModelNames[0] ?? "your-virtual-model"}
-        params={params}
-        pathname="/api-keys"
-      />
     </div>
   );
 }

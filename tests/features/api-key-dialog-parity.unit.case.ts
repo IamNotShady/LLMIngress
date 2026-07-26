@@ -26,8 +26,13 @@ describe("api key presentation contract", () => {
   test("the one-time page never introduces a script into interpolated markup", () => {
     const createdPage = source("api/api-keys/_created-page.ts");
     // The page is assembled by string interpolation around user-controlled
-    // names; a script tag there turns an escaping slip into code execution.
-    expect(createdPage).not.toContain("<script");
+    // names; a script tag there turns an escaping slip into code execution. It
+    // needs one — the copy buttons — and that is only safe while its body is a
+    // constant, so every script tag here must be a bare call into the shared
+    // module and nothing else.
+    for (const tag of createdPage.match(/<script[\s\S]*?<\/script>/g) ?? []) {
+      expect(tag).toMatch(/^<script>\$\{[A-Za-z]+\(\)\}<\/script>$/);
+    }
     expect(createdPage).toContain("function escapeHtml");
   });
 

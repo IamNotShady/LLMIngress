@@ -1,8 +1,6 @@
 import type { ApiKeyAllowedVirtualModel } from "@llmingress/db/console-api-keys";
 import type { RouteEndpointProtocol } from "@llmingress/domain";
 
-export const API_KEY_PLACEHOLDER = "<YOUR_API_KEY>";
-
 // Platform enum is a UI-local vocabulary: the API key entity no longer carries
 // an integration_platform column, and this module is bundled into client
 // components, so it must not runtime-import @llmingress/db (node-only).
@@ -29,6 +27,13 @@ export const integrationGuidePlatforms: readonly IntegrationPlatform[] = [
 
 export type ConfigurationGuide = {
   codeBlocks: Array<{ code: string; label: string }>;
+  /**
+   * Which endpoint this agent speaks, and therefore what the virtual model has
+   * to be routed to. It is a precondition rather than a step — following the
+   * steps with the wrong route protocol produces a 404 from the Gateway, not a
+   * misconfigured agent — so it reads after them rather than as the first one.
+   */
+  note?: string;
   steps: string[];
   title: string;
 };
@@ -47,8 +52,11 @@ const integrationPlatformLabels: Record<IntegrationPlatform, string> = {
   hermes: "Hermes",
   openclaw: "OpenClaw",
   opencode: "OpenCode",
-  other: "Other",
+  other: "Other / curl",
 };
+
+const routeNote = (agent: string, endpoint: string, path: string) =>
+  `${agent} calls the ${endpoint} endpoint — the virtual model must be routed to ${path}.`;
 
 export function formatIntegrationPlatformLabel(platform: IntegrationPlatform): string {
   return integrationPlatformLabels[platform];
@@ -80,8 +88,8 @@ export function buildConfigurationGuide(input: {
   if (input.integrationPlatform === "codex") {
     return {
       title: "Configure Codex",
+      note: routeNote("Codex", "Responses", "/v1/responses"),
       steps: [
-        "Codex calls the Responses endpoint; use a Virtual Model routed to /v1/responses.",
         "Export the API key in your shell.",
         "Add the LLMIngress provider to the user-level ~/.codex/config.toml file.",
         "Start Codex; the configured Virtual Model will be sent through LLMIngress.",
@@ -99,8 +107,8 @@ export function buildConfigurationGuide(input: {
   if (input.integrationPlatform === "claude-code") {
     return {
       title: "Configure Claude Code",
+      note: routeNote("Claude Code", "Messages", "/v1/messages"),
       steps: [
-        "Claude Code calls the Messages endpoint; use a Virtual Model routed to /v1/messages.",
         "Export the LLMIngress API key and Gateway URL.",
         "Start Claude Code with the selected Virtual Model.",
       ],
@@ -114,22 +122,23 @@ export function buildConfigurationGuide(input: {
   }
 
   if (input.integrationPlatform === "cursor") {
-    return uiGuide("Configure Cursor", [
-      "Cursor calls the Chat Completions endpoint; use a Virtual Model routed to /v1/chat/completions.",
-      "Open Cursor Settings, then open Models.",
-      `Enter the API key ${apiKey} in the OpenAI API key field.`,
-      `Set Override OpenAI Base URL to ${openAiBaseUrl}.`,
-      `Add or select the model ${model}, then verify the connection.`,
-      "The Gateway URL must be reachable from Cursor's servers; a localhost or private address will not work.",
-      "Custom keys apply to chat only; Tab completion and Agent features keep using Cursor's built-in models.",
-    ]);
+    return uiGuide(
+      "Configure Cursor",
+      [
+        "Open Cursor Settings, then open Models.",
+        `Enter the API key ${apiKey} in the OpenAI API key field.`,
+        `Set Override OpenAI Base URL to ${openAiBaseUrl}.`,
+        `Add or select the model ${model}, then verify the connection.`,
+      ],
+      `${routeNote("Cursor", "Chat Completions", "/v1/chat/completions")} The Gateway URL must be reachable from Cursor's servers, so a localhost or private address will not work, and custom keys apply to chat only — Tab completion and Agent features keep using Cursor's built-in models.`,
+    );
   }
 
   if (input.integrationPlatform === "opencode") {
     return {
       title: "Configure OpenCode",
+      note: routeNote("OpenCode", "Chat Completions", "/v1/chat/completions"),
       steps: [
-        "OpenCode calls the Chat Completions endpoint; use a Virtual Model routed to /v1/chat/completions.",
         "Run /connect in OpenCode, pick Other, enter llmingress as the provider id, then paste the API key.",
         "Add the provider and Virtual Model to your OpenCode configuration.",
       ],
@@ -157,17 +166,21 @@ export function buildConfigurationGuide(input: {
   }
 
   if (input.integrationPlatform === "hermes") {
-    return uiGuide("Configure Hermes", [
-      "Hermes calls the Chat Completions endpoint; use a Virtual Model routed to /v1/chat/completions.",
-      "Run hermes model and choose Custom endpoint.",
-      `Enter ${openAiBaseUrl} as the API base URL.`,
-      `Enter ${apiKey} as the API key and ${model} as the model name.`,
-    ]);
+    return uiGuide(
+      "Configure Hermes",
+      [
+        "Run hermes model and choose Custom endpoint.",
+        `Enter ${openAiBaseUrl} as the API base URL.`,
+        `Enter ${apiKey} as the API key and ${model} as the model name.`,
+      ],
+      routeNote("Hermes", "Chat Completions", "/v1/chat/completions"),
+    );
   }
 
   if (input.integrationPlatform === "openclaw") {
     return {
       title: "Configure OpenClaw",
+      note: routeNote("OpenClaw", "Responses", "/v1/responses"),
       steps: ["Add LLMIngress as a custom provider, then select its Virtual Model."],
       codeBlocks: [
         {
@@ -197,8 +210,8 @@ export function buildConfigurationGuide(input: {
   if (input.integrationPlatform === "github-copilot") {
     return {
       title: "Configure GitHub Copilot",
+      note: routeNote("GitHub Copilot", "Chat Completions", "/v1/chat/completions"),
       steps: [
-        "GitHub Copilot is configured here for the Chat Completions endpoint; use a Virtual Model routed to /v1/chat/completions.",
         "In VS Code, run Chat: Manage Language Models from the Command Palette, choose Add Models, then Custom Endpoint.",
         `Enter ${gatewayBaseUrl}/v1/chat/completions as the model url, ${apiKey} as the API key, and add ${model} as the model id.`,
         "Or use Copilot CLI with the environment variables below.",
@@ -212,16 +225,19 @@ export function buildConfigurationGuide(input: {
     };
   }
 
-  return uiGuide("Configure your integration", [
-    `Use ${gatewayBaseUrl} as the Gateway URL.`,
-    `Send ${apiKey} as a Bearer API key.`,
-    `Use ${model} as the Virtual Model name.`,
-    "Call the endpoint path that matches the Virtual Model's route policy: /v1/chat/completions, /v1/responses, or /v1/messages.",
-  ]);
+  return uiGuide(
+    "Configure your integration",
+    [
+      `Use ${gatewayBaseUrl} as the Gateway URL.`,
+      `Send ${apiKey} as a Bearer API key.`,
+      `Use ${model} as the Virtual Model name.`,
+    ],
+    "Call the endpoint path that matches the virtual model's route policy: /v1/chat/completions, /v1/responses, or /v1/messages.",
+  );
 }
 
-function uiGuide(title: string, steps: string[]): ConfigurationGuide {
-  return { codeBlocks: [], steps, title };
+function uiGuide(title: string, steps: string[], note?: string): ConfigurationGuide {
+  return { codeBlocks: [], note, steps, title };
 }
 
 function shellQuote(value: string): string {

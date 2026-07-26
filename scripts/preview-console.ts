@@ -45,6 +45,7 @@ const PAGES: Array<[string, string]> = [
   // The same editor in its narrower edit shape, where its toolbar has the
   // least room to fit.
   ["dialog-edit-api-key", "/api-keys?selected=__KEY__&dialog=edit"],
+  ["dialog-agent-setup", "/api-keys?selected=__KEY__&dialog=guide"],
   ["drawer-limits", "/limits"],
   ["drawer-activity", "/activity"],
   ["dialog-add-provider", "/providers?dialog=new"],

@@ -90,7 +90,7 @@ export function renderOneTimeApiKeyResponse(
                the tail of the one secret this page exists to show. -->
           <div class="blockhead">
             <p class="label">SECRET · SHOWN ONCE</p>
-            <button type="button" class="copy" data-copy="#secret">copy</button>
+            <button type="button" class="copy" data-copy="#secret">Copy</button>
           </div>
           <div class="secret">
             <input id="secret" readonly value="${escapeHtml(apiKey)}" aria-label="API key secret" />
@@ -171,10 +171,14 @@ dd{margin:0;text-align:right;overflow-wrap:anywhere}
 .tabs input:checked + label{color:var(--ink);font-weight:500;box-shadow:inset 0 -2px 0 var(--accent)}
 .panel{display:none;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;margin-top:14px;border-top:1px solid var(--hair);padding-top:14px}
 .panel ol{margin:0;padding-left:18px}
-.panel li{font:400 13px var(--mono);line-height:1.6;margin-bottom:7px}
+/* A step can name the whole secret, which has no spaces to break at. */
+.panel li{font:400 13px var(--mono);line-height:1.6;margin-bottom:7px;overflow-wrap:anywhere}
 .panel h2{margin:0 0 5px;font:500 11.5px var(--mono);color:var(--dim);letter-spacing:.08em}
 .blockhead{display:flex;align-items:center;gap:8px;margin-bottom:5px}
-.blockhead h2{margin:0}
+.blockhead h2{margin:0;text-transform:uppercase}
+.blockhead .copy{margin-left:auto}
+.guide-title{margin:0 0 6px;font:500 13.5px var(--mono);color:var(--ink);letter-spacing:0}
+.guide-note{margin:12px 0 0;font:400 13px var(--mono);line-height:1.6;color:var(--faint);overflow-wrap:anywhere}
 pre{margin:0 0 10px;background:var(--track);border:1px solid var(--rule);border-radius:3px;padding:10px 12px;font:400 12px var(--mono);line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
 footer{display:flex;align-items:center;gap:8px;margin-top:20px;padding-top:14px;border-top:1px solid var(--hair)}
 footer a{display:inline-flex;align-items:center;border:1px solid var(--btnbd);background:var(--btnbg);color:var(--ink);border-radius:3px;font:500 13.5px var(--mono);padding:6px 12px;text-decoration:none}
@@ -186,8 +190,9 @@ footer a.primary{border-color:transparent;background:var(--seg);color:var(--segf
 function renderGuidePanel(entry: IntegrationGuideEntry): string {
   return `<div class="panel" data-guide-panel id="panel-${escapeHtml(entry.platform)}">
         <div>
-          <h2>${escapeHtml(entry.guide.title)}</h2>
+          <h2 class="guide-title">${escapeHtml(entry.guide.title)}</h2>
           <ol>${entry.guide.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
+          ${entry.guide.note ? `<p class="guide-note">${escapeHtml(entry.guide.note)}</p>` : ""}
         </div>
         <div>
           ${entry.guide.codeBlocks
@@ -197,7 +202,7 @@ function renderGuidePanel(entry: IntegrationGuideEntry): string {
               const id = `code-${escapeHtml(entry.platform)}-${index}`;
               return `<div class="blockhead"><h2>${escapeHtml(
                 block.label,
-              )}</h2><button type="button" class="copy" data-copy="#${id}">copy</button></div><pre id="${id}">${escapeHtml(
+              )}</h2><button type="button" class="copy" data-copy="#${id}">Copy</button></div><pre id="${id}">${escapeHtml(
                 block.code,
               )}</pre>`;
             })

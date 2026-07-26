@@ -51,7 +51,9 @@ if(!button){return}
 var node=document.querySelector(button.getAttribute("data-copy"));
 if(!node){return}
 var text=typeof node.value==="string"?node.value:node.textContent||"";
-var restore=function(label){button.textContent=label;setTimeout(function(){button.textContent="copy"},2000)};
+var original=button.getAttribute("data-copy-label")||button.textContent;
+button.setAttribute("data-copy-label",original);
+var restore=function(label){button.textContent=label;setTimeout(function(){button.textContent=original},2000)};
 write(text).then(function(){restore("copied")},function(){restore("copy failed")});
 });
 })()`;

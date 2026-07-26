@@ -2,12 +2,12 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  API_KEY_PLACEHOLDER,
   buildIntegrationGuides,
   endpointPathByProtocol,
   groupVirtualModelEndpoints,
   integrationGuidePlatforms,
 } from "../../apps/console/src/app/_ui/api-keys/integration-guide.ts";
+
 import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page.ts";
 import { listApiKeyVirtualModelAccess } from "../../packages/db/src/console-api-keys.ts";
 import {
@@ -16,8 +16,14 @@ import {
   withDedicatedPostgresClient,
 } from "../../packages/db/src/index.ts";
 
+/**
+ * What the key's own dialog passes: the stored prefix, because the secret was
+ * shown once. Every guide that names a key must carry it through verbatim.
+ */
+const KEY_STAND_IN = "llmi_stand_in…";
+
 describe("apiKey integration guidance", () => {
-  it("builds guides for every Integration Platform with the key placeholder", () => {
+  it("builds guides for every Integration Platform with the key it was given", () => {
     expect([...integrationGuidePlatforms]).toEqual([
       "codex",
       "claude-code",
@@ -30,7 +36,7 @@ describe("apiKey integration guidance", () => {
     ]);
 
     const guides = buildIntegrationGuides({
-      apiKey: API_KEY_PLACEHOLDER,
+      apiKey: KEY_STAND_IN,
       gatewayBaseUrl: "http://127.0.0.1:4000",
       model: "guide-vm",
     });
@@ -44,15 +50,18 @@ describe("apiKey integration guidance", () => {
       "Hermes",
       "OpenClaw",
       "GitHub Copilot",
-      "Other",
+      "Other / curl",
     ]);
     for (const entry of guides) {
       expect(entry.guide.title).toBeTruthy();
       expect(entry.guide.steps.length).toBeGreaterThan(0);
       expect(JSON.stringify(entry.guide)).toContain("http://127.0.0.1:4000");
+      // Which endpoint the agent speaks is a precondition, not a step: it
+      // decides how the virtual model must be routed before any of this works.
+      expect(entry.guide.note ?? "", entry.platform).toContain("/v1/");
     }
     // OpenCode stores the key via /connect; every other platform must surface
-    // the placeholder literally.
+    // the key it was handed literally.
     for (const platform of [
       "codex",
       "claude-code",
@@ -63,7 +72,7 @@ describe("apiKey integration guidance", () => {
       "other",
     ]) {
       const entry = guides.find((candidate) => candidate.platform === platform);
-      expect(JSON.stringify(entry?.guide), platform).toContain(API_KEY_PLACEHOLDER);
+      expect(JSON.stringify(entry?.guide), platform).toContain(KEY_STAND_IN);
     }
   });
 

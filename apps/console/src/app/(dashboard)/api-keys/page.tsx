@@ -147,6 +147,7 @@ export default async function ApiKeysPage({
 
       <ApiKeyDialogs
         apiKey={selected}
+        gatewayBaseUrl={gatewayPublicBaseUrl()}
         grants={grants}
         limits={limits.filter((limit) => limit.apiKeyId === selected?.id)}
         params={params}

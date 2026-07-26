@@ -84,16 +84,24 @@ test("ApiKey dialogs show endpoint groups and integration tabs without the platf
         await expect(page.getByText(`OpenAI-compatible base ${gatewayUrl}/v1`)).toBeVisible();
         await expect(page.getByText("guide-routed-vm").first()).toBeVisible();
 
-        // The setup instructions stay available after creation, with the
-        // placeholder standing in for the secret that was shown once.
-        const tablist = page.getByRole("tablist", { name: "Integration platform" });
+        // The setup instructions stay available after creation, from the key's
+        // own dialog rather than under the detail.
+        await expect(page.getByRole("tablist", { name: "Integration platform" })).toHaveCount(0);
+        await page.getByRole("link", { name: "Set up an agent" }).click();
+        const setupDialog = page.getByRole("dialog", { name: "Set up an agent" });
+        await expect(setupDialog).toContainText("guide-apiKey");
+        await expect(setupDialog).toContainText("default model guide-routed-vm");
+
+        const tablist = setupDialog.getByRole("tablist", { name: "Integration platform" });
         await expect(tablist.getByRole("tab")).toHaveCount(8);
-        await expect(page.getByText("<YOUR_API_KEY>").first()).toBeVisible();
-        await expect(page.getByText("llmi_guide_k").first()).toBeVisible();
+        // The secret is stored hashed, so the snippets carry the prefix and the
+        // dialog says what to do about it rather than looking complete.
+        await expect(
+          setupDialog.getByText("export LLMINGRESS_API_KEY='llmi_guide_k'"),
+        ).toBeVisible();
+        await expect(setupDialog.getByText(/snippets show the prefix only/)).toBeVisible();
         await tablist.getByRole("tab", { name: "Claude Code" }).click();
         await expect(page.getByText(/ANTHROPIC_BASE_URL=/)).toBeVisible();
-        // Only the prefix is on the page; the rest of the secret is not stored.
-        await expect(page.getByText("ANTHROPIC_AUTH_TOKEN='llmi_guide_k")).toHaveCount(0);
 
         // --- Creating a key hands over every platform's setup, with the real
         // secret substituted for the placeholder.
@@ -112,10 +120,11 @@ test("ApiKey dialogs show endpoint groups and integration tabs without the platf
         expect(apiKey.startsWith("llmi_")).toBe(true);
         await expect(page.getByRole("radio")).toHaveCount(8);
         await expect(page.getByText(`export LLMINGRESS_API_KEY='${apiKey}'`)).toBeVisible();
-        // The placeholder never survives into the snippet handed over.
-        await expect(page.getByText("<YOUR_API_KEY>")).toHaveCount(0);
+        // The one-time screen is the only place the whole secret exists, so it
+        // carries it rather than the prefix the detail has to fall back to.
+        await expect(page.getByText("llmi_guide_k", { exact: true })).toHaveCount(0);
 
-        await page.getByText("Other", { exact: true }).click();
+        await page.getByText("Other / curl", { exact: true }).click();
         await expect(page.getByText(`Use ${gatewayUrl} as the Gateway URL.`)).toBeVisible();
 
         // Both the one-time screen and the detail hold their layout at the

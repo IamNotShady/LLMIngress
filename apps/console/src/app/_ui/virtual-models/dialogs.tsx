@@ -31,10 +31,14 @@ import { buildHref, readParam, type SearchParams } from "../params";
 import { providerIsMetered } from "../providers/model";
 import { SyncedSelect } from "../synced-select";
 import { formatRange, Pagination } from "../table";
+import {
+  activeCandidateProviderId,
+  providersServingProtocol,
+  ROUTE_PROTOCOLS,
+  readRouteProtocol,
+} from "./candidate-providers";
 import { EditorNav } from "./editor-nav";
 import { strategyRouteNote } from "./strategy";
-
-const PROTOCOLS = ["chat_completions", "messages", "responses"] as const;
 
 /** The candidate filters submit as GET while the editor posts, so they own a
  * separate form element and the controls associate with it by id. */
@@ -109,7 +113,10 @@ export async function VirtualModelDialogs({
     .filter((model): model is ConsoleProviderModelOption => Boolean(model));
 
   const providerById = new Map(providers.map((provider) => [provider.id, provider]));
-  const protocol = readParam(params, "protocol") ?? policy?.endpointProtocol ?? PROTOCOLS[0];
+  const protocol =
+    readRouteProtocol(readParam(params, "protocol")) ??
+    policy?.endpointProtocol ??
+    ROUTE_PROTOCOLS[0];
   const strategy =
     readRoutePolicyStrategy(readParam(params, "editorStrategy")) ??
     policy?.strategy ??
@@ -162,7 +169,7 @@ export async function VirtualModelDialogs({
           <div className="mt-[14px] grid grid-cols-2 gap-4">
             <Field
               label="ENDPOINT PROTOCOL"
-              hint="Candidates that do not serve this protocol cannot be selected."
+              hint="Only providers that serve this protocol are offered below."
             >
               <SyncedSelect
                 id="virtual-model-dialog-endpoint"
@@ -171,7 +178,7 @@ export async function VirtualModelDialogs({
                 preserveFields={PRESERVED_EDITOR_FIELDS}
                 value={protocol}
               >
-                {PROTOCOLS.map((value) => (
+                {ROUTE_PROTOCOLS.map((value) => (
                   <option key={value} value={value}>
                     {value}
                   </option>
@@ -321,26 +328,44 @@ function CandidateBrowser({
   providers: ConsoleProvider[];
   selection: string[];
 }) {
-  const activeProviderId = readParam(params, "candidateProvider") ?? providers[0]?.id;
+  // Only the providers that speak this protocol, and only one of those can be
+  // the active one — a stored choice that stops serving after a protocol change
+  // does not survive it.
+  const serving = providersServingProtocol(providers, protocol);
+  const activeProviderId = activeCandidateProviderId(
+    providers,
+    protocol,
+    readParam(params, "candidateProvider"),
+  );
   const pageSize = 8;
 
   return (
     <>
       <div className="mt-[14px] flex items-center gap-2">
         <span className="flex items-center gap-2">
-          <select
-            form={CANDIDATE_FILTER_FORM_ID}
-            name="candidateProvider"
-            defaultValue={activeProviderId}
-            aria-label="Filter candidates by provider"
-            className={filterControlClass}
-          >
-            {providers.map((provider) => (
-              <option key={provider.id} value={provider.id}>
-                {provider.displayName}
-              </option>
-            ))}
-          </select>
+          {/* Picking a provider shows that provider's models straight away:
+              waiting for Apply left the list describing someone else. The
+              wrapper fixes the width: the select's own class is w-full, which
+              would otherwise let it eat the rest of the filter row. */}
+          <span className="block w-[190px] flex-none">
+            <SyncedSelect
+              aria-label="Filter candidates by provider"
+              className={filterControlClass}
+              href={buildHref("/models", params, {
+                candidatePage: null,
+                candidateProvider: "__value__",
+              })}
+              name="candidateProvider"
+              preserveFields={PRESERVED_EDITOR_FIELDS}
+              value={activeProviderId ?? ""}
+            >
+              {serving.map((provider) => (
+                <option key={provider.id} value={provider.id}>
+                  {provider.displayName}
+                </option>
+              ))}
+            </SyncedSelect>
+          </span>
           <input
             form={CANDIDATE_FILTER_FORM_ID}
             name="candidateQuery"
@@ -371,7 +396,12 @@ function CandidateBrowser({
         ADD FROM MATCHING MODELS
       </div>
       <div data-testid="virtual-model-candidates">
-        {candidatePage && candidatePage.items.length > 0 ? (
+        {serving.length === 0 ? (
+          <p className="py-5 font-mono text-13 leading-[1.6] text-dim">
+            No connected provider serves {protocol}. Add one that does, or pick a protocol your
+            providers already speak.
+          </p>
+        ) : candidatePage && candidatePage.items.length > 0 ? (
           candidatePage.items.map((model) => {
             const provider = providerById.get(model.providerId);
             const selected = selection.includes(model.id);

@@ -91,37 +91,33 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
         await endpointSelect.selectOption("messages");
         await page.waitForURL(/protocol=messages/);
 
-        const editor = page.getByRole("dialog", { name: "New Virtual Model" });
         const providerFilter = page.getByLabel("Filter candidates by provider");
-        const applyFilters = editor.getByRole("button", { name: "Apply" });
         const candidates = page.getByTestId("virtual-model-candidates");
 
-        const applyProvider = async (label: string) => {
+        // Picking a provider shows its models at once — no Apply in between.
+        const pickProvider = async (label: string) => {
           await providerFilter.selectOption({ label });
-          await applyFilters.click();
           await page.waitForLoadState("networkidle");
         };
 
-        await applyProvider("Anthropic");
+        // The protocol decides which providers are worth offering at all: a
+        // provider that cannot serve it has nothing to contribute, and listing
+        // it would fill the browser with rows that refuse to be picked.
+        await expect(providerFilter.locator("option")).toHaveText(["Anthropic"]);
         await expect(candidates.getByRole("link", { name: /claude-msg/ })).toBeVisible();
 
-        // A model whose provider cannot serve the endpoint says so on its own
-        // row and offers nothing to click — the operator is not sent away to
-        // another page to work out why it is missing.
-        await applyProvider("OpenAI");
-        await expect(candidates).toContainText("does not serve messages");
-        await expect(candidates.getByRole("link", { name: /gpt-chat/ })).toHaveCount(0);
-
-        // Switching the endpoint re-reads the same rows against the new protocol.
+        // Switching the endpoint re-reads the choice: OpenAI serves chat, so it
+        // appears, and the provider the browser was on has to move with it.
         await endpointSelect.selectOption("chat_completions");
         await page.waitForURL(/protocol=chat_completions/);
+        await expect(providerFilter.locator("option")).toHaveText(["OpenAI"]);
         await expect(candidates.getByRole("link", { name: /gpt-chat/ })).toBeVisible();
         // An embedding-only model serves no chat endpoint either way.
         await expect(candidates.getByRole("link", { name: /embedding-only/ })).toHaveCount(0);
 
         await endpointSelect.selectOption("responses");
         await page.waitForURL(/protocol=responses/);
-        await applyProvider("OpenAI Codex");
+        await pickProvider("OpenAI Codex");
         await candidates.getByRole("link", { name: /codex-resp/ }).click();
         await expect(page.getByText("1 selected")).toBeVisible();
 

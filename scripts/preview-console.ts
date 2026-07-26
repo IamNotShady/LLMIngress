@@ -55,6 +55,9 @@ const PAGES: Array<[string, string]> = [
   ["dialog-add-key", "/providers?selected=__OPENROUTER__&providerKeyDialog=__OPENROUTER__&connection=new"],
   ["dialog-edit-key", "/providers?selected=__OPENROUTER__&providerKeyDialog=__OPENROUTER__&connection=__ORMAIN__"],
   ["dialog-virtual-model", "/models?dialog=edit"],
+  // The candidate browser under each protocol: only providers that speak it.
+  ["dialog-vm-chat", "/models?dialog=new&protocol=chat_completions"],
+  ["dialog-vm-messages", "/models?dialog=new&protocol=messages"],
 ];
 
 let failingProviderId = "";

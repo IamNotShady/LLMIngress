@@ -21,6 +21,12 @@ import { formatCount } from "../../_ui/format";
 import { EmptyState, PageShell, PageTitleRow } from "../../_ui/layout";
 import { buildHref, readIntParam, readParam, type SearchParams } from "../../_ui/params";
 import { PickRow } from "../../_ui/table";
+import {
+  activeCandidateProviderId,
+  ROUTE_PROTOCOLS,
+  type RouteProtocol,
+  readRouteProtocol,
+} from "../../_ui/virtual-models/candidate-providers";
 import { VirtualModelDetail } from "../../_ui/virtual-models/detail";
 import { VirtualModelDialogs } from "../../_ui/virtual-models/dialogs";
 import { RETRY_NOTE } from "../../_ui/virtual-models/strategy";
@@ -75,8 +81,17 @@ export default async function VirtualModelsPage({
       ])
     : [[], []];
 
-  // The candidate browser inside the editor pages one provider at a time.
-  const editorProviderId = readParam(params, "candidateProvider") ?? providers[0]?.id;
+  // The candidate browser pages one provider at a time, and only a provider
+  // that speaks the route's protocol — the same choice the dialog offers.
+  const editorProtocol =
+    readRouteProtocol(readParam(params, "protocol")) ??
+    (selectedPolicy?.endpointProtocol as RouteProtocol | undefined) ??
+    ROUTE_PROTOCOLS[0];
+  const editorProviderId = activeCandidateProviderId(
+    providers,
+    editorProtocol,
+    readParam(params, "candidateProvider"),
+  );
   const candidatePage =
     readParam(params, "dialog") && editorProviderId
       ? await listProviderModelPage({

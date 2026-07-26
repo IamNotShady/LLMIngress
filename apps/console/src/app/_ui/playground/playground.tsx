@@ -215,7 +215,7 @@ export function Playground({
               key={entry.value}
               type="button"
               onClick={() => setProtocol(entry.value)}
-              className={`flex-1 px-[11px] py-1 text-center font-mono text-13 ${
+              className={`flex-1 whitespace-nowrap px-[11px] py-1 text-center font-mono text-13 ${
                 index > 0 ? "border-l border-rule" : ""
               } ${entry.value === protocol ? "bg-seg text-segfg" : "text-dim"}`}
             >
@@ -312,7 +312,7 @@ export function Playground({
 
         <div className="mt-4 flex items-center gap-2">
           <ActionButton
-            className="px-4 py-[6px] text-135"
+            size="dialog"
             disabled={sending}
             onClick={() => void send()}
             tone="primary"

@@ -16,7 +16,7 @@ import {
   listConsoleApiKeyVirtualModelGrants,
   listVirtualModels,
 } from "@llmingress/db/console-virtual-models";
-import { ActionLink, filterControlClass } from "../../_ui/controls";
+import { ActionLink, FilterButton, filterControlClass } from "../../_ui/controls";
 import { formatCount } from "../../_ui/format";
 import { EmptyState, PageShell, PageTitleRow } from "../../_ui/layout";
 import { buildHref, readIntParam, readParam, type SearchParams } from "../../_ui/params";
@@ -134,12 +134,7 @@ export default async function VirtualModelsPage({
                   </option>
                 ))}
               </select>
-              <button
-                type="submit"
-                className="flex-none whitespace-nowrap rounded-xs border border-btnbd bg-btnbg px-2 py-1 font-mono text-12 text-ink"
-              >
-                Apply
-              </button>
+              <FilterButton>Apply</FilterButton>
               <span className="flex-none whitespace-nowrap font-mono text-12 text-faint">
                 {formatCount(visible.length)} of {formatCount(virtualModels.length)}
               </span>

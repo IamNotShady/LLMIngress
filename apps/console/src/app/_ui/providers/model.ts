@@ -111,7 +111,7 @@ export function describeProbeSchedule(
   }
   if (health.nextProbeAt && health.nextProbeAt.getTime() > now.getTime()) {
     const seconds = Math.round((health.nextProbeAt.getTime() - now.getTime()) / 1000);
-    parts.push(seconds < 90 ? `next in ${seconds}s` : `next in ${Math.round(seconds / 60)}m`);
+    parts.push(seconds < 90 ? `next ${seconds}s` : `next ${Math.round(seconds / 60)}m`);
   }
   return parts.length > 0 ? parts.join(" · ") : null;
 }

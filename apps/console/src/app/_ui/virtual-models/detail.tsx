@@ -31,7 +31,7 @@ import {
 import { GridRow } from "../table";
 import { strategyRouteNote } from "./strategy";
 
-const ROUTE_COLUMNS = "36px 282px 190px 116px 170px 1fr";
+const ROUTE_COLUMNS = "26px 252px 168px 168px 140px 1fr";
 const KEY_COLUMNS = "148px 104px 1fr";
 const FAILURE_COLUMNS = "64px 1fr 126px";
 
@@ -80,7 +80,7 @@ export function VirtualModelDetail({
       <div className="flex items-center gap-3">
         <h2 className="m-0 font-sans text-19 font-semibold text-ink">{virtualModel.name}</h2>
         <span className="font-mono text-13 text-dim cell-clip">{virtualModel.description}</span>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex items-center gap-2">
           <ActionLink href={href({ dialog: "edit" })}>Edit route</ActionLink>
           <ActionLink href={href({ dialog: "delete" })} tone="danger">
             Delete
@@ -149,7 +149,7 @@ export function VirtualModelDetail({
                 <span className="text-dim cell-clip">{formatCapabilities(candidate)}</span>
                 <span className="flex items-center justify-end gap-2">
                   <Meter className="w-[90px]" height={6} ratio={traffic?.share ?? 0} />
-                  <span className="w-[74px] text-right text-dim tabnum">
+                  <span className="w-[56px] text-right text-dim tabnum">
                     {formatCount(traffic?.requestCount ?? 0)}
                   </span>
                 </span>

@@ -8,6 +8,7 @@ import type { ConsoleUsageSummary } from "@llmingress/db/console-usage";
 import {
   ActionButton,
   ActionLink,
+  FilterButton,
   filterControlClass,
   RowActionButton,
   StatusDot,
@@ -33,7 +34,7 @@ import {
   providerIsMetered,
 } from "./model";
 
-const CONNECTION_COLUMNS = "128px 214px 68px 226px 92px 1fr";
+const CONNECTION_COLUMNS = "116px minmax(0,1fr) 64px 300px 88px 218px";
 const MODEL_COLUMNS = "258px 146px 146px 104px 1fr";
 
 export function ProviderDetail({
@@ -77,7 +78,7 @@ export function ProviderDetail({
           <StatusDot tone={health.tone} />
           {health.text}
         </span>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex items-center gap-2">
           <form action="/api/provider-model-refresh" method="post">
             <input type="hidden" name="providerId" value={provider.id} />
             <ActionButton>Refresh models</ActionButton>
@@ -180,20 +181,20 @@ export function ProviderDetail({
                 <span className={connection.enabled ? "text-green" : "text-faint"}>
                   {connection.enabled ? "enabled" : "disabled"}
                 </span>
-                <span className="flex justify-end gap-[6px]">
+                <span className="flex items-center justify-end gap-[6px]">
                   <form action="/api/provider-health-probes" method="post">
                     <input type="hidden" name="providerId" value={provider.id} />
                     <input type="hidden" name="providerConnectionId" value={connection.id} />
                     <RowActionButton>Re-check</RowActionButton>
                   </form>
                   <ActionLink
-                    className="px-2 py-[2px]"
+                    size="row"
                     href={href({ providerKeyDialog: provider.id, connection: connection.id })}
                   >
                     Edit
                   </ActionLink>
                   <ActionLink
-                    className="px-2 py-[2px]"
+                    size="row"
                     href={href({ dialog: "deleteConnection", connection: connection.id })}
                     tone="danger"
                   >
@@ -232,7 +233,7 @@ export function ProviderDetail({
             <option value="not_listed">not_listed</option>
             <option value="unavailable">unavailable</option>
           </select>
-          <ActionButton className="px-2 py-1">Apply</ActionButton>
+          <FilterButton>Apply</FilterButton>
         </form>
         <span className="whitespace-nowrap font-mono text-12 text-faint">
           {modelPage ? `${formatCount(modelPage.total)} matching` : null}

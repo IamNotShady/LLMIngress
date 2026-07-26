@@ -106,7 +106,7 @@ export function ConfirmForm({
             {confirmLabel}
           </button>
         ) : (
-          <ActionButton className="px-[18px] py-[6px] text-135" tone="primary">
+          <ActionButton size="dialog" tone="primary">
             {confirmLabel}
           </ActionButton>
         )}

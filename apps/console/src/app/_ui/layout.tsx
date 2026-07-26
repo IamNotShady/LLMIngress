@@ -22,7 +22,7 @@ export function PageTitleRow({
     <div className="flex items-center gap-4 overflow-x-auto pt-[22px]">
       <h1 className="font-sans text-25 font-semibold tracking-[-.02em] text-ink">{title}</h1>
       {meta ? <span className="font-mono text-13 text-faint">{meta}</span> : null}
-      {actions ? <div className="ml-auto flex gap-2">{actions}</div> : null}
+      {actions ? <div className="ml-auto flex items-center gap-2">{actions}</div> : null}
     </div>
   );
 }

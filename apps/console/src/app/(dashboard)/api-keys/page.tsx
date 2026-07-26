@@ -12,7 +12,7 @@ import {
 } from "@llmingress/db/console-virtual-models";
 import { ApiKeyDetail } from "../../_ui/api-keys/detail";
 import { ApiKeyDialogs } from "../../_ui/api-keys/dialogs";
-import { ActionLink, filterControlClass } from "../../_ui/controls";
+import { ActionLink, FilterButton, filterControlClass } from "../../_ui/controls";
 import { formatCount } from "../../_ui/format";
 import { EmptyState, PageShell, PageTitleRow } from "../../_ui/layout";
 import { buildHref, readParam, type SearchParams } from "../../_ui/params";
@@ -84,12 +84,7 @@ export default async function ApiKeysPage({
                 aria-label="Filter API keys by name"
                 className={`${filterControlClass} min-w-0 flex-1`}
               />
-              <button
-                type="submit"
-                className="flex-none whitespace-nowrap rounded-xs border border-btnbd bg-btnbg px-2 py-1 font-mono text-12 text-ink"
-              >
-                Apply
-              </button>
+              <FilterButton>Apply</FilterButton>
               <span className="flex-none whitespace-nowrap font-mono text-125 text-faint">
                 {formatCount(visible.length)} of {formatCount(apiKeys.length)}
               </span>

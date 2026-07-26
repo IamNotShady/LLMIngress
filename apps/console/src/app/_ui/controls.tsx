@@ -3,14 +3,32 @@ import type { ReactNode } from "react";
 
 type ButtonTone = "danger" | "primary" | "secondary";
 
+/**
+ * Size is a prop, not something a caller pastes into className: two padding
+ * utilities on one element are a conflict Tailwind resolves by stylesheet
+ * order, not by the order they were written, so an override silently wins or
+ * loses. That is what made a button and a link sitting in the same row render
+ * at different heights.
+ */
+type ButtonSize = "dialog" | "default" | "row";
+
 const toneClass: Record<ButtonTone, string> = {
   primary: "bg-seg text-segfg",
   secondary: "border border-btnbd bg-btnbg text-ink",
   danger: "border border-btnbd bg-btnbg text-redtx",
 };
 
+const sizeClass: Record<ButtonSize, string> = {
+  /** Footer action of a dialog or drawer. */
+  dialog: "px-[18px] py-[6px] text-135",
+  /** Toolbar, detail header, anywhere a control stands on its own. */
+  default: "px-3 py-[5px] text-13",
+  /** Inside a table row, where the row height is the constraint. */
+  row: "px-2 py-[2px] text-13",
+};
+
 const buttonBase =
-  "inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-xs font-mono text-13 font-medium disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-xs font-mono font-medium disabled:cursor-not-allowed disabled:opacity-50";
 
 export function ActionButton({
   children,
@@ -18,6 +36,7 @@ export function ActionButton({
   disabled,
   name,
   onClick,
+  size = "default",
   tone = "secondary",
   type = "submit",
   value,
@@ -27,6 +46,7 @@ export function ActionButton({
   disabled?: boolean;
   name?: string;
   onClick?: () => void;
+  size?: ButtonSize;
   tone?: ButtonTone;
   type?: "button" | "submit";
   value?: string;
@@ -38,7 +58,7 @@ export function ActionButton({
       value={value}
       disabled={disabled}
       onClick={onClick}
-      className={`${buttonBase} ${toneClass[tone]} px-[10px] py-1 ${className}`}
+      className={`${buttonBase} ${toneClass[tone]} ${sizeClass[size]} ${className}`}
     >
       {children}
     </button>
@@ -50,19 +70,21 @@ export function ActionLink({
   className = "",
   href,
   id,
+  size = "default",
   tone = "secondary",
 }: {
   children: ReactNode;
   className?: string;
   href: string;
   id?: string;
+  size?: ButtonSize;
   tone?: ButtonTone;
 }) {
   return (
     <Link
       id={id}
       href={href}
-      className={`${buttonBase} ${toneClass[tone]} px-3 py-[5px] ${className}`}
+      className={`${buttonBase} ${toneClass[tone]} ${sizeClass[size]} ${className}`}
     >
       {children}
     </Link>
@@ -82,7 +104,7 @@ export function RowActionButton({
   value?: string;
 }) {
   return (
-    <ActionButton className="px-2 py-[2px]" name={name} tone={tone} value={value}>
+    <ActionButton name={name} size="row" tone={tone} value={value}>
       {children}
     </ActionButton>
   );
@@ -145,6 +167,31 @@ export function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
 /** Small filter control that sits in a toolbar rather than a form column. */
 export const filterControlClass =
   "min-w-0 rounded-xs border border-btnbd bg-btnbg px-2 py-1 font-mono text-13 text-ink";
+
+/**
+ * The button that applies a filter row. It is built from the same class as the
+ * inputs beside it, because a control that sits in a line of controls has to be
+ * the same height as they are — six hand-written copies of this had drifted to
+ * three different sizes.
+ */
+export function FilterButton({
+  children,
+  form,
+}: {
+  children: ReactNode;
+  /** Set when the button lives outside the form it submits. */
+  form?: string;
+}) {
+  return (
+    <button
+      type="submit"
+      form={form}
+      className={`${filterControlClass} flex-none cursor-pointer whitespace-nowrap font-medium`}
+    >
+      {children}
+    </button>
+  );
+}
 
 export function StatusDot({ tone }: { tone: "amber" | "dim" | "green" | "red" }) {
   const background =

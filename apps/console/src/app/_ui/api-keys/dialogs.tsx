@@ -241,7 +241,7 @@ function ApiKeyEditorDialog({
         </div>
         <div className="mt-[10px] grid grid-cols-3 gap-3">
           <Field label="BUDGET USD / PERIOD" hint="spend cap per period · blocks past it">
-            <span className="flex gap-[6px] [&>select]:w-[110px] [&>select]:flex-none">
+            <span className="flex items-center gap-[6px] [&>select]:w-[110px] [&>select]:flex-none">
               <TextInput
                 name="budgetUsd"
                 defaultValue={limitFieldValue(view.budgetLimit, editing ? null : 25)}
@@ -300,11 +300,7 @@ function ApiKeyEditorDialog({
         </div>
 
         <DialogActions>
-          <ActionButton
-            className="px-4 py-[6px] text-135"
-            disabled={selectedGrantIds.length === 0}
-            tone="primary"
-          >
+          <ActionButton size="dialog" disabled={selectedGrantIds.length === 0} tone="primary">
             {editing ? "Save" : "Create key"}
           </ActionButton>
           <ActionLink href={closeHref}>Cancel</ActionLink>

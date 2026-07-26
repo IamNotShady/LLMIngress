@@ -8,13 +8,13 @@ import { listProviders } from "@llmingress/db/console-providers";
 import { listVirtualModels } from "@llmingress/db/console-virtual-models";
 import { ActivityDrawer } from "../../_ui/activity/drawer";
 import { ACTIVITY_WINDOWS, activityStatusTone, readActivityWindow } from "../../_ui/activity/model";
-import { ActionLink, filterControlClass } from "../../_ui/controls";
+import { ActionLink, FilterButton, filterControlClass } from "../../_ui/controls";
 import { formatClock, formatCost, formatCount, formatLatency } from "../../_ui/format";
 import { EmptyState, PageShell, PageTitleRow } from "../../_ui/layout";
 import { buildHref, readIntParam, readParam, type SearchParams } from "../../_ui/params";
 import { formatRange, GridRow, Pagination } from "../../_ui/table";
 
-const COLUMNS = "80px 138px 128px 138px 296px 140px 68px 68px 64px 74px 84px";
+const COLUMNS = "80px 134px 124px 134px 286px 136px 66px 66px 62px 74px 84px";
 const PAGE_SIZE = 20;
 
 export default async function ActivityPage({
@@ -67,7 +67,7 @@ export default async function ActivityPage({
       <form
         method="get"
         action="/activity"
-        className="mt-[14px] grid grid-cols-[repeat(6,1fr)_1.6fr_auto_auto] items-center gap-2 overflow-x-auto"
+        className="mt-[14px] grid grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,1.25fr)_repeat(2,minmax(0,1fr))_minmax(0,1.2fr)_auto_auto] items-center gap-2 overflow-x-auto"
       >
         <select
           name="status"
@@ -150,12 +150,7 @@ export default async function ActivityPage({
           aria-label="Search by request id"
           className={`${filterControlClass} box-border h-[30px]`}
         />
-        <button
-          type="submit"
-          className="whitespace-nowrap rounded-xs border border-btnbd bg-btnbg px-2 py-1 font-mono text-13 text-ink"
-        >
-          Apply
-        </button>
+        <FilterButton>Apply</FilterButton>
         <span className="whitespace-nowrap font-mono text-13 text-faint">
           {formatCount(total)} matching
         </span>

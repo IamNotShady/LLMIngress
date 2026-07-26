@@ -4,7 +4,7 @@ import {
 } from "@llmingress/db/console-api-key-limits";
 import { listApiKeys } from "@llmingress/db/console-api-keys";
 import { buildApiKeyLimitsView, formatLimitValue } from "../../_ui/api-keys/limits-view";
-import { filterControlClass, Meter } from "../../_ui/controls";
+import { FilterButton, filterControlClass, Meter } from "../../_ui/controls";
 import { formatCost, formatCount } from "../../_ui/format";
 import { EmptyState, PageShell, PageTitleRow } from "../../_ui/layout";
 import { LimitsDrawer } from "../../_ui/limits/drawer";
@@ -90,12 +90,7 @@ export default async function LimitsPage({
               <option value="on">enabled</option>
               <option value="off">disabled or none</option>
             </select>
-            <button
-              type="submit"
-              className="whitespace-nowrap rounded-xs border border-btnbd bg-btnbg px-2 py-1 font-mono text-12 text-ink"
-            >
-              Apply
-            </button>
+            <FilterButton>Apply</FilterButton>
             <span className="whitespace-nowrap font-mono text-125 text-faint">
               {formatCount(visible.length)} of {formatCount(rows.length)}
             </span>

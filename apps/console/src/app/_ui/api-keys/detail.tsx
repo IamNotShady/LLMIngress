@@ -68,7 +68,7 @@ export function ApiKeyDetail({
           <StatusDot tone={apiKey.enabled ? "green" : "dim"} />
           {apiKey.enabled ? "enabled" : "disabled"}
         </span>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex items-center gap-2">
           <ActionLink href={href({ dialog: "edit" })}>Edit</ActionLink>
           <ActionLink href="/playground">Test in Playground</ActionLink>
           <ActionLink href={href({ dialog: apiKey.enabled ? "disable" : "enable" })}>
@@ -117,7 +117,7 @@ export function ApiKeyDetail({
           })
         )}
         <div className="py-2">
-          <ActionLink className="px-[10px] py-[3px]" href={href({ dialog: "edit" })}>
+          <ActionLink href={href({ dialog: "edit" })} size="row">
             Edit access
           </ActionLink>
         </div>

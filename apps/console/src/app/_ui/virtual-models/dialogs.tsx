@@ -14,7 +14,14 @@ import type {
 } from "@llmingress/db/console-virtual-models";
 import Link from "next/link";
 import { TypeNameToConfirm } from "../confirm-form";
-import { ActionButton, ActionLink, Field, filterControlClass, TextInput } from "../controls";
+import {
+  ActionButton,
+  ActionLink,
+  Field,
+  FilterButton,
+  filterControlClass,
+  TextInput,
+} from "../controls";
 import { formatCost, formatCount, formatPricePair } from "../format";
 import { DetailRow } from "../layout";
 import { formatModelContextTokens } from "../model-capability-format";
@@ -277,11 +284,7 @@ export async function VirtualModelDialogs({
           />
 
           <DialogActions>
-            <ActionButton
-              className="px-4 py-[6px] text-135"
-              disabled={orderedSelection.length === 0}
-              tone="primary"
-            >
+            <ActionButton size="dialog" disabled={orderedSelection.length === 0} tone="primary">
               {editing ? "Save virtual model" : "Create virtual model"}
             </ActionButton>
             <ActionLink href={closeHref}>Cancel</ActionLink>
@@ -357,13 +360,7 @@ function CandidateBrowser({
             <option value="all">all</option>
             <option value="deprecated">deprecated</option>
           </select>
-          <button
-            form={CANDIDATE_FILTER_FORM_ID}
-            type="submit"
-            className="whitespace-nowrap rounded-xs border border-btnbd bg-btnbg px-2 py-1 font-mono text-12 text-ink"
-          >
-            Apply
-          </button>
+          <FilterButton form={CANDIDATE_FILTER_FORM_ID}>Apply</FilterButton>
         </span>
         <span className="ml-auto whitespace-nowrap font-mono text-12 text-faint">
           {candidatePage ? `${formatCount(candidatePage.total)} matches` : null}

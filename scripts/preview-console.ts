@@ -32,6 +32,8 @@ const OUT = process.env.PREVIEW_OUT ?? "preview";
 const PAGES: Array<[string, string]> = [
   ["overview", "/"],
   ["providers", "/providers"],
+  // The provider with a failing connection carries the longest health text.
+  ["providers-failing", "/providers?selected=__OPENROUTER__"],
   ["models", "/models"],
   ["api-keys", "/api-keys"],
   ["limits", "/limits"],
@@ -44,6 +46,8 @@ const PAGES: Array<[string, string]> = [
   ["dialog-add-provider", "/providers?dialog=new"],
   ["dialog-virtual-model", "/models?dialog=edit"],
 ];
+
+let failingProviderId = "";
 
 async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>) {
   const id = () => randomUUID();
@@ -59,6 +63,8 @@ async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture
        ($3, 'local', 'ollama', 'ollama', 'ollama (local)', 'http://localhost:11434/v1', true)`,
     [providers.openrouter, providers.claudeCode, providers.ollama],
   );
+
+  failingProviderId = providers.openrouter;
 
   const models: Record<string, string> = {};
   const modelRows = [
@@ -360,7 +366,8 @@ async function main() {
         // The same key the console's own bootstrap script reads.
         localStorage.setItem("llmingress-console-theme", value);
       }, theme);
-      for (const [name, path] of PAGES) {
+      for (const [name, rawPath] of PAGES) {
+        const path = rawPath.replace("__OPENROUTER__", failingProviderId);
         visiting = `${name} ${theme}`;
         await page.goto(`${baseUrl}${path}`);
         if (name === "drawer-limits") {

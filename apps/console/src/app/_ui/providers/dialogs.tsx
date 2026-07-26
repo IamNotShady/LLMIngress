@@ -188,7 +188,7 @@ function AddProviderDialog({
               dialogTab: entry.id,
               template: null,
             })}
-            className={`flex items-baseline gap-[7px] px-[14px] py-[7px] font-mono text-14 ${
+            className={`flex flex-none items-baseline gap-[7px] whitespace-nowrap px-[14px] py-[7px] font-mono text-14 ${
               entry.id === group?.id
                 ? "font-medium text-ink shadow-[inset_0_-2px_0_var(--accent)]"
                 : "text-dim"
@@ -274,7 +274,7 @@ function AddProviderDialog({
           </div>
           <EndpointChips providerKey={template.providerKey} />
           <DialogActions>
-            <ActionButton className="px-[18px] py-[6px] text-135" tone="primary">
+            <ActionButton size="dialog" tone="primary">
               Create
             </ActionButton>
             <ActionLink href={closeHref}>Cancel</ActionLink>
@@ -335,7 +335,7 @@ function EditProviderDialog({
           and provider type are fixed after creation; credentials are managed per connection.
         </DialogNote>
         <DialogActions>
-          <ActionButton className="px-[18px] py-[6px] text-135" tone="primary">
+          <ActionButton size="dialog" tone="primary">
             Save
           </ActionButton>
           <ActionLink href={closeHref}>Cancel</ActionLink>
@@ -715,7 +715,7 @@ function ApiKeyForm({
           keeps its credential but leaves routing.
         </DialogNote>
         <DialogActions>
-          <ActionButton className="px-[18px] py-[6px] text-135" tone="primary">
+          <ActionButton size="dialog" tone="primary">
             {editing ? "Save connection" : "Add key"}
           </ActionButton>
           <ActionLink href={closeHref}>Cancel</ActionLink>
@@ -762,7 +762,7 @@ function LocalEndpointForm({
         </Field>
       </div>
       <DialogActions>
-        <ActionButton className="px-[18px] py-[6px] text-135" tone="primary">
+        <ActionButton size="dialog" tone="primary">
           Save endpoint
         </ActionButton>
         <ActionLink href={closeHref}>Cancel</ActionLink>
@@ -881,7 +881,7 @@ function SubscriptionForm({
           </Field>
         </div>
         <DialogActions>
-          <ActionButton className="px-[18px] py-[6px] text-135" tone="primary">
+          <ActionButton size="dialog" tone="primary">
             Complete authorization
           </ActionButton>
           <ActionLink href={closeHref}>Cancel</ActionLink>
@@ -910,7 +910,7 @@ function SubscriptionForm({
         Subscription plans are not metered — requests routed through this token record no cost.
       </DialogNote>
       <DialogActions>
-        <ActionButton className="px-[18px] py-[6px] text-135" tone="primary">
+        <ActionButton size="dialog" tone="primary">
           Start authorization
         </ActionButton>
         <ActionLink href={closeHref}>Cancel</ActionLink>
@@ -943,7 +943,7 @@ function ConnectionStateActions({
       </p>
       {/* Both switches post in place, so the dialog the operator opened stays
           open and shows the result rather than closing on them. */}
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <ActionLink
           href={buildHref("/providers", params, {
             connection: connection.id,

@@ -166,7 +166,7 @@ export function LimitsDrawer({
           when known, estimated otherwise.
         </p>
         <div className="mt-[18px] flex flex-wrap items-center gap-2">
-          <ActionButton className="px-[18px] py-[6px] text-135" tone="primary">
+          <ActionButton size="dialog" tone="primary">
             Save rules
           </ActionButton>
         </div>
@@ -174,16 +174,13 @@ export function LimitsDrawer({
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {view.state === "none" ? null : (
-          <ActionLink
-            className="px-3 py-[6px] text-135"
-            href={buildHref("/limits", params, { dialog: "toggleLimits" })}
-          >
+          <ActionLink size="dialog" href={buildHref("/limits", params, { dialog: "toggleLimits" })}>
             {view.state === "enabled" ? "Disable limits" : "Enable limits"}
           </ActionLink>
         )}
         {view.state === "none" ? null : (
           <ActionLink
-            className="px-3 py-[6px] text-135"
+            size="dialog"
             href={buildHref("/limits", params, { dialog: "deleteRules" })}
             tone="danger"
           >

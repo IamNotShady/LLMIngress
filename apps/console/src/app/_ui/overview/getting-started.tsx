@@ -95,11 +95,7 @@ export function GettingStarted({ counts, params }: { counts: SetupCounts; params
                 <p className="mt-2 font-mono text-12 leading-[1.6] text-dim">{step.body}</p>
                 <div className="mt-[10px] flex flex-wrap items-center gap-2">
                   {step.links.map((link) => (
-                    <ActionLink
-                      key={link.href}
-                      className="px-[9px] py-[3px] text-12"
-                      href={link.href}
-                    >
+                    <ActionLink key={link.href} href={link.href} size="row">
                       {link.label}
                     </ActionLink>
                   ))}

@@ -39,6 +39,48 @@ describe("console current budget periods", () => {
     }
   });
 
+  it("measures spend against the window the key's own rule defines", async () => {
+    const fixture = await createTestPostgresFixture({
+      databaseNamePrefix: `llmingress_budget_rule_${randomUUID().replaceAll("-", "_")}`,
+    });
+    try {
+      await runMigrations({ databaseUrl: fixture.databaseUrl });
+      const apiKeyId = randomUUID();
+      const now = new Date("2026-07-25T12:00:00.000Z");
+      await fixture.query(
+        "insert into api_keys (id, name, key_prefix, key_hash) values ($1, 'docs-bot', 'llmi_d…', gen_random_uuid()::text)",
+        [apiKeyId],
+      );
+      // The key moved from a monthly budget to a daily one; the monthly rows
+      // are still there and still cover today.
+      await fixture.query(
+        `insert into api_key_limits (id, api_key_id, limit_type, limit_value, unit, period, enabled)
+         values (gen_random_uuid(), $1, 'budget', 5, 'usd', 'day', true)`,
+        [apiKeyId],
+      );
+      await fixture.query(
+        `insert into budget_periods (id, api_key_id, period_type, period_start, period_end, cost_used_usd, tokens_used) values
+           (gen_random_uuid(), $1, 'month', '2026-07-01T00:00:00Z', '2026-08-01T00:00:00Z', 88.20, 500000),
+           (gen_random_uuid(), $1, 'day', '2026-07-25T00:00:00Z', '2026-07-26T00:00:00Z', 1.40, 9000)`,
+        [apiKeyId],
+      );
+
+      const periods = await listConsoleCurrentBudgetPeriods({
+        databaseUrl: fixture.databaseUrl,
+        now,
+      });
+      const period = periods.find((entry) => entry.apiKeyId === apiKeyId);
+
+      // The daily rule is what enforces, so the daily window is what SPENT
+      // means — the stale monthly row must not stand in for it.
+      expect(period?.periodType).toBe("day");
+      expect(period?.costUsedUsd).toBe("1.40000000");
+      expect(period?.tokensUsed).toBe(9000);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
   it("returns nothing for a key whose periods have all elapsed", async () => {
     const fixture = await createTestPostgresFixture({
       databaseNamePrefix: `llmingress_budget_none_${randomUUID().replaceAll("-", "_")}`,

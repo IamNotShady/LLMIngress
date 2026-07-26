@@ -38,6 +38,33 @@ describe("api key limit enforcement policy", () => {
     expect(rules.every((rule) => rule.enforcementPolicy === "warn_only")).toBe(true);
   });
 
+  it("leaves out the ceilings the form left blank", () => {
+    const rules = normalizeApiKeyLimitRulesInput({
+      budgetPeriod: "month",
+      budgetUsd: "25",
+      concurrency: "",
+      rpm: "",
+      tokenLimit: null,
+      tpm: "50000",
+    });
+
+    // An empty field is unlimited, which is a rule that does not exist — not a
+    // ceiling of zero, and not a reason to refuse the save.
+    expect(rules.map((rule) => rule.limitType).sort()).toEqual(["budget", "tpm"]);
+  });
+
+  it("still refuses a ceiling that was typed and makes no sense", () => {
+    expect(() =>
+      normalizeApiKeyLimitRulesInput({
+        budgetPeriod: "month",
+        budgetUsd: "0",
+        rpm: "120",
+        tokenLimit: "16384",
+        tpm: "50000",
+      }),
+    ).toThrow(/greater than zero/i);
+  });
+
   it("rejects an enforcement value the database would not accept", () => {
     expect(() =>
       normalizeApiKeyLimitRulesInput({

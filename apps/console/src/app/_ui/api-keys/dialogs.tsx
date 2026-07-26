@@ -13,7 +13,8 @@ import { formatCost, formatCount, formatDateOnly } from "../format";
 import { DetailRow } from "../layout";
 import { Dialog, DialogActions, DialogBody, DialogImpact, DialogNote } from "../overlay";
 import { buildHref, readParam, type SearchParams } from "../params";
-import { buildApiKeyLimitsView, ENFORCEMENT_NOTE } from "./limits-view";
+import { ApiKeyEditorForm } from "./editor-form";
+import { buildApiKeyLimitsView, ENFORCEMENT_NOTE, limitFieldValue } from "./limits-view";
 
 const BUDGET_PERIODS = ["day", "week", "month"] as const;
 
@@ -137,7 +138,7 @@ function ApiKeyEditorDialog({
       }
       width={editing ? 720 : 900}
     >
-      <form action="/api/api-keys" method="post">
+      <ApiKeyEditorForm editing={Boolean(editing)} formError={readParam(params, "formError")}>
         <input type="hidden" name="action" value={editing ? "saveAll" : "create"} />
         {apiKey ? <input type="hidden" name="id" value={apiKey.id} /> : null}
         {selectedGrantIds.map((id) => (
@@ -152,7 +153,7 @@ function ApiKeyEditorDialog({
               data-autofocus=""
               id="api-key-name"
               aria-label="API key name"
-              defaultValue={apiKey?.name ?? ""}
+              defaultValue={readParam(params, "keyName") ?? apiKey?.name ?? ""}
               required
             />
           </Field>
@@ -243,9 +244,9 @@ function ApiKeyEditorDialog({
             <span className="flex gap-[6px] [&>select]:w-[110px] [&>select]:flex-none">
               <TextInput
                 name="budgetUsd"
-                defaultValue={String(view.budgetLimit ?? 25)}
+                defaultValue={limitFieldValue(view.budgetLimit, editing ? null : 25)}
                 inputMode="decimal"
-                required
+                placeholder="unlimited"
               />
               <SelectInput
                 name="budgetPeriod"
@@ -263,36 +264,38 @@ function ApiKeyEditorDialog({
           <Field label="RPM" hint="requests per minute">
             <TextInput
               name="rpm"
-              defaultValue={String(view.rpm ?? 120)}
+              defaultValue={limitFieldValue(view.rpm, editing ? null : 120)}
               inputMode="numeric"
-              required
+              placeholder="unlimited"
             />
           </Field>
           <Field label="TPM" hint="tokens per minute (input + output)">
             <TextInput
               name="tpm"
-              defaultValue={String(view.tpm ?? 50_000)}
+              defaultValue={limitFieldValue(view.tpm, editing ? null : 50_000)}
               inputMode="numeric"
-              required
+              placeholder="unlimited"
             />
           </Field>
           <Field label="TOKENS / REQUEST" hint="max tokens a single request may use">
             <TextInput
               name="tokenLimit"
-              defaultValue={String(view.tokensPerRequest ?? 16_384)}
+              defaultValue={limitFieldValue(view.tokensPerRequest, editing ? null : 16_384)}
               inputMode="numeric"
-              required
+              placeholder="unlimited"
             />
           </Field>
           <Field label="CONCURRENCY" hint="in-flight requests at the same time">
             <TextInput
               name="concurrency"
-              defaultValue={String(view.concurrency ?? 4)}
+              defaultValue={limitFieldValue(view.concurrency, editing ? null : 4)}
               inputMode="numeric"
+              placeholder="unlimited"
             />
           </Field>
           <Field label="ENFORCEMENT" hint={ENFORCEMENT_NOTE}>
             <TextInput defaultValue={view.enforcement} disabled className="opacity-55" />
+            <input type="hidden" name="enforcementPolicy" value={view.enforcement} />
           </Field>
         </div>
 
@@ -311,7 +314,7 @@ function ApiKeyEditorDialog({
               : "the secret is shown once, on the next screen"}
           </span>
         </DialogActions>
-      </form>
+      </ApiKeyEditorForm>
     </Dialog>
   );
 }

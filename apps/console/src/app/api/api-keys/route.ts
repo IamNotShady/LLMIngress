@@ -12,6 +12,7 @@ import {
 } from "@llmingress/db/console-api-keys";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
+import { classifyConsoleActionError } from "../_error-classify";
 import { consoleActionErrorResponse } from "../_errors";
 import { readRequiredText, readText, readTextValues } from "../_form";
 import { redirectToConsolePath } from "../_redirect";
@@ -97,6 +98,31 @@ export const POST = withConsoleAuth(async (request) => {
       );
     }
   } catch (error) {
+    // Creating is the one action that cannot post through MutationForm — its
+    // success response is the one-time secret page — so its refusal comes back
+    // to the dialog with the message and the name, instead of replacing the
+    // console with an error body.
+    if (action === "create" && !request.headers.get("accept")?.includes("application/json")) {
+      const verdict = classifyConsoleActionError(error, "The key could not be created.");
+      if (verdict.status !== 500) {
+        const back = new URL("/api-keys", request.url);
+        back.searchParams.set("dialog", "new");
+        back.searchParams.set("formError", verdict.message);
+        const grantIds = readTextValues(form, "allowedVirtualModelIds");
+        if (grantIds.length > 0) {
+          back.searchParams.set("grantIds", grantIds.join(","));
+        }
+        const defaultGrant = readText(form, "defaultVirtualModelId");
+        if (defaultGrant) {
+          back.searchParams.set("defaultGrant", defaultGrant);
+        }
+        const name = readText(form, "name");
+        if (name) {
+          back.searchParams.set("keyName", name);
+        }
+        return redirectToConsolePath(back);
+      }
+    }
     return consoleActionErrorResponse(error, "API key action failed.");
   }
 
@@ -105,12 +131,17 @@ export const POST = withConsoleAuth(async (request) => {
 
 function readApiKeyLimitRules(form: FormData) {
   return normalizeApiKeyLimitRulesInput({
+    // A save rewrites every rule, so the policy has to come back with the form
+    // or the key silently reverts to block — warn_only is set in Limits and
+    // would be lost by renaming a key here.
+    enforcementPolicy: readText(form, "enforcementPolicy"),
+    // Blank means unlimited, here as in the Limits drawer.
     budgetPeriod: readRequiredText(form, "budgetPeriod"),
-    budgetUsd: readRequiredText(form, "budgetUsd"),
+    budgetUsd: readText(form, "budgetUsd"),
     concurrency: readText(form, "concurrency") ?? null,
-    rpm: readRequiredText(form, "rpm"),
-    tokenLimit: readRequiredText(form, "tokenLimit"),
-    tpm: readRequiredText(form, "tpm"),
+    rpm: readText(form, "rpm"),
+    tokenLimit: readText(form, "tokenLimit"),
+    tpm: readText(form, "tpm"),
   });
 }
 

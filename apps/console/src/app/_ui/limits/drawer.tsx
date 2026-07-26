@@ -4,6 +4,7 @@ import { type ApiKeyLimitsView, ENFORCEMENT_NOTE } from "../api-keys/limits-view
 import { ConfirmForm } from "../confirm-form";
 import { ActionButton, ActionLink, Field, Meter, SelectInput, TextInput } from "../controls";
 import { formatCost, formatDateOnly, formatUntil } from "../format";
+import { MutationForm } from "../mutation-form";
 import { Dialog, DialogBody, DialogNote, Drawer } from "../overlay";
 import { buildHref, readParam, type SearchParams } from "../params";
 
@@ -77,12 +78,19 @@ export function LimitsDrawer({
         </div>
       )}
 
-      <form action="/api/api-key-limits" method="post">
+      <MutationForm
+        action="/api/api-key-limits"
+        fallbackError="The rules could not be saved."
+        invalidFieldOnError="budgetUsd"
+      >
         <input type="hidden" name="action" value="saveLimitRules" />
         <input type="hidden" name="apiKeyId" value={apiKey.id} />
 
-        <div className="mt-[18px] border-b border-hair pb-[5px] font-mono text-115 font-medium tracking-[.08em] text-dim">
-          RULES
+        <div className="mt-[18px] flex items-baseline gap-[10px] border-b border-hair pb-[5px]">
+          <span className="font-mono text-115 font-medium tracking-[.08em] text-dim">RULES</span>
+          <span className="ml-auto font-mono text-12 text-faint">
+            Leave a field empty for unlimited
+          </span>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3">
           <Field label="BUDGET USD" hint="spend cap for the period · blocks past it">
@@ -91,7 +99,6 @@ export function LimitsDrawer({
               defaultValue={view.budgetLimit === null ? "" : String(view.budgetLimit)}
               inputMode="decimal"
               placeholder="unlimited"
-              required
             />
           </Field>
           <Field label="PERIOD" hint="window the budget resets on">
@@ -109,7 +116,6 @@ export function LimitsDrawer({
               defaultValue={view.rpm === null ? "" : String(view.rpm)}
               inputMode="numeric"
               placeholder="unlimited"
-              required
             />
           </Field>
           <Field label="TPM" hint="tokens per minute (input + output)">
@@ -118,7 +124,6 @@ export function LimitsDrawer({
               defaultValue={view.tpm === null ? "" : String(view.tpm)}
               inputMode="numeric"
               placeholder="unlimited"
-              required
             />
           </Field>
           <Field label="TOKENS / REQUEST" hint="max tokens a single request may use">
@@ -127,7 +132,6 @@ export function LimitsDrawer({
               defaultValue={view.tokensPerRequest === null ? "" : String(view.tokensPerRequest)}
               inputMode="numeric"
               placeholder="unlimited"
-              required
             />
           </Field>
           <Field label="CONCURRENCY" hint="in-flight requests at the same time">
@@ -154,11 +158,14 @@ export function LimitsDrawer({
             Save rules
           </ActionButton>
         </div>
-      </form>
+      </MutationForm>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {view.state === "none" ? null : (
-          <form action="/api/api-key-limits" method="post">
+          <MutationForm
+            action="/api/api-key-limits"
+            fallbackError="Enforcement could not be switched."
+          >
             <input type="hidden" name="action" value="setLimitsEnabled" />
             <input type="hidden" name="apiKeyId" value={apiKey.id} />
             <input
@@ -169,7 +176,7 @@ export function LimitsDrawer({
             <ActionButton className="px-3 py-[6px] text-135">
               {view.state === "enabled" ? "Disable limits" : "Enable limits"}
             </ActionButton>
-          </form>
+          </MutationForm>
         )}
         {view.state === "none" ? null : (
           <ActionLink

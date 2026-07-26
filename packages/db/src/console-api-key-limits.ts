@@ -122,51 +122,44 @@ export function normalizeApiKeyLimitRulesInput(
   const budgetPeriod = normalizeBudgetPeriod(input.budgetPeriod);
   const enforcementPolicy = normalizeEnforcementPolicy(input.enforcementPolicy);
 
-  return [
-    {
-      enforcementPolicy,
-      limitType: "budget",
-      limitValue: normalizePositiveNumber(input.budgetUsd, "Budget USD limit"),
-      manualBypass: false,
-      period: budgetPeriod,
-      unit: "usd",
-    },
-    {
-      enforcementPolicy,
-      limitType: "rpm",
-      limitValue: normalizePositiveNumber(input.rpm, "RPM limit"),
-      manualBypass: false,
-      period: "minute",
-      unit: "requests",
-    },
-    {
-      enforcementPolicy,
-      limitType: "tpm",
-      limitValue: normalizePositiveNumber(input.tpm, "TPM limit"),
-      manualBypass: false,
-      period: "minute",
-      unit: "tokens",
-    },
-    {
-      enforcementPolicy,
-      limitType: "concurrency",
-      limitValue: normalizePositiveNumber(
-        input.concurrency ?? defaultApiKeyLimitFormValues.concurrency,
-        "Concurrency limit",
-      ),
-      manualBypass: false,
-      period: "request",
-      unit: "requests",
-    },
-    {
-      enforcementPolicy,
-      limitType: "token",
-      limitValue: normalizePositiveNumber(input.tokenLimit, "Token limit"),
-      manualBypass: false,
-      period: "request",
-      unit: "tokens",
-    },
-  ];
+  // A ceiling nobody set is not a ceiling of zero: an empty field means the key
+  // is unlimited in that dimension, which is exactly a rule that does not
+  // exist. Leaving every field empty is the same as having no rules at all.
+  const rules: ApiKeyLimitRuleInput[] = [];
+  const add = (
+    limitType: ApiKeyLimitRuleInput["limitType"],
+    value: string | number | null | undefined,
+    label: string,
+    period: ApiKeyLimitRuleInput["period"],
+    unit: ApiKeyLimitRuleInput["unit"],
+  ) => {
+    const limitValue = normalizeOptionalPositiveNumber(value, label);
+    if (limitValue === null) {
+      return;
+    }
+    rules.push({ enforcementPolicy, limitType, limitValue, manualBypass: false, period, unit });
+  };
+
+  add("budget", input.budgetUsd, "Budget USD limit", budgetPeriod, "usd");
+  add("rpm", input.rpm, "RPM limit", "minute", "requests");
+  add("tpm", input.tpm, "TPM limit", "minute", "tokens");
+  add("concurrency", input.concurrency, "Concurrency limit", "request", "requests");
+  add("token", input.tokenLimit, "Token limit", "request", "tokens");
+  return rules;
+}
+
+/** Blank means unlimited; anything else still has to be a positive number. */
+function normalizeOptionalPositiveNumber(
+  value: string | number | null | undefined,
+  label: string,
+): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "string" && value.trim() === "") {
+    return null;
+  }
+  return normalizePositiveNumber(value, label);
 }
 
 function normalizeEnforcementPolicy(
@@ -587,17 +580,28 @@ export async function listConsoleCurrentBudgetPeriods(
       period_type: string;
       tokens_used: string;
     }>(
+      // The window has to be the one the key's own budget rule defines. A key
+      // whose period changed keeps its old rows, so picking the latest window
+      // that merely contains "now" would measure SPENT against a period the
+      // rule no longer uses. Keys with no budget rule still report their
+      // window — the spend is real, it just has no ceiling to sit under.
       `
-        select distinct on (api_key_id)
-               api_key_id::text,
-               cost_used_usd::text,
-               period_end,
-               period_start,
-               period_type,
-               tokens_used::text
+        select distinct on (budget_periods.api_key_id)
+               budget_periods.api_key_id::text,
+               budget_periods.cost_used_usd::text,
+               budget_periods.period_end,
+               budget_periods.period_start,
+               budget_periods.period_type,
+               budget_periods.tokens_used::text
         from budget_periods
-        where period_start <= $1 and period_end > $1
-        order by api_key_id, period_start desc
+        left join api_key_limits
+          on api_key_limits.api_key_id = budget_periods.api_key_id
+         and api_key_limits.limit_type = 'budget'
+         and api_key_limits.enabled = true
+        where budget_periods.period_start <= $1 and budget_periods.period_end > $1
+        order by budget_periods.api_key_id,
+                 (api_key_limits.period = budget_periods.period_type) desc nulls last,
+                 budget_periods.period_start desc
       `,
       [now.toISOString()],
     );

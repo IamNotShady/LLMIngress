@@ -39,13 +39,16 @@ export const POST = withConsoleAuth(async (request) => {
     await saveApiKeyLimitRules({
       limits: normalizeApiKeyLimitFormInput({
         apiKeyId,
+        // Every ceiling is optional: a blank field means unlimited, so the
+        // route must let it through rather than demand a value the form no
+        // longer asks for.
         budgetPeriod: readRequiredText(form, "budgetPeriod"),
-        budgetUsd: readRequiredText(form, "budgetUsd"),
+        budgetUsd: readText(form, "budgetUsd"),
         concurrency: readText(form, "concurrency"),
         enforcementPolicy: readText(form, "enforcementPolicy"),
-        rpm: readRequiredText(form, "rpm"),
-        tokenLimit: readRequiredText(form, "tokenLimit"),
-        tpm: readRequiredText(form, "tpm"),
+        rpm: readText(form, "rpm"),
+        tokenLimit: readText(form, "tokenLimit"),
+        tpm: readText(form, "tpm"),
       }),
     });
     return redirectToConsolePath(`/limits?selected=${encodeURIComponent(apiKeyId)}`);

@@ -210,7 +210,11 @@ function AddProviderDialog({
       </div>
 
       {template ? (
-        <form action="/api/providers" method="post">
+        <MutationForm
+          action="/api/providers"
+          fallbackError="The provider could not be created."
+          invalidFieldOnError="baseUrl"
+        >
           {/* OpenAI and Anthropic are registered directly rather than as
               templates, so they are created by provider key instead. */}
           <input
@@ -255,7 +259,7 @@ function AddProviderDialog({
               Credentials are added per connection once the provider exists.
             </span>
           </DialogActions>
-        </form>
+        </MutationForm>
       ) : null}
     </Dialog>
   );
@@ -275,7 +279,11 @@ function EditProviderDialog({
       titleNote={`${provider.displayName} · ${provider.providerType}`}
       width={720}
     >
-      <form action="/api/providers" method="post">
+      <MutationForm
+        action="/api/providers"
+        fallbackError="The provider could not be saved."
+        invalidFieldOnError="baseUrl"
+      >
         <input type="hidden" name="action" value="update" />
         <input type="hidden" name="id" value={provider.id} />
         <div className="mt-4 grid grid-cols-2 gap-4">
@@ -309,7 +317,7 @@ function EditProviderDialog({
           </ActionButton>
           <ActionLink href={closeHref}>Cancel</ActionLink>
         </DialogActions>
-      </form>
+      </MutationForm>
     </Dialog>
   );
 }
@@ -557,7 +565,11 @@ function ApiKeyForm({
 }) {
   return (
     <>
-      <form action="/api/provider-keys" method="post">
+      <MutationForm
+        action="/api/provider-keys"
+        fallbackError="The connection could not be saved."
+        invalidFieldOnError="apiKey"
+      >
         <input type="hidden" name="providerId" value={provider.id} />
         {editing ? <input type="hidden" name="providerApiKeyId" value={editing.id} /> : null}
         <div className="mt-4">
@@ -596,7 +608,7 @@ function ApiKeyForm({
           </ActionButton>
           <ActionLink href={closeHref}>Cancel</ActionLink>
         </DialogActions>
-      </form>
+      </MutationForm>
       {/* The state switches are their own posts, so they sit beside the
           credential form rather than inside it — a nested form would be
           dropped by the browser and submit the save instead. */}
@@ -620,7 +632,11 @@ function LocalEndpointForm({
   provider: ConsoleProvider;
 }) {
   return (
-    <form action="/api/providers" method="post">
+    <MutationForm
+      action="/api/providers"
+      fallbackError="The endpoint could not be saved."
+      invalidFieldOnError="baseUrl"
+    >
       <input type="hidden" name="action" value="update" />
       <input type="hidden" name="id" value={provider.id} />
       <input type="hidden" name="displayName" value={provider.displayName} />
@@ -638,7 +654,7 @@ function LocalEndpointForm({
         </ActionButton>
         <ActionLink href={closeHref}>Cancel</ActionLink>
       </DialogActions>
-    </form>
+    </MutationForm>
   );
 }
 
@@ -709,7 +725,11 @@ function SubscriptionForm({
 
   if (authorizeUrl && oauthId) {
     return (
-      <form action="/api/provider-oauth" method="post">
+      <MutationForm
+        action="/api/provider-oauth"
+        fallbackError="The authorization could not be completed."
+        invalidFieldOnError="callbackInput"
+      >
         <input type="hidden" name="action" value="complete" />
         <input type="hidden" name="providerId" value={provider.id} />
         <input type="hidden" name="providerOAuthId" value={oauthId} />
@@ -753,12 +773,12 @@ function SubscriptionForm({
           </ActionButton>
           <ActionLink href={closeHref}>Cancel</ActionLink>
         </DialogActions>
-      </form>
+      </MutationForm>
     );
   }
 
   return (
-    <form action="/api/provider-oauth" method="post">
+    <MutationForm action="/api/provider-oauth" fallbackError="Authorization could not be started.">
       <input type="hidden" name="action" value="start" />
       <input type="hidden" name="providerId" value={provider.id} />
       <div className="mt-4 grid grid-cols-2 gap-3">
@@ -782,7 +802,7 @@ function SubscriptionForm({
         </ActionButton>
         <ActionLink href={closeHref}>Cancel</ActionLink>
       </DialogActions>
-    </form>
+    </MutationForm>
   );
 }
 

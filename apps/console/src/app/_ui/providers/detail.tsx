@@ -60,7 +60,9 @@ export function ProviderDetail({
 
   const modelQuery = readParam(params, "modelQuery") ?? "";
   const availability = readParam(params, "availability") ?? "available";
-  const pageSize = readIntParam(params, "modelPageSize", 20);
+  // Bounded on purpose: the page size is a URL parameter, and an unbounded one
+  // lets a single request materialise the whole model table.
+  const pageSize = Math.min(100, Math.max(1, readIntParam(params, "modelPageSize", 20)));
 
   return (
     <div className="min-w-0 pl-6 pt-[18px]">

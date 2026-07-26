@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { ConsoleOperationError } from "@llmingress/db/console-operation-error";
 import { describe, expect, it } from "vitest";
 import { classifyConsoleActionError } from "../../apps/console/src/app/api/_error-classify";
@@ -104,11 +104,21 @@ describe("console api hygiene", () => {
     expect(payload).not.toHaveProperty("integrationPlatform");
   });
 
-  it("sanitizes provider action errors before surfacing them", () => {
-    const providers = readFileSync("apps/console/src/app/api/providers/route.ts", "utf8");
-    expect(providers).toContain("classifyConsoleActionError");
-    const oauth = readFileSync("apps/console/src/app/api/provider-oauth/route.ts", "utf8");
-    expect(oauth).toContain("classifyConsoleActionError");
-    expect(oauth).toContain("consoleActionErrorResponse");
+  it("sanitizes action errors before surfacing them, on every route", () => {
+    // The sanitizing happens inside consoleActionErrorResponse, which classifies
+    // the error and keeps an unexpected one behind an id. A route that builds
+    // its own body from the caught error is what this guards against.
+    const routes = readdirSync("apps/console/src/app/api", { recursive: true })
+      .map(String)
+      .filter((file) => file.endsWith("route.ts"));
+    expect(routes.length).toBeGreaterThan(5);
+    for (const file of routes) {
+      const source = readFileSync(`apps/console/src/app/api/${file}`, "utf8");
+      if (!source.includes("catch (error)")) {
+        continue;
+      }
+      expect(source, file).toContain("consoleActionErrorResponse");
+      expect(source, file).not.toMatch(/error:\s*(String\(error\)|error\.message|`\$\{error)/);
+    }
   });
 });

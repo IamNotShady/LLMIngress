@@ -9,6 +9,21 @@ import { type FormEvent, type ReactNode, useState } from "react";
  * for JSON, and a refusal — a provider still used by a route, a name that is
  * already taken — is rendered where the operator was working.
  */
+/** The path a followed redirect landed on, or null if it stayed where it was. */
+function redirectTarget(response: Response): string | null {
+  if (!response.redirected) {
+    return null;
+  }
+  try {
+    const url = new URL(response.url);
+    const here = `${window.location.pathname}${window.location.search}`;
+    const there = `${url.pathname}${url.search}`;
+    return there === here ? null : there;
+  } catch {
+    return null;
+  }
+}
+
 export function MutationForm({
   action,
   children,
@@ -57,8 +72,13 @@ export function MutationForm({
         redirect: "follow",
       });
       if (response.ok || response.redirected) {
-        if (onSuccessHref) {
-          router.push(onSuccessHref);
+        // Where to land, in order of authority: what the caller asked for, then
+        // where the action redirected to. Several actions redirect somewhere
+        // that carries state the operator now needs — an authorization URL, the
+        // key they just saved — and refreshing in place would lose it.
+        const landing = onSuccessHref ?? redirectTarget(response);
+        if (landing) {
+          router.push(landing);
         }
         router.refresh();
         return;

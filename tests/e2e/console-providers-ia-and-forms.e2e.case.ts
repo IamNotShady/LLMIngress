@@ -887,3 +887,82 @@ async function addProviderDeleteRaceBlocker(databaseUrl: string, providerId: str
     );
   });
 }
+
+test("a refused form states why in the dialog it was submitted from", async ({ browser }) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_form_refusal_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = await seedIaData(fixture.databaseUrl);
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await signInFromFirstRun(page, baseUrl);
+
+        // --- Editing a provider: an unusable base url is refused, and the
+        // refusal belongs in the dialog. Closing it silently would look like
+        // the save worked, and navigating to the error body would lose the
+        // form the operator was filling in.
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&dialog=edit`, {
+          waitUntil: "networkidle",
+        });
+        const editDialog = page.getByRole("dialog", { name: "Edit provider" });
+        await editDialog.getByLabel(/BASE URL/).fill("not-a-url");
+        await editDialog.getByRole("button", { name: /Save/ }).click();
+
+        await expect(editDialog.getByRole("alert")).toBeVisible();
+        await expect(page).toHaveURL(/dialog=edit/);
+        await expect(editDialog.getByLabel(/BASE URL/)).toHaveValue("not-a-url");
+        // Nothing was written: the provider still has the base url it had.
+        const stored = await fixture.query<{ base_url: string | null }>(
+          "select base_url from providers where id = $1",
+          [providerId],
+        );
+        expect(stored.rows[0]?.base_url).not.toBe("not-a-url");
+
+        // --- The same contract in the Limits drawer, whose rules are validated
+        // in the database layer rather than by the browser.
+        const apiKeyId = randomUUID();
+        await fixture.query(
+          `insert into api_keys (id, name, key_prefix, key_hash)
+           values ($1, 'refusal-key', 'llmi_r…', gen_random_uuid()::text)`,
+          [apiKeyId],
+        );
+        await page.goto(`${baseUrl}/limits?selected=${apiKeyId}`, { waitUntil: "networkidle" });
+        const drawer = page.getByRole("dialog", { name: /refusal-key/ });
+        await drawer
+          .getByLabel(/BUDGET/)
+          .first()
+          .fill("0");
+        await drawer.getByRole("button", { name: /Save/ }).click();
+
+        await expect(drawer.getByRole("alert")).toBeVisible();
+        await expect(drawer.getByRole("alert")).toContainText(/greater than zero/i);
+        // The page is still the console, not the API's error body.
+        await expect(page).toHaveURL(new RegExp(`${escapeRegExp(baseUrl)}/limits`));
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+function escapeRegExp(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

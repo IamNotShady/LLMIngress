@@ -81,6 +81,19 @@ export function formatApiKeyLimitRules(limits: readonly ConsoleApiKeyLimit[]): s
     .join(" · ");
 }
 
+/**
+ * What a limit field starts with. An empty box means unlimited, so a ceiling a
+ * key does not have must render empty rather than be re-filled from a
+ * suggestion — otherwise saving the form quietly re-imposes it. New keys start
+ * from the suggested value; existing ones start from what they have.
+ */
+export function limitFieldValue(value: number | null, suggestion: number | null): string {
+  if (value !== null) {
+    return String(value);
+  }
+  return suggestion === null ? "" : String(suggestion);
+}
+
 /** Unset ceilings are unlimited, which is not the same as zero. */
 export function formatLimitValue(value: number | null): string {
   return value === null ? "unlimited" : value.toLocaleString("en-US");

@@ -7,6 +7,7 @@ import {
   type IntegrationGuideEntry,
 } from "../../_ui/api-keys/integration-guide";
 import { formatApiKeyLimitRules } from "../../_ui/api-keys/limits-view";
+import { standaloneThemeCss, standaloneThemeHead } from "../_standalone-theme";
 
 export function renderOneTimeApiKeyResponse(
   input: {
@@ -65,13 +66,12 @@ export function renderOneTimeApiKeyResponse(
 
   return new NextResponse(
     `<!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>API key created</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600&amp;family=DM+Mono:wght@400;500&amp;display=swap" rel="stylesheet" />
+    ${standaloneThemeHead()}
     <style>${pageStyles()}</style>
   </head>
   <body>
@@ -137,8 +137,7 @@ export function renderOneTimeApiKeyResponse(
 /** Same tokens as the console, inlined because this page renders outside it. */
 function pageStyles(): string {
   return `
-:root{--bg:#ffffff;--ink:#23262b;--seg:#343a42;--segfg:#ffffff;--dim:#767d86;--faint:#a2a8b0;--hair:#ccd4dc;--rule:#e6eaef;--rule2:#f2f4f7;--track:#edf0f4;--btnbg:#fbfcfd;--btnbd:#ccd3da;--accent:oklch(0.64 0.13 245);--ambtx:oklch(0.56 0.12 68);--ambbd:oklch(0.88 0.08 85);--sans:'Open Sans',system-ui,sans-serif;--mono:'DM Mono',ui-monospace,monospace}
-@media (prefers-color-scheme: dark){:root{--bg:#15181c;--ink:#e9ecf0;--seg:oklch(0.72 0.12 245);--segfg:#15181c;--dim:#b3bac2;--faint:#8b929b;--hair:rgba(255,255,255,.17);--rule:rgba(255,255,255,.09);--rule2:rgba(255,255,255,.05);--track:#20242a;--btnbg:#22262d;--btnbd:rgba(255,255,255,.22);--accent:oklch(0.70 0.12 245);--ambtx:oklch(0.85 0.11 82);--ambbd:rgba(226,182,96,.30)}}
+${standaloneThemeCss()}
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;display:grid;place-items:start center;padding:48px 32px;background:var(--bg);color:var(--ink);font-family:var(--sans)}
 main{width:min(900px,100%);border:1px solid var(--hair);padding:24px 28px;box-shadow:0 12px 40px rgba(0,0,0,.25)}

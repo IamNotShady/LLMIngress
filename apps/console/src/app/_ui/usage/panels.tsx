@@ -151,7 +151,6 @@ export function StatusPanel({ breakouts }: { breakouts: ConsoleUsageBreakouts })
       </div>
       <div className="mt-[6px]">
         <FallbackRow label="recovered on retry" value={breakouts.fallback.recoveredOnRetry} />
-        <FallbackRow label="skipped candidates" value={breakouts.fallback.skippedCandidates} />
         <FallbackRow
           danger
           label="failed after last candidate"

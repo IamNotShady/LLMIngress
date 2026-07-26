@@ -16,6 +16,7 @@ import {
   formatCapabilities,
   formatCost,
   formatCount,
+  formatDateOnly,
   formatPricePerMillion,
   formatRelative,
 } from "../format";
@@ -26,6 +27,7 @@ import { PlanQuotaPanel } from "../quota-panel";
 import { formatRange, GridRow, Pagination } from "../table";
 import {
   describeConnectionHealth,
+  describeProbeSchedule,
   describeProviderHealth,
   type ProviderConnection,
   providerIsMetered,
@@ -157,16 +159,23 @@ export function ProviderDetail({
         ) : (
           connections.map((connection) => {
             const connectionHealth = describeConnectionHealth(connection);
+            const probeSchedule = describeProbeSchedule(connection, now);
             return (
               <GridRow key={connection.id} columns={CONNECTION_COLUMNS} className="py-2">
                 <span className="font-medium cell-clip">{connection.label}</span>
-                <span className="text-dim cell-clip">{connection.credential}</span>
+                <span className="text-dim cell-clip">
+                  {connection.credential}
+                  {connection.tokenExpiresAt
+                    ? ` · exp ${formatDateOnly(connection.tokenExpiresAt)}`
+                    : ""}
+                </span>
                 <span className="text-right tabnum">{connection.priority}</span>
                 <span
                   className={`flex items-center gap-[6px] cell-clip ${healthTextClass(connectionHealth.tone)}`}
                 >
                   <StatusDot tone={connectionHealth.tone} />
                   {connectionHealth.text}
+                  {probeSchedule ? <span className="text-faint">· {probeSchedule}</span> : null}
                 </span>
                 <span className={connection.enabled ? "text-green" : "text-faint"}>
                   {connection.enabled ? "enabled" : "disabled"}

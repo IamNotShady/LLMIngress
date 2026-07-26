@@ -164,8 +164,7 @@ describe("console usage breakouts", () => {
       await addRequest(fixture, ids, {
         attempts: [
           { errorCode: "overloaded", order: 1, status: "failed" },
-          { order: 2, status: "skipped" },
-          { order: 3, status: "succeeded" },
+          { order: 2, status: "succeeded" },
         ],
         status: "succeeded",
       });
@@ -182,8 +181,9 @@ describe("console usage breakouts", () => {
         window: "24h",
       });
 
+      // The gateway records an attempt as failed or succeeded and nothing else,
+      // so these are the only two outcomes this panel can honestly report.
       expect(breakouts.fallback.recoveredOnRetry).toBe(1);
-      expect(breakouts.fallback.skippedCandidates).toBe(1);
       expect(breakouts.fallback.failedAfterLastCandidate).toBe(1);
     } finally {
       await fixture.dispose();

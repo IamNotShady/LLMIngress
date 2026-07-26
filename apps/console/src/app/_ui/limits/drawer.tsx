@@ -29,6 +29,18 @@ export function LimitsDrawer({
         ? "limits disabled · rules kept"
         : `limits enabled · ${view.enforcement}`;
 
+  if (readParam(params, "dialog") === "toggleLimits") {
+    return (
+      <ToggleLimitsDialog
+        apiKey={apiKey}
+        closeHref={buildHref("/limits", params, { dialog: null })}
+        enable={view.state !== "enabled"}
+        params={params}
+        view={view}
+      />
+    );
+  }
+
   if (readParam(params, "dialog") === "deleteRules") {
     return (
       <DeleteRulesDialog
@@ -162,21 +174,12 @@ export function LimitsDrawer({
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {view.state === "none" ? null : (
-          <MutationForm
-            action="/api/api-key-limits"
-            fallbackError="Enforcement could not be switched."
+          <ActionLink
+            className="px-3 py-[6px] text-135"
+            href={buildHref("/limits", params, { dialog: "toggleLimits" })}
           >
-            <input type="hidden" name="action" value="setLimitsEnabled" />
-            <input type="hidden" name="apiKeyId" value={apiKey.id} />
-            <input
-              type="hidden"
-              name="enabled"
-              value={view.state === "enabled" ? "false" : "true"}
-            />
-            <ActionButton className="px-3 py-[6px] text-135">
-              {view.state === "enabled" ? "Disable limits" : "Enable limits"}
-            </ActionButton>
-          </MutationForm>
+            {view.state === "enabled" ? "Disable limits" : "Enable limits"}
+          </ActionLink>
         )}
         {view.state === "none" ? null : (
           <ActionLink
@@ -193,6 +196,71 @@ export function LimitsDrawer({
         runs unlimited until new ones are set.
       </p>
     </Drawer>
+  );
+}
+
+/**
+ * Enforcement is what stands between a key and an unbounded bill, so switching
+ * it says which way traffic changes and that the rules themselves are kept.
+ */
+function ToggleLimitsDialog({
+  apiKey,
+  closeHref,
+  enable,
+  params,
+  view,
+}: {
+  apiKey: ConsoleApiKey;
+  closeHref: string;
+  enable: boolean;
+  params: SearchParams;
+  view: ApiKeyLimitsView;
+}) {
+  return (
+    <Dialog
+      closeHref={closeHref}
+      danger={!enable}
+      title={enable ? "Enable limits" : "Disable limits"}
+      width={460}
+    >
+      <DialogBody>
+        {enable ? (
+          <>
+            Requests presenting <strong className="font-medium">{apiKey.name}</strong> start being
+            checked against its rules again,{" "}
+            {view.enforcement === "warn_only" ? "recording" : "and"}{" "}
+            {view.enforcement === "warn_only"
+              ? "a breach without stopping the request"
+              : "a request past a ceiling is rejected"}
+            .
+          </>
+        ) : (
+          <>
+            Nothing stops requests presenting <strong className="font-medium">{apiKey.name}</strong>{" "}
+            — no budget, rate or concurrency ceiling is checked until limits are switched back on.
+            The rules are kept exactly as they are, and recorded spend keeps accumulating.
+          </>
+        )}
+      </DialogBody>
+      <DialogNote>
+        {enable
+          ? "The rules were never deleted; this only starts enforcing them again."
+          : "To stop this key entirely instead, disable the key itself in API Keys."}
+      </DialogNote>
+      <ConfirmForm
+        action="/api/api-key-limits"
+        confirmLabel={enable ? "Enable limits" : "Disable limits"}
+        onSuccessHref={buildHref("/limits", params, { dialog: null })}
+        hiddenFields={{
+          action: "setLimitsEnabled",
+          apiKeyId: apiKey.id,
+          enabled: enable ? "true" : "false",
+        }}
+        tone={enable ? "primary" : "danger"}
+      >
+        <ActionLink href={buildHref("/limits", params, { dialog: null })}>Cancel</ActionLink>
+      </ConfirmForm>
+    </Dialog>
   );
 }
 

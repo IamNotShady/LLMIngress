@@ -93,12 +93,17 @@ export function PlanQuotaPanel({
             })}
 
             {view.balances.map((balance) => (
-              <div
-                key={balance}
-                className="mt-[5px] flex justify-between font-mono text-13 text-ink"
-              >
-                <span>balance</span>
-                <span className="font-medium">{balance}</span>
+              <div key={balance.label} className="mt-[5px]">
+                <div className="flex justify-between font-mono text-13 text-ink">
+                  <span>balance</span>
+                  <span className="font-medium">{balance.label}</span>
+                </div>
+                {/* Where the credit came from, when the provider reports it. */}
+                {balance.breakdown ? (
+                  <div className="mt-px text-right font-mono text-12 text-faint">
+                    {balance.breakdown}
+                  </div>
+                ) : null}
               </div>
             ))}
 

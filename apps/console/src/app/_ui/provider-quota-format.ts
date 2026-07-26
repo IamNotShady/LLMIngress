@@ -19,7 +19,7 @@ export type ProviderQuotaWindowView = {
 };
 
 export type ProviderQuotaConnectionView = {
-  balances: string[];
+  balances: Array<{ breakdown: string | null; label: string }>;
   // Set when a probe succeeded but reported nothing (openrouter with no
   // spending limit configured is the main case), so the cell is never blank.
   emptyLabel: string | null;
@@ -54,6 +54,22 @@ export function formatQuotaBalance(entry: BalanceEntry): string {
   // The amount stays the stored decimal string; parsing it to a number would
   // lose the precision the string representation exists to protect.
   return `${entry.total} ${entry.currency}`;
+}
+
+/**
+ * Where a balance came from, when the provider says. A total on its own does
+ * not tell an operator whether the credit was granted with the plan or paid
+ * for — which is what decides whether it comes back next month.
+ */
+export function formatQuotaBalanceBreakdown(entry: BalanceEntry): string | null {
+  const parts: string[] = [];
+  if (entry.granted !== undefined) {
+    parts.push(`granted ${entry.granted} ${entry.currency}`);
+  }
+  if (entry.toppedUp !== undefined) {
+    parts.push(`topped up ${entry.toppedUp} ${entry.currency}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 export function formatQuotaWindowLabel(window: string): string {
@@ -200,7 +216,10 @@ export function buildProviderQuotaConnectionView({
   const observedAt = summary?.observedAt ?? null;
 
   return {
-    balances: shownBalances.map(formatQuotaBalance),
+    balances: shownBalances.map((entry) => ({
+      breakdown: formatQuotaBalanceBreakdown(entry),
+      label: formatQuotaBalance(entry),
+    })),
     emptyLabel: entries.length === 0 && !errorCode && observedAt ? QUOTA_NO_LIMITS_LABEL : null,
     // Staleness only matters for real quota numbers: an error state renders its
     // reason pill alone, without a competing "Updated X ago" line.

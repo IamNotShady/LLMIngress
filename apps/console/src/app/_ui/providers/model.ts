@@ -5,6 +5,7 @@ import type { ConsoleProvider } from "@llmingress/db/console-providers";
 import type { ProviderOAuthMetadata } from "@llmingress/db/providers";
 import { endpointPathByProtocol } from "../api-keys/integration-guide";
 import { aggregateProviderConnectionHealthStatus } from "../provider-health";
+import { formatRelativeDateTime } from "../provider-relative-time";
 
 /**
  * One row of the Connections table. A provider's health belongs to each key or
@@ -91,6 +92,30 @@ export type ConnectionHealthView = {
  * provider_health_summary only stores rows that are not healthy, so "no row"
  * means healthy — a disabled connection is neither healthy nor failing.
  */
+/**
+ * When the console last heard from the provider, and when it will ask again.
+ * "healthy" on its own does not say whether it is a fresh answer or one from
+ * this morning, which is the difference between trusting it and re-checking.
+ */
+export function describeProbeSchedule(
+  connection: ProviderConnection,
+  now: Date = new Date(),
+): string | null {
+  const health = connection.health;
+  if (!health) {
+    return null;
+  }
+  const parts: string[] = [];
+  if (health.latestProbeAt) {
+    parts.push(formatRelativeDateTime(health.latestProbeAt, now.getTime()));
+  }
+  if (health.nextProbeAt && health.nextProbeAt.getTime() > now.getTime()) {
+    const seconds = Math.round((health.nextProbeAt.getTime() - now.getTime()) / 1000);
+    parts.push(seconds < 90 ? `next in ${seconds}s` : `next in ${Math.round(seconds / 60)}m`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 export function describeConnectionHealth(connection: ProviderConnection): ConnectionHealthView {
   if (!connection.enabled) {
     return { text: "not probed · disabled", tone: "dim" };

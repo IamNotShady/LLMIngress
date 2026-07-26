@@ -62,7 +62,11 @@ export function Masthead({
             className="flex items-center gap-[6px] rounded-xs border border-ambbd bg-ambbg px-[9px] py-[3px] font-mono text-125 font-medium text-ambtx"
           >
             <span className="size-[6px] rounded-full bg-amber" />
-            {unhealthyConnectionCount} unhealthy
+            {/* Named as connections: the Providers page counts providers, and
+                one failing key does not make its provider unhealthy. Two counts
+                sharing the word "unhealthy" would disagree on screen. */}
+            {unhealthyConnectionCount} connection
+            {unhealthyConnectionCount === 1 ? "" : "s"} failing
           </Link>
         ) : null}
         <ThemeToggle />

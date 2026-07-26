@@ -99,7 +99,13 @@ export default async function OverviewPage({
   const unhealthy = connections.filter(
     ({ connection }) => describeConnectionHealth(connection).tone === "red",
   );
-  const healthyCount = connections.length - unhealthy.length;
+  // "healthy" has to mean healthy: a connection still being checked, or one
+  // that is switched off, is neither failing nor serving, and folding it into
+  // this count would overstate what is actually carrying traffic.
+  const healthyCount = connections.filter(
+    ({ connection }) => describeConnectionHealth(connection).tone === "green",
+  ).length;
+  const pendingCount = connections.length - unhealthy.length - healthyCount;
 
   return (
     <PageShell label="Overview">
@@ -248,6 +254,9 @@ export default async function OverviewPage({
                         <StatusDot tone="green" />
                         <span className="flex-1 font-mono text-135 text-dim">
                           {formatCount(healthyCount)} healthy connections
+                          {pendingCount > 0
+                            ? ` · ${formatCount(pendingCount)} not serving yet`
+                            : ""}
                         </span>
                         <Link href="/providers" className="font-mono text-125 text-faint">
                           → Providers

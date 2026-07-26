@@ -94,6 +94,17 @@ export function ProviderDialogs({
       <DeleteConnectionDialog closeHref={closeHref} connection={connection} provider={provider} />
     ) : null;
   }
+  if (dialog === "disableConnection" || dialog === "enableConnection") {
+    const connection = connections.find((entry) => entry.id === readParam(params, "connection"));
+    return connection ? (
+      <ConnectionStateDialog
+        closeHref={closeHref}
+        connection={connection}
+        enable={dialog === "enableConnection"}
+        provider={provider}
+      />
+    ) : null;
+  }
   return null;
 }
 
@@ -449,6 +460,71 @@ function DeleteProviderDialog({
   );
 }
 
+/**
+ * A connection carries traffic, so taking it out of routing says what stops and
+ * what is kept — the credential stays, which is the whole difference between
+ * this and deleting it.
+ */
+function ConnectionStateDialog({
+  closeHref,
+  connection,
+  enable,
+  provider,
+}: {
+  closeHref: string;
+  connection: ProviderConnection;
+  enable: boolean;
+  provider: ConsoleProvider;
+}) {
+  const action = connection.kind === "oauth" ? "/api/provider-oauth" : "/api/provider-keys";
+  const idField = connection.kind === "oauth" ? "providerOAuthId" : "providerApiKeyId";
+  return (
+    <Dialog
+      closeHref={closeHref}
+      danger={!enable}
+      title={enable ? "Enable connection" : "Disable connection"}
+      width={520}
+    >
+      <DialogBody>
+        {enable ? (
+          <>
+            <strong className="font-medium">{connection.label}</strong> joins {provider.displayName}
+            &apos;s routing again and is probed on the usual schedule.
+          </>
+        ) : (
+          <>
+            Requests stop being routed through{" "}
+            <strong className="font-medium">{connection.label}</strong>. The stored credential is
+            kept and can be switched back on; if this is {provider.displayName}&apos;s only
+            connection, the provider stops serving traffic entirely.
+          </>
+        )}
+      </DialogBody>
+      <DialogImpact>
+        <DetailRow label="credential" value={connection.credential} />
+        <DetailRow label="priority" value={String(connection.priority)} />
+        <DetailRow
+          label="health history"
+          value={enable ? "probing resumes" : "kept, probing stops"}
+        />
+      </DialogImpact>
+      <ConfirmForm
+        action={action}
+        confirmLabel={enable ? "Enable connection" : "Disable connection"}
+        hiddenFields={{
+          action: enable ? "enable" : "disable",
+          [idField]: connection.id,
+          providerId: provider.id,
+        }}
+        onSuccessHref={closeHref}
+        tone={enable ? "primary" : "danger"}
+      >
+        <ActionLink href={closeHref}>Cancel</ActionLink>
+      </ConfirmForm>
+    </Dialog>
+  );
+}
+
 function DeleteConnectionDialog({
   closeHref,
   connection,
@@ -544,6 +620,7 @@ function CredentialDialog({
         <ApiKeyForm
           closeHref={closeHref}
           editing={editing}
+          params={params}
           provider={provider}
           quotaProbeEnabled={quotaProbeEnabled}
         />
@@ -555,11 +632,13 @@ function CredentialDialog({
 function ApiKeyForm({
   closeHref,
   editing,
+  params,
   provider,
   quotaProbeEnabled,
 }: {
   closeHref: string;
   editing: ProviderConnection | null;
+  params: SearchParams;
   provider: ConsoleProvider;
   quotaProbeEnabled: boolean;
 }) {
@@ -616,6 +695,7 @@ function ApiKeyForm({
         <ConnectionStateActions
           closeHref={closeHref}
           connection={editing}
+          params={params}
           provider={provider}
           quotaProbeEnabled={quotaProbeEnabled}
         />
@@ -809,11 +889,13 @@ function SubscriptionForm({
 /** Enable/disable lives outside the credential form so it posts on its own. */
 function ConnectionStateActions({
   connection,
+  params,
   provider,
   quotaProbeEnabled,
 }: {
   closeHref: string;
   connection: ProviderConnection;
+  params: SearchParams;
   provider: ConsoleProvider;
   quotaProbeEnabled: boolean;
 }) {
@@ -829,14 +911,15 @@ function ConnectionStateActions({
       {/* Both switches post in place, so the dialog the operator opened stays
           open and shows the result rather than closing on them. */}
       <div className="mt-2 flex flex-wrap gap-2">
-        <MutationForm action={action} fallbackError="The connection could not be updated.">
-          <input type="hidden" name="action" value={connection.enabled ? "disable" : "enable"} />
-          <input type="hidden" name={idField} value={connection.id} />
-          <input type="hidden" name="providerId" value={provider.id} />
-          <ActionButton>
-            {connection.enabled ? "Disable connection" : "Enable connection"}
-          </ActionButton>
-        </MutationForm>
+        <ActionLink
+          href={buildHref("/providers", params, {
+            connection: connection.id,
+            dialog: connection.enabled ? "disableConnection" : "enableConnection",
+            providerKeyDialog: null,
+          })}
+        >
+          {connection.enabled ? "Disable connection" : "Enable connection"}
+        </ActionLink>
         <MutationForm action={action} fallbackError="The quota probe could not be updated.">
           <input
             type="hidden"

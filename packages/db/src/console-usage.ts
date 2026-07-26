@@ -657,8 +657,6 @@ export type ConsoleUsageBreakouts = {
   fallback: {
     /** Succeeded only after an earlier candidate failed. */
     recoveredOnRetry: number;
-    /** Candidates never tried — quota spent, unhealthy, capability mismatch. */
-    skippedCandidates: number;
     /** Failed with no candidate left to try. */
     failedAfterLastCandidate: number;
   };
@@ -752,16 +750,13 @@ export async function getConsoleUsageBreakouts(input: {
     const fallback = await client.query<{
       failed_after_last_candidate: number;
       recovered_on_retry: number;
-      skipped_candidates: number;
     }>(
       `
         with attempts as (
           select request_activity.id,
                  request_activity.status,
                  count(fallback_events.id) filter (where fallback_events.status = 'failed')
-                   as failed_attempts,
-                 count(fallback_events.id) filter (where fallback_events.status = 'skipped')
-                   as skipped_attempts
+                   as failed_attempts
           from request_activity
           join fallback_events on fallback_events.request_activity_id = request_activity.id
           where ${scope}
@@ -769,7 +764,6 @@ export async function getConsoleUsageBreakouts(input: {
         )
         select count(*) filter (where status = 'succeeded' and failed_attempts > 0)::integer
                  as recovered_on_retry,
-               coalesce(sum(skipped_attempts), 0)::integer as skipped_candidates,
                count(*) filter (where status = 'failed')::integer as failed_after_last_candidate
         from attempts
       `,
@@ -804,7 +798,7 @@ export async function getConsoleUsageBreakouts(input: {
       fallback: {
         failedAfterLastCandidate: fallback.rows[0]?.failed_after_last_candidate ?? 0,
         recoveredOnRetry: fallback.rows[0]?.recovered_on_retry ?? 0,
-        skippedCandidates: fallback.rows[0]?.skipped_candidates ?? 0,
+
       },
       protocols: protocols.rows.map((row) => ({
         avgLatencyMs: readOptionalNumber(row.avg_latency_ms),

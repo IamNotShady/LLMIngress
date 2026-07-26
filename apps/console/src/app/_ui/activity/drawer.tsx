@@ -1,5 +1,8 @@
 import type { ConsoleActivityDetail } from "@llmingress/db/console-activity";
-import { formatConsoleActivityMetadata } from "@llmingress/db/console-activity";
+import {
+  formatConsoleActivityMetadata,
+  formatConsoleActivityRouteReason,
+} from "@llmingress/db/console-activity";
 import { StatusDot } from "../controls";
 import { formatCompact, formatCost, formatLatency, formatOffset, formatStamp } from "../format";
 import { DetailRow, SectionTitle } from "../layout";
@@ -64,6 +67,12 @@ export function ActivityDrawer({
       <SectionTitle className="mt-[18px]" note="offset from request start">
         {fallbackEvents.length > 1 ? "Route timeline" : "Route"}
       </SectionTitle>
+      {/* Why this candidate and not another — the gateway records the reason
+          it picked, and without it the timeline shows what happened but never
+          why the route looked the way it did. */}
+      <p className="mt-2 font-mono text-125 leading-[1.6] text-dim">
+        {formatConsoleActivityRouteReason(activity.routeReason)}
+      </p>
       <div className="mt-2 border-t border-hair">
         {fallbackEvents.length === 0 ? (
           <p className="py-3 font-mono text-13 leading-[1.6] text-dim">

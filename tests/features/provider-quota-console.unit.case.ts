@@ -69,8 +69,24 @@ describe("quota entry discrimination", () => {
       { label: "Five hour", percent: "7%", resetLabel: "resets in 2 h" },
       { label: "Seven day", percent: "53%", resetLabel: "resets 2026-07-24" },
     ]);
-    expect(view.balances).toEqual(["76.50 USD"]);
+    expect(view.balances).toEqual([{ breakdown: null, label: "76.50 USD" }]);
     expect(view.reason).toBeNull();
+  });
+
+  it("says where a balance came from when the provider breaks it down", () => {
+    const view = buildProviderQuotaConnectionView({
+      referenceTimeMs,
+      sharedBalanceKeys: new Set<string>(),
+      summary: summaryOf({
+        entries: [{ currency: "USD", granted: "20.00", toppedUp: "30.00", total: "50.00" }],
+      }),
+    });
+
+    // A total alone does not say whether the credit renews with the plan or was
+    // paid for, which is the thing an operator is deciding about.
+    expect(view.balances).toEqual([
+      { breakdown: "granted 20.00 USD · topped up 30.00 USD", label: "50.00 USD" },
+    ]);
   });
 });
 

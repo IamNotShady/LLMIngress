@@ -530,6 +530,9 @@ test("Console sidebar counts aggregate Provider health", async ({ browser }) => 
         // so it counts healthy; only the provider whose sole key failed does not.
         await page.goto(`${baseUrl}/providers`, { waitUntil: "networkidle" });
         await expect(page.getByText("1 healthy · 1 unhealthy")).toBeVisible();
+        // The masthead counts connections, not providers, and says so — the two
+        // numbers describe different things and must not both read "unhealthy".
+        await expect(page.getByRole("link", { name: /connections failing/ })).toBeVisible();
         // Not "2 unhealthy": the mixed provider is not counted as down.
         await expect(page.getByText(/·\s*2 unhealthy/)).toHaveCount(0);
         // The mixed provider's row says both things, in words rather than by

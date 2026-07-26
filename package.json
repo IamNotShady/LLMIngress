@@ -11,6 +11,7 @@
     "lint:fix": "biome check --write .",
     "test": "tsx scripts/run-with-env.ts vitest run --coverage",
     "test:e2e": "tsx scripts/run-with-env.ts playwright test",
+    "preview:console": "tsx scripts/run-with-env.ts tsx scripts/preview-console.ts",
     "verify": "pnpm run lint && pnpm run typecheck && pnpm test && pnpm run build",
     "verify:features": "tsx scripts/run-with-env.ts node scripts/verify-features.mjs",
     "db:migrate": "tsx scripts/migrate.ts",

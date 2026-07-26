@@ -49,7 +49,15 @@ export async function getFreePort(): Promise<number> {
   });
 }
 
-export async function waitForConsole(baseUrl: string, consoleApp: ConsoleProcess): Promise<void> {
+/**
+ * `timeoutMs` exists for callers outside the suite: a dev tool starting a
+ * console on a cold Next cache can wait well past the 30s a test should.
+ */
+export async function waitForConsole(
+  baseUrl: string,
+  consoleApp: ConsoleProcess,
+  timeoutMs = 30_000,
+): Promise<void> {
   try {
     await expect
       .poll(
@@ -67,7 +75,7 @@ export async function waitForConsole(baseUrl: string, consoleApp: ConsoleProcess
         },
         {
           message: "Console did not start.",
-          timeout: 30_000,
+          timeout: timeoutMs,
         },
       )
       .toBe(200);

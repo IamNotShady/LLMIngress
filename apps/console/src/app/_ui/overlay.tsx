@@ -27,9 +27,14 @@ function useModalDialog(closeHref: string) {
     opener.current = document.activeElement as HTMLElement | null;
     if (!element.open) {
       element.showModal();
-      // showModal focuses the first tabbable node, which is the close control.
-      // A dialog opens for what it is about, so the first field takes focus.
-      element.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+      // showModal focuses the first tabbable node, which is the close control —
+      // a dialog would open primed to dismiss itself, ring and all. Focus goes
+      // to the field the dialog is about where there is one, and otherwise to
+      // the panel, which announces the dialog and leaves Tab at the top.
+      const target =
+        element.querySelector<HTMLElement>("[data-autofocus]") ??
+        element.querySelector<HTMLElement>("[data-dialog-panel]");
+      target?.focus();
     }
     return () => {
       element.close();
@@ -92,8 +97,10 @@ export function Dialog({
       className="fixed inset-0 m-0 size-full max-h-none max-w-none bg-transparent p-0 text-ink"
     >
       <div
+        data-dialog-panel
+        tabIndex={-1}
         style={{ width }}
-        className={`mx-auto mt-16 max-h-[84vh] max-w-[calc(100vw-64px)] overflow-auto bg-bg px-[26px] py-[22px] ${
+        className={`mx-auto mt-16 max-h-[84vh] outline-none max-w-[calc(100vw-64px)] overflow-auto bg-bg px-[26px] py-[22px] ${
           danger ? "border border-red shadow-danger" : "border border-hair shadow-dialog"
         }`}
       >
@@ -145,7 +152,11 @@ export function Drawer({
       aria-label={title}
       className="fixed inset-0 m-0 size-full max-h-none max-w-none bg-transparent p-0 text-ink"
     >
-      <aside className="ml-auto h-full w-[520px] max-w-[calc(100vw-24px)] overflow-auto border-l border-hair bg-bg px-6 py-5 shadow-drawer">
+      <aside
+        data-dialog-panel
+        tabIndex={-1}
+        className="ml-auto h-full w-[520px] outline-none max-w-[calc(100vw-24px)] overflow-auto border-l border-hair bg-bg px-6 py-5 shadow-drawer"
+      >
         <div className="flex items-center gap-[10px]">
           <div className="min-w-0">
             <div className="font-sans text-17 font-semibold text-ink">{title}</div>

@@ -43,7 +43,9 @@ export function GettingStarted({ counts, params }: { counts: SetupCounts; params
       body: "Give each key a budget and rate ceiling, then send a real request from the Playground to confirm routing before handing the key over.",
       done: counts.apiKeyCount > 0 && counts.unlimitedKeyCount === 0,
       links: [
-        { href: "/limits", label: "Limits" },
+        // The step is about the keys with no rules, so the list opens on those
+        // rather than on every key.
+        { href: counts.unlimitedKeyCount > 0 ? "/limits?state=off" : "/limits", label: "Limits" },
         { href: "/playground", label: "Playground" },
       ],
       note:

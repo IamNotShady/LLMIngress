@@ -212,7 +212,7 @@ export default async function UsagePage({
           <div className="mt-6 grid grid-cols-3 gap-x-8 overflow-x-auto">
             <ProtocolPanel breakouts={breakouts} />
             <StatusPanel breakouts={breakouts} />
-            <TopErrorsPanel breakouts={breakouts} />
+            <TopErrorsPanel breakouts={breakouts} window={window} />
           </div>
         </>
       )}

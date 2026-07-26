@@ -626,11 +626,11 @@ test("device-code provider shows the user code and polls to complete; the author
 
         const dialog = page.getByRole("dialog", { name: "Authorize token" });
         await expect(dialog).toBeVisible();
-        await expect(dialog.getByLabel("Your code")).toHaveText("WDJB-MJHT");
-        await expect(dialog.getByRole("link", { name: "Open verification page" })).toHaveAttribute(
-          "href",
-          "https://platform.minimax.io/oauth-authorize",
-        );
+        await expect(dialog.getByLabel("enter this code at the provider")).toHaveText("WDJB-MJHT");
+        // The url is printed so it can be read before it is followed, and one
+        // button opens it and takes the code along.
+        await expect(dialog.getByText("https://platform.minimax.io/oauth-authorize")).toBeVisible();
+        await expect(dialog.getByRole("button", { name: "Open · copy code" })).toBeVisible();
 
         // The client polls (interval 1s) and, on the second reply, completes.
         await expect(dialog.getByText(/is connected/)).toBeVisible({ timeout: 15_000 });
@@ -665,9 +665,10 @@ test("device-code provider shows the user code and polls to complete; the author
         );
         const codeDialog = page.getByRole("dialog", { name: "Authorize token" });
         await expect(codeDialog).toBeVisible();
-        await expect(
-          codeDialog.getByRole("link", { name: "Open authorization URL" }),
-        ).toHaveAttribute("href", authorizeUrl);
+        await expect(codeDialog.getByRole("link", { name: "Open in browser" })).toHaveAttribute(
+          "href",
+          authorizeUrl,
+        );
         // The url is shown so it can be checked before it is followed, and the
         // callback value is pasted back in the same dialog.
         await expect(codeDialog.getByText(authorizeUrl)).toBeVisible();
@@ -830,9 +831,10 @@ test("Grok subscription: a Chat Completions chip in the Subscription group and a
         );
         const codeDialog = page.getByRole("dialog", { name: "Authorize token" });
         await expect(codeDialog).toBeVisible();
-        await expect(
-          codeDialog.getByRole("link", { name: "Open authorization URL" }),
-        ).toHaveAttribute("href", authorizeUrl);
+        await expect(codeDialog.getByRole("link", { name: "Open in browser" })).toHaveAttribute(
+          "href",
+          authorizeUrl,
+        );
         // The url is shown so it can be checked before it is followed, and the
         // callback value is pasted back in the same dialog.
         await expect(codeDialog.getByText(authorizeUrl)).toBeVisible();

@@ -169,7 +169,7 @@ async function seedConsoleData(databaseUrl: string) {
     }
   });
 
-  return { providerId, virtualModelId };
+  return { apiKeyId, apiKeyName, providerId, virtualModelId };
 }
 
 test("console keeps layout integrity with real data: cells clip, no page overflow, empty states are explicit, and every module stays reachable below the target width", async ({
@@ -256,6 +256,29 @@ test("console keeps layout integrity with real data: cells clip, no page overflo
         await page.setViewportSize({ width: 1280, height: 800 });
         await page.goto(`${baseUrl}/limits`, { waitUntil: "networkidle" });
         await expect(page.getByText("Edit ▸").first()).toBeVisible();
+
+        // --- A jump between modules carries the subject it was standing next
+        // to: arriving unfiltered would make the operator pick the same key
+        // again from a list that can be pages long.
+        await page.goto(`${baseUrl}/api-keys?selected=${seeded.apiKeyId}`, {
+          waitUntil: "networkidle",
+        });
+        await page.getByRole("link", { name: "→ Activity" }).click();
+        await page.waitForURL((url) => url.pathname === "/activity");
+        expect(new URL(page.url()).searchParams.get("apiKey")).toBe(seeded.apiKeyId);
+        await expect(page.getByLabel("Filter by API key")).toHaveValue(seeded.apiKeyId);
+        // The rows below are that key's, not every key's.
+        await expect(page.locator("a[href*='request=']").first()).toContainText(seeded.apiKeyName);
+
+        await page.goto(`${baseUrl}/api-keys?selected=${seeded.apiKeyId}`, {
+          waitUntil: "networkidle",
+        });
+        await page.getByRole("link", { name: "edit → Limits" }).click();
+        await page.waitForURL((url) => url.pathname === "/limits");
+        expect(new URL(page.url()).searchParams.get("selected")).toBe(seeded.apiKeyId);
+        // The key's own rules are open, not the list of every key's.
+        await expect(page.getByLabel("Filter by API key name")).toHaveValue(seeded.apiKeyName);
+        await expect(page.getByText("RULES", { exact: true })).toBeVisible();
 
         // --- Below the desktop target the module row scrolls; every module
         // stays reachable without a menu.

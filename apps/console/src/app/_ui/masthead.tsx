@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { activityHref } from "./cross-links";
 import { consoleNavItems } from "./nav";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -35,22 +36,33 @@ export function Masthead({
       <nav aria-label="Console modules" className="flex h-[54px] flex-none items-stretch">
         {consoleNavItems.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          const badged = item.href === "/activity" && failedRequestCount > 0;
           return (
-            <Link
+            <span
               key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
               className={`flex items-center gap-[6px] px-[13px] font-sans text-14 ${
                 active ? "font-semibold text-ink shadow-[inset_0_-2px_0_var(--accent)]" : "text-dim"
               }`}
             >
-              {item.label}
-              {item.href === "/activity" && failedRequestCount > 0 ? (
-                <span className="rounded-[2px] bg-red px-[5px] py-px font-mono text-11 font-medium text-white tabnum">
+              <Link
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className="flex h-[54px] items-center"
+              >
+                {item.label}
+              </Link>
+              {/* The count is about failures, so it opens them rather than the
+                  module — the tab beside it is still the way to everything. */}
+              {badged ? (
+                <Link
+                  href={activityHref({ status: "failed" })}
+                  aria-label={`${failedRequestCount} failed requests in the last 24h`}
+                  className="rounded-[2px] bg-red px-[5px] py-px font-mono text-11 font-medium text-white tabnum"
+                >
                   {failedRequestCount}
-                </span>
+                </Link>
               ) : null}
-            </Link>
+            </span>
           );
         })}
       </nav>

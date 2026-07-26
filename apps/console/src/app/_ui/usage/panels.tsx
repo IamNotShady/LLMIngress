@@ -3,6 +3,7 @@ import type {
   ConsoleUsageDimensionBreakdown,
 } from "@llmingress/db/console-usage";
 import { Meter } from "../controls";
+import { activityHref, activityWindowForUsageWindow } from "../cross-links";
 import { formatCompact, formatCost, formatCount, formatLatency, formatPercent } from "../format";
 import { SectionTitle } from "../layout";
 import { GridRow } from "../table";
@@ -178,14 +179,27 @@ function FallbackRow({
   );
 }
 
-export function TopErrorsPanel({ breakouts }: { breakouts: ConsoleUsageBreakouts }) {
+export function TopErrorsPanel({
+  breakouts,
+  window,
+}: {
+  breakouts: ConsoleUsageBreakouts;
+  /** The Usage window, so Activity opens on the same span of failures. */
+  window: string;
+}) {
   const max = Math.max(1, ...breakouts.topErrors.map((row) => row.count));
 
   return (
     <div>
       <SectionTitle
         trailing={
-          <a href="/activity" className="font-mono text-13 text-dim">
+          <a
+            href={activityHref({
+              status: "failed",
+              window: activityWindowForUsageWindow(window),
+            })}
+            className="font-mono text-13 text-dim"
+          >
             → Activity
           </a>
         }

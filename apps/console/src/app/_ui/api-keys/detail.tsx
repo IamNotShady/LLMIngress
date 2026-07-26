@@ -8,6 +8,7 @@ import type { ConsoleUsageSummary } from "@llmingress/db/console-usage";
 import type { ConsoleApiKeyVirtualModelGrant } from "@llmingress/db/console-virtual-models";
 import Link from "next/link";
 import { ActionLink, Meter, StatusDot } from "../controls";
+import { activityHref, limitsHref } from "../cross-links";
 import { formatCompact, formatCost, formatCount, formatDateOnly, formatRelative } from "../format";
 import { DetailRow, SectionTitle } from "../layout";
 import { buildHref, type SearchParams } from "../params";
@@ -121,7 +122,7 @@ export function ApiKeyDetail({
           <SectionTitle
             note={view.label}
             trailing={
-              <Link href="/limits" className="font-mono text-13 text-dim">
+              <Link href={limitsHref(apiKey)} className="font-mono text-13 text-dim">
                 edit → Limits
               </Link>
             }
@@ -178,7 +179,10 @@ export function ApiKeyDetail({
         <div>
           <SectionTitle
             trailing={
-              <Link href="/activity" className="font-mono text-13 text-dim">
+              <Link
+                href={activityHref({ apiKeyId: apiKey.id })}
+                className="font-mono text-13 text-dim"
+              >
                 → Activity
               </Link>
             }

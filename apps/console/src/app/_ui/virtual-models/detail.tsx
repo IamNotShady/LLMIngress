@@ -14,6 +14,7 @@ import type {
 import type { ProviderOAuthMetadata } from "@llmingress/db/providers";
 import Link from "next/link";
 import { ActionLink, Meter, StatusDot } from "../controls";
+import { activityHref } from "../cross-links";
 import {
   formatCapabilities,
   formatClock,
@@ -209,7 +210,10 @@ export function VirtualModelDetail({
         <div>
           <SectionTitle
             trailing={
-              <Link href="/activity" className="font-mono text-13 text-dim">
+              <Link
+                href={activityHref({ status: "failed", virtualModelId: virtualModel.id })}
+                className="font-mono text-13 text-dim"
+              >
                 → Activity
               </Link>
             }

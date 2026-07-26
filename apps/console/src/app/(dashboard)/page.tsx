@@ -15,6 +15,7 @@ import { listVirtualModels } from "@llmingress/db/console-virtual-models";
 import Link from "next/link";
 import { ChartLegend, StackedBarChart } from "../_ui/charts";
 import { Meter, StatusDot } from "../_ui/controls";
+import { activityHref } from "../_ui/cross-links";
 import {
   failureRateTone,
   failureRateToneClass,
@@ -276,7 +277,10 @@ export default async function OverviewPage({
               <SectionTitle
                 className="mt-5"
                 trailing={
-                  <Link href="/activity" className="font-mono text-13 text-dim">
+                  <Link
+                    href={activityHref({ status: "failed" })}
+                    className="font-mono text-13 text-dim"
+                  >
                     → Activity
                   </Link>
                 }

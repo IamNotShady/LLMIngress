@@ -16,6 +16,7 @@ import {
 } from "../../_ui/format";
 import { EmptyState, PageShell } from "../../_ui/layout";
 import { readParam, type SearchParams } from "../../_ui/params";
+import { axisLabelsForWindow, readUsageWindow } from "../../_ui/usage/axis";
 import {
   DataQualityPanel,
   DistributionTable,
@@ -23,7 +24,7 @@ import {
   StatusPanel,
   TopErrorsPanel,
 } from "../../_ui/usage/panels";
-import { axisLabelsForWindow, readUsageWindow, WindowPicker } from "../../_ui/usage/window";
+import { WindowPicker } from "../../_ui/usage/window";
 
 export default async function UsagePage({
   searchParams,

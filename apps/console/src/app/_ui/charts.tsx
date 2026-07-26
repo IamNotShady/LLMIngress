@@ -47,8 +47,9 @@ export function StackedBarChart({
         ))}
       </div>
       <div className="mt-[6px] flex justify-between font-mono text-12 text-faint">
-        {axisLabels.map((label) => (
-          <span key={label}>{label}</span>
+        {axisLabels.map((label, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: a label marks a position on the axis, and two positions can read the same
+          <span key={index}>{label}</span>
         ))}
       </div>
     </>

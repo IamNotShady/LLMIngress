@@ -36,7 +36,8 @@ import { readParam, type SearchParams } from "../_ui/params";
 import { buildProviderConnections, describeConnectionHealth } from "../_ui/providers/model";
 import { PlanQuotaPanel } from "../_ui/quota-panel";
 import { GridRow } from "../_ui/table";
-import { axisLabelsForWindow, readUsageWindow, WindowPicker } from "../_ui/usage/window";
+import { axisLabelsForWindow, readUsageWindow } from "../_ui/usage/axis";
+import { WindowPicker } from "../_ui/usage/window";
 
 const BREAKDOWN_COLUMNS = "120px 1fr 58px 62px 58px";
 const KEY_COLUMNS = "120px 1fr 58px 62px 58px 44px";

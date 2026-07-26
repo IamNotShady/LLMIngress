@@ -7,18 +7,19 @@ export type ConsoleFooterProps = {
 };
 
 /**
- * One-line condensation of the same facts, for screens that have no footer.
- * The auth panels show this so the version, database and encryption state are
- * visible before anyone can sign in.
+ * One-line condensation of the same facts, for the screens that have no footer.
+ * It says the database is reachable and the encryption key is usable, which is
+ * what someone staring at a sign-in box needs to know. It does not say which
+ * postgres — a version number is a fingerprint, and this line is readable by
+ * anyone who can reach the port. The footer inside names it, after signing in.
  */
 export function consoleStatusLine({
   encryptionReady,
-  runtime,
   version,
-}: ConsoleFooterProps): string {
+}: Omit<ConsoleFooterProps, "runtime">): string {
   return [
     `LLMIngress ${version}`,
-    `postgres ${runtime.databaseServerVersion}`,
+    "postgres",
     encryptionReady ? "encryption ok" : "encryption unavailable",
   ].join(" · ");
 }

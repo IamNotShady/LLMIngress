@@ -17,19 +17,21 @@ import { ToastHost } from "../_ui/toast";
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const cookieStore = await cookies();
   const authState = await readConsoleAuthState(cookieStore.get(sessionCookieName)?.value);
-  const runtime = await getConsoleRuntimeStatus();
   const statusFacts = {
     encryptionReady: isEncryptionReady(),
-    runtime,
     version: process.env.LLMINGRESS_VERSION?.trim() || "dev",
   };
 
+  // Nothing is read from the database for a visitor who has not signed in: the
+  // sign-in line is built from process state alone.
   if (authState === "setup") {
     return <FirstRunSetup statusLine={consoleStatusLine(statusFacts)} />;
   }
   if (authState === "login") {
     return <Login statusLine={consoleStatusLine(statusFacts)} />;
   }
+
+  const runtime = await getConsoleRuntimeStatus();
 
   const [healthSummaries, failedRequestCount] = await Promise.all([
     listConsoleProviderHealthSummaries(),
@@ -52,7 +54,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       <Suspense fallback={null}>
         <ToastHost />
       </Suspense>
-      <ConsoleFooter {...statusFacts} />
+      <ConsoleFooter {...statusFacts} runtime={runtime} />
     </div>
   );
 }

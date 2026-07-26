@@ -11,7 +11,7 @@ const INPUT_CLASS =
   "block h-10 w-full box-border rounded-sm border border-btnbd bg-btnbg px-[10px] font-mono text-135 text-ink";
 const LABEL_CLASS = "block font-mono text-11 font-medium tracking-[.08em] text-dim";
 const SUBMIT_CLASS =
-  "mt-4 block h-10 w-full cursor-pointer rounded-sm bg-seg font-mono text-135 font-medium text-segfg disabled:cursor-not-allowed disabled:opacity-50";
+  "mt-6 block h-10 w-full cursor-pointer rounded-sm bg-seg font-mono text-135 font-medium text-segfg disabled:cursor-not-allowed disabled:opacity-50";
 
 function AuthFrame({ children, statusLine }: { children: ReactNode; statusLine: string }) {
   return (
@@ -22,7 +22,7 @@ function AuthFrame({ children, statusLine }: { children: ReactNode; statusLine: 
         </span>
         <span className="font-mono text-11 tracking-[.14em] text-dim">CONSOLE</span>
       </div>
-      <section className="mt-5 w-[420px] max-w-full rounded-sm border border-hair p-7">
+      <section className="mt-7 w-[420px] max-w-full rounded-sm border border-hair p-7">
         {children}
       </section>
       <p className="mt-5 font-mono text-11 text-faint">{statusLine}</p>
@@ -89,7 +89,7 @@ export function Login({ statusLine }: { statusLine: string }) {
         action="/api/auth/login"
         method="post"
         onSubmit={onSubmit}
-        className="mt-5"
+        className="mt-7"
       >
         {error ? <ErrorBanner message={error} /> : null}
         <label htmlFor="login-password" className={LABEL_CLASS}>
@@ -131,7 +131,7 @@ export function FirstRunSetup({ statusLine }: { statusLine: string }) {
         ref={formRef}
         action="/api/auth/setup"
         method="post"
-        className="mt-5"
+        className="mt-7"
         onSubmit={(event) => {
           const form = event.currentTarget;
           const password = new FormData(form).get("password");
@@ -162,8 +162,8 @@ export function FirstRunSetup({ statusLine }: { statusLine: string }) {
           aria-label="Admin password"
           className={`${INPUT_CLASS} mt-[6px]`}
         />
-        <p className="mt-1 font-mono text-[10.5px] text-faint">At least 8 characters.</p>
-        <label htmlFor="setup-password-confirmation" className={`${LABEL_CLASS} mt-4`}>
+        <p className="mt-2 font-mono text-[10.5px] text-faint">at least 8 characters</p>
+        <label htmlFor="setup-password-confirmation" className={`${LABEL_CLASS} mt-5`}>
           CONFIRM PASSWORD
         </label>
         <input
@@ -176,7 +176,7 @@ export function FirstRunSetup({ statusLine }: { statusLine: string }) {
           aria-label="Confirm admin password"
           className={`${INPUT_CLASS} mt-[6px]`}
         />
-        <p className="mt-1 font-mono text-[10.5px] text-faint">Both entries must match.</p>
+        <p className="mt-2 font-mono text-[10.5px] text-faint">both entries must match</p>
         <button type="submit" disabled={pending} className={SUBMIT_CLASS}>
           Create admin &amp; continue
         </button>

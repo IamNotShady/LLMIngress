@@ -82,21 +82,23 @@ export function IntegrationPanel({
         <div className="flex flex-col gap-[10px]">
           {active.guide.codeBlocks.map((block) => (
             <div key={block.label}>
-              {/* Same row, same label, as the one-time screen — the two are
-                  compared side by side and have to stay identical. */}
-              <div className="flex items-center gap-2">
-                <div className="font-mono text-115 font-medium uppercase tracking-[.08em] text-dim">
-                  {block.label}
-                </div>
-                <span className="ml-auto">
+              {/* Same label, same button in the same corner, as the one-time
+                  screen — the two are compared side by side. The button sits
+                  over the block and outside the <pre>, so the snippet it copies
+                  is the snippet and nothing else. */}
+              <div className="font-mono text-115 font-medium uppercase tracking-[.08em] text-dim">
+                {block.label}
+              </div>
+              <div className="relative mt-[5px]">
+                <pre className="whitespace-pre-wrap rounded-xs border border-rule bg-track py-[10px] pl-3 pr-[66px] font-mono text-12 leading-[1.65] text-ink">
+                  {block.code}
+                </pre>
+                <span className="absolute right-2 top-2">
                   <CopyButton size="row" value={block.code}>
                     Copy
                   </CopyButton>
                 </span>
               </div>
-              <pre className="mt-[5px] whitespace-pre-wrap rounded-xs border border-rule bg-track px-3 py-[10px] font-mono text-12 leading-[1.65] text-ink">
-                {block.code}
-              </pre>
             </div>
           ))}
         </div>

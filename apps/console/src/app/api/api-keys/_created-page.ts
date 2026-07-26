@@ -86,14 +86,15 @@ export function renderOneTimeApiKeyResponse(
       </header>
       <div class="split">
         <section aria-label="Secret">
-          <!-- On the label line, not inside the box: a button in there cuts off
-               the tail of the one secret this page exists to show. -->
-          <div class="blockhead">
-            <p class="label">SECRET · SHOWN ONCE</p>
+          <p class="label">SECRET · SHOWN ONCE</p>
+          <!-- A textarea rather than an input: with the button inside the box a
+               one-line field would scroll the tail of the secret out of sight,
+               and this is the only time it is ever shown. -->
+          <div class="secret codewrap">
+            <textarea id="secret" readonly rows="2" aria-label="API key secret">${escapeHtml(
+              apiKey,
+            )}</textarea>
             <button type="button" class="copy" data-copy="#secret">Copy</button>
-          </div>
-          <div class="secret">
-            <input id="secret" readonly value="${escapeHtml(apiKey)}" aria-label="API key secret" />
           </div>
           <p class="warn">Stored hashed — it cannot be shown again. Copy it before closing.</p>
         </section>
@@ -157,9 +158,9 @@ h1{margin:0;font:600 18px var(--sans)}
 .label{margin:0;font:500 11.5px var(--mono);color:var(--dim);letter-spacing:.08em}
 .label.spaced{margin-top:20px}
 .split{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;margin-top:16px;align-items:start}
-.secret{display:flex;align-items:center;gap:10px;margin-top:6px;background:var(--track);border:1px solid var(--ambbd);border-radius:3px;padding:12px 14px}
-.secret input{flex:1;min-width:0;width:100%;min-width:0;border:0;background:transparent;color:var(--ink);font:500 15px var(--mono)}
-.secret .copy{font-size:13.5px;padding:4px 10px}
+.secret{margin-top:6px;background:var(--track);border:1px solid var(--ambbd);border-radius:3px;padding:12px 14px}
+.secret textarea{display:block;width:100%;padding:0 58px 0 0;border:0;resize:none;overflow:auto;background:transparent;color:var(--ink);font:500 15px var(--mono);line-height:1.5;overflow-wrap:anywhere}
+.codewrap pre{padding-right:66px}
 .warn{margin:6px 0 0;font:400 12.5px var(--mono);color:var(--ambtx)}
 dl{display:block;margin:6px 0 0;border-top:1px solid var(--hair)}
 dl div{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--rule2);font:400 12.5px var(--mono)}
@@ -200,11 +201,14 @@ function renderGuidePanel(entry: IntegrationGuideEntry): string {
               // The key's detail renders the same label row, so an operator who
               // comes back later finds the snippet in the same shape.
               const id = `code-${escapeHtml(entry.platform)}-${index}`;
+              // The button sits over the block rather than beside its label, and
+              // outside the <pre> — inside, its own word would be copied with
+              // the snippet.
               return `<div class="blockhead"><h2>${escapeHtml(
                 block.label,
-              )}</h2><button type="button" class="copy" data-copy="#${id}">Copy</button></div><pre id="${id}">${escapeHtml(
+              )}</h2></div><div class="codewrap"><pre id="${id}">${escapeHtml(
                 block.code,
-              )}</pre>`;
+              )}</pre><button type="button" class="copy" data-copy="#${id}">Copy</button></div>`;
             })
             .join("")}
         </div>

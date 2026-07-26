@@ -22,7 +22,11 @@ export function standaloneThemeCss(): string {
   return `:root{${LIGHT_TOKENS}}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${DARK_TOKENS}}}
 :root[data-theme="dark"]{${DARK_TOKENS}}
-.copy{flex:none;cursor:pointer;white-space:nowrap;border:1px solid var(--btnbd);background:var(--btnbg);color:var(--ink);border-radius:3px;font:500 12px var(--mono);padding:2px 8px}`;
+.copy{flex:none;cursor:pointer;white-space:nowrap;border:1px solid var(--btnbd);background:var(--btnbg);color:var(--ink);border-radius:3px;font:500 12px var(--mono);padding:2px 8px}
+/* The button belongs to the box it takes the value from, in its corner. Each
+   page pads its own block on the right so no line runs under it. */
+.codewrap{position:relative}
+.codewrap .copy{position:absolute;top:8px;right:8px}`;
 }
 
 /**

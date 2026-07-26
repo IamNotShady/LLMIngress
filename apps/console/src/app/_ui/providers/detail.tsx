@@ -23,6 +23,7 @@ import {
 } from "../format";
 import { DetailRow, SectionTitle } from "../layout";
 import { formatModelContextTokens } from "../model-capability-format";
+import { MutationForm } from "../mutation-form";
 import { buildHref, readIntParam, readParam, type SearchParams } from "../params";
 import { PlanQuotaPanel } from "../quota-panel";
 import { formatRange, GridRow, Pagination } from "../table";
@@ -79,10 +80,13 @@ export function ProviderDetail({
           {health.text}
         </span>
         <div className="ml-auto flex items-center gap-2">
-          <form action="/api/provider-model-refresh" method="post">
+          <MutationForm
+            action="/api/provider-model-refresh"
+            fallbackError="The model refresh could not be queued."
+          >
             <input type="hidden" name="providerId" value={provider.id} />
             <ActionButton>Refresh models</ActionButton>
-          </form>
+          </MutationForm>
           <ActionLink href={href({ dialog: "edit" })}>Edit</ActionLink>
           <ActionLink href={href({ dialog: provider.enabled ? "disable" : "enable" })}>
             {provider.enabled ? "Disable" : "Enable"}
@@ -107,10 +111,14 @@ export function ProviderDetail({
               {formatRelative(refreshStatus.lastSucceededAt, now)}.
             </div>
           </div>
-          <form action="/api/provider-model-refresh" method="post" className="flex-none">
+          <MutationForm
+            action="/api/provider-model-refresh"
+            className="flex-none"
+            fallbackError="The model refresh could not be queued."
+          >
             <input type="hidden" name="providerId" value={provider.id} />
             <ActionButton className="bg-bg">Retry now</ActionButton>
-          </form>
+          </MutationForm>
         </div>
       ) : null}
 
@@ -182,11 +190,14 @@ export function ProviderDetail({
                   {connection.enabled ? "enabled" : "disabled"}
                 </span>
                 <span className="flex items-center justify-end gap-[6px]">
-                  <form action="/api/provider-health-probes" method="post">
+                  <MutationForm
+                    action="/api/provider-health-probes"
+                    fallbackError="The re-check could not be queued."
+                  >
                     <input type="hidden" name="providerId" value={provider.id} />
                     <input type="hidden" name="providerConnectionId" value={connection.id} />
                     <RowActionButton>Re-check</RowActionButton>
-                  </form>
+                  </MutationForm>
                   <ActionLink
                     size="row"
                     href={href({ providerKeyDialog: provider.id, connection: connection.id })}

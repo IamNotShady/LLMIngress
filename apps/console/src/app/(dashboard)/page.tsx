@@ -28,6 +28,7 @@ import {
   formatRelative,
 } from "../_ui/format";
 import { EmptyState, PageShell, SectionTitle } from "../_ui/layout";
+import { MutationForm } from "../_ui/mutation-form";
 import { AutoRefresh } from "../_ui/overview/auto-refresh";
 import { GettingStarted } from "../_ui/overview/getting-started";
 import { readParam, type SearchParams } from "../_ui/params";
@@ -232,7 +233,10 @@ export default async function OverviewPage({
                               {view.text}
                             </div>
                           </div>
-                          <form action="/api/provider-health-probes" method="post">
+                          <MutationForm
+                            action="/api/provider-health-probes"
+                            fallbackError="The re-check could not be queued."
+                          >
                             <input type="hidden" name="providerId" value={provider.id} />
                             <input
                               type="hidden"
@@ -245,7 +249,7 @@ export default async function OverviewPage({
                             >
                               Re-check
                             </button>
-                          </form>
+                          </MutationForm>
                         </div>
                       );
                     })}

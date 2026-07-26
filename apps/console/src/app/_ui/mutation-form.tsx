@@ -75,11 +75,15 @@ export function MutationForm({
         redirect: "follow",
       });
       if (response.ok || response.redirected) {
-        // Where to land, in order of authority: what the caller asked for, then
-        // where the action redirected to. Several actions redirect somewhere
-        // that carries state the operator now needs — an authorization URL, the
-        // key they just saved — and refreshing in place would lose it.
-        const landing = onSuccessHref ?? redirectTarget(response);
+        // Where to land, in order of authority: what the caller asked for, what
+        // the action's answer names, then where it redirected to. Several
+        // actions land somewhere carrying state the operator now needs — an
+        // authorization url, a toast, the key they just saved — and refreshing
+        // in place would lose it.
+        const answer = response.redirected
+          ? null
+          : ((await response.json().catch(() => null)) as { redirectTo?: string } | null);
+        const landing = onSuccessHref ?? answer?.redirectTo ?? redirectTarget(response);
         if (landing) {
           router.push(landing);
         }

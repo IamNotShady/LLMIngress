@@ -10,11 +10,11 @@ import {
   buildPlaygroundChatRequest,
   buildPlaygroundMessagesRequest,
   buildPlaygroundResponsesRequest,
+  createPlaygroundStreamDecoder,
   formatPlaygroundFetchError,
   type PlaygroundProtocol,
   readOptionalPlaygroundNumber,
   readPlaygroundResponseText,
-  readPlaygroundStreamResponseText,
   retryPlaygroundRequestDetail,
 } from "./helpers";
 
@@ -75,6 +75,8 @@ export function Playground({
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [stream, setStream] = useState("true");
+  /** The answer so far, while it is still being written. */
+  const [streamText, setStreamText] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("You are a concise coding assistant.");
   const [temperature, setTemperature] = useState("0.7");
   const [toast, setToast] = useState<string | null>(null);
@@ -153,6 +155,7 @@ export function Playground({
     setSending(true);
     setStatus(null);
     setResult(null);
+    setStreamText("");
     try {
       const input = {
         maxTokens: readOptionalPlaygroundNumber(maxTokens),
@@ -180,15 +183,17 @@ export function Playground({
       // The gateway stamps its own id; x-request-id may be the provider's and
       // would look up nothing in Activity.
       const requestId = response.headers.get("x-llmingress-request-id");
-      const raw = await response.text();
+      // A streamed answer is read as it arrives and shown while it is still
+      // being written — buffering the whole body first is the same request with
+      // none of the point of streaming it.
+      const { raw, streamed } =
+        input.stream && response.body
+          ? await readStream(response.body, setStreamText)
+          : { raw: await response.text(), streamed: "" };
       // A stream request can still come back as one JSON body — an error page
       // or a provider that ignored the flag — so the reader falls through
       // rather than showing an empty response.
-      const streamed = input.stream ? readPlaygroundStreamResponseText(raw) : "";
-      const responseText =
-        streamed && streamed !== "No response text"
-          ? streamed
-          : readPlaygroundResponseText(safeParse(raw));
+      const responseText = streamed.trim() || readPlaygroundResponseText(safeParse(raw));
 
       // The gateway records the request asynchronously, so the trace is polled
       // rather than assumed to exist the moment the response lands.
@@ -351,7 +356,25 @@ export function Playground({
       </div>
 
       <div className="py-[18px] pl-6">
-        {result === null ? (
+        {result === null && streamText ? (
+          // The answer while it is still being written. The trace below it is
+          // not here yet: the gateway records the request once it finishes.
+          <>
+            <div className="flex items-center gap-3 font-mono text-13">
+              <span className="font-medium text-dim">streaming…</span>
+              <span className="text-dim">
+                {base}
+                {ENDPOINT_PATH[protocol]}
+              </span>
+            </div>
+            <pre
+              data-testid="playground-stream"
+              className="mt-3 whitespace-pre-wrap rounded-xs border border-rule bg-track px-4 py-[14px] font-mono text-14 leading-[1.65] text-ink"
+            >
+              {streamText}
+            </pre>
+          </>
+        ) : result === null ? (
           <p className="font-mono text-13 leading-[1.7] text-dim">
             No request sent yet. The response body and the route it took appear here — the same
             request also shows up in Activity.
@@ -442,6 +465,49 @@ export function Playground({
       ) : null}
     </div>
   );
+}
+
+/**
+ * Reads the body to the end, handing each decoded piece to the page as it is
+ * decoded, and keeps the raw text so a body that turned out not to be a stream
+ * can still be parsed as one JSON answer.
+ */
+async function readStream(
+  body: ReadableStream<Uint8Array>,
+  onText: (text: string) => void,
+): Promise<{ raw: string; streamed: string }> {
+  const reader = body.getReader();
+  const bytes = new TextDecoder();
+  const frames = createPlaygroundStreamDecoder();
+  let raw = "";
+  let streamed = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    const chunk = bytes.decode(value, { stream: true });
+    raw += chunk;
+    const text = frames.push(chunk);
+    if (text) {
+      streamed += text;
+      onText(streamed);
+    }
+  }
+
+  // Whatever the decoders were still holding: a multi-byte character split
+  // across chunks, and a last frame that never got its newline.
+  const trailing = bytes.decode();
+  if (trailing) {
+    raw += trailing;
+    streamed += frames.push(trailing);
+  }
+  streamed += frames.flush();
+  if (streamed) {
+    onText(streamed);
+  }
+  return { raw, streamed };
 }
 
 function virtualModelHint(model: PlaygroundVirtualModel | undefined): string {

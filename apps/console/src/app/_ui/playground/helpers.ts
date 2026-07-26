@@ -173,28 +173,50 @@ export function readPlaygroundResponseText(body: unknown): string {
   return "No response text";
 }
 
-export function readPlaygroundStreamResponseText(body: string): string {
-  const chunks: string[] = [];
-  for (const line of body.split(/\r?\n/)) {
+/**
+ * Turns the bytes of an event stream into answer text as they arrive.
+ *
+ * A network chunk ends wherever the network ended it, which is usually the
+ * middle of a frame: the tail is held back until its newline turns up, because
+ * printing a half-parsed frame would put JSON on screen instead of the answer.
+ */
+export function createPlaygroundStreamDecoder(): {
+  flush: () => string;
+  push: (chunk: string) => string;
+} {
+  let pending = "";
+
+  const decodeLine = (line: string): string => {
     const trimmedLine = line.trim();
     if (!trimmedLine.startsWith("data:")) {
-      continue;
+      return "";
     }
     const data = trimmedLine.slice("data:".length).trim();
     if (!data || data === "[DONE]") {
-      continue;
+      return "";
     }
     const payload = readJsonRecord(data);
-    if (!payload) {
-      continue;
-    }
-    const text = readStreamPayloadText(payload);
-    if (text) {
-      chunks.push(text);
-    }
-  }
+    return payload ? (readStreamPayloadText(payload) ?? "") : "";
+  };
 
-  const text = chunks.join("").trim();
+  return {
+    flush() {
+      const rest = pending;
+      pending = "";
+      return decodeLine(rest);
+    },
+    push(chunk: string) {
+      pending += chunk;
+      const lines = pending.split(/\r?\n/);
+      pending = lines.pop() ?? "";
+      return lines.map(decodeLine).join("");
+    },
+  };
+}
+
+export function readPlaygroundStreamResponseText(body: string): string {
+  const decoder = createPlaygroundStreamDecoder();
+  const text = `${decoder.push(body)}${decoder.flush()}`.trim();
   return text || "No response text";
 }
 

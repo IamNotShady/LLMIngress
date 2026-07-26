@@ -43,6 +43,21 @@ const BREAKDOWN_COLUMNS = "120px 1fr 58px 62px 58px";
 const KEY_COLUMNS = "120px 1fr 58px 62px 58px 44px";
 const FAILURE_COLUMNS = "54px 1fr 118px";
 
+/**
+ * Every list on this page is capped. The Overview is read at a glance and its
+ * height is part of that: a console with forty connections or eighty keys would
+ * otherwise push the panel below it off the screen entirely. Each capped list
+ * says how many it is not showing and links to the page that shows them all.
+ */
+const CONNECTION_HEALTH_ROWS = 4;
+const PLAN_QUOTA_ROWS = 3;
+const BREAKDOWN_ROWS = 8;
+
+/** Worst first — the panel exists for what is not serving. */
+const HEALTH_TONE_ORDER = { red: 0, amber: 1, dim: 2, green: 3 } as const;
+
+const healthRank = (tone: keyof typeof HEALTH_TONE_ORDER) => HEALTH_TONE_ORDER[tone];
+
 export default async function OverviewPage({
   searchParams,
 }: {
@@ -99,16 +114,25 @@ export default async function OverviewPage({
     },
   ];
 
-  const unhealthy = connections.filter(
-    ({ connection }) => describeConnectionHealth(connection).tone === "red",
-  );
+  const connectionViews = connections.map(({ connection, provider }) => ({
+    connection,
+    provider,
+    view: describeConnectionHealth(connection),
+  }));
   // "healthy" has to mean healthy: a connection still being checked, or one
   // that is switched off, is neither failing nor serving, and folding it into
   // this count would overstate what is actually carrying traffic.
-  const healthyCount = connections.filter(
-    ({ connection }) => describeConnectionHealth(connection).tone === "green",
-  ).length;
-  const pendingCount = connections.length - unhealthy.length - healthyCount;
+  const healthyCount = connectionViews.filter(({ view }) => view.tone === "green").length;
+  const unhealthyCount = connectionViews.filter(({ view }) => view.tone === "red").length;
+  const pendingCount = connectionViews.length - unhealthyCount - healthyCount;
+  // Worst first: this panel exists to surface what is not serving, and a long
+  // list of working connections would push it off the fold.
+  const orderedConnections = [...connectionViews].sort(
+    (left, right) => healthRank(left.view.tone) - healthRank(right.view.tone),
+  );
+  const shownConnections = orderedConnections.slice(0, CONNECTION_HEALTH_ROWS);
+  const hiddenConnections = orderedConnections.slice(CONNECTION_HEALTH_ROWS);
+  const hiddenHealthyCount = hiddenConnections.filter(({ view }) => view.tone === "green").length;
 
   return (
     <PageShell label="Overview">
@@ -179,39 +203,36 @@ export default async function OverviewPage({
             </div>
           </div>
 
-          <div className="grid grid-cols-[minmax(0,1fr)_400px] overflow-x-auto">
-            <div className="border-r border-rule py-5 pr-6">
-              <div className="flex items-baseline">
-                <span className="font-sans text-155 font-semibold text-ink">
-                  Requests, {window === "24h" ? "hourly" : "daily"}
-                </span>
-                <ChartLegend series={requestSeries} />
-              </div>
-              <StackedBarChart
-                axisLabels={axisLabelsForWindow(window, usage.trend, now)}
-                height={168}
-                series={requestSeries}
-              />
-
-              <div className="mt-6 grid grid-cols-2 gap-x-6">
-                <Breakdown
-                  columns={BREAKDOWN_COLUMNS}
-                  rows={usage.providerBreakdowns}
-                  title="Usage by provider"
-                  unit="PROVIDER"
-                />
-                <Breakdown
-                  columns={KEY_COLUMNS}
-                  rows={usage.apiKeyBreakdowns}
-                  showFails
-                  title="Usage by API key"
-                  unit="API KEY"
-                />
-              </div>
+          {/* The chart is the widest object on the page and takes the whole
+              width; the panels below are read as two bands across it. */}
+          <div className="py-5">
+            <div className="flex items-baseline">
+              <span className="font-sans text-155 font-semibold text-ink">
+                Requests, {window === "24h" ? "hourly" : "daily"}
+              </span>
+              <ChartLegend series={requestSeries} />
             </div>
+            <StackedBarChart
+              axisLabels={axisLabelsForWindow(window, usage.trend, now)}
+              height={168}
+              series={requestSeries}
+            />
+          </div>
 
-            <div className="py-5 pl-6">
-              <SectionTitle>Connection health</SectionTitle>
+          <div className="grid grid-cols-3 items-start gap-x-8 overflow-x-auto border-t border-hair py-5">
+            {/* Each capped panel is addressable: what it draws and what it says
+                it is leaving out is a contract, and the names repeat elsewhere
+                on the page. */}
+            <div data-testid="overview-connection-health">
+              <SectionTitle
+                trailing={
+                  <Link href="/providers" className="font-mono text-13 text-dim">
+                    → Providers
+                  </Link>
+                }
+              >
+                Connection health
+              </SectionTitle>
               <div className="mt-2 border-t border-hair">
                 {connections.length === 0 ? (
                   <p className="py-3 font-mono text-13 text-dim">
@@ -219,22 +240,27 @@ export default async function OverviewPage({
                   </p>
                 ) : (
                   <>
-                    {unhealthy.map(({ connection, provider }) => {
-                      const view = describeConnectionHealth(connection);
-                      return (
-                        <div
-                          key={connection.id}
-                          className="flex items-center gap-[9px] border-b border-rule2 py-2"
-                        >
-                          <StatusDot tone="red" />
-                          <div className="min-w-0 flex-1">
-                            <div className="font-mono text-135 text-ink cell-clip">
-                              {provider.displayName} · {connection.label}
-                            </div>
+                    {shownConnections.map(({ connection, provider, view }) => (
+                      <div
+                        key={connection.id}
+                        className="flex items-center gap-[9px] border-b border-rule2 py-2"
+                      >
+                        <StatusDot tone={view.tone} />
+                        <div className="min-w-0 flex-1">
+                          <div
+                            className={`font-mono text-135 cell-clip ${
+                              view.tone === "green" ? "text-dim" : "text-ink"
+                            }`}
+                          >
+                            {provider.displayName} · {connection.label}
+                          </div>
+                          {view.tone === "red" ? (
                             <div className="mt-px font-mono text-125 text-redtx cell-clip">
                               {view.text}
                             </div>
-                          </div>
+                          ) : null}
+                        </div>
+                        {view.tone === "red" ? (
                           <MutationForm
                             action="/api/provider-health-probes"
                             fallbackError="The re-check could not be queued."
@@ -252,31 +278,57 @@ export default async function OverviewPage({
                               Re-check
                             </button>
                           </MutationForm>
-                        </div>
-                      );
-                    })}
-                    {healthyCount > 0 ? (
+                        ) : (
+                          <span className="flex-none font-mono text-125 text-faint tabnum">
+                            {view.tone === "green"
+                              ? connection.health?.latestProbeAt
+                                ? formatClock(connection.health.latestProbeAt)
+                                : "healthy"
+                              : view.text}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                    {hiddenConnections.length > 0 ? (
                       <div className="flex items-center gap-[9px] border-b border-rule2 py-2">
-                        <StatusDot tone="green" />
+                        <StatusDot
+                          tone={hiddenHealthyCount === hiddenConnections.length ? "green" : "dim"}
+                        />
                         <span className="flex-1 font-mono text-135 text-dim">
-                          {formatCount(healthyCount)} healthy connections
-                          {pendingCount > 0
-                            ? ` · ${formatCount(pendingCount)} not serving yet`
-                            : ""}
+                          {hiddenHealthyCount === hiddenConnections.length
+                            ? `${formatCount(hiddenHealthyCount)} more healthy connections`
+                            : `${formatCount(hiddenConnections.length)} more connections`}
                         </span>
-                        <Link href="/providers" className="font-mono text-125 text-faint">
-                          → Providers
-                        </Link>
                       </div>
                     ) : null}
                   </>
                 )}
               </div>
+              {connections.length > 0 ? (
+                <p className="mt-2 font-mono text-12 leading-[1.6] text-faint">
+                  {formatCount(healthyCount)} serving
+                  {unhealthyCount > 0 ? ` · ${formatCount(unhealthyCount)} failing` : ""}
+                  {pendingCount > 0 ? ` · ${formatCount(pendingCount)} not serving yet` : ""}
+                </p>
+              ) : null}
+            </div>
 
-              <PlanQuotaPanel now={now} summaries={quotas} />
+            <PlanQuotaPanel
+              limit={PLAN_QUOTA_ROWS}
+              testId="overview-plan-quota"
+              moreHref="/providers"
+              now={now}
+              summaries={quotas}
+              titleClassName=""
+              trailing={
+                <Link href="/providers" className="font-mono text-13 text-dim">
+                  → Providers
+                </Link>
+              }
+            />
 
+            <div data-testid="overview-recent-failures">
               <SectionTitle
-                className="mt-5"
                 trailing={
                   <Link
                     href={activityHref({ status: "failed" })}
@@ -315,6 +367,26 @@ export default async function OverviewPage({
               </p>
             </div>
           </div>
+
+          <div className="grid grid-cols-2 items-start gap-x-8 overflow-x-auto border-t border-hair py-5">
+            <Breakdown
+              columns={BREAKDOWN_COLUMNS}
+              limit={BREAKDOWN_ROWS}
+              rows={usage.providerBreakdowns}
+              testId="overview-usage-providers"
+              title="Usage by provider"
+              unit="PROVIDER"
+            />
+            <Breakdown
+              columns={KEY_COLUMNS}
+              limit={BREAKDOWN_ROWS}
+              rows={usage.apiKeyBreakdowns}
+              showFails
+              testId="overview-usage-api-keys"
+              title="Usage by API key"
+              unit="API KEY"
+            />
+          </div>
         </>
       )}
     </PageShell>
@@ -345,12 +417,16 @@ function Kpi({
 
 function Breakdown({
   columns,
+  limit,
   rows,
   showFails = false,
+  testId,
   title,
   unit,
 }: {
   columns: string;
+  /** Rows to draw; the rest are counted and left to the Usage page. */
+  limit: number;
   rows: Array<{
     failureCount: number;
     id: string;
@@ -360,12 +436,16 @@ function Breakdown({
     totalTokens: number;
   }>;
   showFails?: boolean;
+  testId: string;
   title: string;
   unit: string;
 }) {
+  // The share is a share of everything, not of what fits on screen.
   const total = rows.reduce((sum, row) => sum + row.requestCount, 0);
+  const shown = rows.slice(0, limit);
+  const hiddenCount = rows.length - shown.length;
   return (
-    <div>
+    <div data-testid={testId}>
       <SectionTitle
         trailing={
           <Link href="/usage" className="font-mono text-13 text-dim">
@@ -384,7 +464,7 @@ function Breakdown({
           <span className="text-right">COST</span>
           {showFails ? <span className="text-right">FAILS</span> : null}
         </GridRow>
-        {rows.map((row) => (
+        {shown.map((row) => (
           <GridRow key={row.id} columns={columns} gap={8}>
             <span className="font-medium cell-clip">{row.label}</span>
             <Meter height={8} ratio={total > 0 ? row.requestCount / total : 0} />
@@ -397,6 +477,12 @@ function Breakdown({
           </GridRow>
         ))}
       </div>
+      {hiddenCount > 0 ? (
+        <p className="mt-2 font-mono text-12 text-faint">
+          {formatCount(hiddenCount)} more in Usage — the busiest {formatCount(shown.length)} are
+          here.
+        </p>
+      ) : null}
     </div>
   );
 }

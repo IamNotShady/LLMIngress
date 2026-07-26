@@ -1,5 +1,7 @@
 import type { ConsoleProviderQuotaSummary } from "@llmingress/db/console-provider-quota";
 import { isWindowEntry } from "@llmingress/domain/quota";
+import Link from "next/link";
+import type { ReactNode } from "react";
 import { Meter } from "./controls";
 import { SectionTitle } from "./layout";
 import {
@@ -17,13 +19,25 @@ import {
  * provider documented not to expose quota is not a failure.
  */
 export function PlanQuotaPanel({
+  limit,
+  moreHref,
   now,
   summaries,
+  testId,
   title = "Plan quota",
+  titleClassName = "mt-5",
+  trailing,
 }: {
+  /** Plans to draw. Unset lists them all, which is what a Provider's own page wants. */
+  limit?: number;
+  /** Where the plans this panel is not showing can be read. */
+  moreHref?: string;
   now: Date;
   summaries: ConsoleProviderQuotaSummary[];
+  testId?: string;
   title?: string;
+  titleClassName?: string;
+  trailing?: ReactNode;
 }) {
   if (summaries.length === 0) {
     return null;
@@ -37,10 +51,20 @@ export function PlanQuotaPanel({
     view: buildProviderQuotaConnectionView({ referenceTimeMs, sharedBalanceKeys, summary }),
     windowEntries: summary.entries.filter(isWindowEntry),
   }));
+  // Closest to its limit first: a capped list has to spend its rows on the
+  // plans that are about to stop serving, not on the ones with room to spare.
+  const ranked =
+    limit === undefined
+      ? rows
+      : [...rows].sort((left, right) => peakUtilization(right) - peakUtilization(left));
+  const shown = limit === undefined ? ranked : ranked.slice(0, limit);
+  const hiddenCount = ranked.length - shown.length;
 
   return (
-    <div>
-      <SectionTitle className="mt-5">{title}</SectionTitle>
+    <div data-testid={testId}>
+      <SectionTitle className={titleClassName} trailing={trailing}>
+        {title}
+      </SectionTitle>
       <div className="mt-2 border-t border-hair">
         {shared.map((balance) => (
           <div key={balance.key} className="border-b border-rule2 py-[9px]">
@@ -53,7 +77,7 @@ export function PlanQuotaPanel({
           </div>
         ))}
 
-        {rows.map(({ summary, view, windowEntries }) => (
+        {shown.map(({ summary, view, windowEntries }) => (
           <div key={summary.id} className="border-b border-rule2 py-[9px]">
             <div className="flex justify-between gap-3 font-mono text-13 text-ink">
               <span className="cell-clip">
@@ -115,7 +139,25 @@ export function PlanQuotaPanel({
             ) : null}
           </div>
         ))}
+
+        {hiddenCount > 0 ? (
+          <div className="flex items-center gap-3 border-b border-rule2 py-[9px] font-mono text-13 text-dim">
+            <span className="min-w-0 flex-1 cell-clip">
+              {hiddenCount} more {hiddenCount === 1 ? "plan" : "plans"} with more room
+            </span>
+            {moreHref ? (
+              <Link href={moreHref} className="flex-none text-faint">
+                →
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );
+}
+
+/** How close a plan is to its ceiling; a plan without windows has no answer. */
+function peakUtilization(row: { windowEntries: Array<{ utilization: number }> }): number {
+  return row.windowEntries.reduce((peak, entry) => Math.max(peak, entry.utilization), -1);
 }

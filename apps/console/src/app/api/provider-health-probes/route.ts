@@ -24,16 +24,19 @@ export const POST = withConsoleAuth(async (request) => {
         { status: 409 },
       );
     }
-    // Both callers land in the same place with the same words: a native post
-    // follows the redirect, and a fetch is told where to go so it can navigate
-    // in the client rather than reloading the page.
+    // A queued probe changes nothing the operator is looking at, so a fetch is
+    // answered with the words to show and stays where it is. A post without
+    // JavaScript has nowhere to put a message but the query string.
     const landing = `/providers?selected=${encodeURIComponent(providerId)}&toast=${encodeURIComponent("Connection re-check queued")}&toastMeta=${encodeURIComponent("Health updates once the probe returns — nothing about the credential changed.")}`;
     if (request.headers.get("accept")?.includes("application/json")) {
       return NextResponse.json({
         jobId: result.jobId,
         ok: true,
-        redirectTo: landing,
         reused: result.reused,
+        toast: {
+          message: "Connection re-check queued",
+          meta: "Health updates once the probe returns — nothing about the credential changed.",
+        },
       });
     }
     return NextResponse.redirect(new URL(landing, request.url), 303);

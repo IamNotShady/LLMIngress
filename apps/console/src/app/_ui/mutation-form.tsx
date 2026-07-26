@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { type FormEvent, type ReactNode, useState } from "react";
+import { announceToast, type ConsoleToast } from "./toast";
 
 /**
  * Posts a console action and keeps its failure on screen. A plain form post
@@ -75,14 +76,19 @@ export function MutationForm({
         redirect: "follow",
       });
       if (response.ok || response.redirected) {
-        // Where to land, in order of authority: what the caller asked for, what
-        // the action's answer names, then where it redirected to. Several
-        // actions land somewhere carrying state the operator now needs — an
-        // authorization url, a toast, the key they just saved — and refreshing
-        // in place would lose it.
         const answer = response.redirected
           ? null
-          : ((await response.json().catch(() => null)) as { redirectTo?: string } | null);
+          : ((await response.json().catch(() => null)) as {
+              redirectTo?: string;
+              toast?: ConsoleToast;
+            } | null);
+        if (answer?.toast) {
+          announceToast(answer.toast);
+        }
+        // Where to land, in order of authority: what the caller asked for, what
+        // the action's answer names, then where it redirected to. Actions that
+        // only report — a queued probe, a refresh — name nothing, and the URL
+        // the operator is looking at stays exactly as it was.
         const landing = onSuccessHref ?? answer?.redirectTo ?? redirectTarget(response);
         if (landing) {
           router.push(landing);

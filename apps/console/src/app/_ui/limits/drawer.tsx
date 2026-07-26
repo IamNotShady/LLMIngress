@@ -94,6 +94,7 @@ export function LimitsDrawer({
         action="/api/api-key-limits"
         fallbackError="The rules could not be saved."
         invalidFieldOnError="budgetUsd"
+        onSuccessHref={buildHref("/limits", params, { dialog: null })}
       >
         <input type="hidden" name="action" value="saveLimitRules" />
         <input type="hidden" name="apiKeyId" value={apiKey.id} />

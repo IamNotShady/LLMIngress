@@ -138,7 +138,11 @@ function ApiKeyEditorDialog({
       }
       width={editing ? 720 : 900}
     >
-      <ApiKeyEditorForm editing={Boolean(editing)} formError={readParam(params, "formError")}>
+      <ApiKeyEditorForm
+        closeHref={closeHref}
+        editing={Boolean(editing)}
+        formError={readParam(params, "formError")}
+      >
         <input type="hidden" name="action" value={editing ? "saveAll" : "create"} />
         {apiKey ? <input type="hidden" name="id" value={apiKey.id} /> : null}
         {selectedGrantIds.map((id) => (

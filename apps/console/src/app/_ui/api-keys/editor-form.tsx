@@ -15,10 +15,13 @@ import { MutationForm } from "../mutation-form";
  */
 export function ApiKeyEditorForm({
   children,
+  closeHref,
   editing,
   formError,
 }: {
   children: ReactNode;
+  /** Where a save lands: the list as the operator left it, dialog closed. */
+  closeHref: string;
   editing: boolean;
   /** A refused creation comes back through the URL rather than the response. */
   formError?: string;
@@ -43,6 +46,7 @@ export function ApiKeyEditorForm({
       action="/api/api-keys"
       fallbackError="The key could not be saved."
       invalidFieldOnError="name"
+      onSuccessHref={closeHref}
     >
       {children}
     </MutationForm>

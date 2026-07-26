@@ -287,6 +287,7 @@ function EditProviderDialog({
         action="/api/providers"
         fallbackError="The provider could not be saved."
         invalidFieldOnError="baseUrl"
+        onSuccessHref={closeHref}
       >
         <input type="hidden" name="action" value="update" />
         <input type="hidden" name="id" value={provider.id} />
@@ -602,6 +603,7 @@ function ApiKeyForm({
       action="/api/provider-keys"
       fallbackError="The connection could not be saved."
       invalidFieldOnError="providerApiKey"
+      onSuccessHref={closeHref}
     >
       <input type="hidden" name="providerId" value={provider.id} />
       {editing ? <input type="hidden" name="providerApiKeyId" value={editing.id} /> : null}
@@ -710,6 +712,7 @@ function LocalEndpointForm({
       action="/api/providers"
       fallbackError="The endpoint could not be saved."
       invalidFieldOnError="baseUrl"
+      onSuccessHref={closeHref}
     >
       <input type="hidden" name="action" value="update" />
       <input type="hidden" name="id" value={provider.id} />
@@ -896,6 +899,7 @@ function SubscriptionForm({
       fallbackError={
         saving ? "The connection could not be saved." : "Authorization could not be started."
       }
+      onSuccessHref={saving ? closeHref : undefined}
     >
       <input type="hidden" name="action" value={saving ? "update" : "start"} />
       {editing ? (

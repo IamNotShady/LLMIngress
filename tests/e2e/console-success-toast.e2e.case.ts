@@ -59,11 +59,15 @@ test("an idempotent action reports through a toast that clears itself", async ({
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 800 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?selected=${providerId}`);
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&modelPageSize=50`);
+        const before = page.url();
 
         await page.getByRole("button", { name: "Re-check" }).first().click();
         const toast = page.getByRole("status");
         await expect(toast).toBeVisible();
+        // Reporting is not navigating: the selection, the filters and the
+        // scroll position the operator left behind are all still theirs.
+        expect(page.url()).toBe(before);
         await expect(toast).toContainText("Connection re-check queued");
         // It says what did and did not happen: a queued probe is not a result,
         // and nothing about the stored credential changed.

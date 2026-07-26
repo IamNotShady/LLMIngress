@@ -19,6 +19,7 @@ import {
  * provider documented not to expose quota is not a failure.
  */
 export function PlanQuotaPanel({
+  bodyClassName = "",
   limit,
   moreHref,
   now,
@@ -28,6 +29,8 @@ export function PlanQuotaPanel({
   titleClassName = "mt-5",
   trailing,
 }: {
+  /** Height and overflow for the list itself, where a band aligns its panels. */
+  bodyClassName?: string;
   /** Plans to draw. Unset lists them all, which is what a Provider's own page wants. */
   limit?: number;
   /** Where the plans this panel is not showing can be read. */
@@ -65,7 +68,7 @@ export function PlanQuotaPanel({
       <SectionTitle className={titleClassName} trailing={trailing}>
         {title}
       </SectionTitle>
-      <div className="mt-2 border-t border-hair">
+      <div className={`mt-2 border-t border-hair ${bodyClassName}`}>
         {shared.map((balance) => (
           <div key={balance.key} className="border-b border-rule2 py-[9px]">
             <div className="flex justify-between gap-3 font-mono text-13 text-ink">
@@ -139,20 +142,21 @@ export function PlanQuotaPanel({
             ) : null}
           </div>
         ))}
-
-        {hiddenCount > 0 ? (
-          <div className="flex items-center gap-3 border-b border-rule2 py-[9px] font-mono text-13 text-dim">
-            <span className="min-w-0 flex-1 cell-clip">
-              {hiddenCount} more {hiddenCount === 1 ? "plan" : "plans"} with more room
-            </span>
-            {moreHref ? (
-              <Link href={moreHref} className="flex-none text-faint">
-                →
-              </Link>
-            ) : null}
-          </div>
-        ) : null}
       </div>
+      {/* Below the list, not inside it: the panels in a band are the same
+          height, and what a list leaves out is a note about the list. */}
+      {hiddenCount > 0 ? (
+        <p className="mt-2 flex items-center gap-2 font-mono text-12 text-faint">
+          <span className="min-w-0 cell-clip">
+            {hiddenCount} more {hiddenCount === 1 ? "plan" : "plans"} with more room
+          </span>
+          {moreHref ? (
+            <Link href={moreHref} className="flex-none">
+              →
+            </Link>
+          ) : null}
+        </p>
+      ) : null}
     </div>
   );
 }

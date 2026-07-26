@@ -50,8 +50,17 @@ const FAILURE_COLUMNS = "54px 1fr 118px";
  * says how many it is not showing and links to the page that shows them all.
  */
 const CONNECTION_HEALTH_ROWS = 4;
-const PLAN_QUOTA_ROWS = 3;
+const PLAN_QUOTA_ROWS = 2;
 const BREAKDOWN_ROWS = 8;
+
+/**
+ * The three panels in the middle band are one row of the page, so they end
+ * where each other ends: a quota panel that ran two rows taller than the two
+ * beside it pushed the usage tables below the fold on its own. The caps keep
+ * the content inside this, and anything unusual (a plan reporting several
+ * windows) scrolls in place rather than growing the band.
+ */
+const BAND_BODY_HEIGHT = "h-[178px] overflow-y-auto";
 
 /** Worst first — the panel exists for what is not serving. */
 const HEALTH_TONE_ORDER = { red: 0, amber: 1, dim: 2, green: 3 } as const;
@@ -233,7 +242,7 @@ export default async function OverviewPage({
               >
                 Connection health
               </SectionTitle>
-              <div className="mt-2 border-t border-hair">
+              <div className={`mt-2 border-t border-hair ${BAND_BODY_HEIGHT}`}>
                 {connections.length === 0 ? (
                   <p className="py-3 font-mono text-13 text-dim">
                     No connection yet — no provider can serve traffic.
@@ -314,6 +323,7 @@ export default async function OverviewPage({
             </div>
 
             <PlanQuotaPanel
+              bodyClassName={BAND_BODY_HEIGHT}
               limit={PLAN_QUOTA_ROWS}
               testId="overview-plan-quota"
               moreHref="/providers"
@@ -340,7 +350,7 @@ export default async function OverviewPage({
               >
                 Recent failures
               </SectionTitle>
-              <div className="mt-2 border-t border-hair">
+              <div className={`mt-2 border-t border-hair ${BAND_BODY_HEIGHT}`}>
                 {recentFailures.length === 0 ? (
                   <p className="py-3 font-mono text-13 text-dim">
                     No failed request in the retention window.

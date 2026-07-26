@@ -18,7 +18,7 @@ const PROVIDER_COUNT = 9;
 const API_KEY_COUNT = 11;
 
 const CONNECTION_HEALTH_ROWS = 4;
-const PLAN_QUOTA_ROWS = 3;
+const PLAN_QUOTA_ROWS = 2;
 const BREAKDOWN_ROWS = 8;
 const RECENT_FAILURE_ROWS = 5;
 
@@ -170,8 +170,8 @@ test("the Overview caps every list it draws, and says what it is not showing", a
         await expect(
           quota.getByText(`${PROVIDER_COUNT - PLAN_QUOTA_ROWS} more plans with more room`),
         ).toBeVisible();
-        // The three it keeps are the three closest to their ceiling: the
-        // busiest plan is here and the quietest is not.
+        // The ones it keeps are the closest to their ceiling: the busiest plan
+        // is here and the quietest is not.
         await expect(quota.getByText("82% used")).toBeVisible();
         await expect(quota.getByText("10% used")).toHaveCount(0);
 

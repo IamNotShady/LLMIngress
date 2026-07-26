@@ -92,6 +92,18 @@ export function ProviderDialogs({
   }
   if (dialog === "deleteConnection") {
     const connection = connections.find((entry) => entry.id === readParam(params, "connection"));
+    if (connection?.kind === "local") {
+      return (
+        <LocalConnectionDeleteDialog
+          closeHref={closeHref}
+          deleteProviderHref={buildHref("/providers", params, {
+            connection: null,
+            dialog: "delete",
+          })}
+          provider={provider}
+        />
+      );
+    }
     return connection ? (
       <DeleteConnectionDialog closeHref={closeHref} connection={connection} provider={provider} />
     ) : (
@@ -470,6 +482,40 @@ function MissingConnectionDialog({ closeHref }: { closeHref: string }) {
         <ActionLink href={closeHref} tone="primary">
           Back to the provider
         </ActionLink>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/**
+ * A local provider stores no credential: the row in its connections table is
+ * the provider itself. Deleting it is deleting the provider, so this points at
+ * that rather than erasing something under a name that promises less.
+ */
+function LocalConnectionDeleteDialog({
+  closeHref,
+  deleteProviderHref,
+  provider,
+}: {
+  closeHref: string;
+  deleteProviderHref: string;
+  provider: ConsoleProvider;
+}) {
+  return (
+    <Dialog closeHref={closeHref} title="Local endpoint" width={520}>
+      <DialogBody>
+        <strong className="font-medium">{provider.displayName}</strong> is a local provider: its
+        endpoint is the provider, not a stored credential, so there is nothing to delete on its own.
+      </DialogBody>
+      <DialogNote>
+        To stop routing to it, disable the provider — the endpoint is kept. Deleting the provider
+        removes it and its models.
+      </DialogNote>
+      <DialogActions>
+        <ActionLink href={deleteProviderHref} size="dialog" tone="danger">
+          Delete the provider
+        </ActionLink>
+        <ActionLink href={closeHref}>Cancel</ActionLink>
       </DialogActions>
     </Dialog>
   );

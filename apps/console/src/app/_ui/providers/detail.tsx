@@ -142,12 +142,18 @@ export function ProviderDetail({
         note={
           metered
             ? "lower priority is tried first"
-            : "subscription plans are not metered — no cost is recorded"
+            : provider.providerType === "local"
+              ? "a server on your own network — no cost is recorded"
+              : "subscription plans are not metered — no cost is recorded"
         }
         trailing={
-          <ActionLink href={href({ providerKeyDialog: provider.id, connection: "new" })}>
-            {addConnectionLabel(provider)}
-          </ActionLink>
+          // A local provider has exactly one endpoint, which is the provider's
+          // own base url — there is no second one to add, only this one to edit.
+          provider.providerType === "local" ? null : (
+            <ActionLink href={href({ providerKeyDialog: provider.id, connection: "new" })}>
+              {addConnectionLabel(provider)}
+            </ActionLink>
+          )
         }
       >
         Connections
@@ -204,13 +210,18 @@ export function ProviderDetail({
                   >
                     Edit
                   </ActionLink>
-                  <ActionLink
-                    size="row"
-                    href={href({ dialog: "deleteConnection", connection: connection.id })}
-                    tone="danger"
-                  >
-                    Delete
-                  </ActionLink>
+                  {/* A local provider's endpoint is the provider: there is no
+                      credential row to erase, and deleting it means deleting
+                      the provider, which its own Delete above already does. */}
+                  {connection.kind === "local" ? null : (
+                    <ActionLink
+                      size="row"
+                      href={href({ dialog: "deleteConnection", connection: connection.id })}
+                      tone="danger"
+                    >
+                      Delete
+                    </ActionLink>
+                  )}
                 </span>
               </GridRow>
             );
@@ -308,11 +319,9 @@ export function ProviderDetail({
   );
 }
 
+/** Local providers have no second connection to add, so they are not here. */
 function addConnectionLabel(provider: ConsoleProvider): string {
-  if (provider.providerType === "subscription") {
-    return "+ Authorize token";
-  }
-  return provider.providerType === "local" ? "+ Add endpoint" : "+ Add key";
+  return provider.providerType === "subscription" ? "+ Authorize token" : "+ Add key";
 }
 
 function healthTextClass(tone: "amber" | "dim" | "green" | "red"): string {

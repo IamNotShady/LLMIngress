@@ -33,6 +33,7 @@ const PAGES: Array<[string, string]> = [
   ["overview", "/"],
   ["providers", "/providers"],
   // The provider with a failing connection carries the longest health text.
+  ["providers-local", "/providers?selected=__OLLAMA__"],
   ["providers-failing", "/providers?selected=__OPENROUTER__"],
   ["models", "/models"],
   ["api-keys", "/api-keys"],
@@ -61,6 +62,7 @@ let subscriptionProviderId = "";
 let oauthConnectionId = "";
 let apiKeyConnectionId = "";
 let codeExpiresAt = "";
+let localProviderId = "";
 
 async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>) {
   const id = () => randomUUID();
@@ -79,6 +81,7 @@ async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture
 
   failingProviderId = providers.openrouter;
   subscriptionProviderId = providers.claudeCode;
+  localProviderId = providers.ollama;
 
   const models: Record<string, string> = {};
   const modelRows = [
@@ -389,7 +392,8 @@ async function main() {
           .replace(/__CLAUDE__/g, subscriptionProviderId)
           .replace(/__OAUTH__/g, oauthConnectionId)
           .replace(/__ORMAIN__/g, apiKeyConnectionId)
-          .replace(/__EXPIRES__/g, encodeURIComponent(codeExpiresAt));
+          .replace(/__EXPIRES__/g, encodeURIComponent(codeExpiresAt))
+          .replace(/__OLLAMA__/g, localProviderId);
         visiting = `${name} ${theme}`;
         await page.goto(`${baseUrl}${path}`);
         if (name === "drawer-limits") {

@@ -47,6 +47,7 @@ const PAGES: Array<[string, string]> = [
   // Both credential dialogs in their edit shape, where new and edit are easy
   // to confuse: a token connection and a key connection.
   ["dialog-edit-token", "/providers?selected=__CLAUDE__&providerKeyDialog=__CLAUDE__&connection=__OAUTH__"],
+  ["dialog-add-key", "/providers?selected=__OPENROUTER__&providerKeyDialog=__OPENROUTER__&connection=new"],
   ["dialog-edit-key", "/providers?selected=__OPENROUTER__&providerKeyDialog=__OPENROUTER__&connection=__ORMAIN__"],
   ["dialog-virtual-model", "/models?dialog=edit"],
 ];

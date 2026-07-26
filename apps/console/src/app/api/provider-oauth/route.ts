@@ -71,11 +71,25 @@ export const POST = withConsoleAuth(async (request) => {
     // its label and its routing priority. Starting an authorization from the
     // edit dialog would have created a second connection instead.
     if (action === "update") {
+      const providerOAuthId = readRequiredText(form, "providerOAuthId");
       const result = await updateProviderOAuthConnectionSettings({
+        enabled: readText(form, "enabled") !== "false",
         label: readNullableText(form, "label") ?? null,
         priority: readNumber(form, "priority") ?? 100,
-        providerOAuthId: readRequiredText(form, "providerOAuthId"),
+        providerOAuthId,
       });
+      await setProviderOAuthQuotaProbeEnabled({
+        providerOAuthId,
+        quotaProbeEnabled: readText(form, "quotaProbeEnabled") !== "false",
+      });
+      if (result.enabled) {
+        await enqueueProviderConnectionProbeJob({
+          providerConnectionId: result.id,
+          providerId: result.providerId,
+          resetHealth: true,
+          source: "oauth_ready",
+        });
+      }
       return redirectToProvider(result.providerId);
     }
 

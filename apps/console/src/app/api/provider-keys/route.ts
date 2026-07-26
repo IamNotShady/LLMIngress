@@ -59,20 +59,36 @@ export const POST = withConsoleAuth(async (request) => {
     const providerApiKeyId = readText(form, "providerApiKeyId");
     const pastedKey = readText(form, "providerApiKey");
 
-    // Saving an existing connection without a new key changes only what the
-    // console owns about it. Demanding a secret to rename a connection would
-    // mean rotating a working credential to fix a typo.
+    // The connection dialog saves everything about a connection at once: its
+    // credential, what it is called, where it sits in the order, and whether it
+    // routes and is probed. State is a field of the form, not a separate act.
+    const enabled = readText(form, "enabled") !== "false";
+    const quotaProbeEnabled = readText(form, "quotaProbeEnabled") !== "false";
+
+    // Saving an existing connection without a new key keeps the stored one —
+    // renaming a connection must not mean rotating a working credential.
     if (providerApiKeyId && !pastedKey) {
       const updated = await updateProviderApiKeySettings({
+        enabled,
         label: readText(form, "label") ?? null,
         priority: readNumber(form, "priority") ?? 100,
         providerApiKeyId,
       });
+      await setProviderApiKeyQuotaProbeEnabled({ providerApiKeyId, quotaProbeEnabled });
+      if (updated.enabled) {
+        await enqueueProviderConnectionProbeJob({
+          providerConnectionId: updated.id,
+          providerId: updated.providerId,
+          resetHealth: true,
+          source: "api_key_saved",
+        });
+      }
       return providerApiKeyMutationResponse(request, updated.providerId);
     }
 
     const plaintext = readRequiredText(form, "providerApiKey");
     const result = await saveProviderApiKey({
+      enabled,
       label: readText(form, "label"),
       encryptionKeySource: readConsoleEncryptionKeySource(),
       plaintext,
@@ -80,17 +96,23 @@ export const POST = withConsoleAuth(async (request) => {
       providerApiKeyId,
       providerId,
     });
-    await enqueueProviderConnectionProbeJob({
-      providerConnectionId: result.metadata.id,
-      providerId,
-      resetHealth: true,
-      source: "api_key_saved",
+    await setProviderApiKeyQuotaProbeEnabled({
+      providerApiKeyId: result.metadata.id,
+      quotaProbeEnabled,
     });
-    await enqueueProviderModelRefreshJob({
-      providerId,
-      source: "api_key_saved",
-      trigger: "system",
-    });
+    if (result.metadata.enabled) {
+      await enqueueProviderConnectionProbeJob({
+        providerConnectionId: result.metadata.id,
+        providerId,
+        resetHealth: true,
+        source: "api_key_saved",
+      });
+      await enqueueProviderModelRefreshJob({
+        providerId,
+        source: "api_key_saved",
+        trigger: "system",
+      });
+    }
 
     if (request.headers.get("accept")?.includes("application/json")) {
       return NextResponse.json(

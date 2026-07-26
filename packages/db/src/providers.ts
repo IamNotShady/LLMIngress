@@ -401,6 +401,7 @@ export async function setProviderOAuthConnectionEnabled(input: {
  */
 export async function updateProviderOAuthConnectionSettings(input: {
   databaseUrl?: string;
+  enabled: boolean;
   label: string | null;
   priority: number;
   providerOAuthId: string;
@@ -411,6 +412,7 @@ export async function updateProviderOAuthConnectionSettings(input: {
         update provider_oauth
         set label = $2,
             priority = $3,
+            enabled = $4,
             updated_at = now()
         where id = $1
           and deleted_at is null
@@ -424,7 +426,7 @@ export async function updateProviderOAuthConnectionSettings(input: {
                   updated_at,
                   completed_at
       `,
-      [input.providerOAuthId, input.label, input.priority],
+      [input.providerOAuthId, input.label, input.priority, input.enabled],
     );
     return toProviderOAuthMetadata(requireProviderOAuthRow(result.rows[0]));
   });

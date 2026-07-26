@@ -317,22 +317,24 @@ export async function deleteProviderApiKey(input: {
  */
 export async function updateProviderApiKeySettings(input: {
   databaseUrl?: string;
+  enabled: boolean;
   label: string | null;
   priority: number;
   providerApiKeyId: string;
-}): Promise<{ id: string; providerId: string }> {
+}): Promise<{ enabled: boolean; id: string; providerId: string }> {
   return withPostgresTransaction(input.databaseUrl, async (client) => {
-    const result = await client.query<{ id: string; provider_id: string }>(
+    const result = await client.query<{ enabled: boolean; id: string; provider_id: string }>(
       `
         update provider_api_keys
         set label = $2,
             priority = $3,
+            enabled = $4,
             updated_at = now()
         where id = $1
           and deleted_at is null
-        returning id::text, provider_id::text
+        returning enabled, id::text, provider_id::text
       `,
-      [input.providerApiKeyId, input.label, input.priority],
+      [input.providerApiKeyId, input.label, input.priority, input.enabled],
     );
     const row = result.rows[0];
     if (!row) {
@@ -340,7 +342,7 @@ export async function updateProviderApiKeySettings(input: {
         providerApiKeyId: input.providerApiKeyId,
       });
     }
-    return { id: row.id, providerId: row.provider_id };
+    return { enabled: row.enabled, id: row.id, providerId: row.provider_id };
   });
 }
 

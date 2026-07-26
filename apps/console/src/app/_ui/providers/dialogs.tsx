@@ -5,7 +5,7 @@ import type { ConsoleProvider, ProviderDependencyImpact } from "@llmingress/db/c
 import type { ConsoleUsageSummary } from "@llmingress/db/console-usage";
 import Link from "next/link";
 import { ConfirmForm, TypeNameToConfirm } from "../confirm-form";
-import { ActionButton, ActionLink, Field, TextInput } from "../controls";
+import { ActionButton, ActionLink, Field, SelectInput, TextInput } from "../controls";
 import { formatCost, formatCount } from "../format";
 import { DetailRow } from "../layout";
 import { MutationForm } from "../mutation-form";
@@ -92,27 +92,6 @@ export function ProviderDialogs({
     const connection = connections.find((entry) => entry.id === readParam(params, "connection"));
     return connection ? (
       <DeleteConnectionDialog closeHref={closeHref} connection={connection} provider={provider} />
-    ) : (
-      <MissingConnectionDialog closeHref={closeHref} />
-    );
-  }
-  if (dialog === "disableConnection" || dialog === "enableConnection") {
-    const connection = connections.find((entry) => entry.id === readParam(params, "connection"));
-    // Cancelling or confirming returns to the credential dialog this was
-    // launched from, so the operator lands back on the connection they were
-    // working on and sees its new state.
-    const backToConnection = buildHref("/providers", params, {
-      connection: connection?.id ?? null,
-      dialog: null,
-      providerKeyDialog: provider.id,
-    });
-    return connection ? (
-      <ConnectionStateDialog
-        closeHref={backToConnection}
-        connection={connection}
-        enable={dialog === "enableConnection"}
-        provider={provider}
-      />
     ) : (
       <MissingConnectionDialog closeHref={closeHref} />
     );
@@ -493,71 +472,6 @@ function MissingConnectionDialog({ closeHref }: { closeHref: string }) {
   );
 }
 
-/**
- * A connection carries traffic, so taking it out of routing says what stops and
- * what is kept — the credential stays, which is the whole difference between
- * this and deleting it.
- */
-function ConnectionStateDialog({
-  closeHref,
-  connection,
-  enable,
-  provider,
-}: {
-  closeHref: string;
-  connection: ProviderConnection;
-  enable: boolean;
-  provider: ConsoleProvider;
-}) {
-  const action = connection.kind === "oauth" ? "/api/provider-oauth" : "/api/provider-keys";
-  const idField = connection.kind === "oauth" ? "providerOAuthId" : "providerApiKeyId";
-  return (
-    <Dialog
-      closeHref={closeHref}
-      danger={!enable}
-      title={enable ? "Enable connection" : "Disable connection"}
-      width={520}
-    >
-      <DialogBody>
-        {enable ? (
-          <>
-            <strong className="font-medium">{connection.label}</strong> joins {provider.displayName}
-            &apos;s routing again and is probed on the usual schedule.
-          </>
-        ) : (
-          <>
-            Requests stop being routed through{" "}
-            <strong className="font-medium">{connection.label}</strong>. The stored credential is
-            kept and can be switched back on; if this is {provider.displayName}&apos;s only
-            connection, the provider stops serving traffic entirely.
-          </>
-        )}
-      </DialogBody>
-      <DialogImpact>
-        <DetailRow label="credential" value={connection.credential} />
-        <DetailRow label="priority" value={String(connection.priority)} />
-        <DetailRow
-          label="health history"
-          value={enable ? "probing resumes" : "kept, probing stops"}
-        />
-      </DialogImpact>
-      <ConfirmForm
-        action={action}
-        confirmLabel={enable ? "Enable connection" : "Disable connection"}
-        hiddenFields={{
-          action: enable ? "enable" : "disable",
-          [idField]: connection.id,
-          providerId: provider.id,
-        }}
-        onSuccessHref={closeHref}
-        tone={enable ? "primary" : "danger"}
-      >
-        <ActionLink href={closeHref}>Cancel</ActionLink>
-      </ConfirmForm>
-    </Dialog>
-  );
-}
-
 function DeleteConnectionDialog({
   closeHref,
   connection,
@@ -626,7 +540,7 @@ function CredentialDialog({
       ? "Authorize token"
       : provider.providerType === "local"
         ? "Add endpoint"
-        : "Add key";
+        : "Add API key";
 
   return (
     <Dialog closeHref={closeHref} title={title} titleNote={provider.displayName} width={600}>
@@ -644,7 +558,6 @@ function CredentialDialog({
           closeHref={closeHref}
           editing={editing}
           oauthId={oauthId}
-          params={params}
           pollInterval={Number.isFinite(pollInterval) ? pollInterval : 5}
           provider={provider}
           quotaProbeEnabled={quotaProbeEnabled}
@@ -655,7 +568,6 @@ function CredentialDialog({
         <ApiKeyForm
           closeHref={closeHref}
           editing={editing}
-          params={params}
           provider={provider}
           quotaProbeEnabled={quotaProbeEnabled}
         />
@@ -667,80 +579,90 @@ function CredentialDialog({
 function ApiKeyForm({
   closeHref,
   editing,
-  params,
   provider,
   quotaProbeEnabled,
 }: {
   closeHref: string;
   editing: ProviderConnection | null;
-  params: SearchParams;
   provider: ConsoleProvider;
   quotaProbeEnabled: boolean;
 }) {
   return (
+    <MutationForm
+      action="/api/provider-keys"
+      fallbackError="The connection could not be saved."
+      invalidFieldOnError="providerApiKey"
+    >
+      <input type="hidden" name="providerId" value={provider.id} />
+      {editing ? <input type="hidden" name="providerApiKeyId" value={editing.id} /> : null}
+      <div className="mt-4">
+        <Field
+          label="API KEY"
+          hint="Encrypted at rest with the console key; only the prefix is ever displayed again."
+        >
+          <TextInput
+            name="providerApiKey"
+            type="password"
+            required={!editing}
+            autoComplete="off"
+            placeholder="paste the provider key"
+          />
+        </Field>
+      </div>
+      <div className="mt-[14px] grid grid-cols-2 gap-3">
+        <Field label="LABEL" labelNote="(optional, ≤100 chars)">
+          <TextInput name="label" defaultValue={editing?.label ?? ""} maxLength={100} />
+        </Field>
+        <Field label="PRIORITY" labelNote="(0–100)">
+          <TextInput
+            name="priority"
+            defaultValue={String(editing?.priority ?? 100)}
+            inputMode="numeric"
+          />
+        </Field>
+      </div>
+      <ConnectionStateFields enabled={editing?.enabled ?? true} probing={quotaProbeEnabled} />
+      <DialogActions>
+        <ActionButton size="dialog" tone="primary">
+          {editing ? "Save connection" : "Add key"}
+        </ActionButton>
+        <ActionLink href={closeHref}>Cancel</ActionLink>
+        <span className="ml-1 font-mono text-125 leading-[1.5] text-faint">
+          {editing
+            ? "leave the credential field empty to keep the stored one — saving re-probes the connection"
+            : "a connection probe and model refresh run right after"}
+        </span>
+      </DialogActions>
+    </MutationForm>
+  );
+}
+
+/**
+ * Whether a connection routes, and whether the console asks its provider about
+ * the plan. Both are part of what a connection *is*, so they are saved with it
+ * rather than being separate switches beside the form.
+ */
+function ConnectionStateFields({ enabled, probing }: { enabled: boolean; probing: boolean }) {
+  return (
     <>
-      <MutationForm
-        action="/api/provider-keys"
-        fallbackError="The connection could not be saved."
-        invalidFieldOnError="apiKey"
-      >
-        <input type="hidden" name="providerId" value={provider.id} />
-        {editing ? <input type="hidden" name="providerApiKeyId" value={editing.id} /> : null}
-        <div className="mt-4">
-          <Field
-            label="API KEY"
-            hint={
-              editing
-                ? "Leave empty to keep the stored key — paste one only to rotate it. Encrypted at rest; only the prefix is ever displayed again."
-                : "Encrypted at rest with the console key; only the prefix is ever displayed again."
-            }
-          >
-            <TextInput
-              name="providerApiKey"
-              type="password"
-              required={!editing}
-              autoComplete="off"
-              placeholder={
-                editing ? "leave empty to keep the current key" : "paste the provider key"
-              }
-            />
-          </Field>
-        </div>
-        <div className="mt-[14px] grid grid-cols-2 gap-3">
-          <Field label="LABEL" labelNote="(optional, ≤100 chars)">
-            <TextInput name="label" defaultValue={editing?.label ?? ""} maxLength={100} />
-          </Field>
-          <Field label="PRIORITY" labelNote="(0–100)" hint="Lower priority is tried first.">
-            <TextInput
-              name="priority"
-              defaultValue={String(editing?.priority ?? 100)}
-              inputMode="numeric"
-            />
-          </Field>
-        </div>
-        <DialogNote>
-          Quota probe reads the plan or balance where the provider exposes it. A disabled connection
-          keeps its credential but leaves routing.
-        </DialogNote>
-        <DialogActions>
-          <ActionButton size="dialog" tone="primary">
-            {editing ? "Save connection" : "Add key"}
-          </ActionButton>
-          <ActionLink href={closeHref}>Cancel</ActionLink>
-        </DialogActions>
-      </MutationForm>
-      {/* The state switches are their own posts, so they sit beside the
-          credential form rather than inside it — a nested form would be
-          dropped by the browser and submit the save instead. */}
-      {editing ? (
-        <ConnectionStateActions
-          closeHref={closeHref}
-          connection={editing}
-          params={params}
-          provider={provider}
-          quotaProbeEnabled={quotaProbeEnabled}
-        />
-      ) : null}
+      <div className="mt-[14px] grid grid-cols-2 gap-3">
+        <Field label="STATE">
+          <SelectInput name="enabled" defaultValue={enabled ? "true" : "false"}>
+            <option value="true">enabled</option>
+            <option value="false">disabled</option>
+          </SelectInput>
+        </Field>
+        <Field label="QUOTA PROBE">
+          <SelectInput name="quotaProbeEnabled" defaultValue={probing ? "true" : "false"}>
+            <option value="true">enabled</option>
+            <option value="false">disabled</option>
+          </SelectInput>
+        </Field>
+      </div>
+      <DialogNote>
+        Lower priority is tried first. Quota probe reads the plan or balance where the provider
+        exposes it. A disabled connection keeps its credential but leaves routing.
+      </DialogNote>
     </>
   );
 }
@@ -784,7 +706,6 @@ function SubscriptionForm({
   closeHref,
   editing,
   oauthId,
-  params,
   pollInterval,
   provider,
   quotaProbeEnabled,
@@ -795,7 +716,6 @@ function SubscriptionForm({
   closeHref: string;
   editing: ProviderConnection | null;
   oauthId: string | undefined;
-  params: SearchParams;
   pollInterval: number;
   provider: ConsoleProvider;
   quotaProbeEnabled: boolean;
@@ -907,103 +827,49 @@ function SubscriptionForm({
   // than changing the one the operator opened.
   const saving = Boolean(editing);
   return (
-    <>
-      <MutationForm
-        action="/api/provider-oauth"
-        fallbackError={
-          saving ? "The connection could not be saved." : "Authorization could not be started."
-        }
-      >
-        <input type="hidden" name="action" value={saving ? "update" : "start"} />
-        {editing ? (
-          <input type="hidden" name="providerOAuthId" value={editing.id} />
-        ) : (
-          <input type="hidden" name="providerId" value={provider.id} />
-        )}
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <Field label="LABEL" labelNote="(optional)">
-            <TextInput name="label" defaultValue={editing?.label ?? ""} maxLength={100} />
-          </Field>
-          <Field label="PRIORITY" hint="Lower priority is tried first.">
-            <TextInput
-              name="priority"
-              defaultValue={String(editing?.priority ?? 100)}
-              inputMode="numeric"
-            />
-          </Field>
-        </div>
-        <DialogNote>
-          {saving
-            ? "The token itself cannot be edited — an expired one is replaced by authorizing again from the provider."
-            : "Subscription plans are not metered — requests routed through this token record no cost."}
-        </DialogNote>
-        <DialogActions>
-          <ActionButton size="dialog" tone="primary">
-            {saving ? "Save connection" : "Start authorization"}
-          </ActionButton>
-          <ActionLink href={closeHref}>Cancel</ActionLink>
-        </DialogActions>
-      </MutationForm>
+    <MutationForm
+      action="/api/provider-oauth"
+      fallbackError={
+        saving ? "The connection could not be saved." : "Authorization could not be started."
+      }
+    >
+      <input type="hidden" name="action" value={saving ? "update" : "start"} />
       {editing ? (
-        <ConnectionStateActions
-          closeHref={closeHref}
-          connection={editing}
-          params={params}
-          provider={provider}
-          quotaProbeEnabled={quotaProbeEnabled}
-        />
-      ) : null}
-    </>
-  );
-}
-
-/** Enable/disable lives outside the credential form so it posts on its own. */
-function ConnectionStateActions({
-  connection,
-  params,
-  provider,
-  quotaProbeEnabled,
-}: {
-  closeHref: string;
-  connection: ProviderConnection;
-  params: SearchParams;
-  provider: ConsoleProvider;
-  quotaProbeEnabled: boolean;
-}) {
-  const action = connection.kind === "oauth" ? "/api/provider-oauth" : "/api/provider-keys";
-  const idField = connection.kind === "oauth" ? "providerOAuthId" : "providerApiKeyId";
-  return (
-    <div className="mt-4 border-t border-hair pt-3">
-      <p className="font-mono text-12 leading-[1.6] text-faint">
-        Disabling keeps the stored credential and removes this connection from routing; deleting
-        erases the credential permanently. Pausing the quota probe only stops the console asking
-        this provider about the plan, and leaves whatever it last reported to go stale.
-      </p>
-      {/* Both switches post in place, so the dialog the operator opened stays
-          open and shows the result rather than closing on them. */}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <ActionLink
-          href={buildHref("/providers", params, {
-            connection: connection.id,
-            dialog: connection.enabled ? "disableConnection" : "enableConnection",
-            providerKeyDialog: null,
-          })}
-        >
-          {connection.enabled ? "Disable connection" : "Enable connection"}
-        </ActionLink>
-        <MutationForm action={action} fallbackError="The quota probe could not be updated.">
-          <input
-            type="hidden"
-            name="action"
-            value={quotaProbeEnabled ? "quota-probe-disable" : "quota-probe-enable"}
+        <input type="hidden" name="providerOAuthId" value={editing.id} />
+      ) : (
+        <input type="hidden" name="providerId" value={provider.id} />
+      )}
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <Field label="LABEL" labelNote="(optional, ≤100 chars)">
+          <TextInput name="label" defaultValue={editing?.label ?? ""} maxLength={100} />
+        </Field>
+        <Field label="PRIORITY" labelNote="(0–100)">
+          <TextInput
+            name="priority"
+            defaultValue={String(editing?.priority ?? 100)}
+            inputMode="numeric"
           />
-          <input type="hidden" name={idField} value={connection.id} />
-          <input type="hidden" name="providerId" value={provider.id} />
-          <ActionButton>
-            {quotaProbeEnabled ? "Pause quota probing" : "Resume quota probing"}
-          </ActionButton>
-        </MutationForm>
+        </Field>
       </div>
-    </div>
+      {editing ? (
+        <ConnectionStateFields enabled={editing.enabled} probing={quotaProbeEnabled} />
+      ) : (
+        <DialogNote>
+          Lower priority is tried first. Subscription plans are not metered — requests routed
+          through this token record no cost.
+        </DialogNote>
+      )}
+      <DialogActions>
+        <ActionButton size="dialog" tone="primary">
+          {saving ? "Save connection" : "Start authorization"}
+        </ActionButton>
+        <ActionLink href={closeHref}>Cancel</ActionLink>
+        <span className="ml-1 font-mono text-125 leading-[1.5] text-faint">
+          {saving
+            ? "the token itself is replaced by authorizing again — saving re-probes the connection"
+            : "the provider is asked to authorize this console"}
+        </span>
+      </DialogActions>
+    </MutationForm>
   );
 }

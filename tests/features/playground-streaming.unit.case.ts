@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createPlaygroundStreamDecoder } from "../../apps/console/src/app/_ui/playground/helpers.ts";
+import {
+  createPlaygroundStreamDecoder,
+  readPlaygroundErrorText,
+} from "../../apps/console/src/app/_ui/playground/helpers.ts";
 
 const frame = (delta: string) =>
   `data: {"choices":[{"delta":{"content":${JSON.stringify(delta)}}}]}`;
@@ -45,5 +48,30 @@ describe("playground stream decoding", () => {
       ),
     ).toBe("messages responses thinking ");
     expect(decoder.flush()).toBe("");
+  });
+});
+
+describe("playground refusals", () => {
+  it("reads a refusal in the words it was refused with", () => {
+    // The gateway's own envelope: the code is what an operator searches for and
+    // the message is what tells them which control to change.
+    expect(
+      readPlaygroundErrorText({
+        error: { code: "route_not_found", message: "No route policy is available." },
+        requestId: "gw_1",
+      }),
+    ).toBe("route_not_found · No route policy is available.");
+    // A provider passed straight through carries its own shape.
+    expect(readPlaygroundErrorText({ error: { message: "context length exceeded" } })).toBe(
+      "context length exceeded",
+    );
+    expect(readPlaygroundErrorText({ error: "upstream unavailable" })).toBe("upstream unavailable");
+    expect(readPlaygroundErrorText({ message: "bad request" })).toBe("bad request");
+  });
+
+  it("says nothing about an answer that is not a refusal", () => {
+    expect(readPlaygroundErrorText({ choices: [{ message: { content: "hi" } }] })).toBeNull();
+    expect(readPlaygroundErrorText("plain text")).toBeNull();
+    expect(readPlaygroundErrorText(null)).toBeNull();
   });
 });

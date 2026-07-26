@@ -135,6 +135,36 @@ export function formatPlaygroundFetchError(action: string, _error: unknown): str
   return `Could not reach Gateway while ${action}. Check the Gateway base URL and that Gateway is running.`;
 }
 
+/**
+ * A refusal in the words it was refused with. The gateway answers
+ * `{ error: { code, message } }` and a provider passed through answers its own
+ * shape; without this the console showed the status code and "No response
+ * text", which says nothing about what to change.
+ */
+export function readPlaygroundErrorText(body: unknown): string | null {
+  if (!isRecord(body)) {
+    return null;
+  }
+
+  const error = body.error;
+  if (typeof error === "string" && error.trim()) {
+    return error.trim();
+  }
+  if (isRecord(error)) {
+    const message = typeof error.message === "string" ? error.message.trim() : "";
+    const code = typeof error.code === "string" ? error.code.trim() : "";
+    if (message && code) {
+      return `${code} · ${message}`;
+    }
+    if (message || code) {
+      return message || code;
+    }
+  }
+
+  const message = body.message;
+  return typeof message === "string" && message.trim() ? message.trim() : null;
+}
+
 export function readPlaygroundResponseText(body: unknown): string {
   if (!isRecord(body)) {
     return "No response text";

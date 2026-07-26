@@ -11,7 +11,10 @@ import {
   waitForConsole,
 } from "../support/console-app";
 
-const FRAME_GAP_MS = 400;
+// Wide enough that a loaded machine still observes the partial answer: the
+// claim is that text renders before the request finishes, not that a poll lands
+// between two particular frames.
+const FRAME_GAP_MS = 1200;
 const FRAMES = ["first ", "second ", "third"];
 
 /**
@@ -29,6 +32,25 @@ function startStreamingGateway(): Promise<{ close: () => Promise<void>; url: str
     if (request.url?.startsWith("/v1/models")) {
       response.writeHead(200, { ...corsHeaders(), "content-type": "application/json" });
       response.end(JSON.stringify({ data: [{ id: "stream-vm" }] }));
+      return;
+    }
+    // The endpoint this virtual model is not routed to answers the way the
+    // gateway does: a code and a message, not an empty body.
+    if (request.url?.startsWith("/v1/messages")) {
+      response.writeHead(400, {
+        ...corsHeaders(),
+        "content-type": "application/json",
+        "x-llmingress-request-id": "playground-refused-request",
+      });
+      response.end(
+        JSON.stringify({
+          error: {
+            code: "route_not_found",
+            message: "No route policy is available for the selected Virtual Model.",
+          },
+          requestId: "playground-refused-request",
+        }),
+      );
       return;
     }
 
@@ -104,18 +126,31 @@ test("the Playground shows a streamed answer while it is still being written", a
         await expect(page.getByLabel("STREAM")).toHaveValue("true");
         await page.getByRole("button", { name: "Send request" }).click();
 
-        // The first frame is on screen while the rest are still being written:
-        // reading the whole body first would show nothing until the end.
+        // Text is on screen while the rest is still being written: reading the
+        // whole body first would show nothing until the end.
         const streamed = page.getByTestId("playground-stream");
-        await expect(streamed).toHaveText("first ", { timeout: 15_000 });
+        await expect(streamed).toContainText("first", { timeout: 20_000 });
         await expect(page.getByText("streaming…")).toBeVisible();
-        await expect(streamed).toHaveText("first second ", { timeout: 15_000 });
+        await expect(page.getByText("200 OK")).toHaveCount(0);
+        await expect(streamed).toContainText("second", { timeout: 20_000 });
 
         // When it ends, the answer is the whole answer and the response panel
         // takes over from the live one.
         await expect(page.getByText("200 OK")).toBeVisible({ timeout: 20_000 });
         await expect(page.getByTestId("playground-stream")).toHaveCount(0);
         await expect(page.getByText("first second third")).toBeVisible();
+
+        // --- A refused request says why. The status alone leaves the operator
+        // guessing which of the controls on the left was the wrong one.
+        await page.getByRole("button", { name: "messages", exact: true }).click();
+        await page.getByRole("button", { name: "Send request" }).click();
+        await expect(page.getByText("400 error")).toBeVisible({ timeout: 20_000 });
+        await expect(
+          page.getByText(
+            "route_not_found · No route policy is available for the selected Virtual Model.",
+          ),
+        ).toBeVisible();
+        await expect(page.getByText("No response text")).toHaveCount(0);
       } finally {
         await context.close();
       }

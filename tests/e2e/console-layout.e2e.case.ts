@@ -257,6 +257,18 @@ test("console keeps layout integrity with real data: cells clip, no page overflo
         await page.goto(`${baseUrl}/limits`, { waitUntil: "networkidle" });
         await expect(page.getByText("Edit ▸").first()).toBeVisible();
 
+        // --- The Playground knows which endpoint a model is routed to, so it
+        // says so rather than letting the gateway refuse the request and
+        // leaving the operator to guess which control was wrong.
+        await page.goto(`${baseUrl}/playground`, { waitUntil: "networkidle" });
+        await expect(page.getByText("is routed to")).toHaveCount(0);
+        await page.getByRole("button", { name: "messages", exact: true }).click();
+        const mismatch = page.getByText("is routed to /v1/chat/completions");
+        await expect(mismatch).toBeVisible();
+        await expect(mismatch).toContainText("/v1/messages request for it is refused");
+        await page.getByRole("button", { name: "chat_completions", exact: true }).click();
+        await expect(page.getByText("is routed to")).toHaveCount(0);
+
         // --- A jump between modules carries the subject it was standing next
         // to: arriving unfiltered would make the operator pick the same key
         // again from a list that can be pages long.

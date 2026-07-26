@@ -14,6 +14,7 @@ import {
   formatPlaygroundFetchError,
   type PlaygroundProtocol,
   readOptionalPlaygroundNumber,
+  readPlaygroundErrorText,
   readPlaygroundResponseText,
   retryPlaygroundRequestDetail,
 } from "./helpers";
@@ -146,6 +147,11 @@ export function Playground({
   }, [apiKey, base]);
 
   const modelOptions = grantedModels ?? virtualModels.map((entry) => entry.name);
+  // Only when the console knows the model's route: a key's model list comes
+  // from the gateway and carries no protocol of its own.
+  const protocolMismatch = Boolean(
+    selected?.endpointProtocol && selected.endpointProtocol !== protocol,
+  );
 
   const send = async () => {
     if (!apiKey.trim()) {
@@ -192,8 +198,13 @@ export function Playground({
           : { raw: await response.text(), streamed: "" };
       // A stream request can still come back as one JSON body — an error page
       // or a provider that ignored the flag — so the reader falls through
-      // rather than showing an empty response.
-      const responseText = streamed.trim() || readPlaygroundResponseText(safeParse(raw));
+      // rather than showing an empty response. A refusal is read as a refusal:
+      // its message is the only thing on screen that says what to change.
+      const parsed = safeParse(raw);
+      const responseText =
+        (response.ok ? null : readPlaygroundErrorText(parsed)) ||
+        streamed.trim() ||
+        readPlaygroundResponseText(parsed);
 
       // The gateway records the request asynchronously, so the trace is polled
       // rather than assumed to exist the moment the response lands.
@@ -245,6 +256,15 @@ export function Playground({
             </button>
           ))}
         </div>
+        {/* The console knows which endpoint the model is routed to, so it says
+            so here rather than letting the gateway refuse the request. */}
+        {protocolMismatch ? (
+          <p className="mt-2 font-mono text-125 leading-[1.5] text-ambtx">
+            {selected?.name} is routed to{" "}
+            {ENDPOINT_PATH[selected?.endpointProtocol as PlaygroundProtocol]} — a{" "}
+            {ENDPOINT_PATH[protocol]} request for it is refused before it reaches a provider.
+          </p>
+        ) : null}
 
         <div className="mt-[14px]">
           <Field

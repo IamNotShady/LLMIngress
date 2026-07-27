@@ -133,7 +133,7 @@
         "console-core"
       ],
       "status": "passing",
-      "evidence": "2026-07-18: TDD red-to-green. New Spinner primitive (apps/console/src/app/_components/spinner.tsx, role=status + aria-label; .spinner CSS with spinner-rotate keyframes + prefers-reduced-motion guard). Wired into playground.tsx: model-loading spinner beside '3. Virtual Model' and send-button spinner. Focused unit (3) + E2E (1: page.route delays **/v1/models** 1.5s, focus model select surfaces role=status 'Loading models', no overflow at 1280/390) passed."
+      "evidence": "2026-07-18: TDD red-to-green. New Spinner primitive (apps/console/src/app/_components/spinner.tsx, role=status + aria-label; .spinner CSS with spinner-rotate keyframes + prefers-reduced-motion guard). Wired into playground.tsx: model-loading spinner beside '3. Virtual Model' and send-button spinner. Focused unit (3) + E2E (1: page.route delays **/v1/models** 1.5s, focus model select surfaces role=status 'Loading models', no overflow at 1280/390) passed. 2026-07-27: Playground no longer falls back to Console-wide models before a key is pasted or when key-scoped discovery fails; the selector enables only from a successful Gateway /v1/models response. Tests were updated but intentionally not run at the user's request; manual verification is pending."
     },
     {
       "id": "console-success-toast",

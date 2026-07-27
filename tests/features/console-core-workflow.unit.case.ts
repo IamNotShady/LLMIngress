@@ -32,6 +32,18 @@ describe("Console core workflow", () => {
     expect(masthead).not.toMatch(/gateway (healthy|ok|online)/i);
   });
 
+  it("does not offer Console-wide models before the pasted key is authorized", () => {
+    const playground = read("apps/console/src/app/_ui/playground/playground.tsx");
+
+    expect(playground).toContain('const [model, setModel] = useState("");');
+    expect(playground).toContain('fetch(`${base}/v1/models`');
+    expect(playground).toContain("setGrantedModels([])");
+    expect(playground).not.toContain(
+      "grantedModels ?? virtualModels.map((entry) => entry.name)",
+    );
+    expect(playground).toContain("paste an API key first");
+  });
+
   it("gives every blocked empty state a path into the core setup flow", () => {
     const apiKeys = read("apps/console/src/app/(dashboard)/api-keys/page.tsx");
     const limits = read("apps/console/src/app/(dashboard)/limits/page.tsx");

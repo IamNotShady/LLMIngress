@@ -69,11 +69,13 @@ test("fresh Console guides users through only the retained core workflow", async
         "access-control-allow-methods": "GET, POST, OPTIONS",
         "access-control-allow-origin": "*",
       };
+      let modelListRequests = 0;
       await page.route("**/v1/models", async (route) => {
         if (route.request().method() === "OPTIONS") {
           await route.fulfill({ headers: corsHeaders, status: 204 });
           return;
         }
+        modelListRequests += 1;
         await route.fulfill({
           body: JSON.stringify({ data: [{ id: "audit-playground-vm" }] }),
           contentType: "application/json",
@@ -141,7 +143,17 @@ test("fresh Console guides users through only the retained core workflow", async
         });
       });
       await page.goto(`${baseUrl}/playground`, { waitUntil: "networkidle" });
+      const virtualModel = page.getByLabel("Virtual model", { exact: true });
+      await expect(virtualModel).toBeDisabled();
+      await expect(virtualModel.locator("option")).toHaveText("paste an API key first");
+      expect(modelListRequests).toBe(0);
+
       await page.getByLabel("API key", { exact: true }).fill("llmi_test_key");
+      await expect
+        .poll(() => modelListRequests, { message: "model list is requested after a key is pasted" })
+        .toBe(1);
+      await expect(virtualModel).toBeEnabled();
+      await expect(virtualModel.locator("option")).toHaveText("audit-playground-vm");
       await page.getByRole("button", { name: "Send request" }).click();
       await expect(page.getByText("Playground retry verified")).toBeVisible();
       // The trace reports the gateway's own request id, not the provider's, and

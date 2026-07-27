@@ -71,6 +71,8 @@ type Result = {
   responseText: string;
 };
 
+type ModelListStatus = "idle" | "loading" | "loaded" | "error";
+
 export function Playground({
   gatewayBaseUrl,
   virtualModels,
@@ -80,7 +82,7 @@ export function Playground({
 }) {
   const [apiKey, setApiKey] = useState("");
   const [maxTokens, setMaxTokens] = useState("4096");
-  const [model, setModel] = useState(virtualModels[0]?.name ?? "");
+  const [model, setModel] = useState("");
   const [prompt, setPrompt] = useState(
     "Write a SQL query that finds the top 5 API keys by total cost over the last 7 days.",
   );
@@ -95,8 +97,8 @@ export function Playground({
   const [temperature, setTemperature] = useState("0.7");
   const [toast, setToast] = useState<{ note: string; text: string } | null>(null);
 
-  const [grantedModels, setGrantedModels] = useState<string[] | null>(null);
-  const [loadingModels, setLoadingModels] = useState(false);
+  const [grantedModels, setGrantedModels] = useState<string[]>([]);
+  const [modelListStatus, setModelListStatus] = useState<ModelListStatus>("idle");
   const selected = virtualModels.find((entry) => entry.name === model);
   const base = gatewayBaseUrl.replace(/\/+$/, "");
 
@@ -121,19 +123,26 @@ export function Playground({
   // the ones it was granted.
   useEffect(() => {
     const secret = apiKey.trim();
+    // A missing or changed key cannot keep showing models authorized for no key
+    // or for the previous one while the next lookup is pending.
+    setGrantedModels([]);
+    setModel("");
     if (!secret) {
-      setGrantedModels(null);
-      setLoadingModels(false);
+      setModelListStatus("idle");
       return;
     }
+    setModelListStatus("loading");
     let cancelled = false;
     const timer = setTimeout(async () => {
-      setLoadingModels(true);
       try {
         const response = await fetch(`${base}/v1/models`, {
           headers: { authorization: `Bearer ${secret}` },
         });
-        if (!response.ok || cancelled) {
+        if (cancelled) {
+          return;
+        }
+        if (!response.ok) {
+          setModelListStatus("error");
           return;
         }
         const payload = (await response.json()) as { data?: Array<{ id?: string }> };
@@ -142,24 +151,31 @@ export function Playground({
           .filter((id): id is string => Boolean(id));
         if (!cancelled) {
           setGrantedModels(ids);
-          setModel((current) => (ids.includes(current) ? current : (ids[0] ?? current)));
+          setModel(ids[0] ?? "");
+          setModelListStatus("loaded");
         }
       } catch {
-        // Leave the console's own list in place; sending will report the error.
-      } finally {
         if (!cancelled) {
-          setLoadingModels(false);
+          setModelListStatus("error");
         }
       }
     }, 300);
     return () => {
       cancelled = true;
       clearTimeout(timer);
-      setLoadingModels(false);
     };
   }, [apiKey, base]);
 
-  const modelOptions = grantedModels ?? virtualModels.map((entry) => entry.name);
+  const loadingModels = modelListStatus === "loading";
+  const modelListHint = virtualModelHint(selected, modelListStatus, grantedModels.length);
+  const emptyModelOption =
+    modelListStatus === "idle"
+      ? "paste an API key first"
+      : modelListStatus === "loading"
+        ? "loading available models…"
+        : modelListStatus === "error"
+          ? "could not load models for this key"
+          : "no virtual models available for this key";
   // Only when the console knows the model's route: a key's model list comes
   // from the gateway and carries no protocol of its own.
   const protocolMismatch = Boolean(
@@ -299,22 +315,19 @@ export function Playground({
         <div className="mt-[14px]">
           <Field
             label="VIRTUAL MODEL"
-            hint={
-              loadingModels
-                ? "Asking the gateway which models this key may call…"
-                : virtualModelHint(selected)
-            }
+            hint={modelListHint}
           >
             {loadingModels ? <Spinner className="mb-[5px]" label="Loading models" /> : null}
             <SelectInput
               aria-label="Virtual model"
+              disabled={modelListStatus !== "loaded" || grantedModels.length === 0}
               value={model}
               onChange={(event) => setModel(event.target.value)}
             >
-              {modelOptions.length === 0 ? (
-                <option value="">no virtual model exists yet</option>
+              {grantedModels.length === 0 ? (
+                <option value="">{emptyModelOption}</option>
               ) : (
-                modelOptions.map((name) => (
+                grantedModels.map((name) => (
                   <option key={name} value={name}>
                     {name}
                   </option>
@@ -369,7 +382,7 @@ export function Playground({
         <div className="mt-4 flex items-center gap-2">
           <ActionButton
             size="dialog"
-            disabled={sending}
+            disabled={sending || !model}
             onClick={() => void send()}
             tone="primary"
             type="button"
@@ -604,9 +617,25 @@ async function readStream(
   return { raw, streamed };
 }
 
-function virtualModelHint(model: PlaygroundVirtualModel | undefined): string {
+function virtualModelHint(
+  model: PlaygroundVirtualModel | undefined,
+  status: ModelListStatus,
+  modelCount: number,
+): string {
+  if (status === "idle") {
+    return "Paste an API key to list the models it may call.";
+  }
+  if (status === "loading") {
+    return "Asking the gateway which models this key may call…";
+  }
+  if (status === "error") {
+    return "The gateway did not return a model list for this API key.";
+  }
+  if (modelCount === 0) {
+    return "This API key has no Virtual Model grants.";
+  }
   if (!model) {
-    return "Paste a key to list the models it may call.";
+    return "Available to this API key.";
   }
   return `routes over ${model.strategy}${
     model.endpointProtocol ? ` · serves ${model.endpointProtocol}` : ""

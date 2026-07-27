@@ -79,9 +79,10 @@ Provider has one logical connection. Worker probes up to three chat models. The 
 
 A Virtual Model is created atomically with one Route Policy and at least one candidate. Supported
 strategies are `fixed`, `cost_first`, and `load_balance`. `cost_first` orders by input price plus output
-price and places unknown prices last. Candidate capabilities may differ. Request pre-checks use
-only capability values shared by every candidate; differing or unknown values are left to Provider
-execution and fallback.
+price and places unknown prices last. The candidate picker filters only by endpoint protocol, so
+capability differences remain selectable; saving rejects differences between known capability
+values and reports every conflicting field with both candidate names and values. Unknown values
+remain allowed and skip the corresponding request pre-check.
 
 Before the first client byte, Gateway may try another credential or candidate. After streaming
 starts, it never replays the request. Confirmed unhealthy connections are filtered; models and

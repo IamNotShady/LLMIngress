@@ -60,6 +60,12 @@ export type VirtualModelCapabilityContract = {
 
 export type VirtualModelCapabilityContractCandidate = {
   id: string;
+  /**
+   * How the operator names this candidate. Save-time validation uses the same
+   * label the Console displayed so the refusal is actionable without an id
+   * lookup.
+   */
+  label?: string;
   inputModalities: ModelInputModality[] | null;
   outputModalities: ModelOutputModality[] | null;
   maxContextTokens: number | null;
@@ -68,10 +74,29 @@ export type VirtualModelCapabilityContractCandidate = {
   supportsReasoning: boolean | null;
 };
 
-export type VirtualModelCapabilityContractResult = {
-  contract: VirtualModelCapabilityContract;
-  ok: true;
+export type VirtualModelCapabilityContractErrorCode = "route_policy_candidate_capability_mismatch";
+
+export type VirtualModelCapabilityMismatch = {
+  field: ModelCapabilityField;
+  label: string;
+  providerModelId: string;
+  referenceLabel: string;
+  referenceProviderModelId: string;
+  referenceValue: unknown;
+  value: unknown;
 };
+
+export type VirtualModelCapabilityContractResult =
+  | {
+      contract: VirtualModelCapabilityContract;
+      ok: true;
+    }
+  | {
+      code: VirtualModelCapabilityContractErrorCode;
+      details: Record<string, unknown>;
+      message: string;
+      ok: false;
+    };
 
 export type VirtualModelRequestCapabilities = {
   estimatedInputTokens: number;
@@ -156,30 +181,64 @@ export function resolveVirtualModelCapabilityContract(
     throw new Error("Route policy requires at least one provider model.");
   }
 
-  const contracts = candidates.map(readVirtualModelCapabilityCandidateContract);
+  const contracts = candidates.map((candidate) => ({
+    contract: readVirtualModelCapabilityCandidateContract(candidate),
+    label: candidate.label ?? candidate.id,
+    providerModelId: candidate.id,
+  }));
   const resolved: VirtualModelCapabilityContract = { ...emptySyncedModelCapabilities };
+  const mismatches: VirtualModelCapabilityMismatch[] = [];
 
   for (const field of modelCapabilityFields) {
-    let reference: VirtualModelCapabilityContract[typeof field] | undefined;
-    let shared = true;
+    let reference: (typeof contracts)[number] | undefined;
+    let hasUnknown = false;
 
     for (const candidate of contracts) {
-      const value = candidate[field];
+      const value = candidate.contract[field];
       if (value === null) {
-        shared = false;
-        break;
-      }
-      if (reference === undefined) {
-        reference = value;
+        hasUnknown = true;
         continue;
       }
-      if (!virtualModelCapabilityFieldEqual(reference, value)) {
-        shared = false;
+      if (!reference) {
+        reference = candidate;
+        continue;
+      }
+      if (!virtualModelCapabilityFieldEqual(reference.contract[field], value)) {
+        mismatches.push({
+          field,
+          label: candidate.label,
+          providerModelId: candidate.providerModelId,
+          referenceLabel: reference.label,
+          referenceProviderModelId: reference.providerModelId,
+          referenceValue: reference.contract[field],
+          value,
+        });
         break;
       }
     }
 
-    setCapabilityField(resolved, field, shared && reference !== undefined ? reference : null);
+    setCapabilityField(
+      resolved,
+      field,
+      hasUnknown || !reference ? null : reference.contract[field],
+    );
+  }
+
+  const [first, ...rest] = mismatches;
+  if (first) {
+    return {
+      code: "route_policy_candidate_capability_mismatch",
+      details: {
+        field: first.field,
+        mismatches,
+        providerModelId: first.providerModelId,
+        referenceProviderModelId: first.referenceProviderModelId,
+        referenceValue: first.referenceValue,
+        value: first.value,
+      },
+      message: formatCapabilityMismatchMessage(first, rest),
+      ok: false,
+    };
   }
 
   return { contract: resolved, ok: true };
@@ -703,6 +762,40 @@ function readVirtualModelCapabilityCandidateContract(
 
 function virtualModelCapabilityFieldEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function formatCapabilityMismatchClause(mismatch: VirtualModelCapabilityMismatch): string {
+  return `${mismatch.referenceLabel} has ${formatCapabilityContractValue(
+    mismatch.referenceValue,
+  )}; ${mismatch.label} has ${formatCapabilityContractValue(mismatch.value)}`;
+}
+
+function formatCapabilityMismatchMessage(
+  first: VirtualModelCapabilityMismatch,
+  rest: readonly VirtualModelCapabilityMismatch[],
+): string {
+  if (rest.length === 0) {
+    return `Route policy candidates must agree on ${first.field}, but they differ: ${formatCapabilityMismatchClause(
+      first,
+    )}.`;
+  }
+
+  const fields = [first, ...rest].map((mismatch) => mismatch.field);
+  const named = `${fields.slice(0, -1).join(", ")} and ${fields[fields.length - 1]}`;
+  const breakdown = [first, ...rest]
+    .map((mismatch) => `${mismatch.field}: ${formatCapabilityMismatchClause(mismatch)}.`)
+    .join(" ");
+  return `Route policy candidates must agree on ${named}, but they differ. ${breakdown}`;
+}
+
+function formatCapabilityContractValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "unknown";
+  }
+  if (Array.isArray(value)) {
+    return value.length === 0 ? "none" : value.join(", ");
+  }
+  return String(value);
 }
 
 function virtualModelCapabilityMismatch(

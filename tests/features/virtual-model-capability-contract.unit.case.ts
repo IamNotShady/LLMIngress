@@ -30,7 +30,7 @@ describe("virtual model capability contract", () => {
     });
   });
 
-  it("leaves a capability unknown when candidates disagree or one value is unknown", () => {
+  it("does not let unknown values hide conflicts between known candidates", () => {
     const result = resolveVirtualModelCapabilityContract([
       completeCandidate,
       {
@@ -46,45 +46,71 @@ describe("virtual model capability contract", () => {
     ]);
 
     expect(result).toMatchObject({
-      contract: { maxContextTokens: null },
-      ok: true,
+      code: "route_policy_candidate_capability_mismatch",
+      details: {
+        field: "maxContextTokens",
+        providerModelId: "candidate-conflict",
+        referenceProviderModelId: "candidate-a",
+      },
+      ok: false,
     });
+    if (!result.ok) {
+      expect(result.message).toContain("maxContextTokens");
+      expect(result.message).toContain("128000");
+      expect(result.message).toContain("64000");
+    }
   });
 
-  it("allows different context windows and omits that field from request prechecks", () => {
+  it("names the exact conflicting values for different context windows", () => {
     const result = resolveVirtualModelCapabilityContract([
       { ...completeCandidate, id: "candidate-round", maxContextTokens: 1_000_000 },
       { ...completeCandidate, id: "candidate-nonround", maxContextTokens: 1_048_576 },
     ]);
 
     expect(result).toMatchObject({
-      contract: { maxContextTokens: null },
-      ok: true,
+      code: "route_policy_candidate_capability_mismatch",
+      details: { field: "maxContextTokens" },
+      ok: false,
     });
+    if (!result.ok) {
+      expect(result.message).toContain("1000000");
+      expect(result.message).toContain("1048576");
+    }
   });
 
-  it("keeps only capability values shared by every candidate", () => {
+  it("reports every capability difference with candidate names and values", () => {
     const result = resolveVirtualModelCapabilityContract([
-      completeCandidate,
       {
         ...completeCandidate,
-        id: "candidate-b",
+        id: "candidate-wide",
+        label: "Nous - Aion 2.0 (aion-2.0)",
+      },
+      {
+        ...completeCandidate,
+        id: "candidate-narrow",
+        label: "Grok - Grok 4.5 (grok-4.5)",
         inputModalities: ["text"],
-        maxOutputTokens: 4_096,
+        maxContextTokens: 500_000,
       },
     ]);
 
     expect(result).toMatchObject({
-      contract: {
-        inputModalities: null,
-        maxContextTokens: 128_000,
-        maxOutputTokens: null,
-        outputModalities: ["text"],
-        supportsFunctionCalling: true,
-        supportsReasoning: false,
+      code: "route_policy_candidate_capability_mismatch",
+      details: {
+        field: "inputModalities",
+        mismatches: [{ field: "inputModalities" }, { field: "maxContextTokens" }],
       },
-      ok: true,
+      ok: false,
     });
+    if (!result.ok) {
+      expect(result.message).toContain("must agree on inputModalities and maxContextTokens");
+      expect(result.message).toContain(
+        "inputModalities: Nous - Aion 2.0 (aion-2.0) has text, image",
+      );
+      expect(result.message).toContain("Grok - Grok 4.5 (grok-4.5) has text.");
+      expect(result.message).toContain("maxContextTokens: Nous - Aion 2.0 (aion-2.0) has 128000");
+      expect(result.message).toContain("Grok - Grok 4.5 (grok-4.5) has 500000.");
+    }
   });
 
   it("validates request capabilities against the resolved Virtual Model contract", () => {

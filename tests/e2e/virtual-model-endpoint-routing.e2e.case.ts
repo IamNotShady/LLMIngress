@@ -175,7 +175,7 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
   }
 });
 
-test("route dialog keeps near-identical context windows distinct and allows both candidates", async ({
+test("route dialog allows capability differences to be selected and explains them on save", async ({
   browser,
 }) => {
   test.setTimeout(240_000);
@@ -206,11 +206,12 @@ test("route dialog keeps near-identical context windows distinct and allows both
         await page.waitForURL(/protocol=chat_completions/);
 
         const candidates = page.getByTestId("virtual-model-candidates");
+        await expect(page.getByText("KNOWN CAPABILITIES MUST AGREE")).toBeVisible();
         await candidates.getByRole("link", { name: /round-context/ }).click();
         await expect(page.getByText("1 selected")).toBeVisible();
 
-        // Two near-identical context windows render distinctly, but their
-        // capability differences do not prevent them from sharing a route.
+        // Capability differences do not gray out the candidate: both remain
+        // selectable so the validation happens only when the route is saved.
         const selected = page.getByTestId("virtual-model-selected");
         await expect(selected).toContainText("ctx 1M");
         await expect(candidates).toContainText("ctx 1.05M");
@@ -234,13 +235,13 @@ test("route dialog keeps near-identical context windows distinct and allows both
         }
         await page.setViewportSize({ width: 1280, height: 800 });
 
-        // Both candidates survive the save; endpoint support, not capability
-        // equality, decides which models can be picked.
         await page.getByLabel("NAME", { exact: false }).fill("vm-context-clarity");
         await page.getByLabel("DESCRIPTION").fill("Two near-identical context windows");
         await page.getByRole("button", { name: "Create virtual model" }).click();
-        await page.waitForURL((url) => url.searchParams.get("dialog") === null);
-        await expect(page.getByText("vm-context-clarity").first()).toBeVisible();
+        await expect(page).toHaveURL(/dialog=new/);
+        await expect(page.getByRole("alert")).toContainText("must agree on maxContextTokens");
+        await expect(page.getByRole("alert")).toContainText("1000000");
+        await expect(page.getByRole("alert")).toContainText("1048576");
       } finally {
         await context.close();
       }

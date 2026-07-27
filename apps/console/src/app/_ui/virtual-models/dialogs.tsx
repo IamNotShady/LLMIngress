@@ -131,7 +131,6 @@ export async function VirtualModelDialogs({
         <MutationForm
           action="/api/virtual-models"
           fallbackError="The virtual model could not be saved."
-          invalidFieldOnError="name"
           onSuccessHref={closeHref}
         >
           <input
@@ -200,7 +199,7 @@ export async function VirtualModelDialogs({
 
           <div className="mt-4 flex items-baseline gap-[10px]">
             <span className="font-mono text-115 font-medium tracking-[.08em] text-dim">
-              CANDIDATES · AT LEAST ONE
+              CANDIDATES · AT LEAST ONE — KNOWN CAPABILITIES MUST AGREE
             </span>
             <span className="ml-auto font-mono text-12 text-faint">
               {formatCount(orderedSelection.length)} selected

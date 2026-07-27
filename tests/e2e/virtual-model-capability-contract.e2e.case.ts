@@ -20,7 +20,7 @@ import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
 const apiKey = "llmi_virtual_model_capability_contract_key";
 
-test("route policy save allows unknown and differing provider model capabilities", async () => {
+test("route policy save allows unknown and rejects differing provider model capabilities", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_vm_contract_console_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -34,11 +34,21 @@ test("route policy save allows unknown and differing provider model capabilities
         databaseUrl: fixture.databaseUrl,
         routePolicy: normalizeRoutePolicyFormInput({
           endpointProtocol: "chat_completions",
-          providerModelIds: [
-            seeded.completeModelId,
-            seeded.mismatchedModelId,
-            seeded.incompleteModelId,
-          ],
+          providerModelIds: [seeded.completeModelId, seeded.mismatchedModelId],
+          strategy: "fixed",
+          virtualModelId: seeded.virtualModelId,
+        }),
+      }),
+    ).rejects.toMatchObject({
+      code: "route_policy_candidate_capability_mismatch",
+    });
+
+    await expect(
+      createRoutePolicy({
+        databaseUrl: fixture.databaseUrl,
+        routePolicy: normalizeRoutePolicyFormInput({
+          endpointProtocol: "chat_completions",
+          providerModelIds: [seeded.incompleteModelId],
           strategy: "fixed",
           virtualModelId: seeded.virtualModelId,
         }),
@@ -51,7 +61,7 @@ test("route policy save allows unknown and differing provider model capabilities
   }
 });
 
-test("route policy save allows different context windows", async () => {
+test("route policy save reports exact conflicting context windows", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_vm_ctx_conflict_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -87,19 +97,25 @@ test("route policy save allows different context windows", async () => {
       );
     }
 
-    await expect(
-      createRoutePolicy({
-        databaseUrl: fixture.databaseUrl,
-        routePolicy: normalizeRoutePolicyFormInput({
-          endpointProtocol: "chat_completions",
-          providerModelIds: [roundModelId, oddModelId],
-          strategy: "fixed",
-          virtualModelId,
-        }),
+    const error = await createRoutePolicy({
+      databaseUrl: fixture.databaseUrl,
+      routePolicy: normalizeRoutePolicyFormInput({
+        endpointProtocol: "chat_completions",
+        providerModelIds: [roundModelId, oddModelId],
+        strategy: "fixed",
+        virtualModelId,
       }),
-    ).resolves.toMatchObject({
-      candidates: [{ providerModelId: roundModelId }, { providerModelId: oddModelId }],
-    });
+    }).then(
+      () => {
+        throw new Error("expected the mismatched context windows to be rejected");
+      },
+      (rejection: unknown) => rejection,
+    );
+
+    expect(error).toMatchObject({ code: "route_policy_candidate_capability_mismatch" });
+    expect((error as { message: string }).message).toContain("maxContextTokens");
+    expect((error as { message: string }).message).toContain("1000000");
+    expect((error as { message: string }).message).toContain("1048576");
   } finally {
     await fixture.dispose();
   }
@@ -133,11 +149,31 @@ test("virtual model creation atomically requires and writes its route", async ()
     expect(await countVirtualModelsByName(fixture, ["vm-atomic-empty"])).toBe(0);
     expect(await countRows(fixture, "config_versions")).toBe(versionBefore);
 
+    await expect(
+      createVirtualModelWithRoute({
+        databaseUrl: fixture.databaseUrl,
+        routePolicy: {
+          endpointProtocol: "chat_completions",
+          providerModelIds: [seeded.completeModelId, seeded.mismatchedModelId],
+          strategy: "fixed",
+        },
+        virtualModel: normalizeVirtualModelFormInput({
+          description: "Atomic rollback route",
+          name: "vm-atomic-rollback",
+        }),
+      }),
+    ).rejects.toMatchObject({ code: "route_policy_candidate_capability_mismatch" });
+
+    expect(await countVirtualModelsByName(fixture, ["vm-atomic-empty", "vm-atomic-rollback"])).toBe(
+      0,
+    );
+    expect(await countRows(fixture, "config_versions")).toBe(versionBefore);
+
     const created = await createVirtualModelWithRoute({
       databaseUrl: fixture.databaseUrl,
       routePolicy: {
         endpointProtocol: "chat_completions",
-        providerModelIds: [seeded.completeModelId, seeded.mismatchedModelId],
+        providerModelIds: [seeded.completeModelId],
         strategy: "cost_first",
       },
       virtualModel: normalizeVirtualModelFormInput({
@@ -151,7 +187,7 @@ test("virtual model creation atomically requires and writes its route", async ()
       strategy: "cost_first",
       virtualModelId: created.virtualModel.id,
     });
-    expect(created.routePolicy.candidates).toHaveLength(2);
+    expect(created.routePolicy.candidates).toHaveLength(1);
     expect(await countRows(fixture, "config_versions")).toBe(versionBefore + 1);
     const latestVersion = await fixture.query<{ changes: Array<{ table: string }> }>(
       "select changes from config_versions order by version desc limit 1",

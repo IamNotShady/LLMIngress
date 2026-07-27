@@ -98,7 +98,12 @@ export function ProviderDialogs({
   }
   if (dialog === "disable" || dialog === "enable") {
     return (
-      <ProviderStateDialog closeHref={closeHref} enable={dialog === "enable"} provider={provider} />
+      <ProviderStateDialog
+        closeHref={closeHref}
+        dependencyImpact={dependencyImpact}
+        enable={dialog === "enable"}
+        provider={provider}
+      />
     );
   }
   if (dialog === "deleteConnection") {
@@ -352,13 +357,18 @@ function EditProviderDialog({
 
 function ProviderStateDialog({
   closeHref,
+  dependencyImpact,
   enable,
   provider,
 }: {
   closeHref: string;
+  dependencyImpact: ProviderDependencyImpact | null;
   enable: boolean;
   provider: ConsoleProvider;
 }) {
+  // Disabling is refused while a route names this provider, the same rule the
+  // delete path answers with. Saying so here beats a button that returns a 409.
+  const blockingRoutes = enable ? [] : (dependencyImpact?.routePolicies ?? []);
   return (
     <Dialog
       closeHref={closeHref}
@@ -373,6 +383,14 @@ function ProviderStateDialog({
             every connection is probed again. Virtual models listing its models can serve traffic
             from it as soon as a probe succeeds.
           </>
+        ) : blockingRoutes.length > 0 ? (
+          <>
+            <strong className="font-medium">{provider.displayName}</strong> cannot be disabled while{" "}
+            {blockingRoutes.map((route) => route.virtualModelName).join(", ")}{" "}
+            {blockingRoutes.length === 1 ? "names" : "name"} it as a candidate — the save is
+            refused. Remove it from {blockingRoutes.length === 1 ? "that route" : "those routes"}{" "}
+            first, or switch its connections off to stop its traffic now.
+          </>
         ) : (
           <>
             Virtual models stop routing to{" "}
@@ -384,17 +402,26 @@ function ProviderStateDialog({
       <DialogNote>
         {enable
           ? "Nothing else changes — connections, credentials and model list are already stored."
-          : "Configuration, credentials and the model list are preserved. Deleting is the permanent option."}
+          : blockingRoutes.length > 0
+            ? "A connection switched off leaves routing without touching the routes that name this provider."
+            : "Configuration, credentials and the model list are preserved. Deleting is the permanent option."}
       </DialogNote>
-      <ConfirmForm
-        action="/api/providers"
-        confirmLabel={enable ? "Enable provider" : "Disable provider"}
-        onSuccessHref={closeHref}
-        hiddenFields={{ action: enable ? "enable" : "disable", id: provider.id }}
-        tone="primary"
-      >
-        <ActionLink href={closeHref}>Cancel</ActionLink>
-      </ConfirmForm>
+      {blockingRoutes.length > 0 ? (
+        <DialogActions>
+          <ActionLink href="/models">Open Virtual Models</ActionLink>
+          <ActionLink href={closeHref}>Cancel</ActionLink>
+        </DialogActions>
+      ) : (
+        <ConfirmForm
+          action="/api/providers"
+          confirmLabel={enable ? "Enable provider" : "Disable provider"}
+          onSuccessHref={closeHref}
+          hiddenFields={{ action: enable ? "enable" : "disable", id: provider.id }}
+          tone="primary"
+        >
+          <ActionLink href={closeHref}>Cancel</ActionLink>
+        </ConfirmForm>
+      )}
     </Dialog>
   );
 }
@@ -450,8 +477,9 @@ function DeleteProviderDialog({
           <DialogNote>
             This cannot be deleted while a route still points at it — the save would be refused.
             Remove {provider.displayName} from{" "}
-            {blockingRoutes.map((route) => route.virtualModelName).join(", ")} first, or disable the
-            provider to take it out of routing and keep its configuration.
+            {blockingRoutes.map((route) => route.virtualModelName).join(", ")} first. Disabling the
+            provider is refused for the same reason; to stop its traffic now without editing those
+            routes, switch its connections off.
           </DialogNote>
           <DialogActions>
             <ActionLink href="/models">Open Virtual Models</ActionLink>
@@ -520,8 +548,9 @@ function LocalConnectionDeleteDialog({
         endpoint is the provider, not a stored credential, so there is nothing to delete on its own.
       </DialogBody>
       <DialogNote>
-        To stop routing to it, disable the provider — the endpoint is kept. Deleting the provider
-        removes it and its models.
+        To stop routing to it, disable the provider — the endpoint is kept. A route that still names
+        this provider refuses that the same way it refuses a delete, so remove it from that route
+        first. Deleting the provider removes it and its models.
       </DialogNote>
       <DialogActions>
         <ActionLink href={deleteProviderHref} size="dialog" tone="danger">

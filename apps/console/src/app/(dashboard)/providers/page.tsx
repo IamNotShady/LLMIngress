@@ -63,10 +63,12 @@ export default async function ProvidersPage({
   const selected = providers.find((provider) => provider.id === requestedId) ?? providers[0];
   const selectedConnections = selected ? (connectionsByProvider.get(selected.id) ?? []) : [];
 
-  // What a delete would break is read only when the confirm is open: the same
-  // dependencies the API refuses on, so the dialog can say so before the click.
+  // What a delete or a disable would break is read only when that confirm is
+  // open: the same dependencies the API refuses both on, so the dialog can say
+  // so before the click rather than after a 409.
+  const openDialog = readParam(params, "dialog");
   const dependencyImpact =
-    selected && readParam(params, "dialog") === "delete"
+    selected && (openDialog === "delete" || openDialog === "disable")
       ? await getProviderDependencyImpact({ providerId: selected.id })
       : null;
 

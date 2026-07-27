@@ -150,7 +150,10 @@ export function ProviderDetail({
           // A local provider has exactly one endpoint, which is the provider's
           // own base url — there is no second one to add, only this one to edit.
           provider.providerType === "local" ? null : (
-            <ActionLink href={href({ providerKeyDialog: provider.id, connection: "new" })}>
+            // Adding names no connection: the parameter is dropped rather than
+            // set to a placeholder, because a value that names nothing is what
+            // the "connection is gone" guard exists to catch.
+            <ActionLink href={href({ connection: null, providerKeyDialog: provider.id })}>
               {addConnectionLabel(provider)}
             </ActionLink>
           )

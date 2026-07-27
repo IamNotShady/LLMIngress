@@ -27,6 +27,7 @@ import { providerIsMetered } from "../providers/model";
 import { SyncedSearchInput } from "../synced-search";
 import { SyncedSelect } from "../synced-select";
 import { formatRange, Pagination } from "../table";
+import { candidateParamChange, readCandidateSelection } from "./candidate-params";
 import {
   activeCandidateProviderId,
   providersServingProtocol,
@@ -40,12 +41,6 @@ const PRESERVED_EDITOR_FIELDS = ["name", "description"] as const;
 /** A strategy carried in the URL is only honoured when it is one the router has. */
 function readRoutePolicyStrategy(value: string | undefined): RoutePolicyStrategy | null {
   return routePolicyStrategies.find((entry) => entry === value) ?? null;
-}
-
-/** Selection lives in the URL as an ordered id list, so paging never drops it. */
-function readSelection(params: SearchParams): string[] {
-  const raw = readParam(params, "candidates");
-  return raw ? raw.split(",").filter(Boolean) : [];
 }
 
 export async function VirtualModelDialogs({
@@ -66,6 +61,10 @@ export async function VirtualModelDialogs({
   virtualModel: ConsoleVirtualModel | undefined;
 }) {
   const dialog = readParam(params, "dialog");
+  // Closing drops the whole draft: the candidates picked but not saved, the
+  // name and description typed into the editor, and the protocol and strategy
+  // it was reading. What is left behind belongs to the model it was typed for,
+  // and the next model has to open on its own values.
   const closeHref = buildHref("/models", params, {
     candidateAvailability: null,
     candidatePage: null,
@@ -73,6 +72,10 @@ export async function VirtualModelDialogs({
     candidateQuery: null,
     candidates: null,
     dialog: null,
+    editor_description: null,
+    editor_name: null,
+    editorStrategy: null,
+    protocol: null,
   });
 
   if (dialog === "delete" && virtualModel) {
@@ -92,10 +95,10 @@ export async function VirtualModelDialogs({
   }
   const editing = dialog === "edit" ? virtualModel : undefined;
   // On first open, the editor starts from the route that is already stored.
-  const selection =
-    readParam(params, "candidates") === undefined && editing && policy
-      ? policy.candidates.map((candidate) => candidate.id)
-      : readSelection(params);
+  const selection = readCandidateSelection(
+    params,
+    editing && policy ? policy.candidates.map((candidate) => candidate.id) : [],
+  );
 
   const selectedModels = await listProviderModelOptionsByIds({ providerModelIds: selection });
   const selectedById = new Map(selectedModels.map((model) => [model.id, model]));
@@ -114,7 +117,10 @@ export async function VirtualModelDialogs({
     "load_balance";
 
   const withSelection = (ids: string[]) =>
-    buildHref("/models", params, { candidates: ids.join(","), candidatePage: null });
+    buildHref("/models", params, {
+      candidatePage: null,
+      candidates: candidateParamChange(ids),
+    });
 
   return (
     <Dialog

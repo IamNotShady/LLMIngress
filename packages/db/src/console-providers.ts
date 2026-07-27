@@ -648,7 +648,10 @@ async function readProviderDependencyImpact(
                provider_models.display_name as provider_model_display_name,
                route_policies.id::text as route_policy_id,
                virtual_models.id::text as virtual_model_id,
-               coalesce(nullif(virtual_models.description, ''), virtual_models.name) as virtual_model_name,
+               -- The name, not the description: the dialogs that read this tell
+               -- the operator which route to go and edit, and the Virtual Models
+               -- list they land on is keyed by name.
+               virtual_models.name as virtual_model_name,
                api_keys.id::text as api_key_id,
                api_keys.name as api_key_name
         from provider_models

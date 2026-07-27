@@ -34,12 +34,14 @@ test("provider delete dialog shows real route-policy blockers and POST returns 4
       const dialog = page.getByRole("dialog", { name: "Delete provider" });
       await expect(dialog).toBeVisible();
 
-      // The confirm names the route that holds the provider, says the save
-      // would be refused, and offers the two ways forward instead of a button
-      // that fails — the API returns 409 for exactly this state.
-      await expect(dialog).toContainText("Dependency VM");
+      // The confirm names the route that holds the provider — by name, which is
+      // what the Virtual Models list it sends the operator to is keyed by — says
+      // the save would be refused, and offers a way forward that works. Disabling
+      // is not one: the API refuses it on the same dependency.
+      await expect(dialog).toContainText("dependency-vm");
       await expect(dialog).toContainText("would be refused");
-      await expect(dialog).toContainText("disable the provider");
+      await expect(dialog).toContainText("switch its connections off");
+      await expect(dialog).not.toContainText("or disable the provider");
       await expect(dialog.getByRole("button", { name: "Delete provider" })).toHaveCount(0);
       await expect(dialog.getByRole("link", { name: "Open Virtual Models" })).toBeVisible();
 

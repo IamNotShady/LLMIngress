@@ -9,8 +9,10 @@ import {
 import {
   type ConsoleRoutePolicy,
   createRoutePolicyWithClient,
+  type NormalizedRoutePolicyFormInput,
   normalizeRoutePolicyFormInput,
   type RoutePolicyFormInput,
+  updateRoutePolicyWithClient,
 } from "./console-route-policies.ts";
 
 export type VirtualModelFormInput = {
@@ -255,10 +257,30 @@ export async function updateVirtualModel(input: {
     description: `Update virtual model ${input.id}`,
     changes: [{ table: "virtual_models", recordId: input.id }],
     write: async (client) => {
-      await assertVirtualModelExists(client, input.id);
-      await assertVirtualModelNameAvailable(client, input.virtualModel.name, input.id);
-      const result = await client.query<VirtualModelRow>(
-        `
+      virtualModel = await updateVirtualModelWithClient({
+        client,
+        id: input.id,
+        virtualModel: input.virtualModel,
+      });
+    },
+  });
+
+  return requireSavedVirtualModel(virtualModel);
+}
+
+/**
+ * The write half on a caller's client, so a save that changes both the model
+ * and its route commits or fails as one.
+ */
+export async function updateVirtualModelWithClient(input: {
+  client: QueryClient;
+  id: string;
+  virtualModel: NormalizedVirtualModelFormInput;
+}): Promise<ConsoleVirtualModel> {
+  await assertVirtualModelExists(input.client, input.id);
+  await assertVirtualModelNameAvailable(input.client, input.virtualModel.name, input.id);
+  const result = await input.client.query<VirtualModelRow>(
+    `
           update virtual_models
           set name = $2,
               description = $3,
@@ -309,9 +331,53 @@ export async function updateVirtualModel(input: {
                         and request_activity.started_at >= now() - interval '24 hours'
                     ) as cost_24h_usd
         `,
-        [input.id, input.virtualModel.name, input.virtualModel.description],
-      );
-      virtualModel = rowToConsoleVirtualModel(requireRow(result.rows[0]));
+    [input.id, input.virtualModel.name, input.virtualModel.description],
+  );
+  return rowToConsoleVirtualModel(requireRow(result.rows[0]));
+}
+
+/**
+ * A model and its route saved together. The editor puts both behind one button,
+ * so a route the contract refuses has to take the rename down with it — two
+ * publishes would leave the operator reading "refused" over a model that had
+ * already been renamed.
+ */
+export async function updateVirtualModelWithRoute(input: {
+  databaseUrl?: string;
+  id: string;
+  routePolicy: NormalizedRoutePolicyFormInput | null;
+  routePolicyId: string | null;
+  virtualModel: NormalizedVirtualModelFormInput;
+}): Promise<ConsoleVirtualModel> {
+  let virtualModel: ConsoleVirtualModel | undefined;
+
+  const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
+  await publisher.publish({
+    source: "console",
+    description: `Update virtual model ${input.id}`,
+    changes: [{ table: "virtual_models", recordId: input.id }],
+    write: async (client) => {
+      virtualModel = await updateVirtualModelWithClient({
+        client,
+        id: input.id,
+        virtualModel: input.virtualModel,
+      });
+      if (!input.routePolicy) {
+        return;
+      }
+      if (input.routePolicyId) {
+        await updateRoutePolicyWithClient({
+          client,
+          id: input.routePolicyId,
+          routePolicy: input.routePolicy,
+        });
+        return;
+      }
+      await createRoutePolicyWithClient({
+        client,
+        routePolicy: input.routePolicy,
+        routePolicyId: randomUUID(),
+      });
     },
   });
 

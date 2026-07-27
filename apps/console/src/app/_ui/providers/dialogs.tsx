@@ -621,6 +621,14 @@ function CredentialDialog({
   const oauthId = readParam(params, "providerOAuthId");
   const oauthError = readParam(params, "providerOAuthError");
   const pollInterval = Number.parseInt(readParam(params, "providerOAuthInterval") ?? "5", 10);
+  // A pending authorization is not in `connections` — that list holds completed
+  // ones — so the screen waiting on it cannot read the row it belongs to. What
+  // the operator typed on the way in comes back on the URL the start redirect
+  // built, in the two parameters it has always written and nothing has read.
+  // Without them the form renders its own defaults, and the submit that
+  // finishes the authorization writes those over the stored answers.
+  const pendingLabel = readParam(params, "providerOAuthLabelValue");
+  const pendingPriority = readParam(params, "providerOAuthPriorityValue");
   const quotaProbeEnabled =
     quotas.find((quota) => quota.id === connectionId)?.quotaProbeEnabled ?? true;
 
@@ -655,6 +663,8 @@ function CredentialDialog({
           closeHref={closeHref}
           editing={editing}
           expiresAt={readParam(params, "providerOAuthExpiresAt")}
+          pendingLabel={pendingLabel}
+          pendingPriority={pendingPriority}
           oauthId={oauthId}
           pollInterval={Number.isFinite(pollInterval) ? pollInterval : 5}
           provider={provider}
@@ -740,18 +750,14 @@ function ApiKeyForm({
 /** The device screen's fields are submitted by the poller once the provider confirms. */
 const DEVICE_SETTINGS_FORM_ID = "provider-oauth-device-settings";
 
-function ConnectionIdentityFields({ editing }: { editing: ProviderConnection | null }) {
+function ConnectionIdentityFields({ label, priority }: { label: string; priority: string }) {
   return (
     <div className="mt-4 grid grid-cols-2 gap-3">
       <Field label="LABEL" labelNote="(optional, ≤100 chars)">
-        <TextInput name="label" defaultValue={editing?.label ?? ""} maxLength={100} />
+        <TextInput name="label" defaultValue={label} maxLength={100} />
       </Field>
       <Field label="PRIORITY" labelNote="(0–100)">
-        <TextInput
-          name="priority"
-          defaultValue={String(editing?.priority ?? 100)}
-          inputMode="numeric"
-        />
+        <TextInput name="priority" defaultValue={priority} inputMode="numeric" />
       </Field>
     </div>
   );
@@ -828,6 +834,8 @@ function SubscriptionForm({
   editing,
   expiresAt,
   oauthId,
+  pendingLabel,
+  pendingPriority,
   pollInterval,
   provider,
   quotaProbeEnabled,
@@ -839,6 +847,9 @@ function SubscriptionForm({
   editing: ProviderConnection | null;
   expiresAt: string | undefined;
   oauthId: string | undefined;
+  /** What the operator typed before the authorization started, off the URL. */
+  pendingLabel: string | undefined;
+  pendingPriority: string | undefined;
   pollInterval: number;
   provider: ConsoleProvider;
   quotaProbeEnabled: boolean;
@@ -857,7 +868,10 @@ function SubscriptionForm({
       >
         <input type="hidden" name="action" value="update" />
         <input type="hidden" name="providerOAuthId" value={oauthId} />
-        <ConnectionIdentityFields editing={editing} />
+        <ConnectionIdentityFields
+          label={pendingLabel ?? editing?.label ?? ""}
+          priority={pendingPriority ?? String(editing?.priority ?? 100)}
+        />
         <ConnectionStateFields enabled={editing?.enabled ?? true} probing={quotaProbeEnabled} />
         <div className="mt-[18px] border-b border-hair pb-[5px] font-mono text-115 font-medium tracking-[.08em] text-dim">
           DEVICE CODE FLOW · ENTER THE CODE AT THE PROVIDER
@@ -923,7 +937,10 @@ function SubscriptionForm({
         <input type="hidden" name="providerId" value={provider.id} />
         <input type="hidden" name="providerOAuthId" value={oauthId} />
         <input type="hidden" name="providerAuthorizeUrl" value={authorizeUrl} />
-        <ConnectionIdentityFields editing={editing} />
+        <ConnectionIdentityFields
+          label={pendingLabel ?? editing?.label ?? ""}
+          priority={pendingPriority ?? String(editing?.priority ?? 100)}
+        />
         <ConnectionStateFields enabled={editing?.enabled ?? true} probing={quotaProbeEnabled} />
         <div className="mt-[18px] border-b border-hair pb-[5px] font-mono text-115 font-medium tracking-[.08em] text-dim">
           AUTHORIZATION CODE FLOW · STEP 1 OF 2

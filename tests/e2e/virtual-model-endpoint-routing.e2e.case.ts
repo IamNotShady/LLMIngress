@@ -175,7 +175,7 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
   }
 });
 
-test("route dialog keeps near-identical context windows distinct and refuses a mismatched candidate where it is offered", async ({
+test("route dialog keeps near-identical context windows distinct and allows both candidates", async ({
   browser,
 }) => {
   test.setTimeout(240_000);
@@ -209,21 +209,13 @@ test("route dialog keeps near-identical context windows distinct and refuses a m
         await candidates.getByRole("link", { name: /round-context/ }).click();
         await expect(page.getByText("1 selected")).toBeVisible();
 
-        // Two near-identical context windows must render distinctly — not both
-        // rounded to the same "1M", which would make the pair look
-        // interchangeable when a route rejects exactly this mismatch.
+        // Two near-identical context windows render distinctly, but their
+        // capability differences do not prevent them from sharing a route.
         const selected = page.getByTestId("virtual-model-selected");
         await expect(selected).toContainText("ctx 1M");
         await expect(candidates).toContainText("ctx 1.05M");
-
-        // Every candidate of one virtual model has to agree on capabilities, so
-        // the one that cannot join says so where it is offered rather than
-        // being taken, carried through the rest of the form, and refused by the
-        // save. It is not selectable, and it names the field it differs on.
-        await expect(candidates.getByRole("link", { name: /odd-context/ })).toHaveCount(0);
-        await expect(candidates).toContainText(
-          "max context tokens differs from the candidates already picked",
-        );
+        await candidates.getByRole("link", { name: /odd-context/ }).click();
+        await expect(page.getByText("2 selected")).toBeVisible();
 
         // The wide editor scrolls inside its own container; the page must not
         // gain horizontal overflow at desktop or mobile checkpoints.
@@ -242,11 +234,10 @@ test("route dialog keeps near-identical context windows distinct and refuses a m
         }
         await page.setViewportSize({ width: 1280, height: 800 });
 
-        // The route that is left is the one that can be saved. (What the save
-        // says when a mismatched pair reaches it anyway — both values, both
-        // candidates by name — is pinned in virtual-model-capability-contract.)
+        // Both candidates survive the save; endpoint support, not capability
+        // equality, decides which models can be picked.
         await page.getByLabel("NAME", { exact: false }).fill("vm-context-clarity");
-        await page.getByLabel("DESCRIPTION").fill("One of two near-identical context windows");
+        await page.getByLabel("DESCRIPTION").fill("Two near-identical context windows");
         await page.getByRole("button", { name: "Create virtual model" }).click();
         await page.waitForURL((url) => url.searchParams.get("dialog") === null);
         await expect(page.getByText("vm-context-clarity").first()).toBeVisible();

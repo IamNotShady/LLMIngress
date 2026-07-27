@@ -13,7 +13,6 @@ export function assertGatewayVirtualModelCapabilityContract(
   const result = resolveVirtualModelCapabilityContract(
     routePolicy.candidates.map((candidate) => ({
       id: candidate.providerModelId,
-      label: `${candidate.providerKey} - ${candidate.modelId}`,
       inputModalities: candidate.inputModalities,
       maxContextTokens: candidate.contextWindow ?? null,
       maxOutputTokens: candidate.maxOutputTokens,
@@ -23,11 +22,7 @@ export function assertGatewayVirtualModelCapabilityContract(
     })),
   );
 
-  if (result.ok) {
-    return result.contract;
-  }
-
-  throw new GatewayPipelineError("virtual_model_configuration_invalid", result.message);
+  return result.contract;
 }
 
 export function assertGatewayRequestWithinVirtualModelContract(

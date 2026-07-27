@@ -12,9 +12,7 @@ describe("model capability formatting", () => {
   });
 
   it("keeps near-identical context windows visually distinct", () => {
-    // The reported bug: 1M and ~1M both rounded to the same abbreviation, so
-    // two candidates that fail the capability contract for differing on this
-    // very number read as agreeing on it.
+    // Near-identical values must not become the same displayed value.
     expect(formatModelContextTokens(1_048_576)).toBe("1.05M");
     expect(formatModelContextTokens(1_000_000)).not.toBe(formatModelContextTokens(1_048_576));
     expect(formatModelContextTokens(200_000)).not.toBe(formatModelContextTokens(204_800));

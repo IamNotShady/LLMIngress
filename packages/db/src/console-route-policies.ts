@@ -11,7 +11,6 @@ import {
   type ModelOutputModality,
   type ProviderModelCapabilityMetadata,
   type RouteEndpointProtocol,
-  resolveVirtualModelCapabilityContract,
   routeEndpointProtocols,
 } from "@llmingress/domain";
 import {
@@ -535,7 +534,6 @@ export async function createRoutePolicyWithClient(input: {
   await assertVirtualModelHasNoRoutePolicy(input.client, input.routePolicy.virtualModelId);
   await assertProviderModelsExist(input.client, input.routePolicy.providerModelIds);
   await assertEndpointSupportedRoutePolicyCandidates(input.client, input.routePolicy);
-  await assertRoutePolicyCandidateCapabilityContract(input.client, input.routePolicy);
 
   const result = await input.client.query<RoutePolicyRow>(
     `
@@ -597,8 +595,8 @@ export async function updateRoutePolicy(input: {
 
 /**
  * The write half on a caller's client, so a save that changes both the virtual
- * model and its route is one transaction. A route the capability contract
- * refuses must not leave a rename committed behind it.
+ * model and its route is one transaction. A refused route must not leave a
+ * rename committed behind it.
  */
 export async function updateRoutePolicyWithClient(input: {
   client: QueryClient;
@@ -616,7 +614,6 @@ export async function updateRoutePolicyWithClient(input: {
   }
   await assertProviderModelsExist(input.client, input.routePolicy.providerModelIds);
   await assertEndpointSupportedRoutePolicyCandidates(input.client, input.routePolicy);
-  await assertRoutePolicyCandidateCapabilityContract(input.client, input.routePolicy);
 
   const result = await input.client.query<RoutePolicyRow>(
     `
@@ -757,31 +754,6 @@ async function assertEndpointSupportedRoutePolicyCandidates(
     "route_policy_endpoint_unsupported",
     { endpointProtocol: routePolicy.endpointProtocol },
   );
-}
-
-async function assertRoutePolicyCandidateCapabilityContract(
-  client: QueryClient,
-  routePolicy: NormalizedRoutePolicyFormInput,
-): Promise<void> {
-  const candidates = await readProviderModelOptionsById(client, routePolicy.providerModelIds);
-  const result = resolveVirtualModelCapabilityContract(
-    candidates.map((candidate) => ({
-      id: candidate.id,
-      label: candidate.optionLabel,
-      inputModalities: candidate.inputModalities,
-      maxContextTokens: candidate.contextWindow,
-      maxOutputTokens: candidate.maxOutputTokens,
-      outputModalities: candidate.outputModalities,
-      supportsFunctionCalling: candidate.supportsFunctionCalling,
-      supportsReasoning: candidate.supportsReasoning,
-    })),
-  );
-
-  if (result.ok) {
-    return;
-  }
-
-  throw consoleValidationError(result.message, result.code, result.details);
 }
 
 async function readProviderModelOptionsById(

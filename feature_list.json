@@ -40,7 +40,7 @@
         "virtual-model-routing"
       ],
       "status": "passing",
-      "evidence": "2026-07-15: POST /v1/embeddings is unregistered, returns 404, and never forwards to Providers; the dedicated executor, adapter contract, errors, protocol vocabulary, and docs were removed while embedding model metadata remains. Focused unit/E2E, verify, and feature regression passed."
+      "evidence": "2026-07-15: POST /v1/embeddings is unregistered, returns 404, and never forwards to Providers; the dedicated executor, adapter contract, errors, protocol vocabulary, and docs were removed while embedding model metadata remains. Focused unit/E2E, verify, and feature regression passed. 2026-07-28: Provider Access-Control-Expose-Headers is preserved as the leading value and Gateway-owned exposed header names are appended case-insensitively without duplicates; all other Provider response headers retain the existing passthrough behavior. Unit and E2E contracts were updated, but automated verification was intentionally not run because the user requested manual validation."
     },
     {
       "id": "api-key-access-and-limits",

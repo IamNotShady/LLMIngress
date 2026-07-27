@@ -468,7 +468,9 @@ function writeJson(response: ServerResponse<IncomingMessage>, status: number, bo
 
 function fakeProviderResponseHeaders(status: number): Record<string, string> {
   return {
+    "access-control-expose-headers": "x-provider-trace, X-Request-ID",
     "anthropic-ratelimit-requests-remaining": status === 429 ? "0" : "88",
+    "x-provider-trace": "provider-trace",
     "request-id": "fake-provider-request",
     ...(status === 429 ? { "retry-after": "2" } : {}),
     "x-ratelimit-remaining-requests": status === 429 ? "0" : "99",

@@ -91,7 +91,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           "content-type": "application/json",
           cookie: "api-key-session=secret",
           ...openAIHeaderProbe,
-          origin: "http://console.test",
+          origin: "http://localhost:3000",
           referer: "http://console.test/playground",
           "sec-browser-probe": "must-not-forward",
           "sec-ch-ua": '"Chromium";v="126"',
@@ -113,6 +113,11 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
       expect(response.headers.get("x-llmingress-request-id")).toBe("api-key-chat-request");
       expect(response.headers.get("x-request-id")).toBe("fake-provider-request");
       expect(response.headers.get("x-ratelimit-remaining-requests")).toBe("99");
+      expect(response.headers.get("x-provider-trace")).toBe("provider-trace");
+      const exposedHeaders = response.headers.get("access-control-expose-headers");
+      expect(exposedHeaders).toMatch(/^x-provider-trace, X-Request-ID,/);
+      expect(exposedHeaders).toContain("x-llmingress-request-id");
+      expect(exposedHeaders?.match(/x-request-id/gi)).toHaveLength(1);
       expect(fakeProvider.requests).toHaveLength(1);
       expectOpenAIProviderHeaders(fakeProvider.requests[0]?.headers);
       expect(readHeader(fakeProvider.requests[0]?.headers, "authorization")).toBe(

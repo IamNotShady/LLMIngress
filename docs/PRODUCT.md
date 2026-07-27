@@ -15,6 +15,8 @@ release unless it is added here with code and verification.
 Each API key carries a dedicated `llmi_` secret and may access only its granted Virtual
 Models. Provider payloads remain protocol-native; Gateway replaces the Virtual Model name with
 the selected Provider model and does not log prompts, successful responses, or tool arguments.
+Provider response headers are preserved. For browser requests, Gateway appends its own entries to
+the Provider's `Access-Control-Expose-Headers` value instead of replacing it.
 
 ### Providers and models
 

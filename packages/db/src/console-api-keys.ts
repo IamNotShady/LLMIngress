@@ -299,9 +299,7 @@ export async function createApiKeyWithSettings(input: {
         [apiKeyId, input.apiKey.name, stored.keyPrefix, stored.keyHash, input.limitsEnabled],
       );
       await replaceApiKeyVirtualModelsWithClient(client, apiKeyId, input.virtualModels);
-      if (input.limitsEnabled) {
-        await replaceApiKeyLimitRulesWithClient(client, apiKeyId, input.limitRules);
-      }
+      await replaceApiKeyLimitRulesWithClient(client, apiKeyId, input.limitRules);
       apiKey = {
         ...rowToConsoleApiKey(requireRow(result.rows[0])),
         limits: await readApiKeyLimitsWithClient(client, apiKeyId),

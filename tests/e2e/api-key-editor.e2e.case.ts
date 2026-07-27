@@ -120,8 +120,9 @@ test("the API key editor browses grants, keeps the typed name, and saves the lim
         expect(withLimits.rows[0]?.enforcement_policy).toBe("warn_only");
         expect(withLimits.rows[0]?.period).toBe("week");
 
-        // --- ENABLE LIMITS is a checkbox: unchecked posts nothing, which the
-        // route reads as off, and the key is created with no rules at all.
+        // --- ENABLE LIMITS controls enforcement, not storage. A key created
+        // with the switch off keeps the ceilings the operator entered so they
+        // are still there when enforcement is enabled later.
         await page.goto(`${baseUrl}/api-keys?dialog=new`, { waitUntil: "networkidle" });
         // Whatever the first page offers: this run is about the limits switch.
         await page
@@ -130,20 +131,50 @@ test("the API key editor browses grants, keeps the typed name, and saves the lim
           .click();
         await page.waitForURL((url) => url.searchParams.get("grantIds") !== null);
         await page.getByLabel("API key name").fill("editor-unlimited-key");
+        await page.getByLabel("Budget USD", { exact: true }).fill("37");
+        await page.getByLabel("Budget period").selectOption("week");
+        await page.getByRole("textbox", { name: "RPM", exact: false }).fill("321");
+        await page.getByLabel("Enforcement policy").selectOption("warn_only");
         await page.getByLabel("Enable limits").uncheck();
         await page.getByRole("button", { name: "Create key" }).click();
         await expect(page.getByText("SECRET · SHOWN ONCE")).toBeVisible();
-        await expect(page.getByText("no rules — unlimited")).toBeVisible();
 
-        const unlimited = await withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
-          client.query<{ limits_enabled: boolean; rules: string }>(
+        const disabledWithRules = await withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
+          client.query<{
+            enforcement_policy: string;
+            limit_type: string;
+            limit_value: string;
+            limits_enabled: boolean;
+            period: string | null;
+          }>(
             `select api_keys.limits_enabled,
-                    (select count(*) from api_key_limits where api_key_id = api_keys.id)::text as rules
-             from api_keys where api_keys.name = 'editor-unlimited-key'`,
+                      api_key_limits.limit_type,
+                      api_key_limits.limit_value::text,
+                      api_key_limits.period,
+                      api_key_limits.enforcement_policy
+               from api_keys
+               join api_key_limits on api_key_limits.api_key_id = api_keys.id
+               where api_keys.name = 'editor-unlimited-key'
+                 and api_key_limits.limit_type in ('budget', 'rpm')
+               order by api_key_limits.limit_type`,
           ),
         );
-        expect(unlimited.rows[0]?.limits_enabled).toBe(false);
-        expect(unlimited.rows[0]?.rules).toBe("0");
+        expect(disabledWithRules.rows).toEqual([
+          {
+            enforcement_policy: "warn_only",
+            limit_type: "budget",
+            limit_value: "37.000000",
+            limits_enabled: false,
+            period: "week",
+          },
+          {
+            enforcement_policy: "warn_only",
+            limit_type: "rpm",
+            limit_value: "321.000000",
+            limits_enabled: false,
+            period: "minute",
+          },
+        ]);
 
         // --- A refused creation comes back as the dialog, holding what was
         // typed. Creating cannot post through the in-place path — its success

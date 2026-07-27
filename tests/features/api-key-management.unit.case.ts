@@ -94,6 +94,15 @@ describe("apiKey management contract", () => {
     ).resolves.toEqual({ ok: true });
   });
 
+  it("stores the rules submitted while the ApiKey limits switch is off", () => {
+    const route = readFileSync("apps/console/src/app/api/api-keys/route.ts", "utf8");
+    const db = readFileSync("packages/db/src/console-api-keys.ts", "utf8");
+
+    expect(route).toContain("limitRules: readApiKeyLimitRules(form)");
+    expect(route).not.toContain("limitRules: limitsEnabled ?");
+    expect(db).not.toContain("if (input.limitsEnabled)");
+  });
+
   it("removes derived ApiKey status and exposes explicit Enabled and Virtual Models columns", () => {
     const apiKeysDb = readFileSync("packages/db/src/console-api-keys.ts", "utf8");
     const detail = readFileSync("apps/console/src/app/_ui/api-keys/detail.tsx", "utf8");

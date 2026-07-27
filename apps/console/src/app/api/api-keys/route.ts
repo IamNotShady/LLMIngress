@@ -41,7 +41,7 @@ export const POST = withConsoleAuth(async (request) => {
       });
       const result = await createApiKeyWithSettings({
         apiKey,
-        limitRules: limitsEnabled ? readApiKeyLimitRules(form) : [],
+        limitRules: readApiKeyLimitRules(form),
         limitsEnabled,
         virtualModels: normalizeApiKeyVirtualModelSelectionInput({
           allowedVirtualModelIds: readTextValues(form, "allowedVirtualModelIds"),

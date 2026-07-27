@@ -144,6 +144,14 @@ export const POST = withConsoleAuth(async (request) => {
       }
       // The rest of what was typed. A refused save is usually one field wrong,
       // and retyping the other six is the console losing work it was handed.
+      //
+      // The marker is what makes an empty field readable. A cleared ceiling has
+      // no value to put in the query string, and a parameter that is absent
+      // cannot be told from one that was never sent — so the marker says the
+      // whole draft is here, and a field missing from it was cleared on
+      // purpose. Without it, removing every ceiling and then mistyping the name
+      // brought all five back from the suggested defaults, silently.
+      back.searchParams.set("draft", "1");
       for (const field of CREATE_DRAFT_FIELDS) {
         const value = readText(form, field);
         if (value) {

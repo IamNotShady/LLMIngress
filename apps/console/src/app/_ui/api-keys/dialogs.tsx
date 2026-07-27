@@ -57,6 +57,7 @@ const NO_GRANT_NOTE = "grant at least one Virtual Model — a key with none can 
  * left. They belong to that one round trip: closing the dialog drops them.
  */
 const DRAFT_PARAMS = [
+  "draft",
   "draft_budgetPeriod",
   "draft_budgetUsd",
   "draft_concurrency",
@@ -200,9 +201,15 @@ function ApiKeyEditorDialog({
   // A refused creation comes back through the URL, carrying what was typed: one
   // field was wrong, and retyping the other six is the console losing work it
   // was handed. An existing key has its own saved values to show instead.
+  //
+  // While the marker is there the draft is the whole answer: a ceiling the
+  // operator cleared has nothing to put in the query string, so its parameter
+  // is absent, and reading that as "no draft" put the suggested default back
+  // under a field they had deliberately emptied.
+  const hasDraft = readParam(params, "draft") !== undefined;
   const draft = (field: string) => readParam(params, `draft_${field}`);
   const limitField = (field: string, saved: number | null, fresh: number | null) =>
-    draft(field) ?? limitFieldValue(saved, editing ? null : fresh);
+    draft(field) ?? (hasDraft ? "" : limitFieldValue(saved, editing ? null : fresh));
   const pathname = "/api-keys";
   const withGrants = (ids: string[], nextDefault?: string) =>
     buildHref(
@@ -401,9 +408,7 @@ function ApiKeyEditorDialog({
               value="true"
               aria-label="Enable limits"
               defaultChecked={
-                draft("enableLimits")
-                  ? draft("enableLimits") === "true"
-                  : (apiKey?.limitsEnabled ?? true)
+                hasDraft ? draft("enableLimits") === "true" : (apiKey?.limitsEnabled ?? true)
               }
               className="size-[13px] flex-none accent-accent"
             />

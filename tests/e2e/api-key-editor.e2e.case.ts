@@ -173,6 +173,37 @@ test("the API key editor browses grants, keeps the typed name, and saves the lim
         );
         expect(refused.rows).toEqual([]);
 
+        // --- A ceiling the operator removed stays removed across the refusal.
+        // An empty field has nothing to put in the query string, so its
+        // parameter is absent — and reading absent as "no draft" put the
+        // suggested defaults back under five fields that had been deliberately
+        // emptied, which the next save would then store as real limits.
+        await page.goto(`${baseUrl}/api-keys?dialog=new`, { waitUntil: "networkidle" });
+        await page
+          .getByRole("link", { name: /^Grant / })
+          .first()
+          .click();
+        await page.waitForURL((url) => url.searchParams.get("grantIds") !== null);
+        const ceilings = ["Budget USD", "RPM", "TPM", "TOKENS / REQUEST", "CONCURRENCY"] as const;
+        for (const ceiling of ceilings) {
+          await page.getByLabel(ceiling, { exact: ceiling === "Budget USD" }).fill("");
+        }
+        // The name is what is wrong; every ceiling is exactly as intended. A
+        // space gets past the field's own required check and is refused by the
+        // route, which is the round trip this is about.
+        await page.getByLabel("API key name").fill(" ");
+        await page.getByRole("button", { name: "Create key" }).click();
+
+        await expect(
+          page.getByRole("dialog", { name: "New API Key" }).getByRole("alert"),
+        ).toBeVisible();
+        for (const ceiling of ceilings) {
+          await expect(
+            page.getByLabel(ceiling, { exact: ceiling === "Budget USD" }),
+            ceiling,
+          ).toHaveValue("");
+        }
+
         // --- Revoking a grant has to mean revoking it. What the operator
         // unchecked travels in the URL, and an empty parameter cannot say
         // "none" — the last revocation used to read as "the URL said nothing"

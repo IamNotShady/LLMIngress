@@ -86,17 +86,22 @@ export type ConsoleFallbackEvent = {
 };
 
 /**
- * A candidate the route policy weighed, and what became of it. The gateway
- * records one of these per candidate — including the ones it filtered out and
- * why — and without them the timeline says what happened but never what else
- * could have.
+ * A candidate the route policy offered for this request, and what became of it.
+ *
+ * The router does not eliminate candidates before attempting them: it orders
+ * them by strategy and the fallback chain walks that order until one serves. So
+ * "what became of it" is an attempt outcome, and a candidate with no attempt is
+ * one the chain never reached — not one that was ruled out. The recorded
+ * explanations carry the list and its order; the attempts carry the rest.
  */
 export type ConsoleActivityRouteCandidate = {
+  /** What the attempt for this candidate recorded, or "none" if it never ran. */
+  attempt: "failed" | "none" | "served" | "skipped";
   candidateOrder: number;
-  eligible: boolean;
   /** The provider and model, resolved for reading; the id when it is gone. */
   label: string;
   providerModelId: string;
+  /** Why the attempt ended that way, when the attempt recorded a reason. */
   reasons: string[];
 };
 
@@ -417,15 +422,31 @@ export async function getConsoleActivityDetail(input: {
       }
     }
 
+    const attempts = fallbackEvents.rows.map(rowToConsoleFallbackEvent);
     return {
       activity: rowToConsoleActivity(row),
-      fallbackEvents: fallbackEvents.rows.map(rowToConsoleFallbackEvent),
+      fallbackEvents: attempts,
       requestMetadata: row.request_metadata ?? {},
       responseMetadata: row.response_metadata ?? {},
-      routeCandidates: recorded.map((candidate) => ({
-        ...candidate,
-        label: labels.get(candidate.providerModelId) ?? "model no longer in the catalog",
-      })),
+      routeCandidates: recorded.map((candidate) => {
+        // What happened to this candidate is what its attempt recorded. There
+        // is no earlier verdict to read: nothing filters the list before the
+        // chain walks it.
+        const attempt = attempts.find(
+          (event) => event.providerModelId === candidate.providerModelId,
+        );
+        return {
+          attempt: readAttemptOutcome(attempt?.status),
+          candidateOrder: candidate.candidateOrder,
+          label: labels.get(candidate.providerModelId) ?? "model no longer in the catalog",
+          providerModelId: candidate.providerModelId,
+          reasons: attempt?.errorCode
+            ? [attempt.errorCode, attempt.errorMessage].filter(
+                (part): part is string => typeof part === "string" && part.length > 0,
+              )
+            : [],
+        };
+      }),
     };
   });
 }
@@ -519,9 +540,25 @@ function buildActivityWhereClause(filters: ConsoleActivityFilters): {
  * separable from resolving what each id is called, and a request whose route
  * predates this field simply has none.
  */
+function readAttemptOutcome(status: string | undefined): ConsoleActivityRouteCandidate["attempt"] {
+  if (status === "succeeded") {
+    return "served";
+  }
+  if (status === "failed" || status === "skipped") {
+    return status;
+  }
+  return "none";
+}
+
+/**
+ * The candidate list the router recorded, in policy order. `eligible` is part
+ * of the recorded shape and is always true — nothing eliminates a candidate
+ * before the chain reaches it — so it is read for completeness and not used to
+ * decide anything.
+ */
 export function readConsoleActivityRouteCandidates(
   routeReason: unknown,
-): Array<Omit<ConsoleActivityRouteCandidate, "label">> {
+): Array<Pick<ConsoleActivityRouteCandidate, "candidateOrder" | "providerModelId">> {
   if (!isRecord(routeReason) || !Array.isArray(routeReason.candidateExplanations)) {
     return [];
   }
@@ -533,11 +570,7 @@ export function readConsoleActivityRouteCandidates(
         typeof entry.candidateOrder === "number" && Number.isFinite(entry.candidateOrder)
           ? entry.candidateOrder
           : index + 1,
-      eligible: entry.eligible !== false,
       providerModelId: String(entry.providerModelId),
-      reasons: Array.isArray(entry.reasons)
-        ? entry.reasons.filter((reason): reason is string => typeof reason === "string" && !!reason)
-        : [],
     }))
     .sort((left, right) => left.candidateOrder - right.candidateOrder);
 }

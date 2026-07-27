@@ -185,9 +185,9 @@ async function seedRecordedRoute(databaseUrl: string): Promise<void> {
             },
             {
               candidateOrder: 2,
-              eligible: false,
+              eligible: true,
               providerModelId: filteredModelId,
-              reasons: ["context window is too small"],
+              reasons: ["eligible but not selected by fixed strategy"],
             },
           ],
           message: "fixed route for stream-vm",
@@ -246,13 +246,13 @@ test("the Playground shows a streamed answer while it is still being written", a
         await expect(page.getByTestId("playground-stream")).toHaveCount(0);
         await expect(page.getByText("first second third")).toBeVisible();
 
-        // --- The route the gateway took, including the candidate it dropped
-        // before trying anything. It is recorded on the request and nowhere in
+        // --- The route the gateway took: which candidates the policy offered
+        // and what became of each. It is recorded on the request and nowhere in
         // the answer, which is the reason to read a trace at all.
-        await expect(page.getByText("1 — listed below")).toBeVisible({ timeout: 20_000 });
-        await expect(page.getByText("FILTERED OUT")).toBeVisible();
+        await expect(page.getByText("2 recorded — listed below")).toBeVisible({ timeout: 20_000 });
+        await expect(page.getByText("CANDIDATES", { exact: true })).toBeVisible();
         await expect(
-          page.getByText("Stub Provider · Stub Filtered Model — context window is too small"),
+          page.getByText("Stub Provider · Stub Filtered Model — no attempt was recorded for it"),
         ).toBeVisible();
 
         // --- A refused request says why. The status alone leaves the operator

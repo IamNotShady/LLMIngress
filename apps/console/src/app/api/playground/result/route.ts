@@ -19,16 +19,20 @@ export const GET = withConsoleAuth(async (request) => {
   const activity = detail.activity;
   return NextResponse.json({
     detail: {
-      // What the policy weighed and took off the table. The Playground is where
-      // a route is being worked out, and a candidate that never got an attempt
-      // is the part of the answer the response body cannot show.
-      filteredCandidates: detail.routeCandidates
-        .filter((candidate) => !candidate.eligible)
-        .map((candidate) => ({
-          candidateOrder: candidate.candidateOrder,
-          label: candidate.label,
-          reasons: candidate.reasons,
-        })),
+      // Every candidate the router recorded for this request and what became of
+      // it. The Playground is where a route is being worked out, and what the
+      // response body cannot show is which other candidates existed. An empty
+      // list and a request with nothing recorded are different answers, so the
+      // list is null when the route recorded no candidates at all.
+      routeCandidates:
+        detail.routeCandidates.length === 0
+          ? null
+          : detail.routeCandidates.map((candidate) => ({
+              attempt: candidate.attempt,
+              candidateOrder: candidate.candidateOrder,
+              label: candidate.label,
+              reasons: candidate.reasons,
+            })),
       latencyMs: activity.latencyMs,
       providerDisplayName: activity.providerDisplayName,
       providerKey: activity.providerKey,

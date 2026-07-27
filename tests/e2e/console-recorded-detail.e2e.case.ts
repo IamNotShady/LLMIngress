@@ -23,9 +23,11 @@ type Seeded = {
 };
 
 /**
- * A request the gateway routed: one candidate served it, one was filtered out
- * with reasons, two of the three requests were priced by the console rather
- * than by the provider, and one of the two connections has served traffic.
+ * A request the gateway routed, recorded the way the gateway records one: two
+ * candidates on the policy, both written as eligible (nothing rules a candidate
+ * out before the chain reaches it), an attempt for the first, and none for the
+ * second because the first served. Two of the three requests were priced by the
+ * console rather than the provider, and one connection has served traffic.
  */
 async function seedRecordedRequest(databaseUrl: string): Promise<Seeded> {
   const apiKeyId = randomUUID();
@@ -92,9 +94,9 @@ async function seedRecordedRequest(databaseUrl: string): Promise<Seeded> {
         },
         {
           candidateOrder: 2,
-          eligible: false,
+          eligible: true,
           providerModelId: filteredModelId,
-          reasons: ["model availability is unavailable"],
+          reasons: ["eligible but not selected by cost_first strategy"],
         },
       ],
       message: "cost_first route for recorded-vm",
@@ -139,13 +141,21 @@ async function seedRecordedRequest(databaseUrl: string): Promise<Seeded> {
          ) values ($1, $2, $3, $4, 1.25, $5)`,
         [randomUUID(), activityId, apiKeyId, servingModelId, costSource],
       );
+      // The first candidate was attempted and served; the second never got a
+      // turn, which is what the console has to be able to say.
+      await client.query(
+        `insert into fallback_events (
+           id, request_activity_id, provider_model_id, attempt_order, status, created_at
+         ) values ($1, $2, $3, 1, 'succeeded', now())`,
+        [randomUUID(), activityId, servingModelId],
+      );
     }
   });
 
   return { apiKeyId, freshConnectionId, providerId, usedConnectionId };
 }
 
-test("the console shows what the gateway recorded: filtered candidates, estimated cost, and which connection served", async ({
+test("the console shows what the gateway recorded: the route's candidates, estimated cost, and which connection served", async ({
   browser,
 }) => {
   test.setTimeout(240_000);
@@ -171,22 +181,21 @@ test("the console shows what the gateway recorded: filtered candidates, estimate
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
 
-        // --- The candidate that never got an attempt, and why. The gateway
-        // records one explanation per candidate; the drawer used to render
-        // only the summary line, so the answer to "why not that provider" was
-        // in the database and on no screen.
+        // --- The candidate the chain never reached. The router does not rule a
+        // candidate out before trying it, so this is "did not get a turn" — and
+        // it was recorded in the database and shown on no screen.
         await page.goto(`${baseUrl}/activity?request=${REQUEST_ID}`, { waitUntil: "networkidle" });
         const drawer = page.getByRole("dialog", { name: REQUEST_ID });
         await expect(drawer).toBeVisible();
         await expect(drawer.getByText("cost_first route for recorded-vm")).toBeVisible();
-        await expect(drawer.getByText("FILTERED OUT")).toBeVisible();
+        await expect(drawer.getByText("NOT ATTEMPTED")).toBeVisible();
         await expect(
           drawer.getByText(
-            "Recorded Provider · Recorded Filtered Model — model availability is unavailable",
+            "Recorded Provider · Recorded Filtered Model — no attempt was recorded for it",
           ),
         ).toBeVisible();
-        // The candidate that served is not in that list: it was not filtered.
-        await expect(drawer.getByText("Recorded Serving Model — selected")).toHaveCount(0);
+        // The one that served is not in that list: it had its attempt.
+        await expect(drawer.getByText("Recorded Serving Model — no attempt")).toHaveCount(0);
 
         // --- Cost is not one kind of number. Two of the three requests were
         // priced by the console because the provider did not say what it

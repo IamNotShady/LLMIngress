@@ -18,7 +18,11 @@ export function ActivityDrawer({
   params: SearchParams;
 }) {
   const { activity, fallbackEvents, requestMetadata, routeCandidates } = detail;
-  const filteredOut = routeCandidates.filter((candidate) => !candidate.eligible);
+  // The candidates the chain never reached. The router does not rule a
+  // candidate out before trying it — it orders them and stops at the first that
+  // serves — so this is "did not get a turn", which is a fact about the order
+  // and not a verdict about the candidate.
+  const untried = routeCandidates.filter((candidate) => candidate.attempt === "none");
   // An answer that took more than one candidate to get: the status alone says
   // 200 and hides that the first choice failed on the way there.
   const servedByFallback =
@@ -79,15 +83,15 @@ export function ActivityDrawer({
       <p className="mt-2 font-mono text-125 leading-[1.6] text-dim">
         {formatConsoleActivityRouteReason(activity.routeReason)}
       </p>
-      {/* The candidates that never got an attempt: the other half of "why this
-          provider". The timeline below says what was tried; this says what the
-          policy took off the table before trying anything. */}
-      {filteredOut.length > 0 ? (
+      {/* The other half of "why this provider": the timeline below says what
+          was tried, and this says which of the policy's candidates the chain
+          never got to. */}
+      {untried.length > 0 ? (
         <div className="mt-2">
           <div className="font-mono text-115 font-medium tracking-[.08em] text-dim">
-            FILTERED OUT
+            NOT ATTEMPTED
           </div>
-          {filteredOut.map((candidate) => (
+          {untried.map((candidate) => (
             <div
               key={`${candidate.candidateOrder}-${candidate.providerModelId}`}
               className="mt-1 flex gap-[10px] font-mono text-12 leading-[1.5]"
@@ -95,9 +99,7 @@ export function ActivityDrawer({
               <span className="flex-none text-faint tabnum">#{candidate.candidateOrder}</span>
               <span className="min-w-0 flex-1 text-dim">
                 <span className="text-ink">{candidate.label}</span>
-                {candidate.reasons.length > 0
-                  ? ` — ${candidate.reasons.join("; ")}`
-                  : " — no reason recorded"}
+                {" — no attempt was recorded for it"}
               </span>
             </div>
           ))}

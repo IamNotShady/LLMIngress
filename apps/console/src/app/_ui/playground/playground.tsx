@@ -37,7 +37,8 @@ export type PlaygroundVirtualModel = {
   strategy: string;
 };
 
-type FilteredCandidate = {
+type RouteCandidate = {
+  attempt: "failed" | "none" | "served" | "skipped";
   candidateOrder: number;
   label: string;
   reasons: string[];
@@ -45,11 +46,11 @@ type FilteredCandidate = {
 
 type RequestDetail = {
   /**
-   * Candidates the policy took off the table before any attempt was made. The
-   * trace is whatever the lookup answered with — a request recorded before the
-   * gateway wrote explanations has none, and the panel is not a place to throw.
+   * Every candidate the router recorded, and what became of each. Null when the
+   * request recorded none — a route with nothing written down is not a route
+   * where everything went well, and the trace does not get to say it was.
    */
-  filteredCandidates?: FilteredCandidate[];
+  routeCandidates?: RouteCandidate[] | null;
   latencyMs: number | null;
   providerDisplayName: string | null;
   providerModelDisplayName: string | null;
@@ -465,13 +466,11 @@ export function Playground({
                 }
               />
               <DetailRow
-                label="filtered candidates"
+                label="candidates"
                 value={
-                  result.detail === null
-                    ? "—"
-                    : (result.detail.filteredCandidates?.length ?? 0) === 0
-                      ? "none — every candidate was eligible"
-                      : `${result.detail.filteredCandidates?.length} — listed below`
+                  result.detail?.routeCandidates
+                    ? `${result.detail.routeCandidates.length} recorded — listed below`
+                    : "not recorded for this request"
                 }
               />
               <DetailRow label="cost" value={formatCost(result.detail?.totalCostUsd ?? null)} />
@@ -488,15 +487,16 @@ export function Playground({
                 }
               />
             </div>
-            {/* Why a candidate never got an attempt. It is the part of the
-                route the response body cannot show, and the reason someone
-                opens the Playground rather than reading the answer. */}
-            {result.detail?.filteredCandidates?.length ? (
+            {/* What the response body cannot show: which other candidates the
+                policy offered, in order, and what became of each. The router
+                does not rule any of them out beforehand — it stops at the first
+                that serves — so a candidate with no attempt never got a turn. */}
+            {result.detail?.routeCandidates?.length ? (
               <div className="mt-3">
                 <div className="font-mono text-115 font-medium tracking-[.08em] text-dim">
-                  FILTERED OUT
+                  CANDIDATES
                 </div>
-                {result.detail.filteredCandidates?.map((candidate) => (
+                {result.detail.routeCandidates.map((candidate) => (
                   <div
                     key={`${candidate.candidateOrder}-${candidate.label}`}
                     className="mt-1 flex gap-[10px] font-mono text-12 leading-[1.5]"
@@ -504,9 +504,7 @@ export function Playground({
                     <span className="flex-none text-faint tabnum">#{candidate.candidateOrder}</span>
                     <span className="min-w-0 flex-1 text-dim">
                       <span className="text-ink">{candidate.label}</span>
-                      {candidate.reasons.length > 0
-                        ? ` — ${candidate.reasons.join("; ")}`
-                        : " — no reason recorded"}
+                      {` — ${describeCandidateAttempt(candidate)}`}
                     </span>
                   </div>
                 ))}
@@ -530,6 +528,20 @@ export function Playground({
       ) : null}
     </div>
   );
+}
+
+/** What became of one candidate, said without inventing a verdict for it. */
+function describeCandidateAttempt(candidate: RouteCandidate): string {
+  if (candidate.attempt === "none") {
+    return "no attempt was recorded for it";
+  }
+  const outcome =
+    candidate.attempt === "served"
+      ? "served the request"
+      : candidate.attempt === "skipped"
+        ? "skipped"
+        : "failed";
+  return candidate.reasons.length > 0 ? `${outcome} · ${candidate.reasons.join(" · ")}` : outcome;
 }
 
 /** The recorded trace for a request the gateway has just answered. */

@@ -242,6 +242,25 @@ test("the API key editor browses grants, keeps the typed name, and saves the lim
           "tpm",
         ]);
 
+        // --- Enforcement is a real choice on the edit path too, not only when
+        // the key is created: the select shows what is stored and stores what
+        // it shows. (A save rewrites every rule, so a policy that did not come
+        // back with the form would revert to block on the next rename.)
+        await page.goto(editorUrl(), { waitUntil: "networkidle" });
+        await expect(editor.getByLabel("Enforcement policy")).toHaveValue("warn_only");
+        await editor.getByLabel("Enforcement policy").selectOption("block");
+        await editor.getByRole("button", { name: "Save", exact: true }).click();
+        await page.waitForURL((url) => url.searchParams.get("dialog") === null);
+        const enforcement = await withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
+          client.query<{ enforcement_policy: string }>(
+            `select distinct enforcement_policy from api_key_limits where api_key_id = $1`,
+            [probeId],
+          ),
+        );
+        expect(enforcement.rows.map((row) => row.enforcement_policy)).toEqual(["block"]);
+        await page.goto(editorUrl(), { waitUntil: "networkidle" });
+        await expect(editor.getByLabel("Enforcement policy")).toHaveValue("block");
+
         // Revoking the last one holds: the boxes stay empty, and the save it
         // would take is refused here rather than by the database.
         await page.goto(editorUrl("&grantShow=granted"), { waitUntil: "networkidle" });

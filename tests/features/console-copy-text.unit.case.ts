@@ -65,6 +65,18 @@ describe("copying a value the operator would otherwise retype", () => {
     expect(areas[0]?.value).toBe("llmi_secret");
   });
 
+  it("stops waiting on a clipboard that never answers", async () => {
+    // Chromium leaves writeText pending indefinitely when the page is not
+    // focused. Awaiting it left the button on its original label with no toast
+    // and no error — a copy the operator has no way to check.
+    const { areas, document } = fakeDocument(() => true);
+    vi.stubGlobal("navigator", { clipboard: { writeText: () => new Promise(() => {}) } });
+    vi.stubGlobal("document", document);
+
+    await expect(copyText("llmi_secret")).resolves.toBe(true);
+    expect(areas[0]?.value).toBe("llmi_secret");
+  }, 10_000);
+
   it("says it did not copy rather than saying nothing", async () => {
     vi.stubGlobal("navigator", {});
     vi.stubGlobal("document", fakeDocument(() => false).document);

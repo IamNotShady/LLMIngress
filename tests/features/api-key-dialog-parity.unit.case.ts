@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 import { PLAYGROUND_KEY_HANDOFF } from "../../apps/console/src/app/_ui/playground/handoff.ts";
 import { standaloneThemeCss } from "../../apps/console/src/app/api/_standalone-theme.ts";
 import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page.ts";
+import { renderOneTimeProviderKeyPage } from "../../apps/console/src/app/api/provider-keys/_created-page.ts";
 
 const rootDir = process.cwd();
 const appDir = join(rootDir, "apps/console/src/app");
@@ -162,3 +163,45 @@ describe("the pages rendered outside the console shell", () => {
 function normalizeCssValue(value: string | undefined): string {
   return (value ?? "").replaceAll(/\s+/g, "");
 }
+
+describe("the one-time provider key page", () => {
+  const page = renderOneTimeProviderKeyPage({
+    action: "created",
+    keyPrefix: "sk-live-abcd",
+    plaintext: "sk-live-abcd-0123456789",
+  });
+
+  test("hands the secret over once, with a copy button pointing at it", () => {
+    // The console's own dialog never sees this page — it posts through
+    // MutationForm and gets an outcome. This is the browser-without-JavaScript
+    // path, and the pasted secret is echoed here and nowhere else.
+    expect(page).toContain("Provider API key saved");
+    expect(page).toContain("sk-live-abcd-0123456789");
+    for (const [, target] of page.matchAll(/data-copy="#([a-z-]+)"/g)) {
+      expect(page, `copy target #${target}`).toContain(`id="${target}"`);
+    }
+    expect(page).toContain('data-copy="#provider-key"');
+    // The prefix is what every later screen shows, so it says which key this is.
+    expect(page).toContain("sk-live-abcd</dd>");
+    expect(page).toContain('href="/providers"');
+  });
+
+  test("resolves the theme the way the console does", () => {
+    // Rendered outside the layout, so nothing else stamps data-theme: a stored
+    // choice has to win here too, or creating a key in a light console on a
+    // dark desktop lands on a dark page.
+    expect(page).toContain("data-theme");
+    expect(page).toContain("prefers-color-scheme: dark");
+    expect(page).toContain("llmingress-console-theme");
+  });
+
+  test("escapes what it is handed", () => {
+    const hostile = renderOneTimeProviderKeyPage({
+      action: "rotated",
+      keyPrefix: "sk-<script>",
+      plaintext: 'sk-"><script>alert(1)</script>',
+    });
+    expect(hostile).not.toContain("<script>alert(1)</script>");
+    expect(hostile).toContain("&lt;script&gt;");
+  });
+});

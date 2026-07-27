@@ -147,6 +147,13 @@ test("API key created and detail dialogs share one layout and differ only in the
         expect(shownPrefix.length).toBeLessThan(plaintext.length);
         // Nothing on this page can reveal the rest of it.
         await expect(page.getByText(plaintext)).toHaveCount(0);
+
+        // Every snippet is offered with its own Copy: what the operator does
+        // next with this dialog is paste it somewhere else. (What a click does
+        // — the copy, its fallback and the toast — is held by
+        // console-copy-text.unit; a synthetic click does not reach the handler
+        // in this harness, which is a harness question, not a product one.)
+        await expect(setup.getByRole("button", { name: "Copy" }).first()).toBeVisible();
       } finally {
         await context.close();
       }

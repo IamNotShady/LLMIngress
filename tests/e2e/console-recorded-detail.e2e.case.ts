@@ -42,11 +42,24 @@ async function seedRecordedRequest(databaseUrl: string): Promise<Seeded> {
        values ($1, 'api_key', 'deepseek', 'Recorded Provider', 'https://recorded.test/v1', true)`,
       [providerId],
     );
+    // Three connections in three states: one serving, one failing, one the
+    // operator switched off. The Overview counts them separately because they
+    // are three different answers to "is this carrying traffic".
+    const failingConnectionId = randomUUID();
+    const disabledConnectionId = randomUUID();
     await client.query(
-      `insert into provider_api_keys (id, provider_id, key_prefix, encrypted_key, key_id, label, last_used_at)
-       values ($1, $2, 'sk-used', '{"version":1}'::jsonb, 'used-key', 'serving key', now() - interval '20 minutes'),
-              ($3, $2, 'sk-new', '{"version":1}'::jsonb, 'fresh-key', 'standby key', null)`,
-      [usedConnectionId, providerId, freshConnectionId],
+      `insert into provider_api_keys (id, provider_id, key_prefix, encrypted_key, key_id, label, enabled, last_used_at)
+       values ($1, $2, 'sk-used', '{"version":1}'::jsonb, 'used-key', 'serving key', true, now() - interval '20 minutes'),
+              ($3, $2, 'sk-new', '{"version":1}'::jsonb, 'fresh-key', 'standby key', true, null),
+              ($4, $2, 'sk-bad', '{"version":1}'::jsonb, 'bad-key', 'failing key', true, null),
+              ($5, $2, 'sk-off', '{"version":1}'::jsonb, 'off-key', 'switched off', false, null)`,
+      [usedConnectionId, providerId, freshConnectionId, failingConnectionId, disabledConnectionId],
+    );
+    await client.query(
+      `insert into provider_health_summary (
+         id, provider_id, provider_connection_id, status, consecutive_failures, reason_code
+       ) values ($1, $2, $3, 'unhealthy', 3, 'invalid_api_key')`,
+      [randomUUID(), providerId, failingConnectionId],
     );
     await client.query(
       `insert into provider_models (id, provider_id, model_id, display_name, availability)
@@ -191,7 +204,13 @@ test("the console shows what the gateway recorded: filtered candidates, estimate
         });
         await expect(page.getByText("LAST USED")).toBeVisible();
         await expect(page.getByText("20 min ago")).toBeVisible();
-        await expect(page.getByText("never")).toBeVisible();
+        await expect(page.getByText("never").first()).toBeVisible();
+
+        // --- Deliberately off, still being checked, and failing are three
+        // different answers: the roll-up used to fold the first two together
+        // as "not serving yet".
+        await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+        await expect(page.getByText("2 serving · 1 failing · 1 disabled")).toBeVisible();
       } finally {
         await context.close();
       }

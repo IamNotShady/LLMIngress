@@ -10,14 +10,26 @@
 export async function copyText(value: string): Promise<boolean> {
   try {
     if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value);
-      return true;
+      // Raced, because this promise does not always settle: a page the window
+      // manager does not consider focused leaves the write pending forever in
+      // Chromium, and an await on it would leave the button sitting on its own
+      // label — the exact "did that work?" this function exists to answer.
+      const wrote = await Promise.race([
+        navigator.clipboard.writeText(value).then(() => true),
+        new Promise<false>((resolve) => setTimeout(() => resolve(false), CLIPBOARD_TIMEOUT_MS)),
+      ]);
+      if (wrote) {
+        return true;
+      }
     }
   } catch {
     // Denied permission, or a document that is not focused: try the other way.
   }
   return copyBySelection(value);
 }
+
+/** Long enough for a clipboard that answers, short enough not to be a wait. */
+const CLIPBOARD_TIMEOUT_MS = 1000;
 
 function copyBySelection(value: string): boolean {
   try {

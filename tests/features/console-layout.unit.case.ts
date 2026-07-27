@@ -124,4 +124,17 @@ describe("console layout contract", () => {
     expect(dialogs).toContain("Open in browser");
     expect(dialogs).toContain("Copy url");
   });
+
+  test("inline mutation errors shrink and wrap inside compact action rows", () => {
+    const mutationForm = read("_ui/mutation-form.tsx");
+    expect(mutationForm).toContain('className={`min-w-0 ${className ?? ""}`}');
+    expect(mutationForm).toContain("max-w-full");
+    expect(mutationForm).toContain("break-words");
+
+    const providerDetail = read("_ui/providers/detail.tsx");
+    expect(providerDetail).toContain("flex-wrap");
+    expect(read("(dashboard)/providers/page.tsx")).toContain(
+      'data-testid="providers-master-detail"',
+    );
+  });
 });

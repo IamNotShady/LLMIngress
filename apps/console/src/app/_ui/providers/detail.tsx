@@ -70,7 +70,7 @@ export function ProviderDetail({
 
   return (
     <div className="min-w-0 pl-6 pt-[18px]">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <h2 className="m-0 font-sans text-19 font-semibold text-ink">{provider.displayName}</h2>
         <span className="font-mono text-13 text-dim">{provider.providerType}</span>
         <span
@@ -79,9 +79,10 @@ export function ProviderDetail({
           <StatusDot tone={health.tone} />
           {health.text}
         </span>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-start justify-end gap-2">
           <MutationForm
             action="/api/provider-model-refresh"
+            className="max-w-full"
             fallbackError="The model refresh could not be queued."
           >
             <input type="hidden" name="providerId" value={provider.id} />
@@ -98,9 +99,9 @@ export function ProviderDetail({
       </div>
 
       {refreshStatus?.failure ? (
-        <div className="mt-[14px] flex items-start gap-[10px] rounded-sm border border-ambbd bg-ambbg px-[13px] py-[11px]">
+        <div className="mt-[14px] flex flex-wrap items-start gap-[10px] rounded-sm border border-ambbd bg-ambbg px-[13px] py-[11px]">
           <span className="mt-[5px] size-[7px] flex-none rounded-full bg-red" />
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <div className="font-mono text-13 font-medium text-ink">
               Model refresh failed · {refreshStatus.failure.errorCode ?? "unknown_error"}
             </div>
@@ -113,7 +114,7 @@ export function ProviderDetail({
           </div>
           <MutationForm
             action="/api/provider-model-refresh"
-            className="flex-none"
+            className="max-w-full flex-[0_1_auto]"
             fallbackError="The model refresh could not be queued."
           >
             <input type="hidden" name="providerId" value={provider.id} />
@@ -209,7 +210,7 @@ export function ProviderDetail({
                       : "never"
                     : "—"}
                 </span>
-                <span className="flex items-center justify-end gap-[6px]">
+                <span className="flex flex-wrap items-center justify-end gap-[6px]">
                   <MutationForm
                     action="/api/provider-health-probes"
                     fallbackError="The re-check could not be queued."

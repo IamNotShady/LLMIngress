@@ -114,11 +114,17 @@ export function MutationForm({
   };
 
   return (
-    <form id={formId} action={action} method="post" onSubmit={onSubmit} className={className}>
+    <form
+      id={formId}
+      action={action}
+      method="post"
+      onSubmit={onSubmit}
+      className={`min-w-0 ${className ?? ""}`}
+    >
       {error ? (
         <p
           role="alert"
-          className="mb-3 rounded-xs border border-ambbd bg-ambbg px-[10px] py-2 font-mono text-13 text-redtx"
+          className="mb-3 max-w-full break-words rounded-xs border border-ambbd bg-ambbg px-[10px] py-2 font-mono text-13 text-redtx [overflow-wrap:anywhere]"
         >
           {error}
         </p>

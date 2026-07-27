@@ -131,7 +131,10 @@ export default async function ProvidersPage({
           }
         />
       ) : (
-        <div className="mt-4 grid grid-cols-[344px_minmax(0,1fr)] border-t border-hair overflow-x-auto">
+        <div
+          data-testid="providers-master-detail"
+          className="mt-4 grid grid-cols-[344px_minmax(0,1fr)] overflow-x-auto border-t border-hair"
+        >
           <div className="border-r border-rule pr-5">
             {providers.map((provider) => {
               const connections = connectionsByProvider.get(provider.id) ?? [];

@@ -57,6 +57,23 @@ async function seedIaData(databaseUrl: string) {
   return providerId;
 }
 
+async function seedDisabledProviderWithKey(databaseUrl: string): Promise<string> {
+  const providerId = randomUUID();
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
+    await client.query(
+      `insert into providers (id, provider_type, provider_key, display_name, enabled)
+       values ($1, 'api_key', 'disabled-layout-provider', 'Disabled Layout Provider', false)`,
+      [providerId],
+    );
+    await client.query(
+      `insert into provider_api_keys (id, provider_id, key_prefix, encrypted_key, key_id, enabled)
+       values ($1, $2, 'layout-key', '{"version":1}'::jsonb, $3, true)`,
+      [randomUUID(), providerId, `layout-key-${randomUUID()}`],
+    );
+  });
+  return providerId;
+}
+
 /**
  * Open the Add Provider dialog on a template and read back what the registry
  * says about it: the default base url and the endpoint protocols it serves.
@@ -954,6 +971,62 @@ test("a refused form states why in the dialog it was submitted from", async ({ b
         await expect(drawer.getByRole("alert")).toContainText(/greater than zero/i);
         // The page is still the console, not the API's error body.
         await expect(page).toHaveURL(new RegExp(`${escapeRegExp(baseUrl)}/limits`));
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("refused compact provider actions do not widen the page", async ({ browser }) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_compact_error_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = await seedDisabledProviderWithKey(fixture.databaseUrl);
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await signInFromFirstRun(page, baseUrl);
+        await page.goto(`${baseUrl}/providers?selected=${providerId}`, {
+          waitUntil: "networkidle",
+        });
+
+        const masterDetail = page.getByTestId("providers-master-detail");
+        await page.getByRole("button", { name: "Refresh models" }).click();
+        await expect(
+          masterDetail.getByRole("alert").filter({
+            hasText: "Provider must be enabled before refreshing models.",
+          }),
+        ).toBeVisible();
+        expect(
+          await masterDetail.evaluate((element) => element.scrollWidth - element.clientWidth),
+        ).toBeLessThanOrEqual(0);
+
+        await page.getByRole("button", { name: "Re-check" }).click();
+        await expect(
+          masterDetail.getByRole("alert").filter({
+            hasText: "Provider connection is not available for probing.",
+          }),
+        ).toBeVisible();
+        expect(await overflowPx(page)).toBeLessThanOrEqual(0);
       } finally {
         await context.close();
       }

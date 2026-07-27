@@ -133,6 +133,10 @@ describe("console layout contract", () => {
 
     const providerDetail = read("_ui/providers/detail.tsx");
     expect(providerDetail).toContain("flex-wrap");
+    expect(providerDetail).toContain(
+      "grid-cols-[minmax(0,1fr)_auto] items-start gap-2",
+    );
+    expect(providerDetail).toContain('className="col-start-2 row-start-1"');
     const providersPage = read("(dashboard)/providers/page.tsx");
     expect(providersPage).toContain('data-testid="providers-master-detail"');
     expect(providersPage).toContain(

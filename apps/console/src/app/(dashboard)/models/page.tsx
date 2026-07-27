@@ -19,7 +19,13 @@ import {
 import { ActionLink, FilterButton, filterControlClass } from "../../_ui/controls";
 import { formatCount } from "../../_ui/format";
 import { EmptyState, PageShell, PageTitleRow } from "../../_ui/layout";
-import { buildHref, readIntParam, readParam, type SearchParams } from "../../_ui/params";
+import {
+  buildHref,
+  readIntParam,
+  readParam,
+  type SearchParams,
+  urlFormStateKey,
+} from "../../_ui/params";
 import { PickRow } from "../../_ui/table";
 import {
   activeCandidateProviderId,
@@ -56,6 +62,7 @@ export default async function VirtualModelsPage({
   );
 
   const strategyFilter = readParam(params, "strategy") ?? "all";
+  const modelFilterFormKey = urlFormStateKey(strategyFilter);
   const visible = virtualModels.filter((model) => {
     if (strategyFilter === "all") {
       return true;
@@ -135,7 +142,12 @@ export default async function VirtualModelsPage({
       ) : (
         <div className="mt-4 grid grid-cols-[344px_minmax(0,1fr)] border-t border-hair overflow-x-auto">
           <div className="border-r border-rule pr-5">
-            <form method="get" action="/models" className="flex items-center gap-2 py-2 pb-[10px]">
+            <form
+              key={modelFilterFormKey}
+              method="get"
+              action="/models"
+              className="flex items-center gap-2 py-2 pb-[10px]"
+            >
               <select
                 name="strategy"
                 defaultValue={strategyFilter}

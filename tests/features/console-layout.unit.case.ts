@@ -112,6 +112,29 @@ describe("console layout contract", () => {
     expect(apiKeys).toContain("No API keys yet");
   });
 
+  test("URL-driven filter forms remount when their displayed parameters change", () => {
+    const filterForms = [
+      ["(dashboard)/activity/page.tsx", "activityFilterFormKey"],
+      ["(dashboard)/models/page.tsx", "modelFilterFormKey"],
+      ["(dashboard)/api-keys/page.tsx", "apiKeyFilterFormKey"],
+      ["(dashboard)/limits/page.tsx", "limitsFilterFormKey"],
+      ["_ui/providers/detail.tsx", "providerModelFilterFormKey"],
+    ] as const;
+
+    for (const [file, key] of filterForms) {
+      const source = read(file);
+      expect(source, file).toContain(`const ${key} = urlFormStateKey(`);
+      expect(source, file).toContain(`key={${key}}`);
+    }
+
+    const syncedSearch = read("_ui/synced-search.tsx");
+    expect(syncedSearch).toContain("setTyped(value)");
+    expect(syncedSearch).toContain("settled.current = value");
+
+    const syncedSelect = read("_ui/synced-select.tsx");
+    expect(syncedSelect).toContain("setPending(value)");
+  });
+
   test("the playground key hint names the console's own key format", () => {
     const playground = read("_ui/playground/playground.tsx");
     expect(playground).toContain("llmi_");

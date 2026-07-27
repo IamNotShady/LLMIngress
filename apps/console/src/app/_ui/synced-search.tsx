@@ -35,6 +35,11 @@ export function SyncedSearchInput({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    setTyped(value);
+    settled.current = value;
+  }, [value]);
+
+  useEffect(() => {
     if (typed === settled.current) {
       return;
     }

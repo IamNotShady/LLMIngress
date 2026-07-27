@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SelectInput } from "./controls";
 
 /**
@@ -29,6 +29,10 @@ export function SyncedSelect({
 } & Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "onChange" | "value">) {
   const router = useRouter();
   const [pending, setPending] = useState(value);
+
+  useEffect(() => {
+    setPending(value);
+  }, [value]);
 
   return (
     <SelectInput

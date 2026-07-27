@@ -8,7 +8,12 @@ import { FilterButton, filterControlClass, Meter } from "../../_ui/controls";
 import { formatCost, formatCount } from "../../_ui/format";
 import { EmptyState, PageShell, PageTitleRow } from "../../_ui/layout";
 import { LimitsDrawer } from "../../_ui/limits/drawer";
-import { buildHref, readParam, type SearchParams } from "../../_ui/params";
+import {
+  buildHref,
+  readParam,
+  type SearchParams,
+  urlFormStateKey,
+} from "../../_ui/params";
 import { GridRow } from "../../_ui/table";
 
 const COLUMNS = "172px 104px 170px 190px 80px 92px 104px 80px 1fr";
@@ -36,8 +41,10 @@ export default async function LimitsPage({
     }),
   }));
 
-  const query = (readParam(params, "q") ?? "").trim().toLowerCase();
+  const queryValue = readParam(params, "q") ?? "";
+  const query = queryValue.trim().toLowerCase();
   const stateFilter = readParam(params, "state") ?? "all";
+  const limitsFilterFormKey = urlFormStateKey(queryValue, stateFilter);
   const visible = rows.filter((row) => {
     if (query && !row.apiKey.name.toLowerCase().includes(query)) {
       return false;
@@ -69,13 +76,14 @@ export default async function LimitsPage({
       ) : (
         <>
           <form
+            key={limitsFilterFormKey}
             method="get"
             action="/limits"
             className="mt-[14px] flex items-center gap-2 overflow-x-auto"
           >
             <input
               name="q"
-              defaultValue={readParam(params, "q") ?? ""}
+              defaultValue={queryValue}
               placeholder="filter by API key name…"
               aria-label="Filter by API key name"
               className={`${filterControlClass} w-[260px]`}

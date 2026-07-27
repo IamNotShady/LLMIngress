@@ -24,7 +24,13 @@ import {
 import { DetailRow, SectionTitle } from "../layout";
 import { formatModelContextTokens } from "../model-capability-format";
 import { MutationForm } from "../mutation-form";
-import { buildHref, readPageSizeParam, readParam, type SearchParams } from "../params";
+import {
+  buildHref,
+  readPageSizeParam,
+  readParam,
+  type SearchParams,
+  urlFormStateKey,
+} from "../params";
 import { PlanQuotaPanel } from "../quota-panel";
 import { formatRange, GridRow, Pagination } from "../table";
 import {
@@ -64,6 +70,7 @@ export function ProviderDetail({
 
   const modelQuery = readParam(params, "modelQuery") ?? "";
   const availability = readParam(params, "availability") ?? "available";
+  const providerModelFilterFormKey = urlFormStateKey(provider.id, modelQuery, availability);
   // The same bound the page applies before it queries: what this renders is a
   // page of models, and its controls have to name the page that was fetched.
   const pageSize = readPageSizeParam(params, "modelPageSize", 20);
@@ -248,7 +255,12 @@ export function ProviderDetail({
 
       <div className="mt-5 flex items-center gap-[10px]">
         <span className="flex-none font-sans text-155 font-semibold text-ink">Models</span>
-        <form method="get" action="/providers" className="flex items-center gap-2">
+        <form
+          key={providerModelFilterFormKey}
+          method="get"
+          action="/providers"
+          className="flex items-center gap-2"
+        >
           <input type="hidden" name="selected" value={provider.id} />
           <input type="hidden" name="modelPageSize" value={String(pageSize)} />
           <input

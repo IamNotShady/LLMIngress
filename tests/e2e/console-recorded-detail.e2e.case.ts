@@ -392,11 +392,24 @@ test("the console says what the design says: compact context, capability words, 
         });
         await expect(page.getByText("200 · served by fallback")).toBeVisible();
 
-        // --- Six filters and a search box: the way back is a control.
-        await page.goto(`${baseUrl}/activity?status=failed`, { waitUntil: "networkidle" });
+        // --- Six filters and a search box: Clear resets both the query and the
+        // reused DOM controls to the default 24-hour view.
+        await page.goto(
+          `${baseUrl}/activity?status=failed&protocol=chat_completions&apiKey=${seeded.apiKeyId}&virtualModel=${seeded.virtualModelId}&provider=${seeded.providerId}&window=7d&q=gw_vocab`,
+          { waitUntil: "networkidle" },
+        );
         await expect(page.getByRole("link", { name: "Clear", exact: true })).toBeVisible();
-        await page.goto(`${baseUrl}/activity`, { waitUntil: "networkidle" });
+        await expect(page.getByLabel("Filter by time window")).toHaveValue("7d");
+        await page.getByRole("link", { name: "Clear", exact: true }).click();
+        await expect(page).toHaveURL(`${baseUrl}/activity`);
         await expect(page.getByRole("link", { name: "Clear", exact: true })).toHaveCount(0);
+        await expect(page.getByLabel("Filter by status")).toHaveValue("");
+        await expect(page.getByLabel("Filter by protocol")).toHaveValue("");
+        await expect(page.getByLabel("Filter by API key")).toHaveValue("");
+        await expect(page.getByLabel("Filter by virtual model")).toHaveValue("");
+        await expect(page.getByLabel("Filter by provider")).toHaveValue("");
+        await expect(page.getByLabel("Filter by time window")).toHaveValue("24h");
+        await expect(page.getByLabel("Search by request id")).toHaveValue("");
 
         // --- The failure rate says what the failure count leaves out.
         await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });

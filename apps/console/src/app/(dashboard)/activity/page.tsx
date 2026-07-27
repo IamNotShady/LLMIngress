@@ -11,7 +11,13 @@ import { ACTIVITY_WINDOWS, activityStatusTone, readActivityWindow } from "../../
 import { ActionLink, FilterButton, filterControlClass } from "../../_ui/controls";
 import { formatClockSeconds, formatCost, formatCount, formatLatency } from "../../_ui/format";
 import { EmptyState, PageShell, PageTitleRow } from "../../_ui/layout";
-import { buildHref, readIntParam, readParam, type SearchParams } from "../../_ui/params";
+import {
+  buildHref,
+  readIntParam,
+  readParam,
+  type SearchParams,
+  urlFormStateKey,
+} from "../../_ui/params";
 import { formatRange, GridRow, Pagination } from "../../_ui/table";
 
 const COLUMNS = "80px 134px 124px 134px 286px 136px 66px 66px 62px 74px 84px";
@@ -67,6 +73,15 @@ export default async function ActivityPage({
     : null;
 
   const consoleHasNeverServed = recordedTotal === 0;
+  const activityFilterFormKey = urlFormStateKey(
+    filters.status,
+    filters.protocol,
+    filters.apiKeyId,
+    filters.virtualModelId,
+    filters.providerId,
+    windowKey,
+    filters.requestIdQuery,
+  );
 
   return (
     <PageShell label="Activity">
@@ -76,6 +91,7 @@ export default async function ActivityPage({
       />
 
       <form
+        key={activityFilterFormKey}
         method="get"
         action="/activity"
         className="mt-[14px] grid grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,1.25fr)_repeat(2,minmax(0,1fr))_minmax(0,1.2fr)_auto_auto] items-center gap-2 overflow-x-auto"

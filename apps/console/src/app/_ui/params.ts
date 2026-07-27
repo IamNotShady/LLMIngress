@@ -30,6 +30,17 @@ export function readPageSizeParam(
 }
 
 /**
+ * Native uncontrolled controls keep their current DOM value across a Next.js
+ * client navigation. Key a URL-driven filter form by the values it displays so
+ * clearing or changing those parameters remounts the controls from server state.
+ */
+export function urlFormStateKey(
+  ...values: Array<string | number | undefined>
+): string {
+  return JSON.stringify(values);
+}
+
+/**
  * Preserve the rest of the query string so a navigation never silently drops a
  * filter. Toast and refusal parameters are always dropped — both belong to the
  * action that produced them, not to every later link: a "the name is taken"

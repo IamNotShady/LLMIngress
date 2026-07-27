@@ -15,7 +15,12 @@ import { ApiKeyDialogs } from "../../_ui/api-keys/dialogs";
 import { ActionLink, FilterButton, filterControlClass } from "../../_ui/controls";
 import { formatCount } from "../../_ui/format";
 import { EmptyState, PageShell, PageTitleRow } from "../../_ui/layout";
-import { buildHref, readParam, type SearchParams } from "../../_ui/params";
+import {
+  buildHref,
+  readParam,
+  type SearchParams,
+  urlFormStateKey,
+} from "../../_ui/params";
 import { PickRow } from "../../_ui/table";
 
 export default async function ApiKeysPage({
@@ -37,7 +42,9 @@ export default async function ApiKeysPage({
       listVirtualModels(),
     ]);
 
-  const query = (readParam(params, "q") ?? "").trim().toLowerCase();
+  const queryValue = readParam(params, "q") ?? "";
+  const query = queryValue.trim().toLowerCase();
+  const apiKeyFilterFormKey = urlFormStateKey(queryValue);
   const visible = query ? apiKeys.filter((key) => key.name.toLowerCase().includes(query)) : apiKeys;
 
   const requestedId = readParam(params, "selected");
@@ -73,13 +80,14 @@ export default async function ApiKeysPage({
         <div className="mt-4 grid grid-cols-[384px_minmax(0,1fr)] border-t border-hair overflow-x-auto">
           <div className="border-r border-rule pr-5">
             <form
+              key={apiKeyFilterFormKey}
               method="get"
               action="/api-keys"
               className="flex items-center gap-2 py-2 pb-[10px]"
             >
               <input
                 name="q"
-                defaultValue={readParam(params, "q") ?? ""}
+                defaultValue={queryValue}
                 placeholder="filter by name…"
                 aria-label="Filter API keys by name"
                 className={`${filterControlClass} min-w-0 flex-1`}

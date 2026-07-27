@@ -105,7 +105,9 @@ fallback attempts, and Provider-connection health history.
 Supported Console pages are Overview, API Keys, Providers, Virtual Models, Activity, Usage, Limits,
 and Playground. Playground keeps its Virtual Model selector empty until an API key is pasted, then
 populates it only from the key-scoped Gateway `GET /v1/models` response. Password setup, session
-authentication, stable operation errors, and secret encryption are required.
+authentication, stable operation errors, and secret encryption are required. URL-driven filter
+controls always reflect the current query state; clearing filters restores their documented
+defaults, including Activity's Last 24h window.
 
 Persistent Worker jobs are exactly `model_refresh`, `provider_connection_probe`, `price_sync`, and
 `provider_quota_probe`.

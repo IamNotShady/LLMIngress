@@ -16,7 +16,7 @@ import { listVirtualModels } from "@llmingress/db/console-virtual-models";
 import Link from "next/link";
 import { ChartLegend, StackedBarChart } from "../_ui/charts";
 import { Meter, StatusDot } from "../_ui/controls";
-import { activityHref } from "../_ui/cross-links";
+import { activityHref, activityWindowForUsageWindow } from "../_ui/cross-links";
 import {
   failureRateTone,
   failureRateToneClass,
@@ -139,7 +139,11 @@ export default async function OverviewPage({
   // this count would overstate what is actually carrying traffic.
   const healthyCount = connectionViews.filter(({ view }) => view.tone === "green").length;
   const unhealthyCount = connectionViews.filter(({ view }) => view.tone === "red").length;
-  const pendingCount = connectionViews.length - unhealthyCount - healthyCount;
+  // Deliberately off and still being checked are different answers to "is it
+  // serving": one is a decision, the other is a wait, and rolling them together
+  // makes a console someone disabled look like one that is still starting up.
+  const disabledCount = connectionViews.filter(({ connection }) => !connection.enabled).length;
+  const checkingCount = connectionViews.length - unhealthyCount - healthyCount - disabledCount;
   // Worst first: this panel exists to surface what is not serving, and a long
   // list of working connections would push it off the fold.
   const orderedConnections = [...connectionViews].sort(
@@ -327,7 +331,8 @@ export default async function OverviewPage({
                 <p className="mt-2 font-mono text-12 leading-[1.6] text-faint">
                   {formatCount(healthyCount)} serving
                   {unhealthyCount > 0 ? ` · ${formatCount(unhealthyCount)} failing` : ""}
-                  {pendingCount > 0 ? ` · ${formatCount(pendingCount)} not serving yet` : ""}
+                  {checkingCount > 0 ? ` · ${formatCount(checkingCount)} still checking` : ""}
+                  {disabledCount > 0 ? ` · ${formatCount(disabledCount)} disabled` : ""}
                 </p>
               ) : null}
             </div>
@@ -351,7 +356,10 @@ export default async function OverviewPage({
               <SectionTitle
                 trailing={
                   <Link
-                    href={activityHref({ status: "failed" })}
+                    href={activityHref({
+                      status: "failed",
+                      window: activityWindowForUsageWindow(window),
+                    })}
                     className="font-mono text-13 text-dim"
                   >
                     → Activity

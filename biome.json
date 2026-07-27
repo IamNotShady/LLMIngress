@@ -12,6 +12,7 @@
       "packages/**/src/**/*.ts",
       "packages/**/src/**/*.tsx",
       "tests/**/*.ts",
+      "scripts/**/*.ts",
       "*.ts",
       "*.mjs"
     ]
@@ -32,6 +33,16 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["scripts/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    },
     {
       "includes": ["tests/**"],
       "linter": {

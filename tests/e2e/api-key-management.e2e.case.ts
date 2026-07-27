@@ -89,11 +89,14 @@ test("ApiKey creation is atomic and explicit switches preserve credentials, gran
     );
     expect(rolledBack.rows).toEqual([]);
 
+    // Switching enforcement off keeps the rules: the editor carries them with
+    // the switch, and this call is that editor. (Passing no rules would mean
+    // the operator cleared every field, which is a different statement.)
     await updateApiKeyWithSettings({
       apiKey,
       databaseUrl: fixture.databaseUrl,
       id: created.id,
-      limitRules: [],
+      limitRules: [rpmRule],
       limitsEnabled: false,
       virtualModels,
     });
@@ -222,6 +225,60 @@ test("Limits list and runtime metrics include only enabled ApiKeys with Limits e
     await expect(listApiKeyLimitRuntimeSnapshots(fixture.databaseUrl)).resolves.toMatchObject([
       { apiKeyId: visibleApiKeyId, currentRpm: 5 },
     ]);
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("switching enforcement off in the same save keeps the ceilings that were edited", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_limits_disable_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const apiKey = normalizeApiKeyFormInput({ name: "disable-with-edits" });
+    const virtualModelId = randomUUID();
+    await withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
+      client.query(
+        `insert into virtual_models (id, name, description, enabled)
+         values ($1, 'disable-vm', 'Disable VM', true)`,
+        [virtualModelId],
+      ),
+    );
+    const virtualModels = normalizeApiKeyVirtualModelSelectionInput({
+      allowedVirtualModelIds: [virtualModelId],
+      defaultVirtualModelId: null,
+    });
+    const created = await createApiKeyWithSettings({
+      apiKey,
+      databaseUrl: fixture.databaseUrl,
+      limitRules: [rpmRule],
+      limitsEnabled: true,
+      virtualModels,
+    });
+
+    // The editor shows the rules and the switch in one form. Unchecking the
+    // switch used to skip the write entirely, so a ceiling edited in the same
+    // submission was silently discarded — "disabling keeps the rules" has to
+    // mean the rules the operator is looking at.
+    await updateApiKeyWithSettings({
+      apiKey,
+      databaseUrl: fixture.databaseUrl,
+      id: created.id,
+      limitRules: [{ ...rpmRule, limitValue: 90 }],
+      limitsEnabled: false,
+      virtualModels,
+    });
+    await expect(listSavedApiKeyLimits(fixture.databaseUrl)).resolves.toMatchObject([
+      { apiKeyId: created.id, limitType: "rpm", limitValue: 90 },
+    ]);
+    await expectApiKeyState(fixture.databaseUrl, created.id, {
+      enabled: true,
+      grantCount: 1,
+      limitCount: 1,
+      limitsEnabled: false,
+    });
   } finally {
     await fixture.dispose();
   }

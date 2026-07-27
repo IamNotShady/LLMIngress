@@ -107,9 +107,12 @@ describe("platform foundation", () => {
 
     expect(packageJson.scripts.test).toBe("tsx scripts/run-with-env.ts vitest run --coverage");
     expect(packageJson.scripts["test:e2e"]).toBe("tsx scripts/run-with-env.ts playwright test");
+    // The gate is lint → typecheck (packages, then the scripts that drive
+    // them) → test → build, in that order and with nothing skipped.
     expect(packageJson.scripts.verify).toBe(
-      "pnpm run lint && pnpm run typecheck && pnpm test && pnpm run build",
+      "pnpm run lint && pnpm run typecheck && pnpm run typecheck:scripts && pnpm test && pnpm run build",
     );
+    expect(packageJson.scripts["typecheck:scripts"]).toBe("tsc -p tsconfig.scripts.json --noEmit");
     expect(packageJson.scripts["verify:features"]).toBe(
       "tsx scripts/run-with-env.ts node scripts/verify-features.mjs",
     );

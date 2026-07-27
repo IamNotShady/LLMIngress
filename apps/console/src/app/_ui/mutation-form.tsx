@@ -52,13 +52,15 @@ export function MutationForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  const markField = (form: HTMLFormElement, invalid: boolean) => {
-    if (!invalidFieldOnError) {
-      return;
-    }
-    const field = form.elements.namedItem(invalidFieldOnError);
-    if (field instanceof HTMLElement) {
-      field.setAttribute("aria-invalid", invalid ? "true" : "false");
+  // Which field was refused is the server's answer to give: a refusal carries
+  // details.field, and marking the one this form happens to lead with puts the
+  // ring around a value nobody complained about.
+  const markField = (form: HTMLFormElement, invalid: boolean, refusedField?: string) => {
+    for (const name of new Set([invalidFieldOnError, refusedField].filter(Boolean))) {
+      const field = form.elements.namedItem(name as string);
+      if (field instanceof HTMLElement) {
+        field.setAttribute("aria-invalid", invalid ? "true" : "false");
+      }
     }
   };
 
@@ -96,9 +98,13 @@ export function MutationForm({
         router.refresh();
         return;
       }
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      const payload = (await response.json().catch(() => null)) as {
+        details?: { field?: unknown };
+        error?: string;
+      } | null;
       setError(payload?.error ?? fallbackError);
-      markField(form, true);
+      const refused = payload?.details?.field;
+      markField(form, true, typeof refused === "string" ? refused : undefined);
     } catch {
       setError(fallbackError);
       markField(form, true);

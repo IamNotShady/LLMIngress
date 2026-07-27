@@ -348,9 +348,10 @@ export async function updateApiKeyWithSettings(input: {
         [input.id, input.apiKey.name, input.limitsEnabled],
       );
       await replaceApiKeyVirtualModelsWithClient(client, input.id, input.virtualModels);
-      if (input.limitsEnabled) {
-        await replaceApiKeyLimitRulesWithClient(client, input.id, input.limitRules);
-      }
+      // limits_enabled decides enforcement; the rules are what the form carried.
+      // Skipping the write when the switch is off silently discarded a ceiling
+      // edited in the same submission.
+      await replaceApiKeyLimitRulesWithClient(client, input.id, input.limitRules);
     },
   });
 }

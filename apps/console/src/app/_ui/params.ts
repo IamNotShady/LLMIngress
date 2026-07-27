@@ -31,8 +31,10 @@ export function readPageSizeParam(
 
 /**
  * Preserve the rest of the query string so a navigation never silently drops a
- * filter. Toast parameters are always dropped — a toast belongs to the action
- * that produced it, not to every later link.
+ * filter. Toast and refusal parameters are always dropped — both belong to the
+ * action that produced them, not to every later link: a "the name is taken"
+ * banner that follows the operator through paging and searching is describing a
+ * submission they have already moved on from.
  */
 export function buildHref(
   pathname: string,
@@ -42,7 +44,7 @@ export function buildHref(
   const next = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     const single = Array.isArray(value) ? value[0] : value;
-    if (single !== undefined && single !== "" && !key.startsWith("toast")) {
+    if (single !== undefined && single !== "" && !key.startsWith("toast") && key !== "formError") {
       next.set(key, single);
     }
   }

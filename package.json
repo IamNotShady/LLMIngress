@@ -12,12 +12,13 @@
     "test": "tsx scripts/run-with-env.ts vitest run --coverage",
     "test:e2e": "tsx scripts/run-with-env.ts playwright test",
     "preview:console": "tsx scripts/run-with-env.ts tsx scripts/preview-console.ts",
-    "verify": "pnpm run lint && pnpm run typecheck && pnpm test && pnpm run build",
+    "verify": "pnpm run lint && pnpm run typecheck && pnpm run typecheck:scripts && pnpm test && pnpm run build",
     "verify:features": "tsx scripts/run-with-env.ts node scripts/verify-features.mjs",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:migrate:status": "tsx scripts/run-with-env.ts tsx scripts/migration-status.ts",
     "db:migrate:check": "tsx scripts/run-with-env.ts tsx scripts/migrate-check.ts",
-    "init": "bash init.sh"
+    "init": "bash init.sh",
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json --noEmit"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",

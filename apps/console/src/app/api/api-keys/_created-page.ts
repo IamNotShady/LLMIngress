@@ -153,7 +153,7 @@ function pageStyles(): string {
 ${standaloneThemeCss()}
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;display:grid;place-items:start center;padding:48px 32px;background:var(--bg);color:var(--ink);font-family:var(--sans)}
-main{width:min(900px,100%);border:1px solid var(--hair);padding:24px 28px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+main{width:min(900px,100%);border:1px solid var(--hair);padding:24px 28px;box-shadow:var(--shadow-dialog)}
 header{display:flex;align-items:center;gap:10px}
 h1{margin:0;font:600 18px var(--sans)}
 .note{font:400 12.5px var(--mono);color:var(--faint)}

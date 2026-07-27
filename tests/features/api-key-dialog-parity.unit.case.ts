@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { PLAYGROUND_KEY_HANDOFF } from "../../apps/console/src/app/_ui/playground/handoff.ts";
+import { standaloneThemeCss } from "../../apps/console/src/app/api/_standalone-theme.ts";
 import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page.ts";
 
 const rootDir = process.cwd();
@@ -110,3 +111,54 @@ describe("api key presentation contract", () => {
     expect(createdPage).toContain("virtualModels: input.virtualModels");
   });
 });
+
+describe("the pages rendered outside the console shell", () => {
+  const standaloneCss = standaloneThemeCss();
+  const globals = readFileSync(join(rootDir, "apps/console/src/app/globals.css"), "utf8");
+  const pages = [
+    ["api/api-keys/_created-page.ts", source("api/api-keys/_created-page.ts")],
+    ["api/provider-keys/route.ts", source("api/provider-keys/route.ts")],
+  ] as const;
+
+  const defined = new Set(
+    Array.from(standaloneCss.matchAll(/(--[a-z0-9-]+)\s*:/g), (match) => match[1] as string),
+  );
+
+  test("define every token they use", () => {
+    // The sheet is a hand-written copy of the console's tokens, and a page that
+    // reaches for one it forgot to copy renders with the property unset — an
+    // invisible border, black-on-black text — with nothing to catch it.
+    for (const [name, page] of pages) {
+      for (const [, token] of page.matchAll(/var\((--[a-z0-9-]+)\)/g)) {
+        expect(defined, `${name} uses ${token}`).toContain(token);
+      }
+      // And no colour written by hand beside the tokens — including inside a
+      // shadow, which is where the last hand-written rgba was hiding.
+      expect(page, name).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+      expect(page, name).not.toMatch(/box-shadow:[^;]*(?:#[0-9a-f]{3,8}|rgba?\()/i);
+    }
+  });
+
+  test("copy the console's own values, so the two cannot drift apart", () => {
+    // The two font tokens are named differently on purpose: the console's
+    // resolve to next/font variables, which are stamped by the layout these
+    // pages are rendered outside of, so they carry the families themselves.
+    const namedDifferently = new Set(["--sans", "--mono"]);
+    for (const token of defined) {
+      if (namedDifferently.has(token)) {
+        continue;
+      }
+      const inGlobals = new RegExp(`${token}:\\s*([^;\\n]+)`).exec(globals);
+      expect(inGlobals, `${token} is not a console token`).not.toBeNull();
+      const standaloneValue = new RegExp(`${token}:([^;}]+)`).exec(standaloneCss)?.[1]?.trim();
+      expect(normalizeCssValue(standaloneValue), token).toBe(
+        normalizeCssValue(inGlobals?.[1]?.trim()),
+      );
+    }
+  });
+});
+
+/** Whitespace is not a difference; anything else is. */
+function normalizeCssValue(value: string | undefined): string {
+  return (value ?? "").replaceAll(/\s+/g, "");
+}

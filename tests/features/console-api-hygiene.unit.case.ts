@@ -3,6 +3,7 @@ import { ConsoleOperationError } from "@llmingress/db/console-operation-error";
 import { describe, expect, it } from "vitest";
 import { classifyConsoleActionError } from "../../apps/console/src/app/api/_error-classify";
 import { classifyAndLogConsoleActionError } from "../../apps/console/src/app/api/_errors";
+import { readNumber } from "../../apps/console/src/app/api/_form";
 import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page";
 
 const guardedRoutes = [
@@ -140,5 +141,37 @@ describe("console api hygiene", () => {
       expect(source, file).toContain("consoleActionErrorResponse");
       expect(source, file).not.toMatch(/error:\s*(String\(error\)|error\.message|`\$\{error)/);
     }
+  });
+});
+
+describe("form values the console reads back", () => {
+  const form = (values: Record<string, string>) => {
+    const data = new FormData();
+    for (const [key, value] of Object.entries(values)) {
+      data.set(key, value);
+    }
+    return data;
+  };
+
+  it("refuses a number that is not one instead of falling back to a default", () => {
+    // PRIORITY is a text field with inputMode=numeric, so "high" reaches the
+    // route. Reading it as undefined let the caller's ?? 100 stand in, and the
+    // operator got a row back that disagreed with what they typed.
+    expect(readNumber(form({ priority: "20" }), "priority")).toBe(20);
+    expect(readNumber(form({}), "priority")).toBeUndefined();
+    expect(readNumber(form({ priority: "   " }), "priority")).toBeUndefined();
+
+    let refused: unknown;
+    try {
+      readNumber(form({ priority: "high" }), "priority");
+    } catch (error) {
+      refused = error;
+    }
+    expect(classifyConsoleActionError(refused, "fallback")).toMatchObject({
+      code: "priority_not_a_number",
+      status: 400,
+    });
+    // And it names the field, so the dialog can ring the one that was refused.
+    expect((refused as { details?: { field?: string } }).details?.field).toBe("priority");
   });
 });

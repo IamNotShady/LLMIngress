@@ -22,8 +22,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     version: process.env.LLMINGRESS_VERSION?.trim() || "dev",
   };
 
-  // Nothing is read from the database for a visitor who has not signed in: the
-  // sign-in line is built from process state alone.
+  // The sign-in screens' status line is built from process state alone — the
+  // session lookup above is the only read a visitor who has not signed in
+  // causes, and it says nothing about them.
   if (authState === "setup") {
     return <FirstRunSetup statusLine={consoleStatusLine(statusFacts)} />;
   }

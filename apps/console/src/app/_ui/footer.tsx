@@ -7,11 +7,12 @@ export type ConsoleFooterProps = {
 };
 
 /**
- * One-line condensation of the same facts, for the screens that have no footer.
- * It says the database is reachable and the encryption key is usable, which is
- * what someone staring at a sign-in box needs to know. It does not say which
- * postgres — a version number is a fingerprint, and this line is readable by
- * anyone who can reach the port. The footer inside names it, after signing in.
+ * One-line condensation for the screens that have no footer. It says the
+ * version and whether the encryption key is usable — process facts, which is
+ * all this line can honestly carry: it renders before anything has queried the
+ * database, so a word about postgres here would print the same whether the
+ * database were up or down. The footer inside names it, after signing in, from
+ * a reading that actually happened.
  */
 export function consoleStatusLine({
   encryptionReady,
@@ -19,7 +20,6 @@ export function consoleStatusLine({
 }: Omit<ConsoleFooterProps, "runtime">): string {
   return [
     `LLMIngress ${version}`,
-    "postgres",
     encryptionReady ? "encryption ok" : "encryption unavailable",
   ].join(" · ");
 }

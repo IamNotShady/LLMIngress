@@ -51,13 +51,28 @@ const PAGES: Array<[string, string]> = [
   ["dialog-add-provider", "/providers?dialog=new"],
   // Both credential dialogs in their edit shape, where new and edit are easy
   // to confuse: a token connection and a key connection.
-  ["dialog-edit-token", "/providers?selected=__CLAUDE__&providerKeyDialog=__CLAUDE__&connection=__OAUTH__"],
+  [
+    "dialog-edit-token",
+    "/providers?selected=__CLAUDE__&providerKeyDialog=__CLAUDE__&connection=__OAUTH__",
+  ],
   // The two OAuth flows in the shape the operator meets them: a device code
   // waiting to be entered, and an authorization url waiting for its callback.
-  ["dialog-device-code", "/providers?selected=__CLAUDE__&providerKeyDialog=__CLAUDE__&connection=new&providerOAuthUserCode=GQTN-8FDX&providerOAuthVerificationUri=https%3A%2F%2Fplatform.minimax.io%2Fdevice&providerOAuthInterval=5&providerOAuthId=__OAUTH__&providerOAuthExpiresAt=__EXPIRES__"],
-  ["dialog-auth-code", "/providers?selected=__CLAUDE__&providerKeyDialog=__CLAUDE__&connection=new&providerAuthorizeUrl=https%3A%2F%2Fclaude.ai%2Foauth%2Fauthorize%3Fclient_id%3Dllmingress%26response_type%3Dcode%26code_challenge%3DE9Melhoa2Owvfr&providerOAuthId=__OAUTH__&providerOAuthExpiresAt=__EXPIRES__"],
-  ["dialog-add-key", "/providers?selected=__OPENROUTER__&providerKeyDialog=__OPENROUTER__&connection=new"],
-  ["dialog-edit-key", "/providers?selected=__OPENROUTER__&providerKeyDialog=__OPENROUTER__&connection=__ORMAIN__"],
+  [
+    "dialog-device-code",
+    "/providers?selected=__CLAUDE__&providerKeyDialog=__CLAUDE__&connection=new&providerOAuthUserCode=GQTN-8FDX&providerOAuthVerificationUri=https%3A%2F%2Fplatform.minimax.io%2Fdevice&providerOAuthInterval=5&providerOAuthId=__OAUTH__&providerOAuthExpiresAt=__EXPIRES__",
+  ],
+  [
+    "dialog-auth-code",
+    "/providers?selected=__CLAUDE__&providerKeyDialog=__CLAUDE__&connection=new&providerAuthorizeUrl=https%3A%2F%2Fclaude.ai%2Foauth%2Fauthorize%3Fclient_id%3Dllmingress%26response_type%3Dcode%26code_challenge%3DE9Melhoa2Owvfr&providerOAuthId=__OAUTH__&providerOAuthExpiresAt=__EXPIRES__",
+  ],
+  [
+    "dialog-add-key",
+    "/providers?selected=__OPENROUTER__&providerKeyDialog=__OPENROUTER__&connection=new",
+  ],
+  [
+    "dialog-edit-key",
+    "/providers?selected=__OPENROUTER__&providerKeyDialog=__OPENROUTER__&connection=__ORMAIN__",
+  ],
   ["dialog-virtual-model", "/models?dialog=edit"],
   // The candidate browser under each protocol: only providers that speak it.
   ["dialog-vm-chat", "/models?dialog=new&protocol=chat_completions"],
@@ -348,20 +363,40 @@ async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture
 
 async function main() {
   mkdirSync(OUT, { recursive: true });
-  const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_preview_${randomUUID().replaceAll("-", "_")}`,
-  });
-  await runMigrations({ databaseUrl: fixture.databaseUrl });
-  await seed(fixture);
-
-  const consoleApp = startConsoleProcess({
-    databaseUrl: fixture.databaseUrl,
-    port: await getFreePort(),
-  });
-  const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
-  const browser = await chromium.launch();
+  // Everything acquired here is released by the same list, in reverse: this
+  // script starts a detached dev server and a throwaway database, and a failure
+  // between two acquisitions used to leave both of them running. Ctrl-C counts
+  // as a failure between two acquisitions.
+  const release: Array<() => Promise<void>> = [];
+  const shutdown = async () => {
+    for (const step of release.reverse()) {
+      await step().catch(() => {});
+    }
+    release.length = 0;
+  };
+  const onSignal = () => {
+    void shutdown().then(() => process.exit(130));
+  };
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
 
   try {
+    const fixture = await createTestPostgresFixture({
+      databaseNamePrefix: `llmingress_preview_${randomUUID().replaceAll("-", "_")}`,
+    });
+    release.push(() => fixture.dispose());
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await seed(fixture);
+
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+    release.push(() => stopConsoleProcess(consoleApp));
+    const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+    const browser = await chromium.launch();
+    release.push(() => browser.close());
+
     // A cold Next cache compiles the whole dashboard tree on the first request;
     // this is a tool, not a test, so it waits rather than failing the run.
     await waitForConsole(baseUrl, consoleApp, 180_000);
@@ -373,7 +408,8 @@ async function main() {
       if (message.type() === "error" || message.type() === "warning") {
         const where = visiting;
         void Promise.all(message.args().map((arg) => arg.jsonValue().catch(() => "?"))).then(
-          (args) => console.log(`[browser ${where}] ${args.map(String).join(" | ").slice(0, 4000)}`),
+          (args) =>
+            console.log(`[browser ${where}] ${args.map(String).join(" | ").slice(0, 4000)}`),
         );
       }
     });
@@ -420,10 +456,21 @@ async function main() {
         if (theme === "light") {
           const bad = await page.evaluate(() => {
             const report: string[] = [];
-            for (const selector of ["a a", "p div", "p p", "form form", "button button", "label label", "p ul", "p ol"]) {
+            for (const selector of [
+              "a a",
+              "p div",
+              "p p",
+              "form form",
+              "button button",
+              "label label",
+              "p ul",
+              "p ol",
+            ]) {
               const hits = document.querySelectorAll(selector);
               if (hits.length > 0) {
-                report.push(`${selector} x${hits.length} :: ${(hits[0]?.outerHTML ?? "").slice(0, 160)}`);
+                report.push(
+                  `${selector} x${hits.length} :: ${(hits[0]?.outerHTML ?? "").slice(0, 160)}`,
+                );
               }
             }
             return report;
@@ -453,7 +500,8 @@ async function main() {
       await page.goto(`${baseUrl}${path}`);
       await page.waitForLoadState("networkidle");
       const report = await page.evaluate(() => {
-        const overflow = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+        const overflow =
+          document.documentElement.scrollWidth - document.documentElement.clientWidth;
         if (overflow <= 0) return null;
         const culprits: string[] = [];
         for (const el of Array.from(document.querySelectorAll("*"))) {
@@ -475,9 +523,9 @@ async function main() {
 
     console.log(`screenshots written to ${OUT}`);
   } finally {
-    await browser.close();
-    await stopConsoleProcess(consoleApp);
-    await fixture.dispose();
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
+    await shutdown();
   }
 }
 

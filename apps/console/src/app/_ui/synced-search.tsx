@@ -32,6 +32,7 @@ export function SyncedSearchInput({
   const router = useRouter();
   const [typed, setTyped] = useState(value);
   const settled = useRef(value);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (typed === settled.current) {
@@ -41,7 +42,12 @@ export function SyncedSearchInput({
       settled.current = typed;
       const url = new URL(href.replace("__value__", encodeURIComponent(typed)), location.origin);
       for (const field of preserveFields ?? []) {
-        const element = document.querySelector<HTMLInputElement>(`input[name="${field}"]`);
+        // The draft this box sits beside — scoped to its own form, the way the
+        // select next to it reads its siblings. A document-wide lookup finds
+        // whichever field of that name renders first on the page.
+        const element = inputRef.current
+          ?.closest("form")
+          ?.elements.namedItem(field) as HTMLInputElement | null;
         if (element?.value) {
           url.searchParams.set(`editor_${field}`, element.value);
         }
@@ -54,6 +60,7 @@ export function SyncedSearchInput({
   return (
     <input
       {...rest}
+      ref={inputRef}
       name={name}
       placeholder={placeholder}
       value={typed}

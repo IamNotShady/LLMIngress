@@ -12,10 +12,10 @@ import { THEME_BOOTSTRAP_SCRIPT } from "../_ui/theme";
  * query keeps a scripts-off browser from landing on the wrong canvas.
  */
 const LIGHT_TOKENS =
-  "--bg:#ffffff;--ink:#23262b;--seg:#343a42;--segfg:#ffffff;--dim:#767d86;--faint:#a2a8b0;--hair:#ccd4dc;--rule:#e6eaef;--rule2:#f2f4f7;--track:#edf0f4;--btnbg:#fbfcfd;--btnbd:#ccd3da;--accent:oklch(0.64 0.13 245);--ambtx:oklch(0.56 0.12 68);--ambbd:oklch(0.88 0.08 85);--sans:'Open Sans',system-ui,sans-serif;--mono:'DM Mono',ui-monospace,monospace";
+  "--bg:#ffffff;--ink:#23262b;--seg:#343a42;--segfg:#ffffff;--dim:#767d86;--faint:#a2a8b0;--hair:#ccd4dc;--rule:#e6eaef;--rule2:#f2f4f7;--track:#edf0f4;--btnbg:#fbfcfd;--btnbd:#ccd3da;--accent:oklch(0.64 0.13 245);--ambtx:oklch(0.56 0.12 68);--ambbd:oklch(0.88 0.08 85);--shadow-dialog:0 12px 40px rgba(0, 0, 0, 0.25);--sans:'Open Sans',system-ui,sans-serif;--mono:'DM Mono',ui-monospace,monospace";
 
 const DARK_TOKENS =
-  "--bg:#15181c;--ink:#e9ecf0;--seg:oklch(0.72 0.12 245);--segfg:#15181c;--dim:#b3bac2;--faint:#8b929b;--hair:rgba(255,255,255,.17);--rule:rgba(255,255,255,.09);--rule2:rgba(255,255,255,.05);--track:#20242a;--btnbg:#22262d;--btnbd:rgba(255,255,255,.22);--accent:oklch(0.70 0.12 245);--ambtx:oklch(0.85 0.11 82);--ambbd:rgba(226,182,96,.30)";
+  "--bg:#15181c;--ink:#e9ecf0;--seg:oklch(0.72 0.12 245);--segfg:#15181c;--dim:#b3bac2;--faint:#8b929b;--hair:rgba(255,255,255,.17);--rule:rgba(255,255,255,.09);--rule2:rgba(255,255,255,.05);--track:#20242a;--btnbg:#22262d;--btnbd:rgba(255,255,255,.22);--accent:oklch(0.70 0.12 245);--ambtx:oklch(0.85 0.11 82);--ambbd:rgba(226,182,96,.30);--shadow-dialog:0 12px 40px rgba(0, 0, 0, 0.25)";
 
 /** The console's tokens, resolved the way the console resolves them. */
 export function standaloneThemeCss(): string {

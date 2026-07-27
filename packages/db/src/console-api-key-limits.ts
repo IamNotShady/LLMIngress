@@ -100,15 +100,6 @@ export type ApiKeyLimitQueryClient = {
 
 const budgetPeriods = ["day", "week", "month"] as const;
 
-export const defaultApiKeyLimitFormValues = {
-  budgetPeriod: "month",
-  budgetUsd: 10,
-  concurrency: 10,
-  rpm: 60,
-  tokenLimit: 200_000,
-  tpm: 1_000_000,
-} as const;
-
 export function normalizeApiKeyLimitFormInput(
   input: ApiKeyLimitFormInput,
 ): NormalizedApiKeyLimitFormInput {

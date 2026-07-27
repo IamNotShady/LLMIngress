@@ -1083,6 +1083,26 @@ test("the connection dialog keeps the pasted secret out of its answer, and says 
         expect(await response.text()).not.toContain(secret);
         await expect(page.getByText(secret)).toHaveCount(0);
 
+        // --- A value that is not a number is refused, and the ring goes round
+        // the field the server named — not the one this form happens to lead
+        // with. "high" used to be read as nothing and saved as priority 100.
+        await page.goto(
+          `${baseUrl}/providers?selected=${providerId}&providerKeyDialog=${providerId}`,
+          { waitUntil: "networkidle" },
+        );
+        await page.getByPlaceholder("paste the provider key").fill("sk-priority-probe-0001");
+        await page.getByLabel("PRIORITY", { exact: false }).fill("high");
+        await page.getByRole("button", { name: "Add key" }).click();
+        await expect(page.getByText("priority must be a number.")).toBeVisible();
+        await expect(page.getByLabel("PRIORITY", { exact: false })).toHaveAttribute(
+          "aria-invalid",
+          "true",
+        );
+        await expect(page.getByPlaceholder("paste the provider key")).toHaveAttribute(
+          "aria-invalid",
+          "true",
+        );
+
         // --- A link to a connection that is not on this provider says so. It
         // used to open as "Add API key", asking for a new credential under a
         // title that reads like an edit of the one that is gone.

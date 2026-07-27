@@ -1,11 +1,13 @@
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { type ChildProcessByStdio, spawn } from "node:child_process";
 import { rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { resolve } from "node:path";
+import type { Readable } from "node:stream";
 import { expect, type Page } from "@playwright/test";
 
 export type ConsoleProcess = {
-  child: ChildProcessWithoutNullStreams;
+  /** stdin is ignored; stdout and stderr are piped so failures can be read. */
+  child: ChildProcessByStdio<null, Readable, Readable>;
   distDirectory: string;
   port: number;
   stderr: string[];

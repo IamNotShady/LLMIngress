@@ -63,6 +63,22 @@ describe("api key grant parameters", () => {
     expect(readDefaultGrantId(untouched, "vm-b")).toBe("vm-b");
   });
 
+  it("leaves a refusal behind with the submission that caused it", () => {
+    // formError belongs to one save, not to every link after it: paging the
+    // grants browser or searching it used to carry "the name is taken" along,
+    // describing a submission the operator has already moved on from.
+    const refused: SearchParams = {
+      dialog: "new",
+      formError: "That name is taken.",
+      grantPage: "2",
+    };
+    const paged = navigate(buildHref("/api-keys", refused, { grantPage: "3" }));
+
+    expect(paged.formError).toBeUndefined();
+    expect(paged.grantPage).toBe("3");
+    expect(paged.dialog).toBe("new");
+  });
+
   it("survives the filters the browser applies alongside it", () => {
     const revoked = toggle({ dialog: "edit" }, [], "");
     const filtered = navigate(buildHref("/api-keys", revoked.params, { grantShow: "granted" }));

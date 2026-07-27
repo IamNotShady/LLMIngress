@@ -77,7 +77,11 @@ export const POST = withConsoleAuth(async (request) => {
           name: readText(form, "name"),
         }),
         id,
-        limitRules: limitsEnabled ? readApiKeyLimitRules(form) : [],
+        // The rules the dialog was showing, whether or not they are being
+        // enforced: unchecking the switch in the same save as editing a ceiling
+        // used to drop the edit, and "disabling keeps the rules" has to mean the
+        // rules the operator is looking at.
+        limitRules: readApiKeyLimitRules(form),
         limitsEnabled,
         virtualModels: normalizeApiKeyVirtualModelSelectionInput({
           allowedVirtualModelIds: readTextValues(form, "allowedVirtualModelIds"),

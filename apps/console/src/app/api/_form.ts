@@ -23,6 +23,12 @@ export function readNullableText(form: FormData, name: string): string | null | 
   return value.trim() || null;
 }
 
+/**
+ * Absent means absent; present-but-not-a-number is a refusal. Returning
+ * undefined for both let callers fall back to their default, so typing "high"
+ * into PRIORITY saved 100 and said nothing — the field the operator typed in
+ * disagreeing with the row they get back.
+ */
 export function readNumber(form: FormData, name: string): number | undefined {
   const value = readText(form, name);
   if (!value) {
@@ -30,7 +36,16 @@ export function readNumber(form: FormData, name: string): number | undefined {
   }
 
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  if (!Number.isFinite(parsed)) {
+    throw consoleValidationError(`${name} must be a number.`, `${toSnakeCase(name)}_not_a_number`, {
+      field: name,
+    });
+  }
+  return parsed;
+}
+
+function toSnakeCase(value: string): string {
+  return value.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
 }
 
 export function readTextValues(form: FormData, name: string): string[] {

@@ -47,6 +47,7 @@ export function ProviderDialogs({
     providerKeyDialog: null,
     providerOAuthError: null,
     providerOAuthErrorCode: null,
+    providerOAuthExpiresAt: null,
     providerOAuthId: null,
     providerOAuthInterval: null,
     providerOAuthUserCode: null,

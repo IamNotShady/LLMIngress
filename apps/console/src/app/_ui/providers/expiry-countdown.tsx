@@ -16,7 +16,11 @@ function remainingLabel(expiresAt: number, now: number): string {
  */
 export function ExpiryCountdown({ expiresAt, label }: { expiresAt: string; label: string }) {
   const target = new Date(expiresAt).getTime();
-  const [now, setNow] = useState(target);
+  // Null until the first tick: seeding this with the target makes now === target
+  // on the first render, which reads as "expired" — a red line the operator sees
+  // for a frame before it corrects itself. The server and the first client
+  // render agree on the label alone, so there is nothing to correct.
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
     setNow(Date.now());
@@ -27,10 +31,14 @@ export function ExpiryCountdown({ expiresAt, label }: { expiresAt: string; label
   if (!Number.isFinite(target)) {
     return null;
   }
-  const expired = now >= target;
+  const expired = now !== null && now >= target;
   return (
     <span className={`ml-auto font-mono text-12 ${expired ? "text-redtx" : "text-faint"}`}>
-      {expired ? `${label} expired` : `${label} expires in ${remainingLabel(target, now)}`}
+      {now === null
+        ? label
+        : expired
+          ? `${label} expired`
+          : `${label} expires in ${remainingLabel(target, now)}`}
     </span>
   );
 }

@@ -163,7 +163,8 @@ test("console colors status by meaning and keeps destructive actions quiet but c
         await expect(page.getByRole("button", { name: "Save rules" })).toBeVisible();
         await page.getByRole("link", { name: "Delete rules" }).click();
         await expect(page.getByRole("dialog", { name: "Delete limit rules" })).toBeVisible();
-        await expect(page.getByText("To pause enforcement without losing the rules")).toBeVisible();
+        await expect(page.getByRole("link", { name: "Disable limits instead" })).toHaveCount(0);
+        await expect(page.getByText("Deleting rules also switches limits off")).toBeVisible();
       } finally {
         await context.close();
       }

@@ -133,8 +133,15 @@ describe("console layout contract", () => {
 
     const providerDetail = read("_ui/providers/detail.tsx");
     expect(providerDetail).toContain("flex-wrap");
-    expect(read("(dashboard)/providers/page.tsx")).toContain(
-      'data-testid="providers-master-detail"',
+    const providersPage = read("(dashboard)/providers/page.tsx");
+    expect(providersPage).toContain('data-testid="providers-master-detail"');
+    expect(providersPage).toContain(
+      "grid-cols-[minmax(0,344px)_minmax(0,1fr)]",
     );
+    expect(
+      providersPage.match(
+        /data-testid="providers-master-detail"[\s\S]*?className="([^"]+)"/,
+      )?.[1],
+    ).not.toContain("overflow-x-auto");
   });
 });

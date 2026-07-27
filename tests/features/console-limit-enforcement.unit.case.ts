@@ -2,16 +2,24 @@ import { describe, expect, it } from "vitest";
 import { normalizeApiKeyLimitRulesInput } from "../../packages/db/src/console-api-key-limits.ts";
 
 describe("api key limit enforcement policy", () => {
-  it("defaults every rule to block when the form does not say otherwise", () => {
+  it("creates all five rules when every enabled-limits field is present", () => {
     const rules = normalizeApiKeyLimitRulesInput({
       budgetPeriod: "month",
       budgetUsd: "25",
       concurrency: "4",
+      enforcementPolicy: "block",
       rpm: "120",
       tokenLimit: "16384",
       tpm: "50000",
     });
 
+    expect(rules.map((rule) => rule.limitType).sort()).toEqual([
+      "budget",
+      "concurrency",
+      "rpm",
+      "token",
+      "tpm",
+    ]);
     expect(rules.every((rule) => rule.enforcementPolicy === "block")).toBe(true);
   });
 
@@ -38,19 +46,27 @@ describe("api key limit enforcement policy", () => {
     expect(rules.every((rule) => rule.enforcementPolicy === "warn_only")).toBe(true);
   });
 
-  it("leaves out the ceilings the form left blank", () => {
-    const rules = normalizeApiKeyLimitRulesInput({
-      budgetPeriod: "month",
-      budgetUsd: "25",
-      concurrency: "",
-      rpm: "",
-      tokenLimit: null,
-      tpm: "50000",
-    });
-
-    // An empty field is unlimited, which is a rule that does not exist — not a
-    // ceiling of zero, and not a reason to refuse the save.
-    expect(rules.map((rule) => rule.limitType).sort()).toEqual(["budget", "tpm"]);
+  it.each([
+    ["budgetUsd", { budgetUsd: "" }],
+    ["rpm", { rpm: "" }],
+    ["tpm", { tpm: "" }],
+    ["tokenLimit", { tokenLimit: "" }],
+    ["concurrency", { concurrency: "" }],
+    ["budgetPeriod", { budgetPeriod: "" }],
+    ["enforcementPolicy", { enforcementPolicy: "" }],
+  ])("rejects enabled limits when %s is empty", (_field, override) => {
+    expect(() =>
+      normalizeApiKeyLimitRulesInput({
+        budgetPeriod: "month",
+        budgetUsd: "25",
+        concurrency: "4",
+        enforcementPolicy: "block",
+        rpm: "120",
+        tokenLimit: "16384",
+        tpm: "50000",
+        ...override,
+      }),
+    ).toThrow(/required/i);
   });
 
   it("still refuses a ceiling that was typed and makes no sense", () => {
@@ -58,6 +74,8 @@ describe("api key limit enforcement policy", () => {
       normalizeApiKeyLimitRulesInput({
         budgetPeriod: "month",
         budgetUsd: "0",
+        concurrency: "4",
+        enforcementPolicy: "block",
         rpm: "120",
         tokenLimit: "16384",
         tpm: "50000",
@@ -70,6 +88,7 @@ describe("api key limit enforcement policy", () => {
       normalizeApiKeyLimitRulesInput({
         budgetPeriod: "month",
         budgetUsd: "25",
+        concurrency: "4",
         enforcementPolicy: "ignore",
         rpm: "120",
         tokenLimit: "16384",

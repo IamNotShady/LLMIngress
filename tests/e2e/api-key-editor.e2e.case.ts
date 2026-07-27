@@ -120,9 +120,8 @@ test("the API key editor browses grants, keeps the typed name, and saves the lim
         expect(withLimits.rows[0]?.enforcement_policy).toBe("warn_only");
         expect(withLimits.rows[0]?.period).toBe("week");
 
-        // --- ENABLE LIMITS controls enforcement, not storage. A key created
-        // with the switch off keeps the ceilings the operator entered so they
-        // are still there when enforcement is enabled later.
+        // --- With ENABLE LIMITS off, limit fields are not parsed or stored.
+        // Even an invalid value is ignored because limits are outside this save.
         await page.goto(`${baseUrl}/api-keys?dialog=new`, { waitUntil: "networkidle" });
         // Whatever the first page offers: this run is about the limits switch.
         await page
@@ -131,50 +130,24 @@ test("the API key editor browses grants, keeps the typed name, and saves the lim
           .click();
         await page.waitForURL((url) => url.searchParams.get("grantIds") !== null);
         await page.getByLabel("API key name").fill("editor-unlimited-key");
-        await page.getByLabel("Budget USD", { exact: true }).fill("37");
-        await page.getByLabel("Budget period").selectOption("week");
-        await page.getByRole("textbox", { name: "RPM", exact: false }).fill("321");
-        await page.getByLabel("Enforcement policy").selectOption("warn_only");
+        await page.getByLabel("Budget USD", { exact: true }).fill("not-a-number");
+        await page.getByRole("textbox", { name: "RPM", exact: false }).fill("");
         await page.getByLabel("Enable limits").uncheck();
         await page.getByRole("button", { name: "Create key" }).click();
         await expect(page.getByText("SECRET · SHOWN ONCE")).toBeVisible();
 
-        const disabledWithRules = await withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
-          client.query<{
-            enforcement_policy: string;
-            limit_type: string;
-            limit_value: string;
-            limits_enabled: boolean;
-            period: string | null;
-          }>(
+        const disabledWithoutRules = await withDedicatedPostgresClient(
+          fixture.databaseUrl,
+          (client) =>
+            client.query<{ limits_enabled: boolean; rule_count: number }>(
             `select api_keys.limits_enabled,
-                      api_key_limits.limit_type,
-                      api_key_limits.limit_value::text,
-                      api_key_limits.period,
-                      api_key_limits.enforcement_policy
+                    (select count(*)::integer from api_key_limits
+                     where api_key_id = api_keys.id) as rule_count
                from api_keys
-               join api_key_limits on api_key_limits.api_key_id = api_keys.id
-               where api_keys.name = 'editor-unlimited-key'
-                 and api_key_limits.limit_type in ('budget', 'rpm')
-               order by api_key_limits.limit_type`,
-          ),
+               where api_keys.name = 'editor-unlimited-key'`,
+            ),
         );
-        expect(disabledWithRules.rows).toEqual([
-          {
-            enforcement_policy: "warn_only",
-            limit_type: "budget",
-            limit_value: "37.000000",
-            limits_enabled: false,
-            period: "week",
-          },
-          {
-            enforcement_policy: "warn_only",
-            limit_type: "rpm",
-            limit_value: "321.000000",
-            limits_enabled: false,
-            period: "minute",
-          },
-        ]);
+        expect(disabledWithoutRules.rows).toEqual([{ limits_enabled: false, rule_count: 0 }]);
 
         // --- A refused creation comes back as the dialog, holding what was
         // typed. Creating cannot post through the in-place path — its success
@@ -204,36 +177,21 @@ test("the API key editor browses grants, keeps the typed name, and saves the lim
         );
         expect(refused.rows).toEqual([]);
 
-        // --- A ceiling the operator removed stays removed across the refusal.
-        // An empty field has nothing to put in the query string, so its
-        // parameter is absent — and reading absent as "no draft" put the
-        // suggested defaults back under five fields that had been deliberately
-        // emptied, which the next save would then store as real limits.
+        // --- Enabled limits are one complete contract. An empty ceiling is
+        // refused and stays empty so the operator can fix that field.
         await page.goto(`${baseUrl}/api-keys?dialog=new`, { waitUntil: "networkidle" });
         await page
           .getByRole("link", { name: /^Grant / })
           .first()
           .click();
         await page.waitForURL((url) => url.searchParams.get("grantIds") !== null);
-        const ceilings = ["Budget USD", "RPM", "TPM", "TOKENS / REQUEST", "CONCURRENCY"] as const;
-        for (const ceiling of ceilings) {
-          await page.getByLabel(ceiling, { exact: ceiling === "Budget USD" }).fill("");
-        }
-        // The name is what is wrong; every ceiling is exactly as intended. A
-        // space gets past the field's own required check and is refused by the
-        // route, which is the round trip this is about.
-        await page.getByLabel("API key name").fill(" ");
+        await page.getByLabel("API key name").fill("editor-empty-limit");
+        await page.getByRole("textbox", { name: "RPM", exact: false }).fill("");
         await page.getByRole("button", { name: "Create key" }).click();
 
-        await expect(
-          page.getByRole("dialog", { name: "New API Key" }).getByRole("alert"),
-        ).toBeVisible();
-        for (const ceiling of ceilings) {
-          await expect(
-            page.getByLabel(ceiling, { exact: ceiling === "Budget USD" }),
-            ceiling,
-          ).toHaveValue("");
-        }
+        const emptyLimitDialog = page.getByRole("dialog", { name: "New API Key" });
+        await expect(emptyLimitDialog.getByRole("alert")).toContainText(/RPM limit is required/i);
+        await expect(page.getByRole("textbox", { name: "RPM", exact: false })).toHaveValue("");
 
         // --- Revoking a grant has to mean revoking it. What the operator
         // unchecked travels in the URL, and an empty parameter cannot say
@@ -284,13 +242,12 @@ test("the API key editor browses grants, keeps the typed name, and saves the lim
         await page.waitForURL((url) => url.searchParams.get("dialog") === null);
         expect((await savedAccess()).rows[0]).toEqual({ default_name: null, grants: 1 });
 
-        // --- The editor's limit fields carry the same promise as the drawer:
-        // a field left empty is unlimited, so clearing the budget removes the
-        // rule instead of saving the ceiling that is still in the database.
+        // --- Enabled limits stay complete. Clearing one field refuses the save
+        // and leaves all five stored rules unchanged.
         await page.goto(editorUrl(), { waitUntil: "networkidle" });
         await editor.getByLabel("Budget USD", { exact: true }).fill("");
         await editor.getByRole("button", { name: "Save", exact: true }).click();
-        await page.waitForURL((url) => url.searchParams.get("dialog") === null);
+        await expect(editor.getByRole("alert")).toContainText(/Budget USD limit is required/i);
         const remaining = await withDedicatedPostgresClient(fixture.databaseUrl, (client) =>
           client.query<{ limit_type: string }>(
             `select limit_type from api_key_limits where api_key_id = $1 order by limit_type`,
@@ -298,11 +255,15 @@ test("the API key editor browses grants, keeps the typed name, and saves the lim
           ),
         );
         expect(remaining.rows.map((row) => row.limit_type)).toEqual([
+          "budget",
           "concurrency",
           "rpm",
           "token",
           "tpm",
         ]);
+        await editor.getByLabel("Budget USD", { exact: true }).fill("25");
+        await editor.getByRole("button", { name: "Save", exact: true }).click();
+        await page.waitForURL((url) => url.searchParams.get("dialog") === null);
 
         // --- Enforcement is a real choice on the edit path too, not only when
         // the key is created: the select shows what is stored and stores what

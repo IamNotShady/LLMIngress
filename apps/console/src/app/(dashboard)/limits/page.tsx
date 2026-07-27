@@ -135,9 +135,8 @@ export default async function LimitsPage({
                     >
                       {view.label}
                     </span>
-                    {/* Disabling keeps every rule and stops enforcing them, so
-                        the ceiling is not what this key is running under — the
-                        column says which of the two it is. */}
+                    {/* A disabled legacy row is not an active ceiling. New
+                        writes remove its rules when limits are switched off. */}
                     <span
                       className={
                         view.state === "enabled" && view.budgetLimit !== null
@@ -148,7 +147,7 @@ export default async function LimitsPage({
                       {view.state === "none"
                         ? "no rules"
                         : view.state === "disabled"
-                          ? "rules kept"
+                          ? "limits off"
                           : view.budgetLimit === null
                             ? "unlimited"
                             : `${formatCost(view.budgetLimit)} ${view.budgetPeriod}`}

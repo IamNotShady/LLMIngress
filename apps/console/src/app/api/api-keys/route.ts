@@ -41,7 +41,7 @@ export const POST = withConsoleAuth(async (request) => {
       });
       const result = await createApiKeyWithSettings({
         apiKey,
-        limitRules: readApiKeyLimitRules(form),
+        limitRules: limitsEnabled ? readApiKeyLimitRules(form) : [],
         limitsEnabled,
         virtualModels: normalizeApiKeyVirtualModelSelectionInput({
           allowedVirtualModelIds: readTextValues(form, "allowedVirtualModelIds"),
@@ -77,11 +77,7 @@ export const POST = withConsoleAuth(async (request) => {
           name: readText(form, "name"),
         }),
         id,
-        // The rules the dialog was showing, whether or not they are being
-        // enforced: unchecking the switch in the same save as editing a ceiling
-        // used to drop the edit, and "disabling keeps the rules" has to mean the
-        // rules the operator is looking at.
-        limitRules: readApiKeyLimitRules(form),
+        limitRules: limitsEnabled ? readApiKeyLimitRules(form) : [],
         limitsEnabled,
         virtualModels: normalizeApiKeyVirtualModelSelectionInput({
           allowedVirtualModelIds: readTextValues(form, "allowedVirtualModelIds"),
@@ -169,12 +165,8 @@ export const POST = withConsoleAuth(async (request) => {
 
 function readApiKeyLimitRules(form: FormData) {
   return normalizeApiKeyLimitRulesInput({
-    // A save rewrites every rule, so the policy has to come back with the form
-    // or the key silently reverts to block — warn_only is set in Limits and
-    // would be lost by renaming a key here.
     enforcementPolicy: readText(form, "enforcementPolicy"),
-    // Blank means unlimited, here as in the Limits drawer.
-    budgetPeriod: readRequiredText(form, "budgetPeriod"),
+    budgetPeriod: readText(form, "budgetPeriod"),
     budgetUsd: readText(form, "budgetUsd"),
     concurrency: readText(form, "concurrency") ?? null,
     rpm: readText(form, "rpm"),

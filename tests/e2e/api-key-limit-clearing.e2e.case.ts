@@ -41,7 +41,7 @@ async function seedLimitedApiKey(databaseUrl: string): Promise<string> {
   return apiKeyId;
 }
 
-test("a rule the Limits drawer left empty stops being a rule", async ({ browser }) => {
+test("the Limits drawer refuses an incomplete enabled rule set", async ({ browser }) => {
   test.setTimeout(240_000);
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_limit_drawer_${randomUUID().replaceAll("-", "_")}`,
@@ -77,41 +77,21 @@ test("a rule the Limits drawer left empty stops being a rule", async ({ browser 
 
         const drawer = page.getByRole("dialog", { name: "drawer-limited-key" });
         await expect(drawer).toBeVisible();
-        await expect(drawer.getByText("Leave a field empty for unlimited")).toBeVisible();
+        await expect(drawer.getByText("Every field is required to enable limits")).toBeVisible();
         await expect(drawer.getByLabel("RPM")).toHaveValue("600");
 
-        // --- An emptied field means one ceiling fewer, not the old ceiling
-        // saved again. The rules are read back from the database once the save
-        // has answered: the fields on screen are only what was typed until it
-        // does.
-        const saveRules = async () => {
-          const saved = page.waitForResponse(
-            (response) =>
-              response.url().includes("/api/api-key-limits") &&
-              response.request().method() === "POST",
-          );
-          await drawer.getByRole("button", { name: "Save rules" }).click();
-          expect((await saved).status()).toBeLessThan(400);
-        };
-
         await drawer.getByLabel("RPM").fill("");
-        await saveRules();
-        expect(await savedTypes()).toEqual(["budget", "concurrency", "token", "tpm"]);
+        const refused = page.waitForResponse(
+          (response) =>
+            response.url().includes("/api/api-key-limits") &&
+            response.request().method() === "POST",
+        );
+        await drawer.getByRole("button", { name: "Save rules" }).click();
+        expect((await refused).status()).toBeGreaterThanOrEqual(400);
+        await expect(drawer.getByRole("alert")).toContainText(/RPM limit is required/i);
+        expect(await savedTypes()).toEqual(["budget", "concurrency", "rpm", "token", "tpm"]);
         await expect(drawer.getByLabel("RPM")).toHaveValue("");
         await expect(drawer.getByLabel("TPM")).toHaveValue("1000000");
-
-        // --- Emptying every field is the same statement about every ceiling.
-        // Deleting the rules outright is the other door to it, and this one has
-        // to arrive at the same place rather than saving nothing at all.
-        for (const label of ["BUDGET USD", "TPM", "TOKENS / REQUEST", "CONCURRENCY"]) {
-          await drawer.getByLabel(label).fill("");
-        }
-        await saveRules();
-        expect(await savedTypes()).toEqual([]);
-        await expect(page.getByText("no rules · unlimited")).toBeVisible();
-        await expect(
-          drawer.getByText("No rules are set for this key — it runs unlimited."),
-        ).toBeVisible();
       } finally {
         await context.close();
       }

@@ -379,7 +379,7 @@ test("the console says what the design says: compact context, capability words, 
         // --- Limits has three states, and a key whose rules are switched off
         // is not running under its ceiling.
         await page.goto(`${baseUrl}/limits`, { waitUntil: "networkidle" });
-        await expect(page.getByText("rules kept")).toBeVisible();
+        await expect(page.getByText("limits off")).toBeVisible();
         await expect(page.getByText("no rules")).toBeVisible();
         await expect(page.getByText("on · block")).toHaveCount(0);
 

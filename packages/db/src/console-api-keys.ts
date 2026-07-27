@@ -3,6 +3,7 @@ import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import type { RouteEndpointProtocol } from "@llmingress/domain";
 import {
+  assertCompleteApiKeyLimitRules,
   type ApiKeyLimitRuleInput,
   type ConsoleApiKeyLimit,
   readApiKeyLimitsWithClient,
@@ -272,7 +273,9 @@ export async function createApiKeyWithSettings(input: {
     changes: [
       { table: "api_keys", recordId: apiKeyId },
       { table: "api_key_virtual_models", recordId: apiKeyId },
-      { table: "api_key_limits", recordId: apiKeyId },
+      ...(input.limitsEnabled
+        ? [{ table: "api_key_limits" as const, recordId: apiKeyId }]
+        : []),
     ],
     write: async (client) => {
       await assertVirtualModelsAvailable(client, input.virtualModels.allowedVirtualModelIds);
@@ -299,7 +302,10 @@ export async function createApiKeyWithSettings(input: {
         [apiKeyId, input.apiKey.name, stored.keyPrefix, stored.keyHash, input.limitsEnabled],
       );
       await replaceApiKeyVirtualModelsWithClient(client, apiKeyId, input.virtualModels);
-      await replaceApiKeyLimitRulesWithClient(client, apiKeyId, input.limitRules);
+      if (input.limitsEnabled) {
+        assertCompleteApiKeyLimitRules(input.limitRules);
+        await replaceApiKeyLimitRulesWithClient(client, apiKeyId, input.limitRules);
+      }
       apiKey = {
         ...rowToConsoleApiKey(requireRow(result.rows[0])),
         limits: await readApiKeyLimitsWithClient(client, apiKeyId),
@@ -346,10 +352,12 @@ export async function updateApiKeyWithSettings(input: {
         [input.id, input.apiKey.name, input.limitsEnabled],
       );
       await replaceApiKeyVirtualModelsWithClient(client, input.id, input.virtualModels);
-      // limits_enabled decides enforcement; the rules are what the form carried.
-      // Skipping the write when the switch is off silently discarded a ceiling
-      // edited in the same submission.
-      await replaceApiKeyLimitRulesWithClient(client, input.id, input.limitRules);
+      if (input.limitsEnabled) {
+        assertCompleteApiKeyLimitRules(input.limitRules);
+        await replaceApiKeyLimitRulesWithClient(client, input.id, input.limitRules);
+      } else {
+        await replaceApiKeyLimitRulesWithClient(client, input.id, []);
+      }
     },
   });
 }
@@ -682,24 +690,36 @@ function requireApiKeyVirtualModelAccess(
   return access;
 }
 
-/**
- * Switch enforcement off without touching the stored rules. Disabling limits and
- * deleting them are different operations: only the second loses configuration.
- */
 export async function setApiKeyLimitsEnabled(input: {
   databaseUrl?: string;
   enabled: boolean;
   id: string;
 }): Promise<void> {
-  await withPooledPostgresClient(input.databaseUrl, async (client) => {
-    const result = await client.query(
-      `update api_keys
-         set limits_enabled = $2, updated_at = now()
-       where id = $1::uuid and deleted_at is null`,
-      [input.id, input.enabled],
-    );
-    if (result.rowCount === 0) {
-      throw consoleNotFoundError("API key not found.", "api_key_not_found");
-    }
+  const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
+  await publisher.publish({
+    source: "console",
+    description: `${input.enabled ? "Enable" : "Disable"} API key limits ${input.id}`,
+    changes: [
+      { table: "api_keys", recordId: input.id },
+      { table: "api_key_limits", recordId: input.id },
+    ],
+    write: async (client) => {
+      if (input.enabled) {
+        const rules = await readApiKeyLimitsWithClient(client, input.id);
+        assertCompleteApiKeyLimitRules(rules);
+      }
+      const result = await client.query(
+        `update api_keys
+           set limits_enabled = $2, updated_at = now()
+         where id = $1::uuid and deleted_at is null`,
+        [input.id, input.enabled],
+      );
+      if (result.rowCount === 0) {
+        throw consoleNotFoundError("API key not found.", "api_key_not_found");
+      }
+      if (!input.enabled) {
+        await replaceApiKeyLimitRulesWithClient(client, input.id, []);
+      }
+    },
   });
 }

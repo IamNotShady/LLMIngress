@@ -28,7 +28,7 @@ export function LimitsDrawer({
     view.state === "none"
       ? "no rules · unlimited"
       : view.state === "disabled"
-        ? "limits disabled · rules kept"
+        ? "limits disabled"
         : `limits enabled · ${view.enforcement}`;
 
   if (readParam(params, "dialog") === "toggleLimits") {
@@ -104,7 +104,7 @@ export function LimitsDrawer({
         <div className="mt-[18px] flex items-baseline gap-[10px] border-b border-hair pb-[5px]">
           <span className="font-mono text-115 font-medium tracking-[.08em] text-dim">RULES</span>
           <span className="ml-auto font-mono text-12 text-faint">
-            Leave a field empty for unlimited
+            Every field is required to enable limits
           </span>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3">
@@ -113,7 +113,7 @@ export function LimitsDrawer({
               name="budgetUsd"
               defaultValue={view.budgetLimit === null ? "" : String(view.budgetLimit)}
               inputMode="decimal"
-              placeholder="unlimited"
+              placeholder="required"
             />
           </Field>
           <Field label="PERIOD" hint="window the budget resets on">
@@ -130,7 +130,7 @@ export function LimitsDrawer({
               name="rpm"
               defaultValue={view.rpm === null ? "" : String(view.rpm)}
               inputMode="numeric"
-              placeholder="unlimited"
+              placeholder="required"
             />
           </Field>
           <Field label="TPM" hint="tokens per minute (input + output)">
@@ -138,7 +138,7 @@ export function LimitsDrawer({
               name="tpm"
               defaultValue={view.tpm === null ? "" : String(view.tpm)}
               inputMode="numeric"
-              placeholder="unlimited"
+              placeholder="required"
             />
           </Field>
           <Field label="TOKENS / REQUEST" hint="max tokens a single request may use">
@@ -146,7 +146,7 @@ export function LimitsDrawer({
               name="tokenLimit"
               defaultValue={view.tokensPerRequest === null ? "" : String(view.tokensPerRequest)}
               inputMode="numeric"
-              placeholder="unlimited"
+              placeholder="required"
             />
           </Field>
           <Field label="CONCURRENCY" hint="in-flight requests at the same time">
@@ -154,7 +154,7 @@ export function LimitsDrawer({
               name="concurrency"
               defaultValue={view.concurrency === null ? "" : String(view.concurrency)}
               inputMode="numeric"
-              placeholder="unlimited"
+              placeholder="required"
             />
           </Field>
           <Field label="ENFORCEMENT" hint={ENFORCEMENT_NOTE}>
@@ -170,17 +170,17 @@ export function LimitsDrawer({
         </p>
         <div className="mt-[18px] flex flex-wrap items-center gap-2">
           <ActionButton size="dialog" tone="primary">
-            Save rules
+            {view.state === "enabled" ? "Save rules" : "Enable limits"}
           </ActionButton>
         </div>
       </MutationForm>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        {view.state === "none" ? null : (
+        {view.state === "enabled" ? (
           <ActionLink size="dialog" href={buildHref("/limits", params, { dialog: "toggleLimits" })}>
-            {view.state === "enabled" ? "Disable limits" : "Enable limits"}
+            Disable limits
           </ActionLink>
-        )}
+        ) : null}
         {view.state === "none" ? null : (
           <ActionLink
             size="dialog"
@@ -192,8 +192,7 @@ export function LimitsDrawer({
         )}
       </div>
       <p className="mt-3 font-mono text-12 leading-[1.6] text-faint">
-        Disabling keeps every rule and stops enforcing them; deleting removes the rules and the key
-        runs unlimited until new ones are set.
+        Disabling removes every rule. Saving a complete rule set enables limits again.
       </p>
     </Drawer>
   );
@@ -201,7 +200,7 @@ export function LimitsDrawer({
 
 /**
  * Enforcement is what stands between a key and an unbounded bill, so switching
- * it says which way traffic changes and that the rules themselves are kept.
+ * it says exactly how persisted rules and traffic change.
  */
 function ToggleLimitsDialog({
   apiKey,
@@ -227,7 +226,7 @@ function ToggleLimitsDialog({
         {enable ? (
           <>
             Requests presenting <strong className="font-medium">{apiKey.name}</strong> start being
-            checked against its rules again,{" "}
+            checked against its complete rule set,{" "}
             {view.enforcement === "warn_only" ? "recording" : "and"}{" "}
             {view.enforcement === "warn_only"
               ? "a breach without stopping the request"
@@ -237,14 +236,14 @@ function ToggleLimitsDialog({
         ) : (
           <>
             Nothing stops requests presenting <strong className="font-medium">{apiKey.name}</strong>{" "}
-            — no budget, rate or concurrency ceiling is checked until limits are switched back on.
-            The rules are kept exactly as they are, and recorded spend keeps accumulating.
+            — no budget, rate or concurrency ceiling is checked. Every saved limit rule is removed;
+            recorded spend is kept.
           </>
         )}
       </DialogBody>
       <DialogNote>
         {enable
-          ? "The rules were never deleted; this only starts enforcing them again."
+          ? "If no complete rule set exists, fill every field in the Limits drawer instead."
           : "To stop this key entirely instead, disable the key itself in API Keys."}
       </DialogNote>
       <ConfirmForm
@@ -285,7 +284,7 @@ function DeleteRulesDialog({
         All rules for <strong className="font-medium">{apiKey.name}</strong> are removed and the key
         runs unlimited until new rules are set. Recorded budget usage is kept.
       </DialogBody>
-      <DialogNote>To pause enforcement without losing the rules, disable them instead.</DialogNote>
+      <DialogNote>Deleting rules also switches limits off for this key.</DialogNote>
       <ConfirmForm
         action="/api/api-key-limits"
         confirmLabel="Delete rules"
@@ -293,10 +292,6 @@ function DeleteRulesDialog({
         hiddenFields={{ action: "deleteLimitRules", apiKeyId: apiKey.id }}
       >
         <ActionLink href={buildHref("/limits", params, { dialog: null })}>Cancel</ActionLink>
-        {/* The safer way out, as the control rather than as advice about it. */}
-        <ActionLink href={buildHref("/limits", params, { dialog: "toggleLimits" })}>
-          Disable limits instead
-        </ActionLink>
       </ConfirmForm>
     </Dialog>
   );

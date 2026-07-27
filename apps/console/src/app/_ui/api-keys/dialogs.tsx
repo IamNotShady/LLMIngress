@@ -396,8 +396,6 @@ function ApiKeyEditorDialog({
             })
           )}
 
-          {/* Unchecked posts nothing, which the route reads as off — the rules
-            below are still saved, and none of them are enforced. */}
           <div className="mt-4 flex items-center gap-[10px]">
             <span className="flex-none whitespace-nowrap font-mono text-115 font-medium tracking-[.08em] text-dim">
               ENABLE LIMITS
@@ -412,6 +410,9 @@ function ApiKeyEditorDialog({
               }
               className="size-[13px] flex-none accent-accent"
             />
+            <span className="font-mono text-12 text-faint">
+              all fields below are required when enabled; otherwise they are ignored
+            </span>
           </div>
           <div className="mt-[10px] grid grid-cols-3 gap-3">
             <Field label="BUDGET USD / PERIOD" hint="spend cap per period · blocks past it">
@@ -421,7 +422,7 @@ function ApiKeyEditorDialog({
                   aria-label="Budget USD"
                   defaultValue={limitField("budgetUsd", view.budgetLimit, 25)}
                   inputMode="decimal"
-                  placeholder="unlimited"
+                  placeholder="required when enabled"
                 />
                 <SelectInput
                   name="budgetPeriod"
@@ -441,7 +442,7 @@ function ApiKeyEditorDialog({
                 name="rpm"
                 defaultValue={limitField("rpm", view.rpm, 120)}
                 inputMode="numeric"
-                placeholder="unlimited"
+                placeholder="required when enabled"
               />
             </Field>
             <Field label="TPM" hint="tokens per minute (input + output)">
@@ -449,7 +450,7 @@ function ApiKeyEditorDialog({
                 name="tpm"
                 defaultValue={limitField("tpm", view.tpm, 50_000)}
                 inputMode="numeric"
-                placeholder="unlimited"
+                placeholder="required when enabled"
               />
             </Field>
             <Field label="TOKENS / REQUEST" hint="max tokens a single request may use">
@@ -457,7 +458,7 @@ function ApiKeyEditorDialog({
                 name="tokenLimit"
                 defaultValue={limitField("tokenLimit", view.tokensPerRequest, 16_384)}
                 inputMode="numeric"
-                placeholder="unlimited"
+                placeholder="required when enabled"
               />
             </Field>
             <Field label="CONCURRENCY" hint="in-flight requests at the same time">
@@ -465,7 +466,7 @@ function ApiKeyEditorDialog({
                 name="concurrency"
                 defaultValue={limitField("concurrency", view.concurrency, 4)}
                 inputMode="numeric"
-                placeholder="unlimited"
+                placeholder="required when enabled"
               />
             </Field>
             <Field label="ENFORCEMENT" hint={ENFORCEMENT_NOTE}>

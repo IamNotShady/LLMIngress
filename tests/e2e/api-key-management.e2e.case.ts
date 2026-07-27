@@ -33,7 +33,43 @@ const rpmRule: ApiKeyLimitRuleInput = {
   unit: "requests",
 };
 
-test("ApiKey creation is atomic and explicit switches preserve credentials, grants, and limits", async () => {
+const completeRules: ApiKeyLimitRuleInput[] = [
+  {
+    enforcementPolicy: "block",
+    limitType: "budget",
+    limitValue: 25,
+    manualBypass: false,
+    period: "month",
+    unit: "usd",
+  },
+  rpmRule,
+  {
+    enforcementPolicy: "block",
+    limitType: "tpm",
+    limitValue: 50_000,
+    manualBypass: false,
+    period: "minute",
+    unit: "tokens",
+  },
+  {
+    enforcementPolicy: "block",
+    limitType: "token",
+    limitValue: 16_384,
+    manualBypass: false,
+    period: "request",
+    unit: "tokens",
+  },
+  {
+    enforcementPolicy: "block",
+    limitType: "concurrency",
+    limitValue: 4,
+    manualBypass: false,
+    period: "request",
+    unit: "requests",
+  },
+];
+
+test("ApiKey creation is atomic and disabling limits removes their rules", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_api_key_contract_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -59,7 +95,7 @@ test("ApiKey creation is atomic and explicit switches preserve credentials, gran
     const created = await createApiKeyWithSettings({
       apiKey,
       databaseUrl: fixture.databaseUrl,
-      limitRules: [rpmRule],
+      limitRules: completeRules,
       limitsEnabled: true,
       virtualModels,
     });
@@ -67,7 +103,7 @@ test("ApiKey creation is atomic and explicit switches preserve credentials, gran
     await expectApiKeyState(fixture.databaseUrl, created.id, {
       enabled: true,
       grantCount: 1,
-      limitCount: 1,
+      limitCount: 5,
       limitsEnabled: true,
     });
 
@@ -75,7 +111,11 @@ test("ApiKey creation is atomic and explicit switches preserve credentials, gran
       createApiKeyWithSettings({
         apiKey: normalizeApiKeyFormInput({ name: "rolled-back" }),
         databaseUrl: fixture.databaseUrl,
-        limitRules: [{ ...rpmRule, limitType: "invalid" } as unknown as ApiKeyLimitRuleInput],
+        limitRules: completeRules.map((rule) =>
+          rule.limitType === "rpm"
+            ? ({ ...rule, limitType: "invalid" } as unknown as ApiKeyLimitRuleInput)
+            : rule,
+        ),
         limitsEnabled: true,
         virtualModels: normalizeApiKeyVirtualModelSelectionInput({
           allowedVirtualModelIds: [virtualModelId],
@@ -89,26 +129,23 @@ test("ApiKey creation is atomic and explicit switches preserve credentials, gran
     );
     expect(rolledBack.rows).toEqual([]);
 
-    // Switching enforcement off keeps the rules: the editor carries them with
-    // the switch, and this call is that editor. (Passing no rules would mean
-    // the operator cleared every field, which is a different statement.)
+    // Switching limits off ignores even invalid submitted rule data and removes
+    // the previously stored rules.
     await updateApiKeyWithSettings({
       apiKey,
       databaseUrl: fixture.databaseUrl,
       id: created.id,
-      limitRules: [rpmRule],
+      limitRules: [{ ...rpmRule, limitValue: Number.NaN }],
       limitsEnabled: false,
       virtualModels,
     });
     await expectApiKeyState(fixture.databaseUrl, created.id, {
       enabled: true,
       grantCount: 1,
-      limitCount: 1,
+      limitCount: 0,
       limitsEnabled: false,
     });
-    await expect(listSavedApiKeyLimits(fixture.databaseUrl)).resolves.toMatchObject([
-      { apiKeyId: created.id, limitType: "rpm", limitValue: 60 },
-    ]);
+    await expect(listSavedApiKeyLimits(fixture.databaseUrl)).resolves.toEqual([]);
 
     await setApiKeyEnabled({ databaseUrl: fixture.databaseUrl, enabled: false, id: created.id });
     await expect(
@@ -134,7 +171,7 @@ test("ApiKey creation is atomic and explicit switches preserve credentials, gran
     await expectApiKeyState(fixture.databaseUrl, created.id, {
       enabled: true,
       grantCount: 1,
-      limitCount: 1,
+      limitCount: 0,
       limitsEnabled: false,
     });
 
@@ -142,7 +179,7 @@ test("ApiKey creation is atomic and explicit switches preserve credentials, gran
       apiKey,
       databaseUrl: fixture.databaseUrl,
       id: created.id,
-      limitRules: [rpmRule],
+      limitRules: completeRules,
       limitsEnabled: true,
       virtualModels,
     });
@@ -158,7 +195,7 @@ test("ApiKey creation is atomic and explicit switches preserve credentials, gran
     await expectApiKeyState(fixture.databaseUrl, created.id, {
       enabled: true,
       grantCount: 1,
-      limitCount: 1,
+      limitCount: 5,
       limitsEnabled: true,
     });
   } finally {
@@ -230,7 +267,7 @@ test("Limits list and runtime metrics include only enabled ApiKeys with Limits e
   }
 });
 
-test("switching enforcement off in the same save keeps the ceilings that were edited", async () => {
+test("switching limits off ignores submitted ceilings and removes stored rules", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_limits_disable_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -253,30 +290,26 @@ test("switching enforcement off in the same save keeps the ceilings that were ed
     const created = await createApiKeyWithSettings({
       apiKey,
       databaseUrl: fixture.databaseUrl,
-      limitRules: [rpmRule],
+      limitRules: completeRules,
       limitsEnabled: true,
       virtualModels,
     });
 
     // The editor shows the rules and the switch in one form. Unchecking the
-    // switch used to skip the write entirely, so a ceiling edited in the same
-    // submission was silently discarded — "disabling keeps the rules" has to
-    // mean the rules the operator is looking at.
+    // switch ignores the submitted values and removes every stored rule.
     await updateApiKeyWithSettings({
       apiKey,
       databaseUrl: fixture.databaseUrl,
       id: created.id,
-      limitRules: [{ ...rpmRule, limitValue: 90 }],
+      limitRules: [{ ...rpmRule, limitValue: Number.NaN }],
       limitsEnabled: false,
       virtualModels,
     });
-    await expect(listSavedApiKeyLimits(fixture.databaseUrl)).resolves.toMatchObject([
-      { apiKeyId: created.id, limitType: "rpm", limitValue: 90 },
-    ]);
+    await expect(listSavedApiKeyLimits(fixture.databaseUrl)).resolves.toEqual([]);
     await expectApiKeyState(fixture.databaseUrl, created.id, {
       enabled: true,
       grantCount: 1,
-      limitCount: 1,
+      limitCount: 0,
       limitsEnabled: false,
     });
   } finally {
@@ -338,7 +371,7 @@ test("a budget window is reported only for the period the key's rule is written 
   }
 });
 
-test("a limit field the operator cleared is removed, not kept at its old ceiling", async () => {
+test("an enabled limit set rejects empty fields without changing stored rules", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_limit_clearing_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -365,27 +398,25 @@ test("a limit field the operator cleared is removed, not kept at its old ceiling
       budgetPeriod: "month",
       budgetUsd: "100",
       concurrency: "50",
+      enforcementPolicy: "block",
       rpm: "600",
       tokenLimit: "200000",
       tpm: "1000000",
     });
     await expect(savedTypes()).resolves.toEqual(["budget", "concurrency", "rpm", "token", "tpm"]);
 
-    // The drawer says "Leave a field empty for unlimited". A blank RPM is not a
-    // rule that was left alone — it is the rule being taken away, and whatever
-    // survives the save is what the gateway goes on enforcing.
-    await save({
-      budgetPeriod: "month",
-      budgetUsd: "100",
-      concurrency: "50",
-      rpm: "",
-      tokenLimit: "200000",
-      tpm: "1000000",
-    });
-    await expect(savedTypes()).resolves.toEqual(["budget", "concurrency", "token", "tpm"]);
-
-    await save({ budgetPeriod: "month" });
-    await expect(savedTypes()).resolves.toEqual([]);
+    await expect(
+      save({
+        budgetPeriod: "month",
+        budgetUsd: "100",
+        concurrency: "50",
+        enforcementPolicy: "block",
+        rpm: "",
+        tokenLimit: "200000",
+        tpm: "1000000",
+      }),
+    ).rejects.toThrow(/RPM limit is required/i);
+    await expect(savedTypes()).resolves.toEqual(["budget", "concurrency", "rpm", "token", "tpm"]);
   } finally {
     await fixture.dispose();
   }

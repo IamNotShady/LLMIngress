@@ -113,50 +113,49 @@ export function normalizeApiKeyLimitRulesInput(
   const budgetPeriod = normalizeBudgetPeriod(input.budgetPeriod);
   const enforcementPolicy = normalizeEnforcementPolicy(input.enforcementPolicy);
 
-  // A ceiling nobody set is not a ceiling of zero: an empty field means the key
-  // is unlimited in that dimension, which is exactly a rule that does not
-  // exist. Leaving every field empty is the same as having no rules at all.
   const rules: ApiKeyLimitRuleInput[] = [];
   const add = (
     limitType: ApiKeyLimitRuleInput["limitType"],
     value: string | number | null | undefined,
     label: string,
+    field: string,
     period: ApiKeyLimitRuleInput["period"],
     unit: ApiKeyLimitRuleInput["unit"],
   ) => {
-    const limitValue = normalizeOptionalPositiveNumber(value, label);
-    if (limitValue === null) {
-      return;
-    }
+    const limitValue = normalizeRequiredPositiveNumber(value, label, field);
     rules.push({ enforcementPolicy, limitType, limitValue, manualBypass: false, period, unit });
   };
 
-  add("budget", input.budgetUsd, "Budget USD limit", budgetPeriod, "usd");
-  add("rpm", input.rpm, "RPM limit", "minute", "requests");
-  add("tpm", input.tpm, "TPM limit", "minute", "tokens");
-  add("concurrency", input.concurrency, "Concurrency limit", "request", "requests");
-  add("token", input.tokenLimit, "Token limit", "request", "tokens");
+  add("budget", input.budgetUsd, "Budget USD limit", "budgetUsd", budgetPeriod, "usd");
+  add("rpm", input.rpm, "RPM limit", "rpm", "minute", "requests");
+  add("tpm", input.tpm, "TPM limit", "tpm", "minute", "tokens");
+  add(
+    "concurrency",
+    input.concurrency,
+    "Concurrency limit",
+    "concurrency",
+    "request",
+    "requests",
+  );
+  add("token", input.tokenLimit, "Token limit", "tokenLimit", "request", "tokens");
   return rules;
 }
 
-/** Blank means unlimited; anything else still has to be a positive number. */
-function normalizeOptionalPositiveNumber(
+function normalizeRequiredPositiveNumber(
   value: string | number | null | undefined,
   label: string,
-): number | null {
-  if (value === null || value === undefined) {
-    return null;
+  field: string,
+): number {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    throw consoleValidationError(`${label} is required.`, "form_field_required", { field });
   }
-  if (typeof value === "string" && value.trim() === "") {
-    return null;
-  }
-  return normalizePositiveNumber(value, label);
+  return normalizePositiveNumber(value, label, field);
 }
 
 function normalizeEnforcementPolicy(
   value: string | null | undefined,
 ): ApiKeyLimitEnforcementPolicy {
-  const normalized = (value ?? "block").trim();
+  const normalized = normalizeRequiredText(value, "Limit enforcement", "enforcementPolicy");
   if (normalized === "block" || normalized === "warn_only") {
     return normalized;
   }
@@ -246,10 +245,20 @@ export async function saveApiKeyLimitRules(input: {
   await publisher.publish({
     source: "console",
     description: `Update API key limits ${input.limits.apiKeyId}`,
-    changes: [{ table: "api_key_limits", recordId: input.limits.apiKeyId }],
+    changes: [
+      { table: "api_keys", recordId: input.limits.apiKeyId },
+      { table: "api_key_limits", recordId: input.limits.apiKeyId },
+    ],
     write: async (client) => {
       await assertApiKeyExists(client, input.limits.apiKeyId);
+      assertCompleteApiKeyLimitRules(input.limits.rules);
       await replaceApiKeyLimitRulesWithClient(client, input.limits.apiKeyId, input.limits.rules);
+      await client.query(
+        `update api_keys
+         set limits_enabled = true, updated_at = now()
+         where id = $1`,
+        [input.limits.apiKeyId],
+      );
 
       savedLimits = await readApiKeyLimitsWithClient(client, input.limits.apiKeyId);
     },
@@ -266,9 +275,6 @@ export async function replaceApiKeyLimitRulesWithClient(
   apiKeyId: string,
   rules: readonly ApiKeyLimitRuleInput[],
 ): Promise<void> {
-  // Every caller submits the whole rule set, and a field left empty is a
-  // ceiling being taken away rather than one left alone — deleting only the
-  // types being written back would keep enforcing the ones just cleared.
   await client.query("delete from api_key_limits where api_key_id = $1", [apiKeyId]);
 
   for (const rule of rules) {
@@ -301,6 +307,50 @@ export async function replaceApiKeyLimitRulesWithClient(
   }
 }
 
+const REQUIRED_LIMITS = {
+  budget: { field: "budgetUsd", label: "Budget USD" },
+  concurrency: { field: "concurrency", label: "Concurrency" },
+  rpm: { field: "rpm", label: "RPM" },
+  token: { field: "tokenLimit", label: "Token" },
+  tpm: { field: "tpm", label: "TPM" },
+} as const;
+
+export function assertCompleteApiKeyLimitRules(
+  rules: readonly ApiKeyLimitRuleInput[],
+): void {
+  for (const [limitType, requirement] of Object.entries(REQUIRED_LIMITS)) {
+    const matches = rules.filter((rule) => rule.limitType === limitType);
+    if (matches.length !== 1) {
+      throw consoleValidationError(
+        `${requirement.label} limit is required.`,
+        "form_field_required",
+        { field: requirement.field },
+      );
+    }
+    const rule = matches[0];
+    if (!rule || !Number.isFinite(rule.limitValue) || rule.limitValue <= 0) {
+      throw consoleValidationError(
+        `${requirement.label} limit must be greater than zero.`,
+        "api_key_limit_value_invalid",
+        { field: requirement.field },
+      );
+    }
+    if (rule.enforcementPolicy !== "block" && rule.enforcementPolicy !== "warn_only") {
+      throw consoleValidationError(
+        "Limit enforcement must be block or warn_only.",
+        "api_key_limit_enforcement_invalid",
+        { field: "enforcementPolicy" },
+      );
+    }
+  }
+  if (rules.length !== Object.keys(REQUIRED_LIMITS).length) {
+    throw consoleValidationError(
+      "Limits contain an unsupported rule.",
+      "api_key_limit_type_invalid",
+    );
+  }
+}
+
 export async function deleteApiKeyLimitRules(input: {
   apiKeyId: string;
   databaseUrl?: string;
@@ -309,10 +359,19 @@ export async function deleteApiKeyLimitRules(input: {
   await publisher.publish({
     source: "console",
     description: `Delete API key limits ${input.apiKeyId}`,
-    changes: [{ table: "api_key_limits", recordId: input.apiKeyId }],
+    changes: [
+      { table: "api_keys", recordId: input.apiKeyId },
+      { table: "api_key_limits", recordId: input.apiKeyId },
+    ],
     write: async (client) => {
       await assertApiKeyExists(client, input.apiKeyId);
       await client.query("delete from api_key_limits where api_key_id = $1", [input.apiKeyId]);
+      await client.query(
+        `update api_keys
+         set limits_enabled = false, updated_at = now()
+         where id = $1`,
+        [input.apiKeyId],
+      );
     },
   });
 }
@@ -511,24 +570,32 @@ function normalizeBudgetPeriod(value: string | null | undefined): (typeof budget
   return period as (typeof budgetPeriods)[number];
 }
 
-function normalizePositiveNumber(value: string | number | null | undefined, label: string): number {
+function normalizePositiveNumber(
+  value: string | number | null | undefined,
+  label: string,
+  field: string,
+): number {
   const numberValue = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(numberValue) || numberValue <= 0) {
     throw consoleValidationError(
       `${label} must be greater than zero.`,
       "api_key_limit_value_invalid",
       {
-        field: label,
+        field,
       },
     );
   }
   return numberValue;
 }
 
-function normalizeRequiredText(value: string | null | undefined, label: string): string {
+function normalizeRequiredText(
+  value: string | null | undefined,
+  label: string,
+  field = label,
+): string {
   const normalized = value?.trim();
   if (!normalized) {
-    throw consoleValidationError(`${label} is required.`, "form_field_required", { field: label });
+    throw consoleValidationError(`${label} is required.`, "form_field_required", { field });
   }
   return normalized;
 }

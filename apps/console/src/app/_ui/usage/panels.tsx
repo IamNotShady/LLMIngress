@@ -2,6 +2,7 @@ import type {
   ConsoleUsageBreakouts,
   ConsoleUsageDimensionBreakdown,
 } from "@llmingress/db/console-usage";
+import { SegmentBar } from "../charts";
 import { Meter } from "../controls";
 import { activityHref, activityWindowForUsageWindow } from "../cross-links";
 import { formatCompact, formatCost, formatCount, formatLatency, formatPercent } from "../format";
@@ -234,51 +235,59 @@ export function TopErrorsPanel({
   );
 }
 
+/**
+ * Every source the schema allows, in the order the schema lists them, whether
+ * or not the window saw one. A source that produced nothing is a fact about the
+ * window — dropping its row makes the reader work out which one is missing, and
+ * a colour bound to a row's position changes meaning when the counts reorder.
+ */
+const TOKEN_SOURCES = [
+  { className: "bg-accent", source: "provider" },
+  { className: "bg-amber", source: "estimated" },
+  { className: "bg-dim", source: "unavailable" },
+] as const;
+
+const COST_SOURCES = ["provider", "estimated", "reconciled", "unavailable"] as const;
+
 export function DataQualityPanel({ breakouts }: { breakouts: ConsoleUsageBreakouts }) {
+  const tokenSourceCount = (source: string) =>
+    breakouts.tokenSources.find((entry) => entry.source === source)?.requestCount ?? 0;
+  const costSource = (source: string) =>
+    breakouts.costSources.find((entry) => entry.source === source);
+
   return (
     <div>
       <SectionTitle>Data quality</SectionTitle>
       <div className="mt-[10px] font-mono text-115 font-medium tracking-[.08em] text-dim">
         TOKEN SOURCE
       </div>
-      <div className="mt-[6px] flex h-[9px] bg-track">
-        {breakouts.tokenSources.map((entry, index) => {
-          const total = breakouts.tokenSources.reduce((sum, row) => sum + row.requestCount, 0);
-          return (
-            <div
-              key={entry.source}
-              className={index === 0 ? "bg-accent" : index === 1 ? "bg-amber" : "bg-dim"}
-              style={{
-                width: total > 0 ? `${((entry.requestCount / total) * 100).toFixed(2)}%` : "0%",
-              }}
-            />
-          );
-        })}
-      </div>
-      <div className="mt-[6px] flex flex-wrap gap-3 font-mono text-12 text-dim">
-        {breakouts.tokenSources.map((entry) => (
-          <span key={entry.source}>
-            {entry.source} {formatCount(entry.requestCount)}
-          </span>
-        ))}
-      </div>
+      <SegmentBar
+        segments={TOKEN_SOURCES.map((entry) => ({
+          className: entry.className,
+          label: entry.source,
+          value: tokenSourceCount(entry.source),
+        }))}
+      />
 
       <div className="mt-[14px] font-mono text-115 font-medium tracking-[.08em] text-dim">
         COST SOURCE
       </div>
       <div className="mt-[6px]">
-        {breakouts.costSources.map((entry) => (
-          <div
-            key={entry.source}
-            className="flex justify-between border-b border-rule2 py-[6px] font-mono text-13"
-          >
-            <span className="text-dim">{entry.source}</span>
-            <span className="tabnum">
-              {entry.source === "unavailable" ? "—" : formatCost(entry.totalCostUsd)} ·{" "}
-              {formatCount(entry.requestCount)} reqs
-            </span>
-          </div>
-        ))}
+        {COST_SOURCES.map((source) => {
+          const entry = costSource(source);
+          return (
+            <div
+              key={source}
+              className="flex justify-between border-b border-rule2 py-[6px] font-mono text-13"
+            >
+              <span className="text-dim">{source}</span>
+              <span className={entry ? "tabnum" : "tabnum text-faint"}>
+                {source === "unavailable" ? "—" : formatCost(entry?.totalCostUsd ?? null)} ·{" "}
+                {formatCount(entry?.requestCount ?? 0)} reqs
+              </span>
+            </div>
+          );
+        })}
       </div>
       <p className="mt-2 font-mono text-12 leading-[1.6] text-faint">
         Prices come from the sync job or a manual override; estimated rows use the last known price

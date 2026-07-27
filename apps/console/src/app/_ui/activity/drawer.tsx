@@ -17,7 +17,12 @@ export function ActivityDrawer({
   detail: ConsoleActivityDetail;
   params: SearchParams;
 }) {
-  const { activity, fallbackEvents, requestMetadata } = detail;
+  const { activity, fallbackEvents, requestMetadata, routeCandidates } = detail;
+  const filteredOut = routeCandidates.filter((candidate) => !candidate.eligible);
+  // An answer that took more than one candidate to get: the status alone says
+  // 200 and hides that the first choice failed on the way there.
+  const servedByFallback =
+    activity.status === "succeeded" && activity.fallbackFailedAttemptCount > 0;
   const metadataLines = formatConsoleActivityMetadata(requestMetadata);
   const tokens =
     activity.inputTokens === null && activity.outputTokens === null
@@ -34,14 +39,15 @@ export function ActivityDrawer({
       trailing={
         <span
           className={`flex items-center gap-[6px] rounded-xs border px-[9px] py-[3px] font-mono text-125 font-medium ${
-            activity.status === "failed"
-              ? `border-ambbd bg-ambbg ${activityStatusTone(activity.status)}`
+            activity.status === "failed" || servedByFallback
+              ? `border-ambbd bg-ambbg ${servedByFallback ? "text-ambtx" : activityStatusTone(activity.status)}`
               : `border-rule bg-track ${activityStatusTone(activity.status)}`
           }`}
         >
-          <StatusDot tone={attemptTone(activity.status)} />
+          <StatusDot tone={servedByFallback ? "amber" : attemptTone(activity.status)} />
           {activity.httpStatus ?? activity.status}
           {activity.errorCode ? ` ${activity.errorCode}` : ""}
+          {servedByFallback ? " · served by fallback" : ""}
         </span>
       }
     >
@@ -73,6 +79,30 @@ export function ActivityDrawer({
       <p className="mt-2 font-mono text-125 leading-[1.6] text-dim">
         {formatConsoleActivityRouteReason(activity.routeReason)}
       </p>
+      {/* The candidates that never got an attempt: the other half of "why this
+          provider". The timeline below says what was tried; this says what the
+          policy took off the table before trying anything. */}
+      {filteredOut.length > 0 ? (
+        <div className="mt-2">
+          <div className="font-mono text-115 font-medium tracking-[.08em] text-dim">
+            FILTERED OUT
+          </div>
+          {filteredOut.map((candidate) => (
+            <div
+              key={`${candidate.candidateOrder}-${candidate.providerModelId}`}
+              className="mt-1 flex gap-[10px] font-mono text-12 leading-[1.5]"
+            >
+              <span className="flex-none text-faint tabnum">#{candidate.candidateOrder}</span>
+              <span className="min-w-0 flex-1 text-dim">
+                <span className="text-ink">{candidate.label}</span>
+                {candidate.reasons.length > 0
+                  ? ` — ${candidate.reasons.join("; ")}`
+                  : " — no reason recorded"}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="mt-2 border-t border-hair">
         {fallbackEvents.length === 0 ? (
           <p className="py-3 font-mono text-13 leading-[1.6] text-dim">

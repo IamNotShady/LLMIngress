@@ -210,7 +210,11 @@ export default async function OverviewPage({
                 }
                 value={formatPercent(usage.failureCount / usage.requestCount, 2)}
               >
-                {formatCount(usage.failureCount)} failed
+                {/* A request that failed on one candidate and was served by
+                    the next is not in the failure count, and it is the thing an
+                    operator most wants to see next to it. */}
+                {formatCount(usage.failureCount)} failed ·{" "}
+                {formatCount(usage.fallbackRecoveredCount)} fallback
               </Kpi>
               <Kpi label="AVG LATENCY" value={formatLatency(usage.avgLatencyMs)}>
                 first byte, mean

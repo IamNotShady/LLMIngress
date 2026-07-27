@@ -12,6 +12,7 @@ import type {
   ConsoleApiKeyVirtualModelGrant,
   ConsoleVirtualModel,
 } from "@llmingress/db/console-virtual-models";
+import { resolveVirtualModelCapabilityContract } from "@llmingress/domain";
 import Link from "next/link";
 import { TypeNameToConfirm } from "../confirm-form";
 import { ActionButton, ActionLink, Field, filterControlClass, TextInput } from "../controls";
@@ -277,6 +278,7 @@ export async function VirtualModelDialogs({
             protocol={protocol}
             providerById={providerById}
             providers={providers}
+            selected={orderedSelection}
             selection={orderedSelection.map((model) => model.id)}
           />
 
@@ -298,6 +300,7 @@ function CandidateBrowser({
   protocol,
   providerById,
   providers,
+  selected: selectedModels,
   selection,
 }: {
   candidatePage: ConsoleProviderModelPage | null;
@@ -305,8 +308,39 @@ function CandidateBrowser({
   protocol: string;
   providerById: Map<string, ConsoleProvider>;
   providers: ConsoleProvider[];
+  /** The candidates already picked, whose capabilities the next one must match. */
+  selected: ConsoleProviderModelOption[];
   selection: string[];
 }) {
+  // Every candidate of one virtual model has to agree on capabilities, and the
+  // gateway refuses a policy where they do not. Working that out at save time
+  // means picking a model, filling in the rest of the form, and being told then;
+  // the contract is decidable here, so a candidate that cannot join says so
+  // where it is offered.
+  const contractCandidate = (model: ConsoleProviderModelOption) => ({
+    id: model.id,
+    inputModalities: model.inputModalities,
+    label: model.optionLabel,
+    maxContextTokens: model.contextWindow,
+    maxOutputTokens: model.maxOutputTokens,
+    outputModalities: model.outputModalities,
+    supportsFunctionCalling: model.supportsFunctionCalling,
+    supportsReasoning: model.supportsReasoning,
+  });
+  const capabilityConflict = (model: ConsoleProviderModelOption): string | null => {
+    if (selectedModels.length === 0 || selection.includes(model.id)) {
+      return null;
+    }
+    const result = resolveVirtualModelCapabilityContract([
+      ...selectedModels.map(contractCandidate),
+      contractCandidate(model),
+    ]);
+    if (result.ok) {
+      return null;
+    }
+    const field = result.details.field;
+    return typeof field === "string" ? field : "capabilities";
+  };
   // Only the providers that speak this protocol, and only one of those can be
   // the active one — a stored choice that stops serving after a protocol change
   // does not survive it.
@@ -393,9 +427,11 @@ function CandidateBrowser({
           candidatePage.items.map((model) => {
             const provider = providerById.get(model.providerId);
             const selected = selection.includes(model.id);
-            const supported = model.supportedEndpoints.includes(
-              protocol as (typeof model.supportedEndpoints)[number],
-            );
+            const conflict = capabilityConflict(model);
+            const supported =
+              model.supportedEndpoints.includes(
+                protocol as (typeof model.supportedEndpoints)[number],
+              ) && conflict === null;
             const next = selected
               ? selection.filter((id) => id !== model.id)
               : [...selection, model.id];
@@ -411,7 +447,11 @@ function CandidateBrowser({
                 </span>
                 <span className={`min-w-0 flex-1 cell-clip ${selected ? "font-medium" : ""}`}>
                   {model.providerDisplayName} · {model.modelId}
-                  {supported ? null : ` — does not serve ${protocol}`}
+                  {supported
+                    ? null
+                    : conflict
+                      ? ` — ${conflict.replace(/([A-Z])/g, " $1").toLowerCase()} differs from the candidates already picked`
+                      : ` — does not serve ${protocol}`}
                 </span>
                 <span className="whitespace-nowrap text-dim">
                   {formatPricePair({

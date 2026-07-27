@@ -9,7 +9,7 @@ import { listVirtualModels } from "@llmingress/db/console-virtual-models";
 import { ActivityDrawer } from "../../_ui/activity/drawer";
 import { ACTIVITY_WINDOWS, activityStatusTone, readActivityWindow } from "../../_ui/activity/model";
 import { ActionLink, FilterButton, filterControlClass } from "../../_ui/controls";
-import { formatClock, formatCost, formatCount, formatLatency } from "../../_ui/format";
+import { formatClockSeconds, formatCost, formatCount, formatLatency } from "../../_ui/format";
 import { EmptyState, PageShell, PageTitleRow } from "../../_ui/layout";
 import { buildHref, readIntParam, readParam, type SearchParams } from "../../_ui/params";
 import { formatRange, GridRow, Pagination } from "../../_ui/table";
@@ -37,6 +37,17 @@ export default async function ActivityPage({
     virtualModelId: readParam(params, "virtualModel"),
   };
   const page = readIntParam(params, "page", 1);
+  // The window is a filter too: "Clear" goes back to the default view, so it
+  // offers itself whenever this view is not that one.
+  const hasFilters = [
+    "apiKey",
+    "protocol",
+    "provider",
+    "q",
+    "status",
+    "virtualModel",
+    "window",
+  ].some((key) => readParam(params, key) !== undefined);
 
   const [rows, total, recordedTotal, apiKeys, virtualModels, providers] = await Promise.all([
     listConsoleActivities({ filters, limit: PAGE_SIZE, page }),
@@ -151,6 +162,13 @@ export default async function ActivityPage({
           className={`${filterControlClass} box-border h-[30px]`}
         />
         <FilterButton>Apply</FilterButton>
+        {/* Six filters and a search box: the way back to everything is a
+            control, not a memory of which ones were touched. */}
+        {hasFilters ? (
+          <ActionLink href="/activity" size="row">
+            Clear
+          </ActionLink>
+        ) : null}
         <span className="whitespace-nowrap font-mono text-13 text-faint">
           {formatCount(total)} matching
         </span>
@@ -207,7 +225,7 @@ export default async function ActivityPage({
                 href={buildHref("/activity", params, { request: activity.requestId })}
                 selected={activity.requestId === selectedRequestId}
               >
-                <span className="text-faint tabnum">{formatClock(activity.startedAt)}</span>
+                <span className="text-faint tabnum">{formatClockSeconds(activity.startedAt)}</span>
                 <span className="text-dim cell-clip">{activity.requestId}</span>
                 <span className="cell-clip">{activity.apiKeyName ?? "—"}</span>
                 <span className="cell-clip">{activity.virtualModelName ?? "—"}</span>

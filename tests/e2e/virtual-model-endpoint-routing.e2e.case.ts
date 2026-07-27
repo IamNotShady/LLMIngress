@@ -175,7 +175,7 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
   }
 });
 
-test("route dialog shows exact context tokens and names the conflicting values when saving a mismatched pair", async ({
+test("route dialog keeps near-identical context windows distinct and refuses a mismatched candidate where it is offered", async ({
   browser,
 }) => {
   test.setTimeout(240_000);
@@ -208,15 +208,22 @@ test("route dialog shows exact context tokens and names the conflicting values w
         const candidates = page.getByTestId("virtual-model-candidates");
         await candidates.getByRole("link", { name: /round-context/ }).click();
         await expect(page.getByText("1 selected")).toBeVisible();
-        await candidates.getByRole("link", { name: /odd-context/ }).click();
-        await expect(page.getByText("2 selected")).toBeVisible();
 
-        // Two near-identical context windows must render as exact, distinct token
-        // counts — not both rounded to the same "~1M", which would make the pair
-        // look interchangeable when a route rejects exactly this mismatch.
+        // Two near-identical context windows must render distinctly — not both
+        // rounded to the same "1M", which would make the pair look
+        // interchangeable when a route rejects exactly this mismatch.
         const selected = page.getByTestId("virtual-model-selected");
-        await expect(selected).toContainText("ctx 1,000,000");
-        await expect(selected).toContainText("ctx 1,048,576");
+        await expect(selected).toContainText("ctx 1M");
+        await expect(candidates).toContainText("ctx 1.05M");
+
+        // Every candidate of one virtual model has to agree on capabilities, so
+        // the one that cannot join says so where it is offered rather than
+        // being taken, carried through the rest of the form, and refused by the
+        // save. It is not selectable, and it names the field it differs on.
+        await expect(candidates.getByRole("link", { name: /odd-context/ })).toHaveCount(0);
+        await expect(candidates).toContainText(
+          "max context tokens differs from the candidates already picked",
+        );
 
         // The wide editor scrolls inside its own container; the page must not
         // gain horizontal overflow at desktop or mobile checkpoints.
@@ -235,16 +242,14 @@ test("route dialog shows exact context tokens and names the conflicting values w
         }
         await page.setViewportSize({ width: 1280, height: 800 });
 
-        // Saving the mismatched pair surfaces the exact conflicting values rather
-        // than a bare "must match for maxContextTokens". The comma-free "1000000"
-        // is unique to the error message (the selected list renders "1,000,000").
+        // The route that is left is the one that can be saved. (What the save
+        // says when a mismatched pair reaches it anyway — both values, both
+        // candidates by name — is pinned in virtual-model-capability-contract.)
         await page.getByLabel("NAME", { exact: false }).fill("vm-context-clarity");
-        await page.getByLabel("DESCRIPTION").fill("Two near-identical context windows");
+        await page.getByLabel("DESCRIPTION").fill("One of two near-identical context windows");
         await page.getByRole("button", { name: "Create virtual model" }).click();
-
-        await expect(page.getByText("must agree on maxContextTokens")).toBeVisible();
-        await expect(page.getByText("1000000", { exact: false })).toBeVisible();
-        await expect(page.getByText("1048576", { exact: false })).toBeVisible();
+        await page.waitForURL((url) => url.searchParams.get("dialog") === null);
+        await expect(page.getByText("vm-context-clarity").first()).toBeVisible();
       } finally {
         await context.close();
       }

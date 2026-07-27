@@ -117,8 +117,10 @@ test("API key created and detail dialogs share one layout and differ only in the
         await expect(page.getByText("Virtual Model access")).toBeVisible();
         await expect(page.getByText("parity-vm").first()).toBeVisible();
 
+        // The detail's own prefix cell: the list row beside it now reads
+        // "llmi_… · 1 model", which is a different string about the same key.
         const shownPrefix = await page
-          .getByText(/^llmi_/)
+          .getByText(/^llmi_\S+$/)
           .first()
           .innerText();
 

@@ -35,7 +35,7 @@ import {
   providerIsMetered,
 } from "./model";
 
-const CONNECTION_COLUMNS = "116px minmax(0,1fr) 64px 300px 88px 218px";
+const CONNECTION_COLUMNS = "116px minmax(0,1fr) 64px 244px 88px 104px 218px";
 const MODEL_COLUMNS = "258px 146px 146px 104px 1fr";
 
 export function ProviderDetail({
@@ -165,6 +165,7 @@ export function ProviderDetail({
           <span className="text-right">PRIORITY</span>
           <span>HEALTH</span>
           <span>STATUS</span>
+          <span>LAST USED</span>
           <span className="text-right">ACTIONS</span>
         </GridRow>
         {connections.length === 0 ? (
@@ -194,6 +195,16 @@ export function ProviderDetail({
                 </span>
                 <span className={connection.enabled ? "text-green" : "text-faint"}>
                   {connection.enabled ? "enabled" : "disabled"}
+                </span>
+                {/* Which credential is actually serving. Only a stored key
+                    records it — an authorized connection has no such column,
+                    and saying "never" for one would be a claim, not a fact. */}
+                <span className="text-dim cell-clip">
+                  {connection.kind === "api_key"
+                    ? connection.lastUsedAt
+                      ? formatRelative(connection.lastUsedAt, now)
+                      : "never"
+                    : "—"}
                 </span>
                 <span className="flex items-center justify-end gap-[6px]">
                   <MutationForm

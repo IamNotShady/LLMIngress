@@ -148,6 +148,7 @@ export function ApiKeyDialogs({
         apiKey={apiKey}
         closeHref={closeHref}
         grants={grants.filter((grant) => grant.apiKeyId === apiKey.id)}
+        params={params}
         usage={usage}
       />
     );
@@ -646,11 +647,13 @@ function DeleteApiKeyDialog({
   apiKey,
   closeHref,
   grants,
+  params,
   usage,
 }: {
   apiKey: ConsoleApiKey;
   closeHref: string;
   grants: ConsoleApiKeyVirtualModelGrant[];
+  params: SearchParams;
   usage: ConsoleUsageSummary;
 }) {
   const breakdown = usage.apiKeyBreakdowns.find((entry) => entry.id === apiKey.id);
@@ -681,8 +684,13 @@ function DeleteApiKeyDialog({
         name={apiKey.name}
       >
         <ActionLink href={closeHref}>Cancel</ActionLink>
+        {/* The safer way out is offered as the thing itself, not as advice
+            about a control the operator now has to go and find. */}
+        <ActionLink href={buildHref("/api-keys", params, { dialog: "disable" })}>
+          Disable instead
+        </ActionLink>
         <span className="ml-1 font-mono text-12 text-dim">
-          Disable instead — keeps configuration and stops traffic
+          keeps configuration and stops traffic
         </span>
       </TypeNameToConfirm>
     </Dialog>

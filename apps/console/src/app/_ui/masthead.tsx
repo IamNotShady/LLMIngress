@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { CopyButton } from "./copy-button";
 import { activityHref } from "./cross-links";
 import { consoleNavItems } from "./nav";
 import { ThemeToggle } from "./theme-toggle";
@@ -9,6 +10,8 @@ import { ThemeToggle } from "./theme-toggle";
 export type MastheadProps = {
   /** Host of the gateway a client should point at, e.g. localhost:4000. */
   gatewayAddress: string;
+  /** The whole url, which is what an agent's configuration needs. */
+  gatewayBaseUrl: string;
   /** Connections currently recorded as unhealthy — click through to Providers. */
   unhealthyConnectionCount: number;
   /** Failed requests in the last 24h, badged on the Activity tab. */
@@ -17,6 +20,7 @@ export type MastheadProps = {
 
 export function Masthead({
   gatewayAddress,
+  gatewayBaseUrl,
   unhealthyConnectionCount,
   failedRequestCount,
 }: MastheadProps) {
@@ -72,7 +76,14 @@ export function Masthead({
         })}
       </nav>
       <div className="ml-auto flex flex-none items-center gap-4">
-        <span className="font-mono text-12 text-dim">gw · {gatewayAddress}</span>
+        {/* The address every agent has to be pointed at: copied from here
+            rather than retyped from a screen. */}
+        <span className="flex items-center gap-[6px] font-mono text-12 text-dim">
+          gw · {gatewayAddress}
+          <CopyButton label="the gateway address" size="row" value={gatewayBaseUrl}>
+            Copy
+          </CopyButton>
+        </span>
         {unhealthyConnectionCount > 0 ? (
           <Link
             href="/providers"

@@ -17,6 +17,8 @@ export type ConsoleUsageBreakdown = {
 
 export type ConsoleUsageDimensionBreakdown = {
   avgLatencyMs: number | null;
+  /** Requests whose cost the gateway priced itself, the provider not saying. */
+  estimatedCostRequests: number;
   failureCount: number;
   id: string;
   label: string;
@@ -50,6 +52,8 @@ export type ConsoleVirtualModelCandidateTraffic = {
 export type ConsoleUsageSummary = {
   apiKeyBreakdowns: ConsoleUsageDimensionBreakdown[];
   avgLatencyMs: number | null;
+  /** Requests that succeeded only after an earlier candidate had failed. */
+  fallbackRecoveredCount: number;
   breakdowns: ConsoleUsageBreakdown[];
   /** Input tokens the provider served from its cache, a subset of inputTokens. */
   cachedInputTokens: number;
@@ -100,6 +104,7 @@ type UsageBreakdownRow = {
 
 type UsageDimensionBreakdownRow = {
   avg_latency_ms: number | string | null;
+  estimated_cost_requests: number;
   failure_count: number;
   id: string | null;
   label: string | null;
@@ -228,14 +233,19 @@ export async function getConsoleUsageSummary(input: {
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd
+                   as total_cost_usd,
+                 count(request_costs.request_activity_id) filter (
+                   where request_costs.cost_source = 'estimated'
+                 )::integer as estimated_cost_requests
           from request_activity
           left join api_keys on api_keys.id = request_activity.api_key_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
           where ${scope.whereSql}
           group by request_activity.api_key_id
-          order by min(request_activity.created_at),
+          -- Busiest first: every reader of these rows shows a share and caps
+          -- the list, and "the first ones recorded" is not what a share ranks.
+          order by request_count desc,
                    label
         `,
       scope.values,
@@ -264,14 +274,19 @@ export async function getConsoleUsageSummary(input: {
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd
+                   as total_cost_usd,
+                 count(request_costs.request_activity_id) filter (
+                   where request_costs.cost_source = 'estimated'
+                 )::integer as estimated_cost_requests
           from request_activity
           left join virtual_models on virtual_models.id = request_activity.virtual_model_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
           where ${scope.whereSql}
           group by request_activity.virtual_model_id
-          order by min(request_activity.created_at),
+          -- Busiest first: every reader of these rows shows a share and caps
+          -- the list, and "the first ones recorded" is not what a share ranks.
+          order by request_count desc,
                    label
         `,
       scope.values,
@@ -295,14 +310,19 @@ export async function getConsoleUsageSummary(input: {
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd
+                   as total_cost_usd,
+                 count(request_costs.request_activity_id) filter (
+                   where request_costs.cost_source = 'estimated'
+                 )::integer as estimated_cost_requests
           from request_activity
           left join providers on providers.id = request_activity.provider_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
           where ${scope.whereSql}
           group by request_activity.provider_id
-          order by min(request_activity.created_at),
+          -- Busiest first: every reader of these rows shows a share and caps
+          -- the list, and "the first ones recorded" is not what a share ranks.
+          order by request_count desc,
                    label
         `,
       scope.values,
@@ -365,14 +385,19 @@ export async function getConsoleUsageSummary(input: {
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd
+                   as total_cost_usd,
+                 count(request_costs.request_activity_id) filter (
+                   where request_costs.cost_source = 'estimated'
+                 )::integer as estimated_cost_requests
           from request_activity
           left join provider_models on provider_models.id = request_activity.provider_model_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
           where ${scope.whereSql}
           group by request_activity.provider_model_id
-          order by min(request_activity.created_at),
+          -- Busiest first: every reader of these rows shows a share and caps
+          -- the list, and "the first ones recorded" is not what a share ranks.
+          order by request_count desc,
                    label
         `,
       scope.values,
@@ -399,11 +424,25 @@ export async function getConsoleUsageSummary(input: {
         `,
       scope.values,
     );
+    // What the failure count does not say: requests that did fail somewhere and
+    // were served anyway. One indexed pass over the window's fallback rows.
+    const fallbackResult = await client.query<{ recovered: number }>(
+      `
+          select count(distinct fallback_events.request_activity_id)::integer as recovered
+          from fallback_events
+          join request_activity on request_activity.id = fallback_events.request_activity_id
+          where ${scope.whereSql}
+            and fallback_events.status = 'failed'
+            and request_activity.status = 'succeeded'
+        `,
+      scope.values,
+    );
     const summaryRow = summaryResult.rows[0];
 
     return {
       apiKeyBreakdowns: apiKeyBreakdownResult.rows.map(rowToConsoleUsageDimensionBreakdown),
       avgLatencyMs: readOptionalNumber(summaryRow?.avg_latency_ms),
+      fallbackRecoveredCount: fallbackResult.rows[0]?.recovered ?? 0,
       breakdowns: breakdownResult.rows.map(rowToConsoleUsageBreakdown),
       cachedInputTokens: readInteger(summaryRow?.cached_input_tokens),
       failureCount: summaryRow?.failure_count ?? 0,
@@ -550,6 +589,7 @@ function rowToConsoleUsageDimensionBreakdown(
 ): ConsoleUsageDimensionBreakdown {
   return {
     avgLatencyMs: readOptionalNumber(row.avg_latency_ms),
+    estimatedCostRequests: row.estimated_cost_requests ?? 0,
     failureCount: row.failure_count,
     id: row.id ?? "unknown",
     label: row.label ?? "Unknown",

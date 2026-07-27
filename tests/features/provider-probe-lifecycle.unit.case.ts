@@ -109,11 +109,6 @@ describe("provider probe lifecycle", () => {
 
     // A model whose context window or price is unknown still renders and is
     // still routable; the cell says Unknown rather than inventing a number.
-    const contextFormat = readFileSync(
-      "apps/console/src/app/_ui/model-capability-format.ts",
-      "utf8",
-    );
-    expect(contextFormat).toContain('return contextWindow === null ? "Unknown"');
     expect(formatModelContextTokens(null)).toBe("Unknown");
   });
 });

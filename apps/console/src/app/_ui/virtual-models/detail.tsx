@@ -23,6 +23,7 @@ import {
   formatPricePair,
 } from "../format";
 import { DetailRow, SectionTitle } from "../layout";
+import { formatModelContextTokens } from "../model-capability-format";
 import { buildHref, type SearchParams } from "../params";
 import {
   buildProviderConnections,
@@ -32,7 +33,7 @@ import {
 import { GridRow } from "../table";
 import { strategyRouteNote } from "./strategy";
 
-const ROUTE_COLUMNS = "26px 252px 168px 168px 140px 1fr";
+const ROUTE_COLUMNS = "26px 252px 150px 156px 78px 140px 1fr";
 const KEY_COLUMNS = "148px 104px 1fr";
 const FAILURE_COLUMNS = "64px 1fr 126px";
 
@@ -111,6 +112,7 @@ export function VirtualModelDetail({
           <span>CANDIDATE</span>
           <span>PRICE</span>
           <span>HEALTH</span>
+          <span className="text-right">CTX</span>
           <span>CAPABILITIES</span>
           <span className="text-right">TRAFFIC 24H</span>
         </GridRow>
@@ -146,6 +148,9 @@ export function VirtualModelDetail({
                 >
                   <StatusDot tone={candidateHealth?.tone ?? "dim"} />
                   {candidateHealth?.text ?? "unknown"}
+                </span>
+                <span className="text-right text-dim tabnum">
+                  {formatModelContextTokens(candidate.contextWindow)}
                 </span>
                 <span className="text-dim cell-clip">{formatCapabilities(candidate)}</span>
                 <span className="flex items-center justify-end gap-2">

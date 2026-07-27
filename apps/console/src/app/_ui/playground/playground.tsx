@@ -37,7 +37,19 @@ export type PlaygroundVirtualModel = {
   strategy: string;
 };
 
+type FilteredCandidate = {
+  candidateOrder: number;
+  label: string;
+  reasons: string[];
+};
+
 type RequestDetail = {
+  /**
+   * Candidates the policy took off the table before any attempt was made. The
+   * trace is whatever the lookup answered with — a request recorded before the
+   * gateway wrote explanations has none, and the panel is not a place to throw.
+   */
+  filteredCandidates?: FilteredCandidate[];
   latencyMs: number | null;
   providerDisplayName: string | null;
   providerModelDisplayName: string | null;
@@ -452,6 +464,16 @@ export function Playground({
                     : formatCompact(result.detail.totalTokens)
                 }
               />
+              <DetailRow
+                label="filtered candidates"
+                value={
+                  result.detail === null
+                    ? "—"
+                    : (result.detail.filteredCandidates?.length ?? 0) === 0
+                      ? "none — every candidate was eligible"
+                      : `${result.detail.filteredCandidates?.length} — listed below`
+                }
+              />
               <DetailRow label="cost" value={formatCost(result.detail?.totalCostUsd ?? null)} />
               <DetailRow
                 label="request id"
@@ -466,9 +488,33 @@ export function Playground({
                 }
               />
             </div>
+            {/* Why a candidate never got an attempt. It is the part of the
+                route the response body cannot show, and the reason someone
+                opens the Playground rather than reading the answer. */}
+            {result.detail?.filteredCandidates?.length ? (
+              <div className="mt-3">
+                <div className="font-mono text-115 font-medium tracking-[.08em] text-dim">
+                  FILTERED OUT
+                </div>
+                {result.detail.filteredCandidates?.map((candidate) => (
+                  <div
+                    key={`${candidate.candidateOrder}-${candidate.label}`}
+                    className="mt-1 flex gap-[10px] font-mono text-12 leading-[1.5]"
+                  >
+                    <span className="flex-none text-faint tabnum">#{candidate.candidateOrder}</span>
+                    <span className="min-w-0 flex-1 text-dim">
+                      <span className="text-ink">{candidate.label}</span>
+                      {candidate.reasons.length > 0
+                        ? ` — ${candidate.reasons.join("; ")}`
+                        : " — no reason recorded"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <p className="mt-3 font-mono text-12 leading-[1.6] text-faint">
-              Filtered candidates and per-attempt outcomes are recorded on the request itself — open
-              it in Activity for the full route timeline.
+              Per-attempt outcomes — which credential was tried, in what order, and how each one
+              ended — are recorded on the request itself: open it in Activity for the full timeline.
             </p>
           </>
         )}

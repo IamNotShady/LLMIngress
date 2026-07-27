@@ -44,6 +44,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     <div className="min-h-screen bg-bg pb-[42px] text-ink">
       <Masthead
         gatewayAddress={formatRuntimeAddress(gatewayPublicBaseUrl())}
+        gatewayBaseUrl={gatewayPublicBaseUrl()}
         unhealthyConnectionCount={
           // provider_health_summary only stores rows that are not healthy.
           healthSummaries.filter((summary) => summary.status === "unhealthy").length

@@ -12,6 +12,27 @@ export function ThemeToggle() {
     setTheme(readStoredTheme() ?? systemTheme());
   }, []);
 
+  // With no stored choice the console follows the system, and following it
+  // means following it now — a desktop that switches to dark at sunset should
+  // not leave an open console light until it is reloaded. A stored choice is
+  // the operator's own and outranks the system either way.
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") {
+      return;
+    }
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const follow = () => {
+      if (readStoredTheme()) {
+        return;
+      }
+      const next: ConsoleTheme = query.matches ? "dark" : "light";
+      document.documentElement.setAttribute("data-theme", next);
+      setTheme(next);
+    };
+    query.addEventListener("change", follow);
+    return () => query.removeEventListener("change", follow);
+  }, []);
+
   const next: ConsoleTheme = theme === "dark" ? "light" : "dark";
 
   return (

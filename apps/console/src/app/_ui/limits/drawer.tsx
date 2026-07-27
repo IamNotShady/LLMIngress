@@ -285,9 +285,7 @@ function DeleteRulesDialog({
         All rules for <strong className="font-medium">{apiKey.name}</strong> are removed and the key
         runs unlimited until new rules are set. Recorded budget usage is kept.
       </DialogBody>
-      <DialogNote>
-        To pause enforcement without losing the rules, use Disable limits instead.
-      </DialogNote>
+      <DialogNote>To pause enforcement without losing the rules, disable them instead.</DialogNote>
       <ConfirmForm
         action="/api/api-key-limits"
         confirmLabel="Delete rules"
@@ -295,6 +293,10 @@ function DeleteRulesDialog({
         hiddenFields={{ action: "deleteLimitRules", apiKeyId: apiKey.id }}
       >
         <ActionLink href={buildHref("/limits", params, { dialog: null })}>Cancel</ActionLink>
+        {/* The safer way out, as the control rather than as advice about it. */}
+        <ActionLink href={buildHref("/limits", params, { dialog: "toggleLimits" })}>
+          Disable limits instead
+        </ActionLink>
       </ConfirmForm>
     </Dialog>
   );

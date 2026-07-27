@@ -85,11 +85,27 @@ export type ConsoleFallbackEvent = {
   statusCode: number | null;
 };
 
+/**
+ * A candidate the route policy weighed, and what became of it. The gateway
+ * records one of these per candidate — including the ones it filtered out and
+ * why — and without them the timeline says what happened but never what else
+ * could have.
+ */
+export type ConsoleActivityRouteCandidate = {
+  candidateOrder: number;
+  eligible: boolean;
+  /** The provider and model, resolved for reading; the id when it is gone. */
+  label: string;
+  providerModelId: string;
+  reasons: string[];
+};
+
 export type ConsoleActivityDetail = {
   activity: ConsoleActivity;
   fallbackEvents: ConsoleFallbackEvent[];
   requestMetadata: unknown;
   responseMetadata: unknown;
+  routeCandidates: ConsoleActivityRouteCandidate[];
 };
 
 type ConsoleActivityProtocol = "chat_completions" | "messages" | "responses";
@@ -369,11 +385,47 @@ export async function getConsoleActivityDetail(input: {
       [row.id],
     );
 
+    // The recorded explanations carry ids; what an operator can read is the
+    // provider and model they name, so they are resolved here in one query
+    // rather than rendered as uuids.
+    const recorded = readConsoleActivityRouteCandidates(row.route_reason);
+    const labels = new Map<string, string>();
+    if (recorded.length > 0) {
+      const named = await client.query<{
+        display_name: string | null;
+        id: string;
+        model_id: string;
+        provider_display_name: string | null;
+      }>(
+        `
+          select provider_models.id::text as id,
+                 provider_models.model_id,
+                 provider_models.display_name,
+                 providers.display_name as provider_display_name
+          from provider_models
+          left join providers on providers.id = provider_models.provider_id
+          where provider_models.id = any($1::uuid[])
+        `,
+        [recorded.map((candidate) => candidate.providerModelId)],
+      );
+      for (const model of named.rows) {
+        const name = model.display_name ?? model.model_id;
+        labels.set(
+          model.id,
+          model.provider_display_name ? `${model.provider_display_name} · ${name}` : name,
+        );
+      }
+    }
+
     return {
       activity: rowToConsoleActivity(row),
       fallbackEvents: fallbackEvents.rows.map(rowToConsoleFallbackEvent),
       requestMetadata: row.request_metadata ?? {},
       responseMetadata: row.response_metadata ?? {},
+      routeCandidates: recorded.map((candidate) => ({
+        ...candidate,
+        label: labels.get(candidate.providerModelId) ?? "model no longer in the catalog",
+      })),
     };
   });
 }
@@ -460,6 +512,34 @@ function buildActivityWhereClause(filters: ConsoleActivityFilters): {
     sql: clauses.length > 0 ? `where ${clauses.join(" and ")}` : "",
     values,
   };
+}
+
+/**
+ * The candidate explanations as recorded, without the names: reading them is
+ * separable from resolving what each id is called, and a request whose route
+ * predates this field simply has none.
+ */
+export function readConsoleActivityRouteCandidates(
+  routeReason: unknown,
+): Array<Omit<ConsoleActivityRouteCandidate, "label">> {
+  if (!isRecord(routeReason) || !Array.isArray(routeReason.candidateExplanations)) {
+    return [];
+  }
+  return routeReason.candidateExplanations
+    .filter(isRecord)
+    .filter((entry) => typeof entry.providerModelId === "string" && entry.providerModelId)
+    .map((entry, index) => ({
+      candidateOrder:
+        typeof entry.candidateOrder === "number" && Number.isFinite(entry.candidateOrder)
+          ? entry.candidateOrder
+          : index + 1,
+      eligible: entry.eligible !== false,
+      providerModelId: String(entry.providerModelId),
+      reasons: Array.isArray(entry.reasons)
+        ? entry.reasons.filter((reason): reason is string => typeof reason === "string" && !!reason)
+        : [],
+    }))
+    .sort((left, right) => left.candidateOrder - right.candidateOrder);
 }
 
 export function formatConsoleActivityRouteReason(routeReason: unknown): string {

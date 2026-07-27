@@ -12,6 +12,17 @@ export function formatClock(value: Date | null | undefined): string {
   return value.toISOString().slice(11, 16);
 }
 
+/**
+ * The same clock with seconds, for the one table that lists requests: two calls
+ * a second apart are two rows, and `14:32` twice reads as one of them repeated.
+ */
+export function formatClockSeconds(value: Date | null | undefined): string {
+  if (!value) {
+    return "—";
+  }
+  return value.toISOString().slice(11, 19);
+}
+
 export function formatStamp(value: Date | null | undefined): string {
   if (!value) {
     return "—";
@@ -160,17 +171,27 @@ export const failureRateToneClass: Record<"danger" | "neutral" | "warn", string>
   warn: "text-ambtx",
 };
 
+/**
+ * What a model can do, in the vocabulary the design uses: `tools · vision ·
+ * reasoning`. Streaming is not among them — every routable model streams, so
+ * saying so of all of them says nothing — while the modalities are recorded per
+ * model and are what decides whether an image can be sent at all.
+ */
 export function formatCapabilities(input: {
+  inputModalities?: string[] | null;
+  outputModalities?: string[] | null;
   supportsFunctionCalling: boolean | null;
   supportsReasoning: boolean | null;
-  supportsStreaming: boolean;
 }): string {
   const parts: string[] = [];
-  if (input.supportsStreaming) {
-    parts.push("stream");
-  }
   if (input.supportsFunctionCalling) {
     parts.push("tools");
+  }
+  if (input.inputModalities?.includes("image")) {
+    parts.push("vision");
+  }
+  if (input.inputModalities?.includes("audio") || input.outputModalities?.includes("audio")) {
+    parts.push("audio");
   }
   if (input.supportsReasoning) {
     parts.push("reasoning");

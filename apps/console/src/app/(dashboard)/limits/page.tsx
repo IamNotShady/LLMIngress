@@ -135,10 +135,23 @@ export default async function LimitsPage({
                     >
                       {view.label}
                     </span>
-                    <span className={view.budgetLimit === null ? "text-faint" : "text-ink"}>
-                      {view.budgetLimit === null
+                    {/* Disabling keeps every rule and stops enforcing them, so
+                        the ceiling is not what this key is running under — the
+                        column says which of the two it is. */}
+                    <span
+                      className={
+                        view.state === "enabled" && view.budgetLimit !== null
+                          ? "text-ink"
+                          : "text-faint"
+                      }
+                    >
+                      {view.state === "none"
                         ? "no rules"
-                        : `${formatCost(view.budgetLimit)} ${view.budgetPeriod}`}
+                        : view.state === "disabled"
+                          ? "rules kept"
+                          : view.budgetLimit === null
+                            ? "unlimited"
+                            : `${formatCost(view.budgetLimit)} ${view.budgetPeriod}`}
                     </span>
                     <span className="flex items-center gap-2">
                       <Meter

@@ -97,6 +97,9 @@ export default async function ApiKeysPage({
             ) : (
               visible.map((key) => {
                 const keyUsage = usage.apiKeyBreakdowns.find((entry) => entry.id === key.id);
+                // What the key can reach is what it is for: the prefix alone
+                // makes two keys of the same name look interchangeable.
+                const grantCount = grants.filter((grant) => grant.apiKeyId === key.id).length;
                 return (
                   <PickRow
                     key={key.id}
@@ -117,7 +120,7 @@ export default async function ApiKeysPage({
                         {key.name}
                       </span>
                       <span className="mt-px block font-mono text-12 text-faint cell-clip">
-                        {key.keyPrefix}
+                        {key.keyPrefix} · {grantCount === 1 ? "1 model" : `${grantCount} models`}
                       </span>
                     </span>
                     <span className="flex-none font-mono text-125 text-faint tabnum">

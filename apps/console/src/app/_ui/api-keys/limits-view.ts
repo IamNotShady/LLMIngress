@@ -13,7 +13,7 @@ export type ApiKeyLimitsView = {
   budgetPeriod: string | null;
   concurrency: number | null;
   enforcement: "block" | "warn_only";
-  /** "on · block" / "on · warn" / "off" / "no rules". */
+  /** The three states the Limits column has: "on · block" / "on · warn" / "off". */
   label: string;
   rpm: number | null;
   spentRatio: number | null;
@@ -45,14 +45,10 @@ export function buildApiKeyLimitsView(input: {
     budgetPeriod: budget?.period ?? null,
     concurrency: byType.get("concurrency")?.limitValue ?? null,
     enforcement,
-    label:
-      state === "none"
-        ? "no rules"
-        : state === "disabled"
-          ? "off"
-          : enforcement === "warn_only"
-            ? "on · warn"
-            : "on · block",
+    // A key with no rules is off, the same as one whose rules are switched
+    // off: what is enforced is nothing either way. Which of the two it is
+    // belongs in the budget cell, where the rules themselves are described.
+    label: state !== "enabled" ? "off" : enforcement === "warn_only" ? "on · warn" : "on · block",
     rpm: byType.get("rpm")?.limitValue ?? null,
     spentRatio:
       budgetLimit && spent !== null && budgetLimit > 0 ? Math.min(1, spent / budgetLimit) : null,

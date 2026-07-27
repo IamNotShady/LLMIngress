@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 import { createServer, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { expect, test } from "@playwright/test";
-import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import {
+  createTestPostgresFixture,
+  runMigrations,
+  withDedicatedPostgresClient,
+} from "../../packages/db/src/index";
 import {
   getFreePort,
   signInFromFirstRun,
@@ -132,6 +136,70 @@ function corsHeaders(): Record<string, string> {
   };
 }
 
+/**
+ * The request the stub gateway is about to answer, as the gateway would have
+ * recorded it: the console polls its own trace by request id, and the route it
+ * shows has to be the recorded one rather than a guess from the response.
+ */
+async function seedRecordedRoute(databaseUrl: string): Promise<void> {
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
+    const providerId = randomUUID();
+    const servingModelId = randomUUID();
+    const filteredModelId = randomUUID();
+    const apiKeyId = randomUUID();
+    await client.query(
+      `insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+       values ($1, 'api_key', 'deepseek', 'Stub Provider', 'https://stub.test/v1', true)`,
+      [providerId],
+    );
+    await client.query(
+      `insert into provider_models (id, provider_id, model_id, display_name, availability)
+       values ($1, $2, 'stub-serving-model', 'Stub Serving Model', 'available'),
+              ($3, $2, 'stub-filtered-model', 'Stub Filtered Model', 'available')`,
+      [servingModelId, providerId, filteredModelId],
+    );
+    await client.query(
+      `insert into api_keys (id, name, key_prefix, key_hash, enabled)
+       values ($1, 'stream-probe-key', 'llmi_stream', gen_random_uuid()::text, true)`,
+      [apiKeyId],
+    );
+    await client.query(
+      `insert into request_activity (
+         id, request_id, api_key_id, api_key_prefix, protocol, model, stream, status, http_status,
+         latency_ms, route_reason, started_at, completed_at,
+         provider_id, provider_model_id, provider_display_name_snapshot,
+         provider_model_name_snapshot
+       )
+       values ($1, 'playground-stream-request', $5, 'llmi_stream', 'chat_completions', 'stream-vm',
+               true, 'succeeded', 200, 120, $2::jsonb, now(), now(), $3, $4,
+               'Stub Provider', 'stub-serving-model')`,
+      [
+        randomUUID(),
+        JSON.stringify({
+          candidateExplanations: [
+            {
+              candidateOrder: 1,
+              eligible: true,
+              providerModelId: servingModelId,
+              reasons: ["selected by fixed strategy"],
+            },
+            {
+              candidateOrder: 2,
+              eligible: false,
+              providerModelId: filteredModelId,
+              reasons: ["context window is too small"],
+            },
+          ],
+          message: "fixed route for stream-vm",
+        }),
+        providerId,
+        servingModelId,
+        apiKeyId,
+      ],
+    );
+  });
+}
+
 test("the Playground shows a streamed answer while it is still being written", async ({
   browser,
 }) => {
@@ -143,6 +211,7 @@ test("the Playground shows a streamed answer while it is still being written", a
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await seedRecordedRoute(fixture.databaseUrl);
     const consoleApp = startConsoleProcess({
       databaseUrl: fixture.databaseUrl,
       env: { GATEWAY_URL: gateway.url },
@@ -176,6 +245,15 @@ test("the Playground shows a streamed answer while it is still being written", a
         await expect(page.getByText("200 OK")).toBeVisible({ timeout: 20_000 });
         await expect(page.getByTestId("playground-stream")).toHaveCount(0);
         await expect(page.getByText("first second third")).toBeVisible();
+
+        // --- The route the gateway took, including the candidate it dropped
+        // before trying anything. It is recorded on the request and nowhere in
+        // the answer, which is the reason to read a trace at all.
+        await expect(page.getByText("1 — listed below")).toBeVisible({ timeout: 20_000 });
+        await expect(page.getByText("FILTERED OUT")).toBeVisible();
+        await expect(
+          page.getByText("Stub Provider · Stub Filtered Model — context window is too small"),
+        ).toBeVisible();
 
         // --- A refused request says why. The status alone leaves the operator
         // guessing which of the controls on the left was the wrong one.

@@ -192,7 +192,23 @@ export function ApiKeyDetail({
           <div className="mt-2 border-t border-hair">
             <DetailRow label="requests" value={formatCount(breakdown?.requestCount ?? 0)} />
             <DetailRow label="tokens" value={formatCompact(breakdown?.totalTokens ?? 0)} />
-            <DetailRow label="cost" value={formatCost(breakdown?.totalCostUsd ?? null)} />
+            {/* Cost is not one kind of number: a provider that reports what it
+                charged and a price the gateway applied itself are both in this
+                total, and only one of them is what the bill will say. */}
+            <DetailRow
+              label="cost"
+              value={
+                <>
+                  {formatCost(breakdown?.totalCostUsd ?? null)}
+                  {breakdown?.estimatedCostRequests ? (
+                    <span className="text-faint">
+                      {" "}
+                      ({formatCount(breakdown.estimatedCostRequests)} estimated)
+                    </span>
+                  ) : null}
+                </>
+              }
+            />
             <DetailRow
               label="failures"
               value={formatCount(breakdown?.failureCount ?? 0)}

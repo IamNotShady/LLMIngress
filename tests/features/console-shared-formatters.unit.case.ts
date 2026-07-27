@@ -2,7 +2,9 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import {
+  formatCapabilities,
   formatClock,
+  formatClockSeconds,
   formatCompact,
   formatCost,
   formatCount,
@@ -72,6 +74,45 @@ describe("console pages consume the shared formatters", () => {
       expect(source, path).not.toMatch(/function format(Compact|Full)?(Number|Money|Usd)/);
       expect(source, path).not.toContain('"N/A"');
     }
+  });
+
+  test("a request list says which second a request started in", () => {
+    // Two calls a second apart are two rows, and 14:32 twice reads as one of
+    // them repeated. The wider clock stays minute-only: nothing there is a list
+    // of individual requests.
+    const at = new Date("2026-07-27T14:32:05.400Z");
+    expect(formatClockSeconds(at)).toBe("14:32:05");
+    expect(formatClock(at)).toBe("14:32");
+    expect(formatClockSeconds(null)).toBe("—");
+  });
+
+  test("capabilities are said in the vocabulary the design uses", () => {
+    // tools · vision · reasoning. Streaming is not among them — every routable
+    // model streams — and the modalities decide whether an image can be sent.
+    expect(
+      formatCapabilities({
+        inputModalities: ["text", "image"],
+        outputModalities: ["text"],
+        supportsFunctionCalling: true,
+        supportsReasoning: true,
+      }),
+    ).toBe("tools · vision · reasoning");
+    expect(
+      formatCapabilities({
+        inputModalities: ["text"],
+        outputModalities: ["text"],
+        supportsFunctionCalling: true,
+        supportsReasoning: false,
+      }),
+    ).toBe("tools");
+    expect(
+      formatCapabilities({
+        inputModalities: null,
+        outputModalities: null,
+        supportsFunctionCalling: null,
+        supportsReasoning: null,
+      }),
+    ).toBe("—");
   });
 
   test("db display formatters delegate to the shared USD rule", () => {

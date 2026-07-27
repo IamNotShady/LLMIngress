@@ -148,4 +148,11 @@ describe("console layout contract", () => {
       )?.[1],
     ).not.toContain("overflow-x-auto");
   });
+
+  test("the limits drawer keeps its three enabled-state actions in one row", () => {
+    const limitsDrawer = read("_ui/limits/drawer.tsx");
+    expect(limitsDrawer).toMatch(
+      /mt-\[18px\] flex flex-wrap items-center gap-2[\s\S]*?Save rules[\s\S]*?Disable limits[\s\S]*?Delete rules[\s\S]*?<\/MutationForm>/,
+    );
+  });
 });

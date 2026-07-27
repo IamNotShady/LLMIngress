@@ -172,25 +172,25 @@ export function LimitsDrawer({
           <ActionButton size="dialog" tone="primary">
             {view.state === "enabled" ? "Save rules" : "Enable limits"}
           </ActionButton>
+          {view.state === "enabled" ? (
+            <ActionLink
+              size="dialog"
+              href={buildHref("/limits", params, { dialog: "toggleLimits" })}
+            >
+              Disable limits
+            </ActionLink>
+          ) : null}
+          {view.state === "none" ? null : (
+            <ActionLink
+              size="dialog"
+              href={buildHref("/limits", params, { dialog: "deleteRules" })}
+              tone="danger"
+            >
+              Delete rules
+            </ActionLink>
+          )}
         </div>
       </MutationForm>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {view.state === "enabled" ? (
-          <ActionLink size="dialog" href={buildHref("/limits", params, { dialog: "toggleLimits" })}>
-            Disable limits
-          </ActionLink>
-        ) : null}
-        {view.state === "none" ? null : (
-          <ActionLink
-            size="dialog"
-            href={buildHref("/limits", params, { dialog: "deleteRules" })}
-            tone="danger"
-          >
-            Delete rules
-          </ActionLink>
-        )}
-      </div>
       <p className="mt-3 font-mono text-12 leading-[1.6] text-faint">
         Disabling removes every rule. Saving a complete rule set enables limits again.
       </p>

@@ -247,7 +247,17 @@ const TOKEN_SOURCES = [
   { className: "bg-dim", source: "unavailable" },
 ] as const;
 
-const COST_SOURCES = ["provider", "estimated", "reconciled", "unavailable"] as const;
+/**
+ * The two dashes on this panel mean different things, so only one of them is a
+ * dash: a priced source that produced nothing costs $0.00, which is an amount;
+ * plan traffic records no metered cost at all, which is not an amount of zero.
+ */
+const COST_SOURCES = [
+  { label: "provider", metered: true, source: "provider" },
+  { label: "estimated", metered: true, source: "estimated" },
+  { label: "reconciled", metered: true, source: "reconciled" },
+  { label: "unavailable / plan", metered: false, source: "unavailable" },
+] as const;
 
 export function DataQualityPanel({ breakouts }: { breakouts: ConsoleUsageBreakouts }) {
   const tokenSourceCount = (source: string) =>
@@ -273,16 +283,16 @@ export function DataQualityPanel({ breakouts }: { breakouts: ConsoleUsageBreakou
         COST SOURCE
       </div>
       <div className="mt-[6px]">
-        {COST_SOURCES.map((source) => {
+        {COST_SOURCES.map(({ label, metered, source }) => {
           const entry = costSource(source);
           return (
             <div
               key={source}
               className="flex justify-between border-b border-rule2 py-[6px] font-mono text-13"
             >
-              <span className="text-dim">{source}</span>
+              <span className="text-dim">{label}</span>
               <span className={entry ? "tabnum" : "tabnum text-faint"}>
-                {source === "unavailable" ? "—" : formatCost(entry?.totalCostUsd ?? null)} ·{" "}
+                {metered ? formatCost(entry?.totalCostUsd ?? "0") : "—"} ·{" "}
                 {formatCount(entry?.requestCount ?? 0)} reqs
               </span>
             </div>

@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { PLAYGROUND_KEY_HANDOFF } from "../../apps/console/src/app/_ui/playground/handoff.ts";
-import { standaloneThemeCss } from "../../apps/console/src/app/api/_standalone-theme.ts";
+import {
+  standaloneThemeCss,
+  standaloneThemeHead,
+} from "../../apps/console/src/app/api/_standalone-theme.ts";
 import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page.ts";
 import { renderOneTimeProviderKeyPage } from "../../apps/console/src/app/api/provider-keys/_created-page.ts";
 
@@ -124,6 +127,20 @@ describe("the pages rendered outside the console shell", () => {
   const defined = new Set(
     Array.from(standaloneCss.matchAll(/(--[a-z0-9-]+)\s*:/g), (match) => match[1] as string),
   );
+
+  test("ask nothing of a third party", () => {
+    // These are the only two pages that show a plaintext credential, and they
+    // were the only two fetching a webfont from Google to do it — which also
+    // left them without their faces on an air-gapped install. Everything they
+    // need is in the response.
+    for (const [name, page] of pages) {
+      expect(page, name).not.toMatch(/https?:\/\/(?!127\.0\.0\.1|localhost)/);
+    }
+    expect(standaloneThemeHead()).not.toContain("<link");
+    // The families are still named, so a machine that has them uses them.
+    expect(standaloneCss).toContain("'Open Sans'");
+    expect(standaloneCss).toContain("system-ui");
+  });
 
   test("define every token they use", () => {
     // The sheet is a hand-written copy of the console's tokens, and a page that

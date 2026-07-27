@@ -215,6 +215,15 @@ test("the console shows what the gateway recorded: the route's candidates, estim
         await expect(page.getByText("20 min ago")).toBeVisible();
         await expect(page.getByText("never").first()).toBeVisible();
 
+        // --- Cost source: a priced source that produced nothing costs $0.00,
+        // which is an amount; plan traffic records no metered cost at all,
+        // which is not an amount of zero. Almost no install produces a
+        // reconciled cost, so the wrong form here is what most would see.
+        await page.goto(`${baseUrl}/usage`, { waitUntil: "networkidle" });
+        await expect(page.getByText("reconciled")).toBeVisible();
+        await expect(page.getByText("$0.00 · 0 reqs")).toBeVisible();
+        await expect(page.getByText("unavailable / plan")).toBeVisible();
+
         // --- Deliberately off, still being checked, and failing are three
         // different answers: the roll-up used to fold the first two together
         // as "not serving yet".

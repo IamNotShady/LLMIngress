@@ -65,7 +65,11 @@ write(text).then(function(){restore("copied")},function(){restore("copy failed")
 
 /** Head markup that stamps the stored theme before the page paints. */
 export function standaloneThemeHead(): string {
-  return `<link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600&amp;family=DM+Mono:wght@400;500&amp;display=swap" rel="stylesheet" />
-    <script>${THEME_BOOTSTRAP_SCRIPT}</script>`;
+  // No webfont link: these two pages are the only ones that show a plaintext
+  // credential, and they were the only ones fetching from a third party for it.
+  // The console proper self-hosts its faces through next/font, which a route
+  // handler rendering outside the layout cannot reach — so the token stack
+  // names the same families and falls back to the system, and an air-gapped
+  // install renders them rather than waiting on a request it cannot make.
+  return `<script>${THEME_BOOTSTRAP_SCRIPT}</script>`;
 }

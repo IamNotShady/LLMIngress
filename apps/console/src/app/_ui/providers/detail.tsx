@@ -98,7 +98,8 @@ export function ProviderDetail({
       </div>
       <MutationForm
         action="/api/provider-model-refresh"
-        className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 [&>p[role=alert]]:mb-0"
+        className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2"
+        errorPresentation="toast"
         fallbackError="The model refresh could not be queued."
       >
         <input type="hidden" name="providerId" value={provider.id} />
@@ -122,6 +123,7 @@ export function ProviderDetail({
           <MutationForm
             action="/api/provider-model-refresh"
             className="max-w-full flex-[0_1_auto]"
+            errorPresentation="toast"
             fallbackError="The model refresh could not be queued."
           >
             <input type="hidden" name="providerId" value={provider.id} />
@@ -220,6 +222,7 @@ export function ProviderDetail({
                 <span className="flex flex-wrap items-center justify-end gap-[6px]">
                   <MutationForm
                     action="/api/provider-health-probes"
+                    errorPresentation="toast"
                     fallbackError="The re-check could not be queued."
                   >
                     <input type="hidden" name="providerId" value={provider.id} />

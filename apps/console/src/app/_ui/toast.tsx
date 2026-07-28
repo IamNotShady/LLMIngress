@@ -16,7 +16,7 @@ import { useEffect, useState } from "react";
  */
 const TOAST_MS = 4000;
 
-export type ToastTone = "accent" | "green" | "amber";
+export type ToastTone = "accent" | "green" | "amber" | "red";
 
 export type ConsoleToast = { message: string; meta?: string; tone?: ToastTone };
 
@@ -30,6 +30,7 @@ const accentVar: Record<ToastTone, string> = {
   accent: "var(--accent)",
   green: "var(--green)",
   amber: "var(--amber)",
+  red: "var(--red)",
 };
 
 export function ToastHost() {
@@ -70,13 +71,26 @@ export function ToastHost() {
 
   return (
     <output
+      role={toast.tone === "red" ? "alert" : "status"}
       className="fixed bottom-14 right-6 z-95 flex w-[420px] max-w-[calc(100vw-48px)] items-start gap-3 rounded-sm border border-hair bg-btnbg px-[14px] py-[11px] shadow-drawer"
       style={{ borderLeft: `3px solid ${accentVar[toast.tone ?? "accent"] ?? accentVar.accent}` }}
     >
       <div className="min-w-0 flex-1">
-        <div className="font-mono text-13 leading-[1.5] text-ink">{toast.message}</div>
+        <div
+          className={`font-mono text-13 leading-[1.5] ${
+            toast.tone === "red" ? "text-redtx" : "text-ink"
+          }`}
+        >
+          {toast.message}
+        </div>
         {toast.meta ? (
-          <div className="mt-[3px] font-mono text-125 leading-[1.5] text-faint">{toast.meta}</div>
+          <div
+            className={`mt-[3px] font-mono text-125 leading-[1.5] ${
+              toast.tone === "red" ? "text-redtx" : "text-faint"
+            }`}
+          >
+            {toast.meta}
+          </div>
         ) : null}
       </div>
       <button

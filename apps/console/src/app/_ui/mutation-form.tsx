@@ -7,8 +7,8 @@ import { announceToast, type ConsoleToast } from "./toast";
 /**
  * Posts a console action and keeps its failure on screen. A plain form post
  * would replace the page with the API's JSON error body; here the request asks
- * for JSON, and a refusal — a provider still used by a route, a name that is
- * already taken — is rendered where the operator was working.
+ * for JSON. Input-bearing refusals stay where the operator was working, while
+ * button-only idempotent failures may use the shared error Toast.
  */
 /** The path a followed redirect landed on, or null if it stayed where it was. */
 function redirectTarget(response: Response): string | null {
@@ -29,6 +29,7 @@ export function MutationForm({
   action,
   children,
   className,
+  errorPresentation = "inline",
   fallbackError,
   formId,
   invalidFieldOnError,
@@ -37,6 +38,8 @@ export function MutationForm({
   action: string;
   children: ReactNode;
   className?: string;
+  /** Toast is only for button-only actions whose failure has no field to fix. */
+  errorPresentation?: "inline" | "toast";
   fallbackError: string;
   /** Set when something outside the form submits it — see the device poller. */
   formId?: string;
@@ -62,6 +65,19 @@ export function MutationForm({
         field.setAttribute("aria-invalid", invalid ? "true" : "false");
       }
     }
+  };
+
+  const reportError = (
+    form: HTMLFormElement,
+    message: string,
+    refusedField?: string,
+  ) => {
+    if (errorPresentation === "toast") {
+      announceToast({ message, tone: "red" });
+      return;
+    }
+    setError(message);
+    markField(form, true, refusedField);
   };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -102,12 +118,14 @@ export function MutationForm({
         details?: { field?: unknown };
         error?: string;
       } | null;
-      setError(payload?.error ?? fallbackError);
       const refused = payload?.details?.field;
-      markField(form, true, typeof refused === "string" ? refused : undefined);
+      reportError(
+        form,
+        payload?.error ?? fallbackError,
+        typeof refused === "string" ? refused : undefined,
+      );
     } catch {
-      setError(fallbackError);
-      markField(form, true);
+      reportError(form, fallbackError);
     } finally {
       setPending(false);
     }

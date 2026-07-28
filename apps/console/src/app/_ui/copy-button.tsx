@@ -56,7 +56,7 @@ export function CopyButton({
               : {
                   message: `Could not copy ${label}`,
                   meta: "This browser blocks clipboard access on plain http — select the value and copy it by hand.",
-                  tone: "amber",
+                  tone: "red",
                 },
           );
         });

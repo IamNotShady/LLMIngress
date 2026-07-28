@@ -1011,21 +1011,24 @@ test("refused compact provider actions do not widen the page", async ({ browser 
 
         const masterDetail = page.getByTestId("providers-master-detail");
         await page.getByRole("button", { name: "Refresh models" }).click();
-        await expect(
-          masterDetail.getByRole("alert").filter({
-            hasText: "Provider must be enabled before refreshing models.",
-          }),
-        ).toBeVisible();
+        const refreshError = page.getByRole("alert").filter({
+          hasText: "Provider must be enabled before refreshing models.",
+        });
+        await expect(refreshError).toBeVisible();
+        await expect(refreshError.locator(".text-redtx")).toBeVisible();
+        await expect(masterDetail.getByRole("alert")).toHaveCount(0);
         expect(
           await masterDetail.evaluate((element) => element.scrollWidth - element.clientWidth),
         ).toBeLessThanOrEqual(0);
 
+        await page.getByRole("button", { name: "Dismiss notification" }).click();
         await page.getByRole("button", { name: "Re-check" }).click();
-        await expect(
-          masterDetail.getByRole("alert").filter({
-            hasText: "Provider connection is not available for probing.",
-          }),
-        ).toBeVisible();
+        const probeError = page.getByRole("alert").filter({
+          hasText: "Provider connection is not available for probing.",
+        });
+        await expect(probeError).toBeVisible();
+        await expect(probeError.locator(".text-redtx")).toBeVisible();
+        await expect(masterDetail.getByRole("alert")).toHaveCount(0);
         expect(await overflowPx(page)).toBeLessThanOrEqual(0);
       } finally {
         await context.close();

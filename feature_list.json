@@ -138,7 +138,7 @@
     {
       "id": "console-success-toast",
       "name": "Console Success Toast",
-      "description": "Idempotent actions — Re-check, Refresh models, a Playground send — report through one bottom-right toast: the acting route redirects back with ?toast=/?toastMeta=, and the single ToastHost on the dashboard shell renders it as an <output> that clears itself after 4s. Nothing destructive or refused reports this way: a confirm asks first, and a refused mutation renders where the operator was working.",
+      "description": "Idempotent actions — Re-check, Refresh models, Copy, and a Playground send — report through one bottom-right toast: server actions may return a toast payload or redirect with ?toast=/?toastMeta=, while client actions announce the same event, and the single ToastHost on the dashboard shell renders it as an <output> that clears itself after 4s. Button-only idempotent failures use the same Toast with alert semantics and red text. Destructive actions still confirm first, while validation and mutation refusals that require user correction render where the operator was working.",
       "verification": "pnpm exec vitest run tests/features/console-success-toast.unit.test.ts && pnpm test:e2e tests/e2e/console-success-toast.e2e.spec.ts --workers=1",
       "dependencies": [
         "console-core",

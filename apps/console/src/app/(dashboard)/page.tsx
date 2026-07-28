@@ -286,6 +286,7 @@ export default async function OverviewPage({
                         {view.tone === "red" ? (
                           <MutationForm
                             action="/api/provider-health-probes"
+                            errorPresentation="toast"
                             fallbackError="The re-check could not be queued."
                           >
                             <input type="hidden" name="providerId" value={provider.id} />

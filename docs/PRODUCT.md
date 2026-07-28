@@ -109,7 +109,9 @@ authentication, stable operation errors, and secret encryption are required. URL
 controls always reflect the current query state; clearing filters restores their documented
 defaults, including Activity's Last 24h window. Selecting a different Provider starts a fresh
 Provider-scoped view: errors, dialogs, credential and OAuth drafts, and model filters from the
-previous Provider are not carried forward.
+previous Provider are not carried forward. Failures from button-only idempotent actions such as
+Refresh models and Re-check use the shared four-second Toast in a red error state; form validation
+and mutation refusals that require user correction stay beside their fields.
 
 Persistent Worker jobs are exactly `model_refresh`, `provider_connection_probe`, `price_sync`, and
 `provider_quota_probe`.

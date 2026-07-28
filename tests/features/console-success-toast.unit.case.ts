@@ -6,11 +6,13 @@ const appDir = join(process.cwd(), "apps/console/src/app");
 const read = (rel: string) => readFileSync(join(appDir, rel), "utf8");
 
 describe("console success toast", () => {
-  test("the toast host announces politely and clears itself", () => {
+  test("the toast host uses status for success, alert and red text for errors, then clears itself", () => {
     const src = read("_ui/toast.tsx");
-    // <output> carries an implicit role=status, so a success notice never
-    // interrupts a screen reader the way an alert would.
     expect(src).toMatch(/<output/);
+    expect(src).toContain('toast.tone === "red" ? "alert" : "status"');
+    expect(src).toContain('toast.tone === "red" ? "text-redtx" : "text-ink"');
+    expect(src).toContain('toast.tone === "red" ? "text-redtx" : "text-faint"');
+    expect(src).toContain('red: "var(--red)"');
     expect(src).toMatch(/const TOAST_MS = 4000/);
     expect(src).toMatch(/setTimeout\(\(\) => setToast\(null\), TOAST_MS\)/);
   });
@@ -37,5 +39,22 @@ describe("console success toast", () => {
     // after the fact instead of asking first.
     expect(read("api/provider-health-probes/route.ts")).toMatch(/toast=/);
     expect(read("api/provider-model-refresh/route.ts")).toMatch(/toast=/);
+  });
+
+  test("button-only idempotent failures use the same red toast", () => {
+    const mutationForm = read("_ui/mutation-form.tsx");
+    const providerDetail = read("_ui/providers/detail.tsx");
+    const overview = read("(dashboard)/page.tsx");
+    const copyButton = read("_ui/copy-button.tsx");
+    const playground = read("_ui/playground/playground.tsx");
+
+    expect(mutationForm).toContain('errorPresentation?: "inline" | "toast"');
+    expect(mutationForm).toContain('announceToast({ message, tone: "red" })');
+    expect(providerDetail.match(/errorPresentation="toast"/g)).toHaveLength(3);
+    expect(overview.match(/errorPresentation="toast"/g)).toHaveLength(1);
+    expect(copyButton).toContain('tone: "red"');
+    expect(playground).toContain("announceToast({");
+    expect(playground).toContain('tone: response.ok ? "green" : "red"');
+    expect(playground).not.toContain('className="fixed bottom-14');
   });
 });

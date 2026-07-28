@@ -5,6 +5,7 @@ import { ActionButton, Field, SelectInput, TextArea, TextInput } from "../contro
 import { formatCompact, formatCost, formatLatency } from "../format";
 import { DetailRow, SectionTitle } from "../layout";
 import { Spinner } from "../spinner";
+import { announceToast } from "../toast";
 import { PLAYGROUND_KEY_HANDOFF } from "./handoff";
 import {
   buildPlaygroundChatRequest,
@@ -95,7 +96,6 @@ export function Playground({
   const [streamText, setStreamText] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("You are a concise coding assistant.");
   const [temperature, setTemperature] = useState("0.7");
-  const [toast, setToast] = useState<{ note: string; text: string } | null>(null);
 
   const [grantedModels, setGrantedModels] = useState<string[]>([]);
   const [modelListStatus, setModelListStatus] = useState<ModelListStatus>("idle");
@@ -251,15 +251,18 @@ export function Playground({
       // A key the gateway did not accept was never attributed to a key, so it
       // counted against no limit and reached no Activity row.
       const accepted = response.status !== 401 && response.status !== 403;
-      setToast({
-        note: accepted
+      announceToast({
+        message: response.ok ? "Request sent through the gateway" : "Gateway returned an error",
+        meta: accepted
           ? "It counted toward the key's limits and appears in Activity."
           : "The gateway did not accept this key, so nothing was counted or recorded.",
-        text: response.ok ? "Request sent through the gateway" : "Gateway returned an error",
+        tone: response.ok ? "green" : "red",
       });
-      setTimeout(() => setToast(null), 4000);
     } catch (error) {
-      setStatus(formatPlaygroundFetchError("sending the request", error));
+      announceToast({
+        message: formatPlaygroundFetchError("sending the request", error),
+        tone: "red",
+      });
       // A stream that stopped is not a stream: the live pane would otherwise
       // keep saying it is being written for the rest of the session.
       setStreamText("");
@@ -530,15 +533,6 @@ export function Playground({
           </>
         )}
       </div>
-
-      {toast ? (
-        <output className="fixed bottom-14 right-6 z-95 flex w-[420px] max-w-[calc(100vw-48px)] items-start gap-3 rounded-sm border border-hair border-l-[3px] border-l-accent bg-btnbg px-[14px] py-[11px] shadow-drawer">
-          <span className="min-w-0 flex-1 font-mono text-13 leading-[1.5] text-ink">
-            {toast.text}
-            <span className="mt-[3px] block font-mono text-125 text-faint">{toast.note}</span>
-          </span>
-        </output>
-      ) : null}
     </div>
   );
 }

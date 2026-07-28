@@ -155,6 +155,9 @@ test("the console's editors carry only the draft they belong to, and a refused s
         await expect(page.getByRole("alert")).toContainText(
           "Provider credentials are required before refreshing models.",
         );
+        await expect(page.getByRole("alert").locator(".text-redtx")).toBeVisible();
+        await expect(page.getByTestId("providers-master-detail").getByRole("alert")).toHaveCount(0);
+        await page.getByRole("button", { name: "Dismiss notification" }).click();
         await page.getByRole("link", { name: /Editor Provider/ }).click();
         await expect(page).toHaveURL(
           `${baseUrl}/providers?selected=${seeded.messagesOnlyProviderId}`,

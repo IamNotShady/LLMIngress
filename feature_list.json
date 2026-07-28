@@ -7,7 +7,7 @@
       "verification": "pnpm exec vitest run tests/features/platform-security.unit.test.ts tests/features/runtime-lifecycle.unit.test.ts && pnpm test:e2e tests/e2e/platform-security.e2e.spec.ts tests/e2e/runtime-lifecycle.e2e.spec.ts --workers=1",
       "dependencies": [],
       "status": "passing",
-      "evidence": "2026-07-14: platform-security and runtime-lifecycle focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
+      "evidence": "2026-07-14: platform-security and runtime-lifecycle focused suites passed; verify, 85 E2E, feature regression, and Compose passed. 2026-07-28: deploy.sh now forces container recreation and removes orphans so a healthy PostgreSQL container detached from the Compose network cannot leave app startup failing with ENOTFOUND postgres; the named database volume remains intact. Focused platform-security unit tests passed 33/33, and a live fault-injection deployment restored both containers, the postgres DNS alias, Gateway/Console HTTP 200, and Worker startup. Full regression was intentionally skipped at operator request."
     },
     {
       "id": "provider-model-management",

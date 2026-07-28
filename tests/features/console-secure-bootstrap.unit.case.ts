@@ -44,7 +44,9 @@ describe("console secure bootstrap", () => {
     expect(deploy).toContain("openssl rand -base64 32");
     expect(deploy).toContain("^ENCRYPTION_KEY=");
     expect(deploy).toContain("--ensure-env");
-    expect(deploy).toContain('exec docker compose up --build "$@"');
+    expect(deploy).toContain(
+      'exec docker compose up --build --force-recreate --remove-orphans "$@"',
+    );
   });
 
   it("writes ENCRYPTION_KEY into .env only when missing", () => {

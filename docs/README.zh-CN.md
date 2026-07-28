@@ -49,9 +49,10 @@ cd LLMIngress
 ```
 
 `./scripts/deploy.sh` 会在缺少配置时把随机 `ENCRYPTION_KEY` 写入已被 gitignore 的 `.env`，
-然后执行 `docker compose up --build`。Compose 仍使用仅限本地的默认 PostgreSQL
-密码（`llmi-local-db`）。对外端口默认绑定到 `127.0.0.1`。请妥善备份
-`.env` —— 解密已存储的 Provider 凭证需要同一个 `ENCRYPTION_KEY`。
+然后重新构建并创建 Compose 容器，以修复陈旧的容器网络状态；PostgreSQL 命名数据卷会被保留。
+Compose 仍使用仅限本地的默认 PostgreSQL 密码（`llmi-local-db`）。对外端口默认绑定到
+`127.0.0.1`。请妥善备份 `.env` —— 解密已存储的 Provider 凭证需要同一个
+`ENCRYPTION_KEY`。
 
 Compose 会运行两个容器：应用容器（同一进程组内包含 Console、Gateway 与 Worker）和
 PostgreSQL。

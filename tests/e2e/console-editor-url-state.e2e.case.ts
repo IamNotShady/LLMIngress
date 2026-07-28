@@ -147,7 +147,22 @@ test("the console's editors carry only the draft they belong to, and a refused s
           page.locator('dialog[open] button, dialog[open] input[name="label"]').first(),
         ).toBeVisible();
 
-        // 2. A draft belongs to the model it was typed for. Closing the editor
+        // 2. A provider refusal belongs to the provider and action that caused
+        //    it. Switching rows clears both the local MutationForm error and
+        //    every provider-scoped URL draft.
+        await page.goto(`${baseUrl}/providers?selected=${seeded.subscriptionProviderId}`);
+        await page.getByRole("button", { name: "Refresh models" }).click();
+        await expect(page.getByRole("alert")).toContainText(
+          "Provider credentials are required before refreshing models.",
+        );
+        await page.getByRole("link", { name: /Editor Provider/ }).click();
+        await expect(page).toHaveURL(
+          `${baseUrl}/providers?selected=${seeded.messagesOnlyProviderId}`,
+        );
+        await expect(page.getByRole("alert")).toHaveCount(0);
+        await expect(page.locator("dialog[open]")).toHaveCount(0);
+
+        // 3. A draft belongs to the model it was typed for. Closing the editor
         //    drops it, so the next model opens on its own values.
         await page.goto(`${baseUrl}/models?selected=${seeded.pairedVirtualModelId}&dialog=edit`);
         await page.locator('dialog[open] select[name="strategy"]').selectOption("fixed");
@@ -160,7 +175,7 @@ test("the console's editors carry only the draft they belong to, and a refused s
           "cost_first",
         );
 
-        // 3. Removing every candidate means the route has none — not that the
+        // 4. Removing every candidate means the route has none — not that the
         //    URL stopped saying which ones the operator picked.
         await page.goto(`${baseUrl}/models?selected=${seeded.pairedVirtualModelId}&dialog=edit`);
         await expect(page.locator("dialog[open]")).toContainText("2 selected");
@@ -171,7 +186,7 @@ test("the console's editors carry only the draft they belong to, and a refused s
         await expect(page.locator("dialog[open]")).toContainText("0 selected");
         await expect(page.getByRole("button", { name: "Save virtual model" })).toBeDisabled();
 
-        // 4. One button, one outcome: a route the API refuses leaves the name
+        // 5. One button, one outcome: a route the API refuses leaves the name
         //    it was submitted with untouched.
         await page.goto(`${baseUrl}/models?selected=${seeded.pairedVirtualModelId}&dialog=edit`);
         await page.locator('dialog[open] select[name="endpointProtocol"]').selectOption("messages");
@@ -190,7 +205,7 @@ test("the console's editors carry only the draft they belong to, and a refused s
         );
         expect(named).toBe("paired-route");
 
-        // 5. The way out of a blocked delete has to be a way that works.
+        // 6. The way out of a blocked delete has to be a way that works.
         await page.goto(
           `${baseUrl}/providers?selected=${seeded.messagesOnlyProviderId}&dialog=delete`,
         );

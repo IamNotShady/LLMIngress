@@ -76,7 +76,7 @@ export function ProviderDetail({
   const pageSize = readPageSizeParam(params, "modelPageSize", 20);
 
   return (
-    <div className="min-w-0 pl-6 pt-[18px]">
+    <div key={provider.id} className="min-w-0 pl-6 pt-[18px]">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="m-0 font-sans text-19 font-semibold text-ink">{provider.displayName}</h2>
         <span className="font-mono text-13 text-dim">{provider.providerType}</span>

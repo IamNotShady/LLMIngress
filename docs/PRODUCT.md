@@ -107,7 +107,9 @@ and Playground. Playground keeps its Virtual Model selector empty until an API k
 populates it only from the key-scoped Gateway `GET /v1/models` response. Password setup, session
 authentication, stable operation errors, and secret encryption are required. URL-driven filter
 controls always reflect the current query state; clearing filters restores their documented
-defaults, including Activity's Last 24h window.
+defaults, including Activity's Last 24h window. Selecting a different Provider starts a fresh
+Provider-scoped view: errors, dialogs, credential and OAuth drafts, and model filters from the
+previous Provider are not carried forward.
 
 Persistent Worker jobs are exactly `model_refresh`, `provider_connection_probe`, `price_sync`, and
 `provider_quota_probe`.

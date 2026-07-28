@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { formatRelativeDateTime } from "../../apps/console/src/app/_ui/provider-relative-time";
+import { buildProviderSelectionHref } from "../../apps/console/src/app/_ui/providers/selection";
 
 const appDir = join(process.cwd(), "apps/console/src/app");
 const read = (rel: string) => readFileSync(join(appDir, rel), "utf8");
@@ -36,6 +37,46 @@ describe("console providers IA contract", () => {
     expect(page).toContain("availability,");
     expect(page).toContain('page: readIntParam(params, "modelPage", 1)');
     expect(page).toContain("query: modelQuery || null");
+  });
+
+  test("switching provider carries no state owned by the provider being left", () => {
+    const href = buildProviderSelectionHref(
+      {
+        availability: "all",
+        connection: "old-connection",
+        dialog: "deleteConnection",
+        dialogTab: "subscription",
+        formError: "old refusal",
+        modelPage: "3",
+        modelPageSize: "50",
+        modelQuery: "old model",
+        modelRefreshProviderId: "old-provider",
+        providerAuthorizeUrl: "https://old.example/authorize",
+        providerKeyDialog: "old-provider",
+        providerOAuthError: "old oauth error",
+        providerOAuthErrorCode: "old_oauth_error",
+        providerOAuthExpiresAt: "2026-07-28T00:00:00.000Z",
+        providerOAuthId: "old-oauth",
+        providerOAuthInterval: "5",
+        providerOAuthLabelValue: "old label",
+        providerOAuthPriorityValue: "90",
+        providerOAuthUserCode: "OLD-CODE",
+        providerOAuthVerificationUri: "https://old.example/verify",
+        selected: "old-provider",
+        template: "old-template",
+        toast: "old toast",
+      },
+      "new-provider",
+    );
+
+    expect(href).toBe("/providers?modelPageSize=50&selected=new-provider");
+  });
+
+  test("provider-scoped client state remounts when the selected provider changes", () => {
+    const page = read("(dashboard)/providers/page.tsx");
+    const detail = read("_ui/providers/detail.tsx");
+    expect(detail).toContain("<div key={provider.id}");
+    expect(page).toContain('key={selected?.id ?? "no-provider"}');
   });
 
   test("the virtual model dialog says Create when creating and Save when editing", () => {

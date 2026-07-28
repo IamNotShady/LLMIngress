@@ -27,6 +27,7 @@ import {
   describeConnectionHealth,
   describeProviderHealth,
 } from "../../_ui/providers/model";
+import { buildProviderSelectionHref } from "../../_ui/providers/selection";
 import { PickRow } from "../../_ui/table";
 
 export default async function ProvidersPage({
@@ -142,12 +143,7 @@ export default async function ProvidersPage({
               return (
                 <PickRow
                   key={provider.id}
-                  href={buildHref("/providers", params, {
-                    availability: null,
-                    modelPage: null,
-                    modelQuery: null,
-                    selected: provider.id,
-                  })}
+                  href={buildProviderSelectionHref(params, provider.id)}
                   selected={provider.id === selected?.id}
                 >
                   {/* Colour alone cannot carry the state: the dot names it. */}
@@ -194,6 +190,7 @@ export default async function ProvidersPage({
       )}
 
       <ProviderDialogs
+        key={selected?.id ?? "no-provider"}
         connections={selectedConnections}
         dependencyImpact={dependencyImpact}
         params={params}

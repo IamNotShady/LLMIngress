@@ -6,11 +6,7 @@ import { useEffect, useState } from "react";
 import { CopyButton } from "./copy-button";
 import { activityHref } from "./cross-links";
 import { consoleNavItems, findActiveNavItem } from "./nav";
-import {
-  MODULE_STATE_STORAGE_KEY,
-  rememberedModuleHref,
-  rememberedModuleQuery,
-} from "./nav-state";
+import { MODULE_STATE_STORAGE_KEY, rememberedModuleHref, rememberedModuleQuery } from "./nav-state";
 import { ThemeToggle } from "./theme-toggle";
 
 export type MastheadProps = {
@@ -142,9 +138,9 @@ export function Masthead({
 
 function readRememberedQueries(): Record<string, string> {
   try {
-    const stored = JSON.parse(window.localStorage.getItem(MODULE_STATE_STORAGE_KEY) ?? "{}") as
-      | Record<string, unknown>
-      | null;
+    const stored = JSON.parse(
+      window.localStorage.getItem(MODULE_STATE_STORAGE_KEY) ?? "{}",
+    ) as Record<string, unknown> | null;
     const remembered: Record<string, string> = {};
     for (const item of consoleNavItems) {
       const query = stored?.[item.href];

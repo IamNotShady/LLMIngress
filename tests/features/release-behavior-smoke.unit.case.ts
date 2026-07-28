@@ -41,6 +41,7 @@ describe("core delivery behavior coverage", () => {
       budgetPeriod: "week",
       budgetUsd: "12.5",
       concurrency: "3",
+      enforcementPolicy: "block",
       rpm: "60",
       tokenLimit: "4096",
       tpm: "120000",

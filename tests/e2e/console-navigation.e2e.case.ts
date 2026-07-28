@@ -41,9 +41,10 @@ test("the masthead routes each module to its own page and follows the chosen the
         // masthead restores them instead of rebuilding the module defaults.
         await page.getByRole("link", { name: "7d", exact: true }).click();
         await page.getByRole("link", { name: "Hide", exact: true }).click();
-        await expect(
-          nav.getByRole("link", { name: "Overview", exact: true }),
-        ).toHaveAttribute("href", "/?window=7d&setup=closed");
+        await expect(nav.getByRole("link", { name: "Overview", exact: true })).toHaveAttribute(
+          "href",
+          "/?window=7d&setup=closed",
+        );
         await nav.getByRole("link", { name: "Usage", exact: true }).click();
         await page.getByRole("link", { name: "30d", exact: true }).click();
         await expect(nav.getByRole("link", { name: "Usage", exact: true })).toHaveAttribute(

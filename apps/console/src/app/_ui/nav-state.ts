@@ -4,16 +4,7 @@ export const MODULE_STATE_STORAGE_KEY = "llmingress:console-module-state:v1";
 
 const rememberedKeys: Record<string, readonly string[]> = {
   "/": ["setup", "window"],
-  "/activity": [
-    "apiKey",
-    "page",
-    "protocol",
-    "provider",
-    "q",
-    "status",
-    "virtualModel",
-    "window",
-  ],
+  "/activity": ["apiKey", "page", "protocol", "provider", "q", "status", "virtualModel", "window"],
   "/api-keys": ["q", "selected"],
   "/limits": ["q", "state"],
   "/models": ["selected", "strategy"],

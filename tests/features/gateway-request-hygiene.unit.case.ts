@@ -1,9 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
-import {
-  gatewayCorsHeaders,
-  mergeAccessControlExposeHeaders,
-} from "../../apps/gateway/src/cors";
+import { gatewayCorsHeaders, mergeAccessControlExposeHeaders } from "../../apps/gateway/src/cors";
 import { closePostgresPools } from "../../packages/db/src/client";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { readGatewayRequestId } from "../../packages/gateway-runtime/src/gateway-auth";

@@ -140,7 +140,7 @@ test("the API key editor browses grants, keeps the typed name, and saves the lim
           fixture.databaseUrl,
           (client) =>
             client.query<{ limits_enabled: boolean; rule_count: number }>(
-            `select api_keys.limits_enabled,
+              `select api_keys.limits_enabled,
                     (select count(*)::integer from api_key_limits
                      where api_key_id = api_keys.id) as rule_count
                from api_keys

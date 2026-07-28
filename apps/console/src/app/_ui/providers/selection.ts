@@ -5,10 +5,7 @@ import { buildHref, readParam, type SearchParams } from "../params";
  * size is a view preference worth carrying; dialogs, drafts, feedback and
  * model filters all belong to the provider the operator is leaving.
  */
-export function buildProviderSelectionHref(
-  params: SearchParams,
-  providerId: string,
-): string {
+export function buildProviderSelectionHref(params: SearchParams, providerId: string): string {
   return buildHref(
     "/providers",
     {},

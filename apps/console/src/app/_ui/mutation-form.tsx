@@ -67,11 +67,7 @@ export function MutationForm({
     }
   };
 
-  const reportError = (
-    form: HTMLFormElement,
-    message: string,
-    refusedField?: string,
-  ) => {
+  const reportError = (form: HTMLFormElement, message: string, refusedField?: string) => {
     if (errorPresentation === "toast") {
       announceToast({ message, tone: "red" });
       return;

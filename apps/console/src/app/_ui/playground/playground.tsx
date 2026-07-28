@@ -316,10 +316,7 @@ export function Playground({
         </div>
 
         <div className="mt-[14px]">
-          <Field
-            label="VIRTUAL MODEL"
-            hint={modelListHint}
-          >
+          <Field label="VIRTUAL MODEL" hint={modelListHint}>
             {loadingModels ? <Spinner className="mb-[5px]" label="Loading models" /> : null}
             <SelectInput
               aria-label="Virtual model"

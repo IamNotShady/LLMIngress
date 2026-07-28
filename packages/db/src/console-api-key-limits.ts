@@ -129,14 +129,7 @@ export function normalizeApiKeyLimitRulesInput(
   add("budget", input.budgetUsd, "Budget USD limit", "budgetUsd", budgetPeriod, "usd");
   add("rpm", input.rpm, "RPM limit", "rpm", "minute", "requests");
   add("tpm", input.tpm, "TPM limit", "tpm", "minute", "tokens");
-  add(
-    "concurrency",
-    input.concurrency,
-    "Concurrency limit",
-    "concurrency",
-    "request",
-    "requests",
-  );
+  add("concurrency", input.concurrency, "Concurrency limit", "concurrency", "request", "requests");
   add("token", input.tokenLimit, "Token limit", "tokenLimit", "request", "tokens");
   return rules;
 }
@@ -315,9 +308,7 @@ const REQUIRED_LIMITS = {
   tpm: { field: "tpm", label: "TPM" },
 } as const;
 
-export function assertCompleteApiKeyLimitRules(
-  rules: readonly ApiKeyLimitRuleInput[],
-): void {
+export function assertCompleteApiKeyLimitRules(rules: readonly ApiKeyLimitRuleInput[]): void {
   for (const [limitType, requirement] of Object.entries(REQUIRED_LIMITS)) {
     const matches = rules.filter((rule) => rule.limitType === limitType);
     if (matches.length !== 1) {

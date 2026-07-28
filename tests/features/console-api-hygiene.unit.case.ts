@@ -87,10 +87,10 @@ describe("console api hygiene", () => {
       "utf8",
     );
     expect(providerKeyRoute).toMatch(
-      /updateProviderApiKeySettings\(\{[\s\S]*?quotaProbeEnabled:[\s\S]*?\}\)/,
+      /updateProviderApiKeySettings\(\{[\s\S]*?\bquotaProbeEnabled\b[\s\S]*?\}\)/,
     );
     expect(providerKeyRoute).toMatch(
-      /saveProviderApiKey\(\{[\s\S]*?quotaProbeEnabled:[\s\S]*?\}\)/,
+      /saveProviderApiKey\(\{[\s\S]*?\bquotaProbeEnabled\b[\s\S]*?\}\)/,
     );
 
     const providerOAuthRoute = readFileSync(

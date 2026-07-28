@@ -74,9 +74,7 @@ describe("console module navigation config", () => {
   });
 
   test("module navigation remembers durable view choices on every URL-driven page", () => {
-    expect(rememberedModuleHref("/", "window=7d&setup=closed")).toBe(
-      "/?window=7d&setup=closed",
-    );
+    expect(rememberedModuleHref("/", "window=7d&setup=closed")).toBe("/?window=7d&setup=closed");
     expect(rememberedModuleHref("/usage", "window=30d")).toBe("/usage?window=30d");
     expect(
       rememberedModuleHref(
@@ -86,18 +84,16 @@ describe("console module navigation config", () => {
     ).toBe(
       "/activity?status=failed&protocol=messages&apiKey=key-1&virtualModel=vm-1&provider=p-1&window=7d&q=gw&page=3",
     );
-    expect(
-      rememberedModuleHref("/providers", "selected=p-1&availability=all&modelQuery=gpt"),
-    ).toBe("/providers?selected=p-1&availability=all&modelQuery=gpt");
+    expect(rememberedModuleHref("/providers", "selected=p-1&availability=all&modelQuery=gpt")).toBe(
+      "/providers?selected=p-1&availability=all&modelQuery=gpt",
+    );
     expect(rememberedModuleHref("/models", "selected=vm-1&strategy=fixed")).toBe(
       "/models?selected=vm-1&strategy=fixed",
     );
     expect(rememberedModuleHref("/api-keys", "selected=key-1&q=agent")).toBe(
       "/api-keys?selected=key-1&q=agent",
     );
-    expect(rememberedModuleHref("/limits", "q=agent&state=off")).toBe(
-      "/limits?q=agent&state=off",
-    );
+    expect(rememberedModuleHref("/limits", "q=agent&state=off")).toBe("/limits?q=agent&state=off");
   });
 
   test("module navigation drops transient, unsafe and unrelated state", () => {
@@ -107,9 +103,7 @@ describe("console module navigation config", () => {
         "selected=p-1&dialog=edit&connection=c-1&providerOAuthUserCode=SECRET&toast=done",
       ),
     ).toBe("selected=p-1");
-    expect(rememberedModuleQuery("/activity", "status=failed&request=gw-1")).toBe(
-      "status=failed",
-    );
+    expect(rememberedModuleQuery("/activity", "status=failed&request=gw-1")).toBe("status=failed");
     expect(rememberedModuleQuery("/limits", "state=off&selected=key-1")).toBe("state=off");
     expect(rememberedModuleQuery("/playground", "apiKey=llmi_secret&model=private")).toBe("");
   });

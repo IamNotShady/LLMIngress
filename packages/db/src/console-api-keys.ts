@@ -3,8 +3,8 @@ import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import type { RouteEndpointProtocol } from "@llmingress/domain";
 import {
-  assertCompleteApiKeyLimitRules,
   type ApiKeyLimitRuleInput,
+  assertCompleteApiKeyLimitRules,
   type ConsoleApiKeyLimit,
   readApiKeyLimitsWithClient,
   replaceApiKeyLimitRulesWithClient,
@@ -274,9 +274,7 @@ export async function createApiKeyWithSettings(input: {
     changes: [
       { table: "api_keys", recordId: apiKeyId },
       { table: "api_key_virtual_models", recordId: apiKeyId },
-      ...(input.limitsEnabled
-        ? [{ table: "api_key_limits" as const, recordId: apiKeyId }]
-        : []),
+      ...(input.limitsEnabled ? [{ table: "api_key_limits" as const, recordId: apiKeyId }] : []),
     ],
     write: async (client) => {
       await assertVirtualModelsAvailable(client, input.virtualModels.allowedVirtualModelIds);
@@ -712,10 +710,11 @@ export async function setApiKeyLimitsEnabled(input: {
       const result = await client.query(
         `update api_keys
            set limits_enabled = $2, updated_at = now()
-         where id = $1::uuid and deleted_at is null`,
+         where id = $1::uuid and deleted_at is null
+         returning id`,
         [input.id, input.enabled],
       );
-      if (result.rowCount === 0) {
+      if (result.rows.length === 0) {
         throw consoleNotFoundError("API key not found.", "api_key_not_found");
       }
       if (!input.enabled) {

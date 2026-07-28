@@ -150,7 +150,7 @@ describe("console layout contract", () => {
 
   test("mutation errors stay bounded and provider header actions share one row", () => {
     const mutationForm = read("_ui/mutation-form.tsx");
-    expect(mutationForm).toContain('className={`min-w-0 ${className ?? ""}`}');
+    expect(mutationForm).toContain(["className={`min-w-0 ", "$", '{className ?? ""}`}'].join(""));
     expect(mutationForm).toContain("max-w-full");
     expect(mutationForm).toContain("break-words");
 
@@ -165,13 +165,9 @@ describe("console layout contract", () => {
     expect(providerDetail).not.toContain("grid-cols-[minmax(0,1fr)_auto]");
     const providersPage = read("(dashboard)/providers/page.tsx");
     expect(providersPage).toContain('data-testid="providers-master-detail"');
-    expect(providersPage).toContain(
-      "grid-cols-[minmax(0,344px)_minmax(0,1fr)]",
-    );
+    expect(providersPage).toContain("grid-cols-[minmax(0,344px)_minmax(0,1fr)]");
     expect(
-      providersPage.match(
-        /data-testid="providers-master-detail"[\s\S]*?className="([^"]+)"/,
-      )?.[1],
+      providersPage.match(/data-testid="providers-master-detail"[\s\S]*?className="([^"]+)"/)?.[1],
     ).not.toContain("overflow-x-auto");
   });
 

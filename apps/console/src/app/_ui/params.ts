@@ -34,9 +34,7 @@ export function readPageSizeParam(
  * client navigation. Key a URL-driven filter form by the values it displays so
  * clearing or changing those parameters remounts the controls from server state.
  */
-export function urlFormStateKey(
-  ...values: Array<string | number | undefined>
-): string {
+export function urlFormStateKey(...values: Array<string | number | undefined>): string {
   return JSON.stringify(values);
 }
 

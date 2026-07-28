@@ -36,11 +36,9 @@ describe("Console core workflow", () => {
     const playground = read("apps/console/src/app/_ui/playground/playground.tsx");
 
     expect(playground).toContain('const [model, setModel] = useState("");');
-    expect(playground).toContain('fetch(`${base}/v1/models`');
+    expect(playground).toContain(["fetch(`", "$", "{base}/v1/models`"].join(""));
     expect(playground).toContain("setGrantedModels([])");
-    expect(playground).not.toContain(
-      "grantedModels ?? virtualModels.map((entry) => entry.name)",
-    );
+    expect(playground).not.toContain("grantedModels ?? virtualModels.map((entry) => entry.name)");
     expect(playground).toContain("paste an API key first");
   });
 

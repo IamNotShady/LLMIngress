@@ -9,8 +9,8 @@ import { clearProviderQuotaWithClient } from "@llmingress/db/provider-quota";
 import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 
 export type { PostgresQueryResult, PostgresQueryResultRow } from "@llmingress/db/client";
-export type { PostgresQueryClient };
 export { PostgresClient, withPooledPostgresClient } from "@llmingress/db/client";
+export type { PostgresQueryClient };
 
 export type ProviderOAuthMetadata = {
   completedAt: Date | null;

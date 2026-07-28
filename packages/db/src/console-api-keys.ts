@@ -170,7 +170,8 @@ export async function listApiKeys(databaseUrl?: string): Promise<ConsoleApiKey[]
                ) as last_used_at
         from api_keys
         where api_keys.deleted_at is null
-        order by api_keys.name
+        order by api_keys.created_at desc,
+                 api_keys.id desc
       `,
     );
     return result.rows.map(rowToConsoleApiKey);

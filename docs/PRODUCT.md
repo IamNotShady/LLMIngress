@@ -117,6 +117,8 @@ The masthead remembers each URL-driven module's durable view choices independent
 modules and returning restores that module's selected window, filters, paging, and primary row.
 Transient dialogs, drawers, mutation drafts, OAuth callback values, Toasts, and Playground secrets
 are excluded; clearing a module updates its remembered state to that module's defaults.
+Providers, API Keys, Virtual Models, Limits, and Activity list newly created records first, with a
+stable record-id tie-breaker when creation timestamps match.
 
 Persistent Worker jobs are exactly `model_refresh`, `provider_connection_probe`, `price_sync`, and
 `provider_quota_probe`.

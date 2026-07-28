@@ -561,7 +561,8 @@ function buildVirtualModelListSql(): string {
            ) as cost_24h_usd
     from virtual_models
     where virtual_models.deleted_at is null
-    order by virtual_models.name
+    order by virtual_models.created_at desc,
+             virtual_models.id desc
   `;
 }
 

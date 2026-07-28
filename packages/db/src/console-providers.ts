@@ -162,7 +162,8 @@ export async function listProviders(databaseUrl?: string): Promise<ConsoleProvid
                ) as provider_model_count
         from providers
         where deleted_at is null
-        order by provider_key
+        order by providers.created_at desc,
+                 providers.id desc
       `,
     );
     return result.rows.map(rowToConsoleProvider);

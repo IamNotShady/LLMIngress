@@ -251,8 +251,8 @@ export async function listConsoleActivities(
             and fallback_events.status = 'failed'
         ) fallback_counts on true
         ${where.sql}
-        order by request_activity.started_at desc,
-                 request_activity.created_at desc
+        order by request_activity.created_at desc,
+                 request_activity.id desc
         limit $${where.values.length + 1}
         offset $${where.values.length + 2}
       `,

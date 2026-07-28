@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
-import { gatewayCorsHeaders } from "../../apps/gateway/src/cors";
+import { gatewayCorsHeaders, mergeAccessControlExposeHeaders } from "../../apps/gateway/src/cors";
 import { closePostgresPools } from "../../packages/db/src/client";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { readGatewayRequestId } from "../../packages/gateway-runtime/src/gateway-auth";
@@ -76,6 +76,19 @@ describe("gateway request hygiene", () => {
     expect(headers["access-control-expose-headers"]).toContain(
       "anthropic-ratelimit-requests-remaining",
     );
+  });
+
+  it("appends gateway exposed headers without replacing the provider value", () => {
+    const providerValue = "x-provider-trace, X-Request-ID";
+    const gatewayValue =
+      gatewayCorsHeaders("http://localhost:3000")["access-control-expose-headers"];
+
+    const merged = mergeAccessControlExposeHeaders(providerValue, gatewayValue);
+
+    expect(merged).toMatch(/^x-provider-trace, X-Request-ID,/);
+    expect(merged).toContain("x-llmingress-request-id");
+    expect(merged?.match(/x-request-id/gi)).toHaveLength(1);
+    expect(mergeAccessControlExposeHeaders(providerValue, undefined)).toBe(providerValue);
   });
 
   it("estimates CJK text as one token per character", () => {

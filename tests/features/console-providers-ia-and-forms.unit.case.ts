@@ -1,89 +1,94 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { formatRelativeDateTime } from "../../apps/console/src/app/_lib/provider-relative-time";
+import { formatRelativeDateTime } from "../../apps/console/src/app/_ui/provider-relative-time";
+import { buildProviderSelectionHref } from "../../apps/console/src/app/_ui/providers/selection";
 
-const rootDir = process.cwd();
-const appDir = join(rootDir, "apps/console/src/app");
-const css = () => readFileSync(join(appDir, "globals.css"), "utf8");
-const sectionSource = (file: string) => readFileSync(join(appDir, "_modules", file), "utf8");
-const providersSection = () =>
-  readFileSync(join(appDir, "_modules/providers-client-section.tsx"), "utf8");
-const routeDialog = () =>
-  readFileSync(join(appDir, "_modules/virtual-model-route-dialog.tsx"), "utf8");
+const appDir = join(process.cwd(), "apps/console/src/app");
+const read = (rel: string) => readFileSync(join(appDir, rel), "utf8");
 
-describe("console providers IA and form polish static contract", () => {
+describe("console providers IA contract", () => {
   test("relative Provider timestamps use one server-provided reference time", () => {
-    const renderedAt = Date.parse("2026-07-12T00:50:00.000Z");
-    expect(formatRelativeDateTime("2026-07-12T00:00:30.000Z", renderedAt)).toBe("49 min ago");
-    expect(formatRelativeDateTime("2026-07-12T00:00:30.000Z", renderedAt + 60_000)).toBe(
-      "50 min ago",
+    const reference = Date.parse("2026-07-25T12:00:00.000Z");
+    expect(formatRelativeDateTime("2026-07-25T11:59:30.000Z", reference)).toBe("just now");
+    expect(formatRelativeDateTime("2026-07-25T11:30:00.000Z", reference)).toBe("30 min ago");
+    expect(formatRelativeDateTime("2026-07-25T09:00:00.000Z", reference)).toBe("3 h ago");
+    expect(formatRelativeDateTime("2026-07-20T09:00:00.000Z", reference)).toBe("2026-07-20");
+    expect(formatRelativeDateTime("not-a-date", reference)).toBe("-");
+
+    // The page passes one `now` down rather than each component reading a clock,
+    // so two rows rendered together can never disagree about the present.
+    const page = read("(dashboard)/providers/page.tsx");
+    expect(page).toContain("const now = new Date()");
+    expect(page).toContain("now={now}");
+  });
+
+  test("providers page has one representation: a list and its detail", () => {
+    const page = read("(dashboard)/providers/page.tsx");
+    expect(page).toContain("grid-cols-1");
+    expect(page).toContain("lg:grid-cols-[minmax(0,344px)_minmax(0,1fr)]");
+    expect(page).toContain("<ProviderDetail");
+    // No second summary grid duplicating the same providers above the list.
+    expect(page).not.toMatch(/summary-card|provider-card-grid/);
+  });
+
+  test("model library search, availability and pagination execute on the server", () => {
+    const page = read("(dashboard)/providers/page.tsx");
+    expect(page).toContain("listProviderModelPage({");
+    expect(page).toContain("availability,");
+    expect(page).toContain('page: readIntParam(params, "modelPage", 1)');
+    expect(page).toContain("query: modelQuery || null");
+  });
+
+  test("switching provider carries no state owned by the provider being left", () => {
+    const href = buildProviderSelectionHref(
+      {
+        availability: "all",
+        connection: "old-connection",
+        dialog: "deleteConnection",
+        dialogTab: "subscription",
+        formError: "old refusal",
+        modelPage: "3",
+        modelPageSize: "50",
+        modelQuery: "old model",
+        modelRefreshProviderId: "old-provider",
+        providerAuthorizeUrl: "https://old.example/authorize",
+        providerKeyDialog: "old-provider",
+        providerOAuthError: "old oauth error",
+        providerOAuthErrorCode: "old_oauth_error",
+        providerOAuthExpiresAt: "2026-07-28T00:00:00.000Z",
+        providerOAuthId: "old-oauth",
+        providerOAuthInterval: "5",
+        providerOAuthLabelValue: "old label",
+        providerOAuthPriorityValue: "90",
+        providerOAuthUserCode: "OLD-CODE",
+        providerOAuthVerificationUri: "https://old.example/verify",
+        selected: "old-provider",
+        template: "old-template",
+        toast: "old toast",
+      },
+      "new-provider",
     );
+
+    expect(href).toBe("/providers?modelPageSize=50&selected=new-provider");
   });
 
-  test("all retained Console mutation forms intercept API errors", () => {
-    const files = [
-      "apps/console/src/app/_components/auth-screens.tsx",
-      "apps/console/src/app/_components/sidebar.tsx",
-      "apps/console/src/app/_modules/api-key-create-dialog-client.tsx",
-      "apps/console/src/app/_modules/api-keys-section.tsx",
-      "apps/console/src/app/_modules/limits-section.tsx",
-      "apps/console/src/app/_modules/models-section.tsx",
-      "apps/console/src/app/_modules/provider-create-form.tsx",
-      "apps/console/src/app/_modules/provider-key-create-dialog-client.tsx",
-      "apps/console/src/app/_modules/providers-client-section.tsx",
-      "apps/console/src/app/_modules/providers-section.tsx",
-      "apps/console/src/app/_modules/virtual-model-route-dialog.tsx",
-      "apps/console/src/app/_modules/virtual-models-section.tsx",
-    ];
-
-    for (const file of files) {
-      const source = readFileSync(join(rootDir, file), "utf8");
-      const nativeMutationForms = source
-        .split("<form")
-        .slice(1)
-        .map((form) => form.split("</form>")[0] ?? "")
-        .filter((form) => form.includes('action="/api/'))
-        .filter((form) => !form.includes("onSubmit="));
-      expect(nativeMutationForms, file).toEqual([]);
-    }
+  test("provider-scoped client state remounts when the selected provider changes", () => {
+    const page = read("(dashboard)/providers/page.tsx");
+    const detail = read("_ui/providers/detail.tsx");
+    expect(detail).toContain("<div key={provider.id}");
+    expect(page).toContain('key={selected?.id ?? "no-provider"}');
   });
 
-  test("providers page has one representation: the summary-card grid is gone", () => {
-    const source = sectionSource("providers-section.tsx");
-    expect(source).not.toContain("provider-card-grid");
-    expect(source).not.toContain("provider-summary-card");
-    expect(css()).not.toContain(".provider-card-grid");
-    expect(css()).not.toContain(".provider-summary-card");
+  test("the virtual model dialog says Create when creating and Save when editing", () => {
+    const dialogs = read("_ui/virtual-models/dialogs.tsx");
+    expect(dialogs).toContain('editing ? "Save virtual model" : "Create virtual model"');
+    expect(dialogs).toContain('editing ? "updateWithRoute" : "createWithRoute"');
   });
 
-  test("model library search and pagination execute on the server", () => {
-    const clientSource = providersSection();
-    const serverSource = sectionSource("providers-section.tsx");
-    const querySource = readFileSync(
-      join(rootDir, "packages/db/src/console-route-policies.ts"),
-      "utf8",
-    );
-    expect(clientSource).toContain("model-library-search");
-    expect(clientSource).toContain("providerModelPage.pageCount");
-    expect(clientSource).not.toContain("MODEL_LIBRARY_PAGE_SIZE");
-    expect(clientSource).not.toContain("selectedProviderModels.filter");
-    expect(serverSource).toContain("listProviderModelPage");
-    expect(querySource).toContain("limit 50");
-  });
-
-  test("api_keys KPI grid collapses to two columns on mobile", () => {
-    expect(css()).toMatch(
-      /@media \(max-width: 56rem\)[\s\S]*?\.api-keys-stat-grid\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
-    );
-  });
-
-  test("settings display-only selects look disabled", () => {
-    expect(css()).toMatch(/select:disabled,\s*textarea:disabled\s*\{[^}]*cursor:\s*not-allowed/s);
-    expect(css()).toMatch(/select:disabled,\s*textarea:disabled\s*\{[^}]*opacity/s);
-  });
-
-  test("virtual model dialog submit says Create when creating, Save when editing", () => {
-    expect(routeDialog()).toContain('{virtualModel ? "Save" : "Create"}');
+  test("display-only fields are disabled rather than styled to look editable", () => {
+    const providerDialogs = read("_ui/providers/dialogs.tsx");
+    // Template and provider type are fixed after creation.
+    expect(providerDialogs).toMatch(/labelNote="\(fixed after creation\)"[\s\S]{0,400}?disabled/);
   });
 });

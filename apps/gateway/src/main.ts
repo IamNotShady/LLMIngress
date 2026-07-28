@@ -47,7 +47,7 @@ import {
 } from "@llmingress/gateway-runtime/gateway-virtual-model-access";
 import { createLogger, createPinoLoggerOptions } from "@llmingress/logging";
 import Fastify, { type FastifyBaseLogger, type FastifyInstance, type FastifyReply } from "fastify";
-import { gatewayCorsHeaders } from "./cors.js";
+import { gatewayCorsHeaders, mergeAccessControlExposeHeaders } from "./cors.js";
 import {
   executeRecordedGatewayJsonRequest,
   executeRecordedGatewayStreamingRequest,
@@ -379,6 +379,17 @@ function writeGatewayResponseHeaders(
   }
 
   for (const [name, value] of Object.entries(headers)) {
+    if (name.toLowerCase() === "access-control-expose-headers") {
+      const gatewayValue = reply.getHeader(name);
+      reply.header(
+        name,
+        mergeAccessControlExposeHeaders(
+          value,
+          typeof gatewayValue === "string" ? gatewayValue : undefined,
+        ),
+      );
+      continue;
+    }
     reply.header(name, value);
   }
 }

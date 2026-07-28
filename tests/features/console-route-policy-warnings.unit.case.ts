@@ -6,10 +6,6 @@ import { buildRoutePolicyConnectionHealthWarnings } from "../../packages/db/src/
 const rootDir = process.cwd();
 const routePolicies = () =>
   readFileSync(join(rootDir, "packages/db/src/console-route-policies.ts"), "utf8");
-const sections = () =>
-  readFileSync(join(rootDir, "apps/console/src/app/_modules/sections.tsx"), "utf8");
-const virtualModelsSection = () =>
-  readFileSync(join(rootDir, "apps/console/src/app/_modules/virtual-models-section.tsx"), "utf8");
 
 function sliceBetween(source: string, startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker);
@@ -26,14 +22,7 @@ describe("console route policy warnings", () => {
       "export function buildRoutePolicyConnectionHealthWarnings",
       "export function normalizeRoutePolicyEditorFilters",
     );
-    const warningCandidates = sliceBetween(
-      sections(),
-      "function buildRoutePolicyConnectionHealthWarningCandidates",
-      "function orderProviderModelsForConsole",
-    );
-
     expect(warningFunction).not.toContain("stale");
-    expect(warningCandidates).not.toContain("HealthIsStale");
   });
 
   test("a route with an available connection does not create a health warning", () => {
@@ -60,14 +49,16 @@ describe("console route policy warnings", () => {
     ]);
   });
 
-  test("virtual model detail candidate badge labels availability, not health", () => {
-    const viewDialog = sliceBetween(
-      virtualModelsSection(),
-      "function VirtualModelViewDialog",
-      "function VirtualModelRouteDialog",
+  test("the route table separates a candidate's availability from its health", () => {
+    const detail = readFileSync(
+      join(rootDir, "apps/console/src/app/_ui/virtual-models/detail.tsx"),
+      "utf8",
     );
 
-    expect(viewDialog).toContain('<span className="pill--ok pill">Available</span>');
-    expect(viewDialog).not.toContain('<span className="pill--ok pill">Healthy</span>');
+    // Health is the provider connection's; availability is the model's own
+    // state. Conflating them would report a deprecated model as unhealthy.
+    expect(detail).toContain("describeProviderHealth");
+    expect(detail).toContain("HEALTH");
+    expect(detail).not.toMatch(/availability[^\n]*healthy/i);
   });
 });

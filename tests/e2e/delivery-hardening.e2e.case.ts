@@ -52,7 +52,7 @@ test("native Console dialog traps focus, closes with Escape, and restores its tr
 
         await trigger.click();
         await expect(page.locator("dialog[open]")).toBeVisible();
-        await page.getByRole("link", { name: "Close", exact: true }).click();
+        await page.getByRole("button", { name: "Close", exact: true }).click();
         await expect(page.locator("dialog[open]")).toHaveCount(0);
         await expect(trigger).toBeFocused();
       } finally {
@@ -117,20 +117,26 @@ test("Playground omits blank optional numeric parameters from Gateway requests",
         await waitForConsole(baseUrl, consoleApp);
         await signInFromFirstRun(page, baseUrl);
         await page.goto(`${baseUrl}/playground`, { waitUntil: "networkidle" });
-        await page.locator("#playground-api-key").fill("llmi_test");
-        await expect(page.locator("#playground-model option[value='virtual-model']")).toHaveCount(
-          1,
-        );
-        await page.locator("#playground-endpoint").selectOption("messages");
-        await page.locator("#playground-temperature").fill("");
-        await page.locator("#playground-top-p").fill("");
-        await page.locator("#playground-max-tokens").fill("");
-        await page.getByRole("button", { name: "Send" }).click();
+        // The model list comes from the gateway, asked with the pasted key —
+        // the console's own records would not say what that key may reach.
+        await page.getByLabel("API key", { exact: true }).fill("llmi_test");
+        await expect(
+          page
+            .getByLabel("Virtual model", { exact: true })
+            .locator("option[value='virtual-model']"),
+        ).toHaveCount(1);
 
+        await page.getByRole("button", { name: "messages", exact: true }).click();
+        await page.getByLabel(/TEMPERATURE/).fill("");
+        await page.getByLabel(/MAX TOKENS/).fill("");
+        await page.getByRole("button", { name: "Send request" }).click();
+
+        // A blank optional parameter is left out of the request rather than
+        // sent as 0, which would mean something else entirely.
         await expect.poll(() => requestBody).not.toBeNull();
         expect(requestBody).not.toHaveProperty("temperature");
-        expect(requestBody).not.toHaveProperty("top_p");
         expect(requestBody).not.toHaveProperty("max_tokens");
+        expect(requestBody).toHaveProperty("model", "virtual-model");
       } finally {
         await context.close();
       }

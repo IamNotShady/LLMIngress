@@ -2,16 +2,16 @@ import { createHash, randomBytes } from "node:crypto";
 import { providerUsesDeviceCodeOAuth } from "@llmingress/config/provider-registry";
 import {
   completeProviderOAuthConnection,
-  createProviderOAuthDevicePendingConnection,
   createProviderOAuthPendingConnection,
-  deletePendingProviderOAuthDeviceConnections,
   deleteProviderOAuthConnection,
   listProviderOAuthMetadata,
   type ProviderOAuthMetadata,
   readProviderOAuthPendingConnection,
   readProviderOAuthRuntimeConnection,
+  replaceProviderOAuthDevicePendingConnection,
   setProviderOAuthConnectionEnabled,
   setProviderOAuthQuotaProbeEnabled,
+  updateProviderOAuthConnectionSettings,
 } from "@llmingress/db/providers";
 import {
   buildProviderOAuthAuthorizeUrl,
@@ -55,10 +55,13 @@ export type StartProviderOAuthConnectionResult =
   | {
       authorizeUrl: string;
       connection: ProviderOAuthMetadata;
+      /** When the provider stops accepting this request. */
+      expiresAt: Date;
       flowType: "authorization_code";
     }
   | {
       connection: ProviderOAuthMetadata;
+      expiresAt: Date;
       flowType: "device_code";
       intervalSeconds: number;
       userCode: string;
@@ -75,10 +78,12 @@ export type PollProviderOAuthDeviceAuthorizationResult = {
 type CompleteProviderOAuthConnectionInput = {
   callbackInput: string;
   databaseUrl?: string;
+  enabled?: boolean;
   label?: string | null;
   encryptionKeySource: EncryptionKeySource;
   priority?: number;
   providerOAuthId: string;
+  quotaProbeEnabled?: boolean;
 };
 
 type RevokeProviderOAuthConnectionInput = {
@@ -126,12 +131,13 @@ export async function startProviderOAuthConnection(
   const pkce = createPkcePair();
   // Claude Code's Anthropic OAuth flow expects state to match the PKCE verifier.
   const pendingState = providerKey === "claude_code" ? pkce.codeVerifier : pkce.state;
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
   const connection = await createProviderOAuthPendingConnection({
     databaseUrl: input.databaseUrl,
     label: input.label,
     pendingCodeChallenge: pkce.codeChallenge,
     pendingCodeVerifier: pkce.codeVerifier,
-    pendingExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    pendingExpiresAt: expiresAt,
     pendingState,
     priority: input.priority,
     providerId: provider.id,
@@ -144,20 +150,17 @@ export async function startProviderOAuthConnection(
       state: pendingState,
     }),
     connection,
+    expiresAt,
     flowType: "authorization_code",
   };
 }
 
-// Device-code start (MiniMax shape). Clears any earlier still-pending device
-// attempt for the same provider first (§ one-time dialog semantics), then hits
-// the upstream device-code endpoint and persists the user code for polling.
+// Device-code start (MiniMax shape). The upstream request runs without a
+// database transaction; after it succeeds, replacing any earlier pending
+// attempt and storing the new user code commit together.
 async function startProviderOAuthDeviceConnection(
   input: StartProviderOAuthConnectionInputInternal,
 ): Promise<StartProviderOAuthConnectionResult> {
-  await deletePendingProviderOAuthDeviceConnections({
-    databaseUrl: input.databaseUrl,
-    providerId: input.provider.id,
-  });
   const pkce = createPkcePair();
   const userCode = await requestProviderOAuthUserCode({
     codeChallenge: pkce.codeChallenge,
@@ -165,13 +168,14 @@ async function startProviderOAuthDeviceConnection(
     providerKey: input.provider.providerKey,
     state: pkce.state,
   });
-  const connection = await createProviderOAuthDevicePendingConnection({
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  const connection = await replaceProviderOAuthDevicePendingConnection({
     databaseUrl: input.databaseUrl,
     intervalSeconds: userCode.intervalSeconds,
     label: input.label,
     pendingCodeChallenge: pkce.codeChallenge,
     pendingCodeVerifier: pkce.codeVerifier,
-    pendingExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    pendingExpiresAt: expiresAt,
     pendingState: pkce.state,
     priority: input.priority,
     providerId: input.provider.id,
@@ -181,6 +185,7 @@ async function startProviderOAuthDeviceConnection(
 
   return {
     connection,
+    expiresAt,
     flowType: "device_code",
     intervalSeconds: userCode.intervalSeconds,
     userCode: userCode.userCode,
@@ -319,11 +324,17 @@ export async function completeProviderOAuthAuthorization(
     providerOAuthId: pending.id,
     tokenExpiresAt: token.expiresAt === null ? null : new Date(token.expiresAt),
   };
+  if (input.enabled !== undefined) {
+    completeInput.enabled = input.enabled;
+  }
   if (Object.hasOwn(input, "label")) {
     completeInput.label = input.label;
   }
   if (input.priority !== undefined) {
     completeInput.priority = input.priority;
+  }
+  if (input.quotaProbeEnabled !== undefined) {
+    completeInput.quotaProbeEnabled = input.quotaProbeEnabled;
   }
 
   return completeProviderOAuthConnection(completeInput);
@@ -359,6 +370,7 @@ export {
   deleteProviderOAuthConnection,
   setProviderOAuthConnectionEnabled,
   setProviderOAuthQuotaProbeEnabled,
+  updateProviderOAuthConnectionSettings,
 };
 
 function encryptProviderOAuthToken(input: {

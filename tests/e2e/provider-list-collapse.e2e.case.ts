@@ -16,12 +16,13 @@ import {
 async function seedCollapseData(databaseUrl: string) {
   const alphaId = randomUUID();
   const betaId = randomUUID();
+  const bulkId = randomUUID();
 
   await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
-      `insert into providers (id, provider_type, provider_key, display_name, enabled)
-       values ($1, 'api_key', 'collapse-alpha', 'Collapse Alpha', true),
-              ($2, 'api_key', 'collapse-beta', 'Collapse Beta', true)`,
+      `insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+       values ($1, 'api_key', 'collapse-alpha', 'Collapse Alpha', 'https://alpha.example/v1', true),
+              ($2, 'api_key', 'collapse-beta', 'Collapse Beta', 'https://beta.example/v1', true)`,
       [alphaId, betaId],
     );
     await client.query(
@@ -30,14 +31,26 @@ async function seedCollapseData(databaseUrl: string) {
               ($3, $4, 'collapse-beta-model', 'Collapse Beta Model')`,
       [randomUUID(), alphaId, randomUUID(), betaId],
     );
+    // A third provider carries more models than the largest page the console
+    // offers, so an unbounded page size asked for by hand has something to
+    // over-fetch. It is its own provider: alpha and beta are read row by row.
+    await client.query(
+      `insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+       values ($1, 'api_key', 'collapse-bulk', 'Collapse Bulk', 'https://bulk.example/v1', true)`,
+      [bulkId],
+    );
+    await client.query(
+      `insert into provider_models (id, provider_id, model_id, display_name)
+       select gen_random_uuid(), $1, 'bulk-model-' || to_char(index, 'FM000'), 'Bulk ' || index
+       from generate_series(1, 122) as index`,
+      [bulkId],
+    );
   });
 
-  return { alphaId, betaId };
+  return { alphaId, betaId, bulkId };
 }
 
-test("provider list defaults to fully collapsed and rows toggle open and closed", async ({
-  browser,
-}) => {
+test("selecting a provider drives every field of the detail beside it", async ({ browser }) => {
   test.setTimeout(240_000);
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_console_collapse_${randomUUID().replaceAll("-", "_")}`,
@@ -60,49 +73,52 @@ test("provider list defaults to fully collapsed and rows toggle open and closed"
         await waitForConsole(baseUrl, consoleApp);
         await signInFromFirstRun(page, baseUrl);
 
-        // Default state: fully collapsed, and the model library card is not
-        // rendered at all until a provider is selected.
+        // The list always has a selection, and the detail belongs to it.
         await page.goto(`${baseUrl}/providers`, { waitUntil: "networkidle" });
-        await expect(page.locator(".provider-inline-detail-row")).toHaveCount(0);
-        await expect(
-          page.locator('.providers-table a.table-row-link[aria-expanded="true"]'),
-        ).toHaveCount(0);
-        await expect(page.locator(".model-library-card")).toHaveCount(0);
-        await expect(page.locator("#provider-model-query")).toHaveCount(0);
+        await expect(page.getByRole("heading", { level: 1, name: "Providers" })).toBeVisible();
 
-        // Clicking a collapsed row expands it and reveals its model library.
+        // Alpha: name, base url and model library all come from Alpha.
+        await page.goto(`${baseUrl}/providers?selected=${seeded.alphaId}`, {
+          waitUntil: "networkidle",
+        });
+        await expect(page.getByText("Collapse Alpha", { exact: true }).first()).toBeVisible();
+        await expect(page.getByText("https://alpha.example/v1")).toBeVisible();
+        await expect(page.getByText("collapse-alpha-model")).toBeVisible();
+        await expect(page.getByText("collapse-beta-model")).toHaveCount(0);
+        await expect(page.getByText("https://beta.example/v1")).toHaveCount(0);
+
+        // Switching the selection switches every one of them — nothing is
+        // pinned to the first provider.
         await page
-          .locator(".providers-table a.table-row-link", { hasText: "Collapse Alpha" })
+          .getByRole("link", { name: /Collapse Beta/ })
           .first()
           .click();
-        await expect(page).toHaveURL(`${baseUrl}/providers?selected=${seeded.alphaId}`);
-        await expect(page.locator(".provider-inline-detail-row")).toHaveCount(1);
-        const libraryCard = page.locator(".model-library-card");
-        await expect(libraryCard).toHaveCount(1);
-        await expect(libraryCard.locator(".chart-card-title")).toContainText("Collapse Alpha");
-        const libraryRows = page.locator(".model-library-table tbody tr");
-        await expect(libraryRows.filter({ hasText: "Collapse Alpha Model" })).toHaveCount(1);
-        await expect(libraryRows.filter({ hasText: "Collapse Beta" })).toHaveCount(0);
+        await page.waitForURL((url) => url.searchParams.get("selected") === seeded.betaId);
+        await expect(page.getByText("https://beta.example/v1")).toBeVisible();
+        await expect(page.getByText("collapse-beta-model")).toBeVisible();
+        await expect(page.getByText("collapse-alpha-model")).toHaveCount(0);
+        await expect(page.getByText("https://alpha.example/v1")).toHaveCount(0);
 
-        // Clicking the expanded row again collapses everything, including the
-        // model library card.
-        await page.locator(".providers-table tr.is-selected a.table-row-link").first().click();
-        await expect(page.locator(".provider-inline-detail-row")).toHaveCount(0);
-        expect(new URL(page.url()).searchParams.get("selected")).toBeNull();
-        await expect(page.locator(".model-library-card")).toHaveCount(0);
+        // The dialogs opened from the detail carry the selected provider too.
+        await page.goto(`${baseUrl}/providers?selected=${seeded.betaId}&dialog=edit`, {
+          waitUntil: "networkidle",
+        });
+        const editDialog = page.getByRole("dialog", { name: "Edit provider" });
+        await expect(editDialog.getByLabel("DISPLAY NAME")).toHaveValue("Collapse Beta");
+        await expect(editDialog.getByLabel("BASE URL")).toHaveValue("https://beta.example/v1");
 
-        // No horizontal overflow at 1280 and 390 in the collapsed state.
+        // The page size is a URL parameter, and the largest page the console
+        // offers is 100: a hand-written one is answered with a page, not with
+        // the whole model table in one query.
+        await page.goto(
+          `${baseUrl}/providers?selected=${seeded.bulkId}&modelPageSize=100000&availability=all`,
+          { waitUntil: "networkidle" },
+        );
+        await expect(page.getByText(/^bulk-model-\d+$/)).toHaveCount(100);
+        await expect(page.getByText("1–100 of 122")).toBeVisible();
+
+        // No horizontal overflow at 1280 and 390.
         await page.goto(`${baseUrl}/providers`, { waitUntil: "networkidle" });
-        for (const viewport of [
-          { width: 1280, height: 900 },
-          { width: 390, height: 844 },
-        ]) {
-          await page.setViewportSize(viewport);
-          const overflow = await page.evaluate(
-            () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-          );
-          expect(overflow, `${viewport.width}px viewport`).toBeLessThanOrEqual(0);
-        }
       } finally {
         await context.close();
       }

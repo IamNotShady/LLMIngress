@@ -15,6 +15,8 @@ release unless it is added here with code and verification.
 Each API key carries a dedicated `llmi_` secret and may access only its granted Virtual
 Models. Provider payloads remain protocol-native; Gateway replaces the Virtual Model name with
 the selected Provider model and does not log prompts, successful responses, or tool arguments.
+Provider response headers are preserved. For browser requests, Gateway appends its own entries to
+the Provider's `Access-Control-Expose-Headers` value instead of replacing it.
 
 ### Providers and models
 
@@ -79,8 +81,10 @@ Provider has one logical connection. Worker probes up to three chat models. The 
 
 A Virtual Model is created atomically with one Route Policy and at least one candidate. Supported
 strategies are `fixed`, `cost_first`, and `load_balance`. `cost_first` orders by input price plus output
-price and places unknown prices last. Known capability values must agree across candidates;
-unknown values skip only the corresponding request pre-check.
+price and places unknown prices last. The candidate picker filters only by endpoint protocol, so
+capability differences remain selectable; saving rejects differences between known capability
+values and reports every conflicting field with both candidate names and values. Unknown values
+remain allowed and skip the corresponding request pre-check.
 
 Before the first client byte, Gateway may try another credential or candidate. After streaming
 starts, it never replays the request. Confirmed unhealthy connections are filtered; models and
@@ -99,8 +103,22 @@ fallback attempts, and Provider-connection health history.
 ### Console, Worker, and health
 
 Supported Console pages are Overview, API Keys, Providers, Virtual Models, Activity, Usage, Limits,
-and Playground. Password setup, session authentication, stable operation errors, and secret
-encryption are required.
+and Playground. Playground keeps its Virtual Model selector empty until an API key is pasted, then
+populates it only from the key-scoped Gateway `GET /v1/models` response. Password setup, session
+authentication, stable operation errors, and secret encryption are required. URL-driven filter
+controls always reflect the current query state; clearing filters restores their documented
+defaults, including Activity's Last 24h window. Selecting a different Provider starts a fresh
+Provider-scoped view: errors, dialogs, credential and OAuth drafts, and model filters from the
+previous Provider are not carried forward. Failures from button-only idempotent actions such as
+Refresh models and Re-check use the shared four-second Toast in a red error state; form validation
+and mutation refusals that require user correction stay beside their fields. Provider Edit,
+Enable/Disable, Delete, and Refresh models actions share one unbroken toolbar row.
+The masthead remembers each URL-driven module's durable view choices independently, so switching
+modules and returning restores that module's selected window, filters, paging, and primary row.
+Transient dialogs, drawers, mutation drafts, OAuth callback values, Toasts, and Playground secrets
+are excluded; clearing a module updates its remembered state to that module's defaults.
+Providers, API Keys, Virtual Models, Limits, and Activity list newly created records first, with a
+stable record-id tie-breaker when creation timestamps match.
 
 Persistent Worker jobs are exactly `model_refresh`, `provider_connection_probe`, `price_sync`, and
 `provider_quota_probe`.

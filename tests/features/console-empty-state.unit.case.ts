@@ -6,30 +6,32 @@ const appDir = join(process.cwd(), "apps/console/src/app");
 const read = (rel: string) => readFileSync(join(appDir, rel), "utf8");
 
 describe("console empty-state primitive", () => {
-  test("exports an EmptyState block with a stable class and no hardcoded color", () => {
-    const src = read("_components/empty-state.tsx");
+  test("exports one EmptyState block and hardcodes no colour", () => {
+    const src = read("_ui/layout.tsx");
     expect(src).toMatch(/export function EmptyState/);
-    expect(src).toMatch(/className="empty-state"/);
     expect(src).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
   });
 
-  test("stylesheet defines the empty-state container using tokens", () => {
-    const css = read("globals.css");
-    expect(css).toMatch(/\.empty-state\s*\{[^}]*var\(--space-/s);
-    expect(css).toMatch(/\.empty-state-title\s*\{/);
-  });
-
-  test("dashboard sections consume the shared EmptyState", () => {
+  test("every module that can be empty renders the shared block", () => {
     for (const file of [
-      "_modules/providers-client-section.tsx",
-      "_modules/models-section.tsx",
-      "_modules/overview-section.tsx",
-      "_modules/activity-section.tsx",
-      "_modules/limits-section.tsx",
+      "(dashboard)/page.tsx",
+      "(dashboard)/providers/page.tsx",
+      "(dashboard)/models/page.tsx",
+      "(dashboard)/api-keys/page.tsx",
+      "(dashboard)/limits/page.tsx",
+      "(dashboard)/activity/page.tsx",
+      "(dashboard)/usage/page.tsx",
     ]) {
       const src = read(file);
-      expect(src, file).toMatch(/from "[^"]*empty-state"/);
       expect(src, file).toMatch(/<EmptyState/);
     }
+  });
+
+  test("a filtered view that returns nothing is not the same as an empty console", () => {
+    const activity = read("(dashboard)/activity/page.tsx");
+    // Both states exist, and the filtered one offers a way back out.
+    expect(activity).toContain("No requests match these filters");
+    expect(activity).toContain("No requests yet");
+    expect(activity).toContain("Clear filters");
   });
 });

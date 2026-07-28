@@ -83,6 +83,11 @@ Database-backed verifications require `TEST_DATABASE_URL` (local Compose default
 
 Lint is Biome (`biome.json`); use `pnpm run lint:fix` to auto-fix before committing.
 
+For Console UI work, `pnpm run preview:console` renders every page, dialog and
+drawer to `preview/` in both themes against seeded data, and reports invalid DOM
+nesting and horizontal overflow naming the element that causes it. Dev only: it
+asserts nothing and is in no gate.
+
 ## Escalation
 
 If you encounter:

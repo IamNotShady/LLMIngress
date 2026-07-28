@@ -57,6 +57,51 @@ async function seedIaData(databaseUrl: string) {
   return providerId;
 }
 
+async function seedDisabledProviderWithKey(databaseUrl: string): Promise<string> {
+  const providerId = randomUUID();
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
+    await client.query(
+      `insert into providers (id, provider_type, provider_key, display_name, enabled)
+       values ($1, 'api_key', 'disabled-layout-provider', 'Disabled Layout Provider', false)`,
+      [providerId],
+    );
+    await client.query(
+      `insert into provider_api_keys (id, provider_id, key_prefix, encrypted_key, key_id, enabled)
+       values ($1, $2, 'layout-key', '{"version":1}'::jsonb, $3, true)`,
+      [randomUUID(), providerId, `layout-key-${randomUUID()}`],
+    );
+  });
+  return providerId;
+}
+
+/**
+ * Open the Add Provider dialog on a template and read back what the registry
+ * says about it: the default base url and the endpoint protocols it serves.
+ */
+async function readTemplate(
+  page: import("@playwright/test").Page,
+  baseUrl: string,
+  group: "API Keys" | "Local" | "Subscription",
+  templateName: string,
+): Promise<{ baseUrlValue: string; endpoints: string[] }> {
+  await page.goto(`${baseUrl}/providers?dialog=new`, { waitUntil: "networkidle" });
+  const dialog = page.getByRole("dialog", { name: "Add Provider" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("tab", { name: group, exact: true }).click();
+  await dialog.getByRole("link", { name: templateName, exact: true }).click();
+  await expect(dialog.getByRole("link", { name: templateName, exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const endpoints = await dialog
+    .locator('[aria-label="Supported endpoints"] > li > span:first-child')
+    .allInnerTexts();
+  return {
+    baseUrlValue: await dialog.getByLabel("Provider base URL").inputValue(),
+    endpoints,
+  };
+}
+
 test("providers page shows one provider representation with a searchable capped model library; api_keys KPIs and settings forms behave on mobile", async ({
   browser,
 }) => {
@@ -83,136 +128,79 @@ test("providers page shows one provider representation with a searchable capped 
         await waitForConsole(baseUrl, consoleApp);
         await signInFromFirstRun(page, baseUrl);
 
-        // --- Providers: no duplicate card grid; the list is the single
-        // representation and the model library is capped and searchable.
-        await page.goto(`${baseUrl}/providers`, { waitUntil: "networkidle" });
-        await expect(page.locator(".provider-card-grid")).toHaveCount(0);
-        await expect(page.locator(".provider-summary-card")).toHaveCount(0);
         const hydrationErrors: string[] = [];
         page.on("console", (message) => {
           if (message.type() === "error" && message.text().includes("Hydration failed")) {
             hydrationErrors.push(message.text());
           }
         });
-        await expect(
-          page.locator(".providers-list-card tr", { hasText: "IA Probe Provider" }).first(),
-        ).toBeVisible();
 
-        // Collapsed list renders no model library; selecting the provider does.
-        await expect(page.locator(".model-library-card")).toHaveCount(0);
-        await page.goto(`${baseUrl}/providers?selected=${providerId}`, {
+        // --- Providers: the list and its detail are the only representation.
+        await page.goto(`${baseUrl}/providers`, { waitUntil: "networkidle" });
+        await expect(page.getByRole("link", { name: /IA Probe Provider/ }).first()).toBeVisible();
+
+        // The model library is paged on the server: the header count and the
+        // range share one denominator, and the query runs in the URL.
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&modelPageSize=50`, {
           waitUntil: "networkidle",
         });
-        const libraryRows = page.locator(".model-library-table tbody tr");
-        await expect(libraryRows).toHaveCount(50);
-        const modelPagination = page.getByRole("navigation", { name: "Model pages" });
-        await expect(modelPagination).toHaveClass(/list-pagination/);
-        await expect(modelPagination.locator(".list-pagination-summary strong")).toHaveText(
-          "Page 1 of 2",
-        );
-        await expect(modelPagination.locator(".list-pagination-range")).toHaveText(
-          `${MODEL_COUNT} models`,
-        );
-        await expect(modelPagination.getByRole("button", { name: "Previous page" })).toBeDisabled();
-        await modelPagination.getByRole("link", { name: "Next page" }).click();
-        await expect(page).toHaveURL(`${baseUrl}/providers?selected=${providerId}&modelPage=2`);
-        await expect(libraryRows).toHaveCount(10);
-        await expect(modelPagination.locator(".list-pagination-summary strong")).toHaveText(
-          "Page 2 of 2",
-        );
-        await modelPagination.getByRole("link", { name: "Previous page" }).click();
-        await expect(page).toHaveURL(`${baseUrl}/providers?selected=${providerId}`);
-        await expect(libraryRows).toHaveCount(50);
+        await expect(page.getByText(`${MODEL_COUNT} matching`)).toBeVisible();
+        await expect(page.getByText(`1–50 of ${MODEL_COUNT}`)).toBeVisible();
+        await page.getByRole("link", { name: "Next →" }).click();
+        await expect(page.getByText(`51–${MODEL_COUNT} of ${MODEL_COUNT}`)).toBeVisible();
 
         await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-needle`, {
           waitUntil: "networkidle",
         });
-        await expect(libraryRows).toHaveCount(1);
-        await expect(libraryRows.first()).toContainText("ia-needle-model");
+        // One page of results states its count and drops the pager.
+        await expect(page.getByText("1 matching")).toBeVisible();
+        await expect(page.getByText("1–1 of 1")).toHaveCount(0);
+        await expect(page.getByText("ia-needle-model")).toBeVisible();
         expect(new URL(page.url()).searchParams.get("modelQuery")).toBe("ia-needle");
         expect(hydrationErrors).toEqual([]);
 
-        // The mono id line renders only when it differs from the display name:
-        // ia-model-001's display name IS its id, so its cell is a single line.
-        await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-model-001`, {
-          waitUntil: "networkidle",
-        });
-        await expect(libraryRows).toHaveCount(1);
-        const sameNameCell = libraryRows.first().locator(".model-id-cell");
-        await expect(sameNameCell.locator("strong")).toHaveText("ia-model-001");
-        await expect(sameNameCell.locator("small")).toHaveCount(0);
-        // A distinct display name keeps the mono id line.
-        await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-model-002`, {
-          waitUntil: "networkidle",
-        });
-        await expect(libraryRows).toHaveCount(1);
-        await expect(libraryRows.first().locator(".model-id-cell small")).toHaveText(
-          "ia-model-002",
+        // A search that matches nothing says so and hides the pagination.
+        await page.goto(
+          `${baseUrl}/providers?selected=${providerId}&modelQuery=nothing-matches-this`,
+          { waitUntil: "networkidle" },
         );
+        await expect(
+          page.getByText("No models match this search and availability filter."),
+        ).toBeVisible();
+        await expect(page.getByText(/of \d+$/)).toHaveCount(0);
 
-        // The page no longer balloons to thousands of pixels.
+        // The page does not balloon to thousands of pixels.
         const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
         expect(pageHeight).toBeLessThan(4500);
 
-        // Saving a Provider API key stays on the Providers page and reveals
-        // the one-time plaintext in a modal instead of navigating away.
-        const addApiKey = page.getByRole("link", { name: "Add API key" });
-        await expect(addApiKey).toHaveCount(1);
-        await addApiKey.click();
-        const createKeyDialog = page.getByRole("dialog", {
-          name: "New IA Probe Provider API key",
-        });
-        await expect(createKeyDialog).toBeVisible();
-        await createKeyDialog.getByLabel("Provider API key").fill("provider-key-dialog-e2e");
-        await createKeyDialog.getByLabel("Label").fill("E2E key");
-        await createKeyDialog.getByRole("button", { name: "Save" }).click();
-
-        const savedKeyDialog = page.getByRole("dialog", { name: "Provider API key saved" });
-        await expect(savedKeyDialog).toBeVisible();
-        await expect(
-          page.getByRole("heading", { level: 1, name: "Providers & Models", exact: true }),
-        ).toBeVisible();
-        await expect(savedKeyDialog.getByLabel("Provider API key")).toHaveValue(
-          "provider-key-dialog-e2e",
-        );
-        await savedKeyDialog.getByRole("link", { name: "Close" }).click();
-        await expect(savedKeyDialog).toHaveCount(0);
-
-        await page.goto(
-          `${baseUrl}/providers?selected=${providerId}&providerDelete=${providerId}`,
-          {
-            waitUntil: "networkidle",
-          },
-        );
-        const deleteProviderDialog = page.getByRole("dialog", { name: "Delete provider?" });
-        await expect(deleteProviderDialog).toBeVisible();
-        await addProviderDeleteRaceBlocker(fixture.databaseUrl, providerId);
-        await deleteProviderDialog.getByRole("button", { name: "Delete provider" }).click();
-        await expect(page).toHaveURL(
-          `${baseUrl}/providers?selected=${providerId}&providerDelete=${providerId}`,
-        );
-        await expect(
-          deleteProviderDialog.getByText("Provider is still used by active route policies."),
-        ).toBeVisible();
-
-        // --- ApiKeys KPIs on mobile: two columns, no truncated values.
-        await page.setViewportSize({ width: 390, height: 844 });
-        await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
-        const columns = await page
-          .locator(".api-keys-stat-grid")
-          .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
-        expect(columns).toBe(2);
-        const truncated = await page
-          .locator(".api-keys-stat-grid .stat-card-value")
-          .evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth).length);
-        expect(truncated).toBe(0);
-
-        // --- Virtual model dialog: create mode says Create.
-        await page.setViewportSize({ width: 1280, height: 900 });
-        await page.goto(`${baseUrl}/models?virtualModelDialog=new`, {
+        // --- A route created after the confirm was opened still refuses the
+        // delete, and the refusal is stated in the dialog rather than replacing
+        // the page with an error body.
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&dialog=delete`, {
           waitUntil: "networkidle",
         });
-        await expect(page.locator(".vm-dialog-actions button[type=submit]")).toHaveText("Create");
+        const deleteDialog = page.getByRole("dialog", { name: "Delete provider" });
+        await expect(deleteDialog).toBeVisible();
+        await deleteDialog
+          .getByLabel("TYPE THE PROVIDER NAME TO CONFIRM")
+          .fill("IA Probe Provider");
+        await addProviderDeleteRaceBlocker(fixture.databaseUrl, providerId);
+        await deleteDialog.getByRole("button", { name: "Delete provider" }).click();
+        await expect(
+          deleteDialog.getByText("Provider is still used by active route policies."),
+        ).toBeVisible();
+
+        // Reopened, the confirm knows about the route and does not offer a
+        // delete it cannot carry out.
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&dialog=delete`, {
+          waitUntil: "networkidle",
+        });
+        await expect(deleteDialog).toContainText("would be refused");
+        await expect(deleteDialog.getByRole("button", { name: "Delete provider" })).toHaveCount(0);
+
+        // --- The virtual model editor says Create when creating.
+        await page.goto(`${baseUrl}/models?dialog=new`, { waitUntil: "networkidle" });
+        await expect(page.getByRole("button", { name: "Create virtual model" })).toBeVisible();
       } finally {
         await context.close();
       }
@@ -246,22 +234,19 @@ test("provider create dialog shows registry-derived supported endpoints", async 
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
+        // OpenAI serves chat completions and responses, never messages.
+        const openai = await readTemplate(page, baseUrl, "API Keys", "OpenAI");
+        expect(openai.endpoints).toEqual(["chat_completions", "responses"]);
+        expect(openai.endpoints).not.toContain("messages");
 
+        // The Claude Code subscription serves messages only.
+        const claudeCode = await readTemplate(page, baseUrl, "Subscription", "Claude Code");
+        expect(claudeCode.endpoints).toEqual(["messages"]);
+
+        // The chip states the protocol and the path it maps to, so a route can
+        // be checked against the provider without leaving the dialog.
         const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-        // OpenAI is the default direct choice: Chat Completions + Responses, never Messages.
-        await expect(endpointChips).toHaveText(["Chat Completions", "Responses"]);
-        await expect(endpointChips.filter({ hasText: "Messages" })).toHaveCount(0);
-
-        // Switch to the Claude Code subscription template: Messages only.
-        await dialog.getByRole("tab", { name: "Subscription" }).click();
-        await dialog
-          .getByLabel("Provider type", { exact: true })
-          .selectOption({ label: "Claude Code" });
-        await expect(endpointChips).toHaveText(["Messages"]);
+        await expect(dialog.getByText("POST /v1/messages")).toBeVisible();
 
         for (const viewport of [
           { width: 1280, height: 900 },
@@ -305,34 +290,25 @@ test("Add Provider API Keys group carries the Batch 1 GLM, Qwen, and Kimi paste-
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
-
-        const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-
-        // Both new providers live in the API Keys template group (remote_api_key),
-        // which uses the editable paste-key base URL, never the local-private mode.
-        await dialog.getByRole("tab", { name: "API Keys" }).click();
-        const providerType = dialog.getByLabel("Provider type", { exact: true });
-        const baseUrlField = dialog.getByLabel("Provider base URL", { exact: true });
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-
-        // GLM Coding Plan: /api/coding/paas/v4 base, OpenAI chat_completions only.
-        await providerType.selectOption({ label: "GLM Coding Plan" });
-        await expect(baseUrlField).toHaveValue("https://api.z.ai/api/coding/paas/v4");
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
-
-        // Qwen Token Plan: token-plan base, chat_completions only (no Responses).
-        await providerType.selectOption({ label: "Qwen Token Plan" });
-        await expect(baseUrlField).toHaveValue(
-          "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
-        );
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
-
-        // Kimi Coding Plan: /coding/v1 base (Anthropic protocol), Messages only.
-        await providerType.selectOption({ label: "Kimi Coding Plan" });
-        await expect(baseUrlField).toHaveValue("https://api.kimi.com/coding/v1");
-        await expect(endpointChips).toHaveText(["Messages"]);
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "GLM Coding Plan");
+          expect(template.baseUrlValue, "GLM Coding Plan").toBe(
+            "https://api.z.ai/api/coding/paas/v4",
+          );
+          expect(template.endpoints, "GLM Coding Plan").toEqual(["chat_completions"]);
+        }
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "Qwen Token Plan");
+          expect(template.baseUrlValue, "Qwen Token Plan").toBe(
+            "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+          );
+          expect(template.endpoints, "Qwen Token Plan").toEqual(["chat_completions"]);
+        }
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "Kimi Coding Plan");
+          expect(template.baseUrlValue, "Kimi Coding Plan").toBe("https://api.kimi.com/coding/v1");
+          expect(template.endpoints, "Kimi Coding Plan").toEqual(["messages"]);
+        }
 
         for (const viewport of [
           { width: 1280, height: 900 },
@@ -342,23 +318,29 @@ test("Add Provider API Keys group carries the Batch 1 GLM, Qwen, and Kimi paste-
           expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
         }
 
-        // Creating one of the templates must land on a provider whose
-        // credential section is the api_key paste branch — the "Add API key"
-        // link whose dialog flow is exercised elsewhere in this suite.
+        // Creating one of the templates lands on a provider whose credential
+        // section is the api_key paste branch.
         await page.setViewportSize({ width: 1280, height: 900 });
-        await providerType.selectOption({ label: "Kimi Coding Plan" });
-        await dialog
-          .getByLabel("Provider display name", { exact: true })
-          .fill("Kimi Coding Plan E2E");
-        await dialog.locator("button[type=submit]").click();
+        await page.goto(`${baseUrl}/providers?dialog=new`, { waitUntil: "networkidle" });
+        const createDialog = page.getByRole("dialog", { name: "Add Provider" });
+        await createDialog.getByRole("tab", { name: "API Keys", exact: true }).click();
+        await createDialog.getByRole("link", { name: "Kimi Coding Plan", exact: true }).click();
+        await createDialog.getByLabel("Provider display name").fill("Kimi Coding Plan E2E");
+        await createDialog.getByRole("button", { name: "Create" }).click();
         await expect(page.getByRole("dialog", { name: "Add Provider" })).toHaveCount(0);
-        // Create redirects to the bare /providers list (rows collapsed);
-        // expanding the new row reveals the api_key credential section.
         await page
-          .locator(".providers-table a.table-row-link", { hasText: "Kimi Coding Plan E2E" })
+          .getByRole("link", { name: /Kimi Coding Plan E2E/ })
           .first()
           .click();
-        await expect(page.getByRole("link", { name: "Add API key" })).toHaveCount(1);
+        await expect(page.getByRole("link", { name: "+ Add key" })).toBeVisible();
+
+        for (const viewport of [
+          { width: 1280, height: 900 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
+        }
       } finally {
         await context.close();
       }
@@ -392,48 +374,35 @@ test("Add Provider API Keys group carries the Batch 3 paste-key templates", asyn
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
 
-        const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-
-        // All four Batch 3 providers live in the API Keys template group
-        // (remote_api_key), the editable paste-key base URL mode.
-        await dialog.getByRole("tab", { name: "API Keys" }).click();
-        const providerType = dialog.getByLabel("Provider type", { exact: true });
-        const baseUrlField = dialog.getByLabel("Provider base URL", { exact: true });
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-
-        // Command Code: dual endpoints — Chat Completions + Messages chips, in
-        // registry endpoint-key order, prefilled /provider/v1 base.
-        await providerType.selectOption({ label: "Command Code" });
-        await expect(baseUrlField).toHaveValue("https://api.commandcode.ai/provider/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions", "Messages"]);
-
-        // NousResearch: OpenAI chat_completions only.
-        await providerType.selectOption({ label: "NousResearch" });
-        await expect(baseUrlField).toHaveValue("https://inference-api.nousresearch.com/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
-
-        // ClinePass: OpenAI chat_completions only, /api/v1 base.
-        await providerType.selectOption({ label: "ClinePass" });
-        await expect(baseUrlField).toHaveValue("https://api.cline.bot/api/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
-
-        // BytePlus ModelArk: OpenAI chat_completions only on the /v3 base
-        // (chat-only; no Messages chip).
-        await providerType.selectOption({ label: "BytePlus ModelArk" });
-        await expect(baseUrlField).toHaveValue(
-          "https://ark.ap-southeast.bytepluses.com/api/coding/v3",
-        );
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
-
-        for (const viewport of [
-          { width: 1280, height: 900 },
-          { width: 390, height: 844 },
+        // Each Batch 3 provider lives in the API Keys group with an editable
+        // paste-key base url, and serves exactly the protocols the registry
+        // declares — in registry endpoint-key order.
+        for (const template of [
+          {
+            baseUrl: "https://api.commandcode.ai/provider/v1",
+            endpoints: ["chat_completions", "messages"],
+            label: "Command Code",
+          },
+          {
+            baseUrl: "https://inference-api.nousresearch.com/v1",
+            endpoints: ["chat_completions"],
+            label: "NousResearch",
+          },
+          {
+            baseUrl: "https://api.cline.bot/api/v1",
+            endpoints: ["chat_completions"],
+            label: "ClinePass",
+          },
+          {
+            baseUrl: "https://ark.ap-southeast.bytepluses.com/api/coding/v3",
+            endpoints: ["chat_completions"],
+            label: "BytePlus ModelArk",
+          },
         ]) {
-          await page.setViewportSize(viewport);
-          expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
+          const read = await readTemplate(page, baseUrl, "API Keys", template.label);
+          expect(read.baseUrlValue, template.label).toBe(template.baseUrl);
+          expect(read.endpoints, template.label).toEqual(template.endpoints);
         }
       } finally {
         await context.close();
@@ -470,19 +439,9 @@ test("Add Provider API Keys group carries the Batch 4 inference cloud templates"
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
-
-        const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-
         // All seven Batch 4 inference clouds live in the API Keys template group
         // (remote_api_key), the editable paste-key base URL mode, each OpenAI
         // chat_completions-only (a single Chat Completions chip).
-        await dialog.getByRole("tab", { name: "API Keys" }).click();
-        const providerType = dialog.getByLabel("Provider type", { exact: true });
-        const baseUrlField = dialog.getByLabel("Provider base URL", { exact: true });
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-
         const batch4Templates = [
           { baseUrl: "https://api.groq.com/openai/v1", label: "Groq" },
           { baseUrl: "https://api.cerebras.ai/v1", label: "Cerebras" },
@@ -494,9 +453,9 @@ test("Add Provider API Keys group carries the Batch 4 inference cloud templates"
         ];
 
         for (const template of batch4Templates) {
-          await providerType.selectOption({ label: template.label });
-          await expect(baseUrlField, template.label).toHaveValue(template.baseUrl);
-          await expect(endpointChips, template.label).toHaveText(["Chat Completions"]);
+          const read = await readTemplate(page, baseUrl, "API Keys", template.label);
+          expect(read.baseUrlValue, template.label).toBe(template.baseUrl);
+          expect(read.endpoints, template.label).toEqual(["chat_completions"]);
         }
 
         for (const viewport of [
@@ -541,34 +500,23 @@ test("Add Provider API Keys group carries the Batch 5 token-plan templates", asy
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
-
-        const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-
-        // All three Batch 5 token-plan providers live in the API Keys template
-        // group (remote_api_key), the editable paste-key base URL mode.
-        await dialog.getByRole("tab", { name: "API Keys" }).click();
-        const providerType = dialog.getByLabel("Provider type", { exact: true });
-        const baseUrlField = dialog.getByLabel("Provider base URL", { exact: true });
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-
-        // OpenCode Go: dual endpoints — Chat Completions + Messages chips, in
-        // registry endpoint-key order, prefilled /zen/go/v1 base.
-        await providerType.selectOption({ label: "OpenCode Go" });
-        await expect(baseUrlField).toHaveValue("https://opencode.ai/zen/go/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions", "Messages"]);
-
-        // Xiaomi MiMo Token Plan: OpenAI chat_completions only, default sgp base.
-        await providerType.selectOption({ label: "Xiaomi MiMo Token Plan" });
-        await expect(baseUrlField).toHaveValue("https://token-plan-sgp.xiaomimimo.com/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
-
-        // Mistral Vibe: OpenAI chat_completions only, sharing the standard
-        // mistral base as a distinct paste-key template.
-        await providerType.selectOption({ label: "Mistral Vibe" });
-        await expect(baseUrlField).toHaveValue("https://api.mistral.ai/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "OpenCode Go");
+          expect(template.baseUrlValue, "OpenCode Go").toBe("https://opencode.ai/zen/go/v1");
+          expect(template.endpoints, "OpenCode Go").toEqual(["chat_completions", "messages"]);
+        }
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "Xiaomi MiMo Token Plan");
+          expect(template.baseUrlValue, "Xiaomi MiMo Token Plan").toBe(
+            "https://token-plan-sgp.xiaomimimo.com/v1",
+          );
+          expect(template.endpoints, "Xiaomi MiMo Token Plan").toEqual(["chat_completions"]);
+        }
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "Mistral Vibe");
+          expect(template.baseUrlValue, "Mistral Vibe").toBe("https://api.mistral.ai/v1");
+          expect(template.endpoints, "Mistral Vibe").toEqual(["chat_completions"]);
+        }
 
         for (const viewport of [
           { width: 1280, height: 900 },
@@ -610,20 +558,13 @@ test("Add Provider API Keys group carries the Batch 7 bedrock template", async (
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 900 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
-
-        const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-
-        await dialog.getByRole("tab", { name: "API Keys" }).click();
-        const providerType = dialog.getByLabel("Provider type", { exact: true });
-        const baseUrlField = dialog.getByLabel("Provider base URL", { exact: true });
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-
-        // AWS Bedrock: OpenAI chat_completions only, mantle us-east-1 base prefilled.
-        await providerType.selectOption({ label: "AWS Bedrock" });
-        await expect(baseUrlField).toHaveValue("https://bedrock-mantle.us-east-1.api.aws/v1");
-        await expect(endpointChips).toHaveText(["Chat Completions"]);
+        {
+          const template = await readTemplate(page, baseUrl, "API Keys", "AWS Bedrock");
+          expect(template.baseUrlValue, "AWS Bedrock").toBe(
+            "https://bedrock-mantle.us-east-1.api.aws/v1",
+          );
+          expect(template.endpoints, "AWS Bedrock").toEqual(["chat_completions"]);
+        }
 
         for (const viewport of [
           { width: 1280, height: 900 },
@@ -700,13 +641,13 @@ test("device-code provider shows the user code and polls to complete; the author
           `&providerOAuthInterval=1`;
         await page.goto(dialogUrl, { waitUntil: "networkidle" });
 
-        const dialog = page.getByRole("dialog", { name: "Connect MiniMax Coding Plan" });
+        const dialog = page.getByRole("dialog", { name: "Authorize token" });
         await expect(dialog).toBeVisible();
-        await expect(dialog.getByLabel("Your code")).toHaveText("WDJB-MJHT");
-        await expect(dialog.getByRole("link", { name: "Open verification page" })).toHaveAttribute(
-          "href",
-          "https://platform.minimax.io/oauth-authorize",
-        );
+        await expect(dialog.getByLabel("enter this code at the provider")).toHaveText("WDJB-MJHT");
+        // The url is printed so it can be read before it is followed, and one
+        // button opens it and takes the code along.
+        await expect(dialog.getByText("https://platform.minimax.io/oauth-authorize")).toBeVisible();
+        await expect(dialog.getByRole("button", { name: "Open · copy code" })).toBeVisible();
 
         // The client polls (interval 1s) and, on the second reply, completes.
         await expect(dialog.getByText(/is connected/)).toBeVisible({ timeout: 15_000 });
@@ -720,8 +661,8 @@ test("device-code provider shows the user code and polls to complete; the author
           expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
         }
 
-        // The authorization-code dialog (claude_code) links out to the
-        // authorization page instead of printing the long URL in a textarea.
+        // The authorization-code dialog links out to the authorization page so
+        // it never has to be copied by hand.
         await page.setViewportSize({ width: 1280, height: 900 });
         const codeProviderId = randomUUID();
         await withDedicatedPostgresClient(fixture.databaseUrl, async (client) => {
@@ -739,13 +680,16 @@ test("device-code provider shows the user code and polls to complete; the author
             `&providerAuthorizeUrl=${encodeURIComponent(authorizeUrl)}`,
           { waitUntil: "networkidle" },
         );
-        const codeDialog = page.getByRole("dialog", { name: "New Claude Code OAuth connection" });
+        const codeDialog = page.getByRole("dialog", { name: "Authorize token" });
         await expect(codeDialog).toBeVisible();
-        await expect(
-          codeDialog.getByRole("link", { name: "Open authorization URL" }),
-        ).toHaveAttribute("href", authorizeUrl);
-        await expect(codeDialog.locator("#provider-oauth-authorize-url")).toHaveCount(0);
-        await expect(codeDialog.locator("#provider-oauth-callback-input")).toBeVisible();
+        await expect(codeDialog.getByRole("link", { name: "Open in browser" })).toHaveAttribute(
+          "href",
+          authorizeUrl,
+        );
+        // The url is shown so it can be checked before it is followed, and the
+        // callback value is pasted back in the same dialog.
+        await expect(codeDialog.getByText(authorizeUrl)).toBeVisible();
+        await expect(codeDialog.getByLabel("CALLBACK VALUE")).toBeVisible();
         for (const viewport of [
           { width: 1280, height: 900 },
           { width: 390, height: 844 },
@@ -822,7 +766,7 @@ test("device-code dialog surfaces the upstream error message and stops polling",
           { waitUntil: "networkidle" },
         );
 
-        const dialog = page.getByRole("dialog", { name: "Connect MiniMax Coding Plan" });
+        const dialog = page.getByRole("dialog", { name: "Authorize token" });
         await expect(dialog).toBeVisible();
         // The concrete upstream message is shown, not a generic fallback.
         await expect(dialog.getByText("The authorization was denied upstream.")).toBeVisible({
@@ -871,13 +815,8 @@ test("Grok subscription: a Chat Completions chip in the Subscription group and a
 
         // --- Add Provider: Grok lives in the Subscription group with a single
         // Chat Completions chip (Feature A ships only the chat face).
-        await page.goto(`${baseUrl}/providers?providerDialog=new`, { waitUntil: "networkidle" });
-        const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog).toBeVisible();
-        await dialog.getByRole("tab", { name: "Subscription" }).click();
-        const endpointChips = dialog.locator(".provider-supported-endpoints .tag-chip");
-        await dialog.getByLabel("Provider type", { exact: true }).selectOption({ label: "Grok" });
-        await expect(endpointChips).toHaveText(["Chat Completions", "Responses"]);
+        const grok = await readTemplate(page, baseUrl, "Subscription", "Grok");
+        expect(grok.endpoints).toEqual(["chat_completions", "responses"]);
         for (const viewport of [
           { width: 1280, height: 900 },
           { width: 390, height: 844 },
@@ -907,13 +846,16 @@ test("Grok subscription: a Chat Completions chip in the Subscription group and a
             `&providerAuthorizeUrl=${encodeURIComponent(authorizeUrl)}`,
           { waitUntil: "networkidle" },
         );
-        const codeDialog = page.getByRole("dialog", { name: "New Grok OAuth connection" });
+        const codeDialog = page.getByRole("dialog", { name: "Authorize token" });
         await expect(codeDialog).toBeVisible();
-        await expect(
-          codeDialog.getByRole("link", { name: "Open authorization URL" }),
-        ).toHaveAttribute("href", authorizeUrl);
-        await expect(codeDialog.locator("#provider-oauth-authorize-url")).toHaveCount(0);
-        await expect(codeDialog.locator("#provider-oauth-callback-input")).toBeVisible();
+        await expect(codeDialog.getByRole("link", { name: "Open in browser" })).toHaveAttribute(
+          "href",
+          authorizeUrl,
+        );
+        // The url is shown so it can be checked before it is followed, and the
+        // callback value is pasted back in the same dialog.
+        await expect(codeDialog.getByText(authorizeUrl)).toBeVisible();
+        await expect(codeDialog.getByLabel("CALLBACK VALUE")).toBeVisible();
         for (const viewport of [
           { width: 1280, height: 900 },
           { width: 390, height: 844 },
@@ -963,4 +905,310 @@ async function addProviderDeleteRaceBlocker(databaseUrl: string, providerId: str
       [randomUUID(), routePolicyId, providerModelId],
     );
   });
+}
+
+test("a refused form states why in the dialog it was submitted from", async ({ browser }) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_form_refusal_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = await seedIaData(fixture.databaseUrl);
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await signInFromFirstRun(page, baseUrl);
+
+        // --- Editing a provider: an unusable base url is refused, and the
+        // refusal belongs in the dialog. Closing it silently would look like
+        // the save worked, and navigating to the error body would lose the
+        // form the operator was filling in.
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&dialog=edit`, {
+          waitUntil: "networkidle",
+        });
+        const editDialog = page.getByRole("dialog", { name: "Edit provider" });
+        await editDialog.getByLabel(/BASE URL/).fill("not-a-url");
+        await editDialog.getByRole("button", { name: /Save/ }).click();
+
+        await expect(editDialog.getByRole("alert")).toBeVisible();
+        await expect(page).toHaveURL(/dialog=edit/);
+        await expect(editDialog.getByLabel(/BASE URL/)).toHaveValue("not-a-url");
+        // Nothing was written: the provider still has the base url it had.
+        const stored = await fixture.query<{ base_url: string | null }>(
+          "select base_url from providers where id = $1",
+          [providerId],
+        );
+        expect(stored.rows[0]?.base_url).not.toBe("not-a-url");
+
+        // --- The same contract in the Limits drawer, whose rules are validated
+        // in the database layer rather than by the browser.
+        const apiKeyId = randomUUID();
+        await fixture.query(
+          `insert into api_keys (id, name, key_prefix, key_hash)
+           values ($1, 'refusal-key', 'llmi_r…', gen_random_uuid()::text)`,
+          [apiKeyId],
+        );
+        await page.goto(`${baseUrl}/limits?selected=${apiKeyId}`, { waitUntil: "networkidle" });
+        const drawer = page.getByRole("dialog", { name: /refusal-key/ });
+        await drawer
+          .getByLabel(/BUDGET/)
+          .first()
+          .fill("0");
+        await drawer.getByRole("button", { name: /Enable limits|Save rules/ }).click();
+
+        await expect(drawer.getByRole("alert")).toBeVisible();
+        await expect(drawer.getByRole("alert")).toContainText(/greater than zero/i);
+        // The page is still the console, not the API's error body.
+        await expect(page).toHaveURL(new RegExp(`${escapeRegExp(baseUrl)}/limits`));
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("refused compact provider actions do not widen the page", async ({ browser }) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_compact_error_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = await seedDisabledProviderWithKey(fixture.databaseUrl);
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await signInFromFirstRun(page, baseUrl);
+        await page.goto(`${baseUrl}/providers?selected=${providerId}`, {
+          waitUntil: "networkidle",
+        });
+
+        const masterDetail = page.getByTestId("providers-master-detail");
+        await page.getByRole("button", { name: "Refresh models" }).click();
+        const refreshError = page.getByRole("alert").filter({
+          hasText: "Provider must be enabled before refreshing models.",
+        });
+        await expect(refreshError).toBeVisible();
+        await expect(refreshError.locator(".text-redtx")).toBeVisible();
+        await expect(masterDetail.getByRole("alert")).toHaveCount(0);
+        expect(
+          await masterDetail.evaluate((element) => element.scrollWidth - element.clientWidth),
+        ).toBeLessThanOrEqual(0);
+
+        await page.getByRole("button", { name: "Dismiss notification" }).click();
+        await page.getByRole("button", { name: "Re-check" }).click();
+        const probeError = page.getByRole("alert").filter({
+          hasText: "Provider connection is not available for probing.",
+        });
+        await expect(probeError).toBeVisible();
+        await expect(probeError.locator(".text-redtx")).toBeVisible();
+        await expect(masterDetail.getByRole("alert")).toHaveCount(0);
+        expect(await overflowPx(page)).toBeLessThanOrEqual(0);
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("a local provider's endpoint is offered as an endpoint, not as a credential", async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_local_provider_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = randomUUID();
+    await fixture.query(
+      `insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+       values ($1, 'local', 'ollama', 'Ollama (local)', 'http://127.0.0.1:11434/v1', true)`,
+      [providerId],
+    );
+
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await signInFromFirstRun(page, baseUrl);
+        await page.goto(`${baseUrl}/providers?selected=${providerId}`, {
+          waitUntil: "networkidle",
+        });
+
+        // The row in its connections table is the provider's own base url, not a
+        // stored credential: there is no second endpoint to add, and Delete here
+        // would mean deleting the provider, which its own Delete already does.
+        await expect(page.getByText("a server on your own network")).toBeVisible();
+        await expect(page.getByRole("link", { name: /Add endpoint/ })).toHaveCount(0);
+        const connections = page.getByText("http://127.0.0.1:11434/v1").first();
+        await expect(connections).toBeVisible();
+        const rowActions = page.getByRole("link", { name: "Edit", exact: true });
+        await expect(rowActions.first()).toBeVisible();
+
+        // The delete URL is still reachable by hand, and says what it can and
+        // cannot do rather than posting at a table that holds nothing for it.
+        await page.goto(
+          `${baseUrl}/providers?selected=${providerId}&dialog=deleteConnection&connection=${providerId}`,
+          { waitUntil: "networkidle" },
+        );
+        const dialog = page.getByRole("dialog", { name: "Local endpoint" });
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toContainText("is a local provider");
+        await expect(dialog.getByRole("link", { name: "Delete the provider" })).toBeVisible();
+        // Nothing on this screen posts at the provider-keys table, which holds
+        // no row for a local provider and answered "not found".
+        await expect(dialog.getByRole("button", { name: /delete/i })).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("the connection dialog keeps the pasted secret out of its answer, and says when a connection is gone", async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_connection_dialog_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const secret = "sk-console-dialog-secret-000001";
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = randomUUID();
+    await fixture.query(
+      `insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+       values ($1, 'api_key', 'openai', 'Dialog Provider', 'https://provider.test/v1', true)`,
+      [providerId],
+    );
+
+    const consoleApp = startConsoleProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://localhost:${consoleApp.port}`;
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        await waitForConsole(baseUrl, consoleApp);
+        await signInFromFirstRun(page, baseUrl);
+        await page.goto(
+          `${baseUrl}/providers?selected=${providerId}&providerKeyDialog=${providerId}`,
+          { waitUntil: "networkidle" },
+        );
+
+        // --- The secret goes one way. It is stored encrypted and shown again
+        // only as a prefix; handing it back to page scripts that have no use
+        // for it puts it somewhere the console cannot account for.
+        await page.getByPlaceholder("paste the provider key").fill(secret);
+        const saved = page.waitForResponse(
+          (response) =>
+            response.url().includes("/api/provider-keys") && response.request().method() === "POST",
+        );
+        await page.getByRole("button", { name: "Add key" }).click();
+        const response = await saved;
+        expect(response.status()).toBe(204);
+        expect(await response.text()).not.toContain(secret);
+        await expect(page.getByText(secret)).toHaveCount(0);
+
+        // --- A value that is not a number is refused, and the ring goes round
+        // the field the server named — not the one this form happens to lead
+        // with. "high" used to be read as nothing and saved as priority 100.
+        await page.goto(
+          `${baseUrl}/providers?selected=${providerId}&providerKeyDialog=${providerId}`,
+          { waitUntil: "networkidle" },
+        );
+        await page.getByPlaceholder("paste the provider key").fill("sk-priority-probe-0001");
+        await page.getByLabel("PRIORITY", { exact: false }).fill("high");
+        await page.getByRole("button", { name: "Add key" }).click();
+        await expect(page.getByText("priority must be a number.")).toBeVisible();
+        await expect(page.getByLabel("PRIORITY", { exact: false })).toHaveAttribute(
+          "aria-invalid",
+          "true",
+        );
+        await expect(page.getByPlaceholder("paste the provider key")).toHaveAttribute(
+          "aria-invalid",
+          "true",
+        );
+
+        // --- A link to a connection that is not on this provider says so. It
+        // used to open as "Add API key", asking for a new credential under a
+        // title that reads like an edit of the one that is gone.
+        const strangerId = randomUUID();
+        await page.goto(
+          `${baseUrl}/providers?selected=${providerId}&providerKeyDialog=${providerId}&connection=${strangerId}`,
+          { waitUntil: "networkidle" },
+        );
+        await expect(page.getByRole("dialog", { name: "Connection not found" })).toBeVisible();
+        await expect(page.getByRole("dialog", { name: "Add API key" })).toHaveCount(0);
+
+        await page.goto(
+          `${baseUrl}/providers?selected=${providerId}&dialog=deleteConnection&connection=${strangerId}`,
+          { waitUntil: "networkidle" },
+        );
+        await expect(page.getByRole("dialog", { name: "Connection not found" })).toBeVisible();
+        // It does not assert a deletion it cannot know about: the link may have
+        // named a connection of another provider, which is still there.
+        await expect(page.getByText("it was deleted since this page was opened")).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await stopConsoleProcess(consoleApp);
+    }
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+function escapeRegExp(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

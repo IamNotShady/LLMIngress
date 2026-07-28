@@ -368,17 +368,24 @@ export async function listProviderModelOptions(
 }
 
 export async function listProviderModelPage(input: {
+  availability?: string | null;
   databaseUrl?: string;
   page?: number;
+  pageSize?: number;
   providerId: string;
   query?: string | null;
 }): Promise<ConsoleProviderModelPage> {
   const requestedPage =
     Number.isInteger(input.page) && Number(input.page) > 0 ? Number(input.page) : 1;
   const query = input.query?.trim() || null;
+  // "all" is the absence of a filter, not a stored availability value.
+  const availability =
+    input.availability && input.availability !== "all" ? input.availability : null;
+  const pageSize =
+    Number.isInteger(input.pageSize) && Number(input.pageSize) > 0 ? Number(input.pageSize) : 50;
 
   return withPooledPostgresClient(input.databaseUrl, async (client) => {
-    const values = [input.providerId, query] as const;
+    const values = [input.providerId, query, availability] as const;
     const filters = `
       provider_models.provider_id = $1::uuid
       and provider_models.deleted_at is null
@@ -389,6 +396,7 @@ export async function listProviderModelPage(input: {
         or provider_models.model_id ilike '%' || $2 || '%'
         or provider_models.display_name ilike '%' || $2 || '%'
       )
+      and ($3::text is null or provider_models.availability = $3)
     `;
     const countResult = await client.query<{ total: number }>(
       `
@@ -400,17 +408,17 @@ export async function listProviderModelPage(input: {
       values,
     );
     const total = countResult.rows[0]?.total ?? 0;
-    const pageCount = Math.max(1, Math.ceil(total / 50));
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(requestedPage, pageCount);
     const result = await client.query<ProviderModelOptionRow>(
       `
         ${providerModelOptionsSelectSql()}
         where ${filters}
         order by lower(provider_models.display_name), provider_models.model_id, provider_models.id
-        limit 50
-        offset $3
+        limit $4
+        offset $5
       `,
-      [...values, (page - 1) * 50],
+      [...values, pageSize, (page - 1) * pageSize],
     );
 
     return {
@@ -576,52 +584,69 @@ export async function updateRoutePolicy(input: {
     description: `Update route policy ${input.id}`,
     changes: [{ table: "route_policies", recordId: input.id }],
     write: async (client) => {
-      await lockProvidersForProviderModels(client, input.routePolicy.providerModelIds);
-      const existing = await readRoutePolicyForUpdate(client, input.id);
-      if (existing.virtual_model_id !== input.routePolicy.virtualModelId) {
-        throw consoleConflictError(
-          "Route policy virtual model cannot be changed.",
-          "route_policy_virtual_model_immutable",
-          { routePolicyId: input.id },
-        );
-      }
-      await assertProviderModelsExist(client, input.routePolicy.providerModelIds);
-      await assertEndpointSupportedRoutePolicyCandidates(client, input.routePolicy);
-      await assertRoutePolicyCandidateCapabilityContract(client, input.routePolicy);
-
-      const result = await client.query<RoutePolicyRow>(
-        `
-          update route_policies
-          set strategy = $2,
-              endpoint_protocol = $3,
-              updated_at = now()
-          where id = $1
-          returning id::text,
-                    strategy,
-                    endpoint_protocol,
-                    virtual_model_id::text,
-                    (
-                      select name
-                      from virtual_models
-                      where virtual_models.id = route_policies.virtual_model_id
-                    ) as virtual_model_name,
-                    (
-                      select description
-                      from virtual_models
-                      where virtual_models.id = route_policies.virtual_model_id
-                    ) as virtual_model_display_name
-        `,
-        [input.id, input.routePolicy.strategy, input.routePolicy.endpointProtocol],
-      );
-      await client.query("delete from route_policy_candidates where route_policy_id = $1", [
-        input.id,
-      ]);
-      const candidateRows = await writeRoutePolicyCandidates(client, input.id, input.routePolicy);
-      routePolicy = rowToConsoleRoutePolicy(requireRow(result.rows[0]), candidateRows);
+      routePolicy = await updateRoutePolicyWithClient({
+        client,
+        id: input.id,
+        routePolicy: input.routePolicy,
+      });
     },
   });
 
   return requireSavedRoutePolicy(routePolicy);
+}
+
+/**
+ * The write half on a caller's client, so a save that changes both the virtual
+ * model and its route is one transaction. A route the capability contract
+ * refuses must not leave a rename committed behind it.
+ */
+export async function updateRoutePolicyWithClient(input: {
+  client: QueryClient;
+  id: string;
+  routePolicy: NormalizedRoutePolicyFormInput;
+}): Promise<ConsoleRoutePolicy> {
+  await lockProvidersForProviderModels(input.client, input.routePolicy.providerModelIds);
+  const existing = await readRoutePolicyForUpdate(input.client, input.id);
+  if (existing.virtual_model_id !== input.routePolicy.virtualModelId) {
+    throw consoleConflictError(
+      "Route policy virtual model cannot be changed.",
+      "route_policy_virtual_model_immutable",
+      { routePolicyId: input.id },
+    );
+  }
+  await assertProviderModelsExist(input.client, input.routePolicy.providerModelIds);
+  await assertEndpointSupportedRoutePolicyCandidates(input.client, input.routePolicy);
+  await assertRoutePolicyCandidateCapabilityContract(input.client, input.routePolicy);
+
+  const result = await input.client.query<RoutePolicyRow>(
+    `
+      update route_policies
+      set strategy = $2,
+          endpoint_protocol = $3,
+          updated_at = now()
+      where id = $1
+      returning id::text,
+                strategy,
+                endpoint_protocol,
+                virtual_model_id::text,
+                (
+                  select name
+                  from virtual_models
+                  where virtual_models.id = route_policies.virtual_model_id
+                ) as virtual_model_name,
+                (
+                  select description
+                  from virtual_models
+                  where virtual_models.id = route_policies.virtual_model_id
+                ) as virtual_model_display_name
+    `,
+    [input.id, input.routePolicy.strategy, input.routePolicy.endpointProtocol],
+  );
+  await input.client.query("delete from route_policy_candidates where route_policy_id = $1", [
+    input.id,
+  ]);
+  const candidateRows = await writeRoutePolicyCandidates(input.client, input.id, input.routePolicy);
+  return rowToConsoleRoutePolicy(requireRow(result.rows[0]), candidateRows);
 }
 
 export async function deleteRoutePolicy(input: {
@@ -742,6 +767,7 @@ async function assertRoutePolicyCandidateCapabilityContract(
   const result = resolveVirtualModelCapabilityContract(
     candidates.map((candidate) => ({
       id: candidate.id,
+      label: candidate.optionLabel,
       inputModalities: candidate.inputModalities,
       maxContextTokens: candidate.contextWindow,
       maxOutputTokens: candidate.maxOutputTokens,
@@ -1114,4 +1140,21 @@ function requireSavedRoutePolicy(routePolicy: ConsoleRoutePolicy | undefined): C
     throw new Error("Route Policy was not saved.");
   }
   return routePolicy;
+}
+
+/**
+ * Resolve specific provider models by id. The route editor keeps its selection
+ * in the URL so paging the candidate browser cannot lose it, which means the
+ * selected rows have to be readable independently of the current page.
+ */
+export async function listProviderModelOptionsByIds(input: {
+  databaseUrl?: string;
+  providerModelIds: readonly string[];
+}): Promise<ConsoleProviderModelOption[]> {
+  if (input.providerModelIds.length === 0) {
+    return [];
+  }
+  return withPooledPostgresClient(input.databaseUrl, async (client) =>
+    readProviderModelOptionsById(client, input.providerModelIds),
+  );
 }

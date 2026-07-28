@@ -12,7 +12,7 @@ import {
   QUOTA_PROBING_PAUSED_LABEL,
   quotaBalanceKey,
   readQuotaErrorReason,
-} from "../../apps/console/src/app/_lib/provider-quota-format";
+} from "../../apps/console/src/app/_ui/provider-quota-format";
 import { isBalanceEntry, isWindowEntry, type QuotaEntry } from "../../packages/domain/src/quota";
 
 const referenceTimeMs = Date.parse("2026-07-20T10:00:00Z");
@@ -69,8 +69,24 @@ describe("quota entry discrimination", () => {
       { label: "Five hour", percent: "7%", resetLabel: "resets in 2 h" },
       { label: "Seven day", percent: "53%", resetLabel: "resets 2026-07-24" },
     ]);
-    expect(view.balances).toEqual(["76.50 USD"]);
+    expect(view.balances).toEqual([{ breakdown: null, label: "76.50 USD" }]);
     expect(view.reason).toBeNull();
+  });
+
+  it("says where a balance came from when the provider breaks it down", () => {
+    const view = buildProviderQuotaConnectionView({
+      referenceTimeMs,
+      sharedBalanceKeys: new Set<string>(),
+      summary: summaryOf({
+        entries: [{ currency: "USD", granted: "20.00", toppedUp: "30.00", total: "50.00" }],
+      }),
+    });
+
+    // A total alone does not say whether the credit renews with the plan or was
+    // paid for, which is the thing an operator is deciding about.
+    expect(view.balances).toEqual([
+      { breakdown: "granted 20.00 USD · topped up 30.00 USD", label: "50.00 USD" },
+    ]);
   });
 });
 
@@ -323,16 +339,15 @@ describe("account-scoped balances", () => {
 
 describe("providers page wiring", () => {
   it("loads the quota read model and passes it into the rendered provider section", () => {
-    const section = readFileSync("apps/console/src/app/_modules/providers-section.tsx", "utf8");
-    expect(section).toContain("listConsoleProviderQuotaSummaries");
-    expect(section).toContain("providerQuotaSummaries={providerQuotaSummaries}");
+    const page = readFileSync("apps/console/src/app/(dashboard)/providers/page.tsx", "utf8");
+    expect(page).toContain("listConsoleProviderQuotaSummaries");
+    // Only the selected provider's quota reaches the detail panel, so the panel
+    // can never show another provider's plan.
+    expect(page).toContain("quotas.filter((quota) => quota.providerId === selected.id)");
 
-    const clientSection = readFileSync(
-      "apps/console/src/app/_modules/providers-client-section.tsx",
-      "utf8",
-    );
-    expect(clientSection).toContain("buildProviderQuotaConnectionView");
-    expect(clientSection).toContain("findSharedProviderBalances");
+    const panel = readFileSync("apps/console/src/app/_ui/quota-panel.tsx", "utf8");
+    expect(panel).toContain("buildProviderQuotaConnectionView");
+    expect(panel).toContain("findSharedProviderBalances");
   });
 
   it("exports the read model as its own package subpath", () => {

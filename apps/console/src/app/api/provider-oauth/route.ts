@@ -6,6 +6,7 @@ import {
   setProviderOAuthConnectionEnabled,
   setProviderOAuthQuotaProbeEnabled,
   startProviderOAuthConnection,
+  updateProviderOAuthConnectionSettings,
 } from "@llmingress/db/console-provider-oauth";
 import {
   enqueueProviderConnectionProbeJob,
@@ -26,22 +27,26 @@ export const POST = withConsoleAuth(async (request) => {
     if (action === "complete") {
       const result = await completeProviderOAuthAuthorization({
         callbackInput: readRequiredText(form, "callbackInput"),
+        enabled: readText(form, "enabled") !== "false",
         label: readNullableText(form, "label"),
         encryptionKeySource: readConsoleEncryptionKeySource(),
         priority: readNumber(form, "priority"),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
+        quotaProbeEnabled: readText(form, "quotaProbeEnabled") !== "false",
       });
-      await enqueueProviderConnectionProbeJob({
-        providerConnectionId: result.id,
-        providerId: result.providerId,
-        resetHealth: true,
-        source: "oauth_ready",
-      });
-      await enqueueProviderModelRefreshJob({
-        providerId: result.providerId,
-        source: "oauth_ready",
-        trigger: "system",
-      });
+      if (result.enabled) {
+        await enqueueProviderConnectionProbeJob({
+          providerConnectionId: result.id,
+          providerId: result.providerId,
+          resetHealth: true,
+          source: "oauth_ready",
+        });
+        await enqueueProviderModelRefreshJob({
+          providerId: result.providerId,
+          source: "oauth_ready",
+          trigger: "system",
+        });
+      }
       return redirectToProvider(result.providerId);
     }
 
@@ -64,6 +69,29 @@ export const POST = withConsoleAuth(async (request) => {
         });
       }
       return NextResponse.json({ message: result.message, status: result.status });
+    }
+
+    // Saving an authorized connection edits what the console owns about it —
+    // its label and its routing priority. Starting an authorization from the
+    // edit dialog would have created a second connection instead.
+    if (action === "update") {
+      const providerOAuthId = readRequiredText(form, "providerOAuthId");
+      const result = await updateProviderOAuthConnectionSettings({
+        enabled: readText(form, "enabled") !== "false",
+        label: readNullableText(form, "label") ?? null,
+        priority: readNumber(form, "priority") ?? 100,
+        providerOAuthId,
+        quotaProbeEnabled: readText(form, "quotaProbeEnabled") !== "false",
+      });
+      if (result.enabled) {
+        await enqueueProviderConnectionProbeJob({
+          providerConnectionId: result.id,
+          providerId: result.providerId,
+          resetHealth: true,
+          source: "oauth_ready",
+        });
+      }
+      return redirectToProvider(result.providerId);
     }
 
     if (action === "delete") {
@@ -117,6 +145,7 @@ export const POST = withConsoleAuth(async (request) => {
             deviceVerificationUri: result.verificationUri,
           }
         : { authorizeUrl: result.authorizeUrl }),
+      expiresAt: result.expiresAt,
       label: result.connection.label,
       priority: result.connection.priority,
       providerId: result.connection.providerId,
@@ -160,6 +189,7 @@ function redirectToProviderOAuthDialog(
     deviceVerificationUri?: string;
     error?: string;
     errorCode?: string;
+    expiresAt?: Date;
     label?: string | null;
     priority?: number;
     providerId: string;
@@ -180,6 +210,9 @@ function redirectToProviderOAuthDialog(
   }
   if (input.deviceInterval !== undefined) {
     url.searchParams.set("providerOAuthInterval", String(input.deviceInterval));
+  }
+  if (input.expiresAt) {
+    url.searchParams.set("providerOAuthExpiresAt", input.expiresAt.toISOString());
   }
   if (input.error) {
     url.searchParams.set("providerOAuthError", input.error);

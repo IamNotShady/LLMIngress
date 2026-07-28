@@ -42,6 +42,39 @@ export function gatewayCorsHeaders(origin: string | undefined): Record<string, s
   };
 }
 
+/**
+ * A Provider may already expose response headers to browser clients. Keep that
+ * value intact and append only Gateway-owned entries it does not already name.
+ */
+export function mergeAccessControlExposeHeaders(
+  providerValue: string,
+  gatewayValue: string | undefined,
+): string {
+  if (!gatewayValue) {
+    return providerValue;
+  }
+
+  const seen = new Set(
+    providerValue
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const additions = gatewayValue
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => {
+      const normalized = entry.toLowerCase();
+      if (!normalized || seen.has(normalized)) {
+        return false;
+      }
+      seen.add(normalized);
+      return true;
+    });
+
+  return additions.length > 0 ? `${providerValue}, ${additions.join(", ")}` : providerValue;
+}
+
 function parseConfiguredOrigins(value: string | undefined): string[] {
   if (!value) {
     return [];

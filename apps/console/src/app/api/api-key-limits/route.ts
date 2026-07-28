@@ -3,6 +3,7 @@ import {
   normalizeApiKeyLimitFormInput,
   saveApiKeyLimitRules,
 } from "@llmingress/db/console-api-key-limits";
+import { setApiKeyLimitsEnabled } from "@llmingress/db/console-api-keys";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { consoleActionErrorResponse } from "../_errors";
@@ -13,6 +14,14 @@ export const POST = withConsoleAuth(async (request) => {
   try {
     const form = await request.formData();
     const action = readRequiredText(form, "action");
+    if (action === "setLimitsEnabled") {
+      const apiKeyId = readRequiredText(form, "apiKeyId");
+      await setApiKeyLimitsEnabled({
+        enabled: readText(form, "enabled") === "true",
+        id: apiKeyId,
+      });
+      return redirectToConsolePath(`/limits?selected=${encodeURIComponent(apiKeyId)}`);
+    }
     if (action === "deleteLimitRules") {
       await deleteApiKeyLimitRules({
         apiKeyId: readRequiredText(form, "apiKeyId"),
@@ -30,12 +39,13 @@ export const POST = withConsoleAuth(async (request) => {
     await saveApiKeyLimitRules({
       limits: normalizeApiKeyLimitFormInput({
         apiKeyId,
-        budgetPeriod: readRequiredText(form, "budgetPeriod"),
-        budgetUsd: readRequiredText(form, "budgetUsd"),
+        budgetPeriod: readText(form, "budgetPeriod"),
+        budgetUsd: readText(form, "budgetUsd"),
         concurrency: readText(form, "concurrency"),
-        rpm: readRequiredText(form, "rpm"),
-        tokenLimit: readRequiredText(form, "tokenLimit"),
-        tpm: readRequiredText(form, "tpm"),
+        enforcementPolicy: readText(form, "enforcementPolicy"),
+        rpm: readText(form, "rpm"),
+        tokenLimit: readText(form, "tokenLimit"),
+        tpm: readText(form, "tpm"),
       }),
     });
     return redirectToConsolePath(`/limits?selected=${encodeURIComponent(apiKeyId)}`);

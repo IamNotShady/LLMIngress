@@ -26,7 +26,7 @@ import {
   readPlaygroundResponseText,
   readPlaygroundStreamResponseText,
   retryPlaygroundRequestDetail,
-} from "../../apps/console/src/app/playground-helpers.ts";
+} from "../../apps/console/src/app/_ui/playground/helpers.ts";
 
 const listed = (modelId: string, overrides: Partial<ListedProviderModel> = {}) => ({
   displayName: modelId,
@@ -41,6 +41,7 @@ describe("core delivery behavior coverage", () => {
       budgetPeriod: "week",
       budgetUsd: "12.5",
       concurrency: "3",
+      enforcementPolicy: "block",
       rpm: "60",
       tokenLimit: "4096",
       tpm: "120000",

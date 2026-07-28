@@ -1,14 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { withPooledPostgresClient, withPostgresTransaction } from "@llmingress/db/client";
+import {
+  type PostgresQueryClient,
+  withPooledPostgresClient,
+  withPostgresTransaction,
+} from "@llmingress/db/client";
 import { clearProviderConnectionHealthWithClient } from "@llmingress/db/provider-health";
 import { clearProviderQuotaWithClient } from "@llmingress/db/provider-quota";
 import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 
-export type {
-  PostgresQueryClient,
-  PostgresQueryResult,
-  PostgresQueryResultRow,
-} from "@llmingress/db/client";
+export type { PostgresQueryResult, PostgresQueryResultRow } from "@llmingress/db/client";
+export type { PostgresQueryClient };
 export { PostgresClient, withPooledPostgresClient } from "@llmingress/db/client";
 
 export type ProviderOAuthMetadata = {
@@ -144,7 +145,7 @@ export async function createProviderOAuthPendingConnection(input: {
   });
 }
 
-export async function createProviderOAuthDevicePendingConnection(input: {
+export type CreateProviderOAuthDevicePendingConnectionInput = {
   databaseUrl?: string;
   intervalSeconds: number;
   label?: string | null;
@@ -156,11 +157,43 @@ export async function createProviderOAuthDevicePendingConnection(input: {
   providerId: string;
   userCode: string;
   verificationUri: string;
-}): Promise<ProviderOAuthMetadata> {
+};
+
+export async function createProviderOAuthDevicePendingConnection(
+  input: CreateProviderOAuthDevicePendingConnectionInput,
+): Promise<ProviderOAuthMetadata> {
+  const rowId = cryptoRandomUUID();
+  return withPostgresTransaction(input.databaseUrl, (client) =>
+    createProviderOAuthDevicePendingConnectionWithClient(client, input, rowId),
+  );
+}
+
+export async function replaceProviderOAuthDevicePendingConnection(
+  input: CreateProviderOAuthDevicePendingConnectionInput,
+): Promise<ProviderOAuthMetadata> {
   const rowId = cryptoRandomUUID();
   return withPostgresTransaction(input.databaseUrl, async (client) => {
-    const result = await client.query<ProviderOAuthRow>(
+    await client.query(
       `
+        delete from provider_oauth
+        where provider_id = $1
+          and flow_type = 'device_code'
+          and completed_at is null
+          and deleted_at is null
+      `,
+      [input.providerId],
+    );
+    return createProviderOAuthDevicePendingConnectionWithClient(client, input, rowId);
+  });
+}
+
+async function createProviderOAuthDevicePendingConnectionWithClient(
+  client: PostgresQueryClient,
+  input: CreateProviderOAuthDevicePendingConnectionInput,
+  rowId: string,
+): Promise<ProviderOAuthMetadata> {
+  const result = await client.query<ProviderOAuthRow>(
+    `
         insert into provider_oauth (
           id,
           provider_id,
@@ -185,45 +218,22 @@ export async function createProviderOAuthDevicePendingConnection(input: {
                   created_at,
                   updated_at,
                   completed_at
-      `,
-      [
-        rowId,
-        input.providerId,
-        normalizeProviderOAuthLabel(input.label),
-        normalizeProviderOAuthPriority(input.priority),
-        input.pendingState,
-        input.pendingCodeVerifier,
-        input.pendingCodeChallenge,
-        input.pendingExpiresAt,
-        input.userCode,
-        input.verificationUri,
-        input.intervalSeconds,
-      ],
-    );
-    return toProviderOAuthMetadata(requireProviderOAuthRow(result.rows[0]));
-  });
-}
-
-// Start-time cleanup: a fresh device connection invalidates any earlier,
-// still-pending device attempt for the same provider so orphan rows can't pile
-// up. Completed rows (with a token) and authorization-code rows are untouched.
-export async function deletePendingProviderOAuthDeviceConnections(input: {
-  databaseUrl?: string;
-  providerId: string;
-}): Promise<number> {
-  return withPostgresTransaction(input.databaseUrl, async (client) => {
-    const result = await client.query(
-      `
-        delete from provider_oauth
-        where provider_id = $1
-          and flow_type = 'device_code'
-          and completed_at is null
-          and deleted_at is null
-      `,
-      [input.providerId],
-    );
-    return result.rowCount ?? 0;
-  });
+    `,
+    [
+      rowId,
+      input.providerId,
+      normalizeProviderOAuthLabel(input.label),
+      normalizeProviderOAuthPriority(input.priority),
+      input.pendingState,
+      input.pendingCodeVerifier,
+      input.pendingCodeChallenge,
+      input.pendingExpiresAt,
+      input.userCode,
+      input.verificationUri,
+      input.intervalSeconds,
+    ],
+  );
+  return toProviderOAuthMetadata(requireProviderOAuthRow(result.rows[0]));
 }
 
 export async function readProviderOAuthPendingConnection(input: {
@@ -263,6 +273,7 @@ export async function readProviderOAuthPendingConnection(input: {
 
 export async function completeProviderOAuthConnection(input: {
   databaseUrl?: string;
+  enabled?: boolean;
   encryptedToken: Record<string, unknown>;
   label?: string | null;
   // When true the write only lands while the row is still pending
@@ -274,6 +285,7 @@ export async function completeProviderOAuthConnection(input: {
   onlyIfPending?: boolean;
   priority?: number;
   providerOAuthId: string;
+  quotaProbeEnabled?: boolean;
   tokenExpiresAt?: Date | null;
 }): Promise<ProviderOAuthMetadata> {
   const shouldUpdateLabel = Object.hasOwn(input, "label");
@@ -287,6 +299,8 @@ export async function completeProviderOAuthConnection(input: {
             token_expires_at = $3,
             label = case when $4::boolean then $5::text else label end,
             priority = case when $6::boolean then $7::integer else priority end,
+            enabled = coalesce($9, enabled),
+            quota_probe_enabled = coalesce($10, quota_probe_enabled),
             pending_state = null,
             pending_code_verifier = null,
             pending_code_challenge = null,
@@ -318,6 +332,8 @@ export async function completeProviderOAuthConnection(input: {
         shouldUpdatePriority,
         shouldUpdatePriority ? normalizeProviderOAuthPriority(input.priority) : null,
         input.onlyIfPending === true,
+        input.enabled ?? null,
+        input.quotaProbeEnabled ?? null,
       ],
     );
     const updated = result.rows[0];
@@ -326,6 +342,18 @@ export async function completeProviderOAuthConnection(input: {
         providerConnectionId: updated.id,
         providerId: updated.provider_id,
       });
+      if (input.quotaProbeEnabled) {
+        await client.query(
+          `
+            update provider_quota_summary
+            set next_refresh_at = now(),
+                updated_at = now()
+            where provider_id = $1
+              and provider_connection_id = $2
+          `,
+          [updated.provider_id, updated.id],
+        );
+      }
       return toProviderOAuthMetadata(updated);
     }
     // onlyIfPending guard: the row was already completed by a concurrent writer
@@ -405,6 +433,7 @@ export async function updateProviderOAuthConnectionSettings(input: {
   label: string | null;
   priority: number;
   providerOAuthId: string;
+  quotaProbeEnabled?: boolean;
 }): Promise<ProviderOAuthMetadata> {
   return withPostgresTransaction(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRow>(
@@ -413,6 +442,7 @@ export async function updateProviderOAuthConnectionSettings(input: {
         set label = $2,
             priority = $3,
             enabled = $4,
+            quota_probe_enabled = coalesce($5, quota_probe_enabled),
             updated_at = now()
         where id = $1
           and deleted_at is null
@@ -433,9 +463,23 @@ export async function updateProviderOAuthConnectionSettings(input: {
         normalizeProviderOAuthLabel(input.label),
         normalizeProviderOAuthPriority(input.priority),
         input.enabled,
+        input.quotaProbeEnabled ?? null,
       ],
     );
-    return toProviderOAuthMetadata(requireProviderOAuthRow(result.rows[0]));
+    const row = requireProviderOAuthRow(result.rows[0]);
+    if (input.quotaProbeEnabled) {
+      await client.query(
+        `
+          update provider_quota_summary
+          set next_refresh_at = now(),
+              updated_at = now()
+          where provider_id = $1
+            and provider_connection_id = $2
+        `,
+        [row.provider_id, row.id],
+      );
+    }
+    return toProviderOAuthMetadata(row);
   });
 }
 

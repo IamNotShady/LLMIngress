@@ -1,4 +1,4 @@
-import { withPooledPostgresClient } from "@llmingress/db/client";
+import { withPooledPostgresClient, withPostgresTransaction } from "@llmingress/db/client";
 import { isRecord } from "@llmingress/util";
 import { consoleValidationError } from "./console-operation-error.ts";
 
@@ -298,7 +298,7 @@ export async function getConsoleActivityDetail(input: {
     );
   }
 
-  return withPooledPostgresClient(input.databaseUrl, async (client) => {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
     const result = await client.query<ActivityRow>(
       `
         select request_activity.id::text,

@@ -81,6 +81,41 @@ describe("console api hygiene", () => {
     expect(source).toContain("renderOneTimeApiKeyResponse");
   });
 
+  it("delegates each Console business mutation to one database transaction owner", () => {
+    const providerKeyRoute = readFileSync(
+      "apps/console/src/app/api/provider-keys/route.ts",
+      "utf8",
+    );
+    expect(providerKeyRoute).toMatch(
+      /updateProviderApiKeySettings\(\{[\s\S]*?quotaProbeEnabled:[\s\S]*?\}\)/,
+    );
+    expect(providerKeyRoute).toMatch(
+      /saveProviderApiKey\(\{[\s\S]*?quotaProbeEnabled:[\s\S]*?\}\)/,
+    );
+
+    const providerOAuthRoute = readFileSync(
+      "apps/console/src/app/api/provider-oauth/route.ts",
+      "utf8",
+    );
+    expect(providerOAuthRoute).toMatch(
+      /completeProviderOAuthAuthorization\(\{[\s\S]*?quotaProbeEnabled:[\s\S]*?\}\)/,
+    );
+    expect(providerOAuthRoute).toMatch(
+      /updateProviderOAuthConnectionSettings\(\{[\s\S]*?quotaProbeEnabled:[\s\S]*?\}\)/,
+    );
+
+    const providerOAuthService = readFileSync("packages/db/src/console-provider-oauth.ts", "utf8");
+    expect(providerOAuthService).toContain("replaceProviderOAuthDevicePendingConnection");
+    expect(providerOAuthService).not.toContain("deletePendingProviderOAuthDeviceConnections");
+
+    const auth = readFileSync("packages/db/src/console-auth.ts", "utf8");
+    expect(auth).toMatch(/loginConsoleAdmin[\s\S]*?withPostgresTransaction/);
+    expect(auth).toMatch(/createAdminPassword[\s\S]*?withPostgresTransaction/);
+
+    const activity = readFileSync("packages/db/src/console-activity.ts", "utf8");
+    expect(activity).toMatch(/getConsoleActivityDetail[\s\S]*?withPostgresTransaction/);
+  });
+
   it("returns the actual virtual model name in one-time apiKey connection details", async () => {
     const response = renderOneTimeApiKeyResponse(
       {

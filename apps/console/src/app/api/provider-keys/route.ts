@@ -74,8 +74,8 @@ export const POST = withConsoleAuth(async (request) => {
         label: readText(form, "label") ?? null,
         priority: readNumber(form, "priority") ?? 100,
         providerApiKeyId,
+        quotaProbeEnabled,
       });
-      await setProviderApiKeyQuotaProbeEnabled({ providerApiKeyId, quotaProbeEnabled });
       if (updated.enabled) {
         await enqueueProviderConnectionProbeJob({
           providerConnectionId: updated.id,
@@ -96,9 +96,6 @@ export const POST = withConsoleAuth(async (request) => {
       priority: readNumber(form, "priority"),
       providerApiKeyId,
       providerId,
-    });
-    await setProviderApiKeyQuotaProbeEnabled({
-      providerApiKeyId: result.metadata.id,
       quotaProbeEnabled,
     });
     if (result.metadata.enabled) {

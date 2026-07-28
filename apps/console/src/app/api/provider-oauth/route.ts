@@ -27,26 +27,14 @@ export const POST = withConsoleAuth(async (request) => {
     if (action === "complete") {
       const result = await completeProviderOAuthAuthorization({
         callbackInput: readRequiredText(form, "callbackInput"),
+        enabled: readText(form, "enabled") !== "false",
         label: readNullableText(form, "label"),
         encryptionKeySource: readConsoleEncryptionKeySource(),
         priority: readNumber(form, "priority"),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
-      });
-      // The state the operator chose while authorizing belongs to the
-      // connection that now exists — the same fields the device flow saves
-      // when the provider confirms.
-      const enabled = readText(form, "enabled") !== "false";
-      await updateProviderOAuthConnectionSettings({
-        enabled,
-        label: readNullableText(form, "label") ?? null,
-        priority: readNumber(form, "priority") ?? result.priority,
-        providerOAuthId: result.id,
-      });
-      await setProviderOAuthQuotaProbeEnabled({
-        providerOAuthId: result.id,
         quotaProbeEnabled: readText(form, "quotaProbeEnabled") !== "false",
       });
-      if (enabled) {
+      if (result.enabled) {
         await enqueueProviderConnectionProbeJob({
           providerConnectionId: result.id,
           providerId: result.providerId,
@@ -92,9 +80,6 @@ export const POST = withConsoleAuth(async (request) => {
         enabled: readText(form, "enabled") !== "false",
         label: readNullableText(form, "label") ?? null,
         priority: readNumber(form, "priority") ?? 100,
-        providerOAuthId,
-      });
-      await setProviderOAuthQuotaProbeEnabled({
         providerOAuthId,
         quotaProbeEnabled: readText(form, "quotaProbeEnabled") !== "false",
       });

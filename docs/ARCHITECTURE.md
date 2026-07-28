@@ -21,6 +21,11 @@ Browser  -> Console -> PostgreSQL <- Worker
 - Code shared by applications belongs under `packages/`; app directories contain process or UI
   entrypoints only.
 
+Console API actions commit all database reads and writes that make up one business mutation in one
+PostgreSQL transaction owned by `packages/db`. Upstream network calls run outside that transaction;
+after an upstream call succeeds, its related database state is committed atomically. Durable jobs
+are enqueued only after the business transaction commits and are not part of that transaction.
+
 ## Request and configuration flow
 
 ```text

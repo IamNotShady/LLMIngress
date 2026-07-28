@@ -209,9 +209,6 @@ function AddProviderDialog({
             </span>
           </Link>
         ))}
-        <span className="ml-auto self-center font-mono text-12 text-faint">
-          the template fixes the wire protocol and default base url
-        </span>
       </div>
 
       <div className="mt-[14px] grid grid-cols-4 gap-2 overflow-x-auto">

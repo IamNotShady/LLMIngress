@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/console-demo.gif" alt="LLMIngress Console demo" />
+  <img src="docs/assets/console-demo.gif" alt="LLMIngress Console workflow demo" />
 </p>
 
 <p align="center">

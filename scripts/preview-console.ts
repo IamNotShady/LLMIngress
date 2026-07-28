@@ -447,7 +447,7 @@ async function main() {
           await page.waitForLoadState("networkidle");
         }
         if (name === "drawer-activity") {
-          await page.getByText("↯", { exact: false }).first().click();
+          await page.locator('a[href*="request="]').first().click();
           await page.waitForLoadState("networkidle");
         }
         await page.waitForTimeout(300);

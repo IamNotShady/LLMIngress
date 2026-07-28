@@ -111,7 +111,8 @@ defaults, including Activity's Last 24h window. Selecting a different Provider s
 Provider-scoped view: errors, dialogs, credential and OAuth drafts, and model filters from the
 previous Provider are not carried forward. Failures from button-only idempotent actions such as
 Refresh models and Re-check use the shared four-second Toast in a red error state; form validation
-and mutation refusals that require user correction stay beside their fields.
+and mutation refusals that require user correction stay beside their fields. Provider Edit,
+Enable/Disable, Delete, and Refresh models actions share one unbroken toolbar row.
 
 Persistent Worker jobs are exactly `model_refresh`, `provider_connection_probe`, `price_sync`, and
 `provider_quota_probe`.

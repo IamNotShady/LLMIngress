@@ -86,7 +86,7 @@ export function ProviderDetail({
           <StatusDot tone={health.tone} />
           {health.text}
         </span>
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        <div className="ml-auto flex max-w-full flex-nowrap items-center justify-end gap-2 overflow-x-auto">
           <ActionLink href={href({ dialog: "edit" })}>Edit</ActionLink>
           <ActionLink href={href({ dialog: provider.enabled ? "disable" : "enable" })}>
             {provider.enabled ? "Disable" : "Enable"}
@@ -94,17 +94,16 @@ export function ProviderDetail({
           <ActionLink href={href({ dialog: "delete" })} tone="danger">
             Delete
           </ActionLink>
+          <MutationForm
+            action="/api/provider-model-refresh"
+            errorPresentation="toast"
+            fallbackError="The model refresh could not be queued."
+          >
+            <input type="hidden" name="providerId" value={provider.id} />
+            <ActionButton>Refresh models</ActionButton>
+          </MutationForm>
         </div>
       </div>
-      <MutationForm
-        action="/api/provider-model-refresh"
-        className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2"
-        errorPresentation="toast"
-        fallbackError="The model refresh could not be queued."
-      >
-        <input type="hidden" name="providerId" value={provider.id} />
-        <ActionButton className="col-start-2 row-start-1">Refresh models</ActionButton>
-      </MutationForm>
 
       {refreshStatus?.failure ? (
         <div className="mt-[14px] flex flex-wrap items-start gap-[10px] rounded-sm border border-ambbd bg-ambbg px-[13px] py-[11px]">

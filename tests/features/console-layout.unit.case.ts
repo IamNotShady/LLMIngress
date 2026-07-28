@@ -148,7 +148,7 @@ describe("console layout contract", () => {
     expect(dialogs).toContain("Copy url");
   });
 
-  test("inline mutation errors shrink and wrap inside compact action rows", () => {
+  test("mutation errors stay bounded and provider header actions share one row", () => {
     const mutationForm = read("_ui/mutation-form.tsx");
     expect(mutationForm).toContain('className={`min-w-0 ${className ?? ""}`}');
     expect(mutationForm).toContain("max-w-full");
@@ -157,9 +157,12 @@ describe("console layout contract", () => {
     const providerDetail = read("_ui/providers/detail.tsx");
     expect(providerDetail).toContain("flex-wrap");
     expect(providerDetail).toContain(
-      "grid-cols-[minmax(0,1fr)_auto] items-start gap-2",
+      'className="ml-auto flex max-w-full flex-nowrap items-center justify-end gap-2 overflow-x-auto"',
     );
-    expect(providerDetail).toContain('className="col-start-2 row-start-1"');
+    expect(providerDetail).toMatch(
+      /Edit[\s\S]*?Disable[\s\S]*?Enable[\s\S]*?Delete[\s\S]*?Refresh models/,
+    );
+    expect(providerDetail).not.toContain("grid-cols-[minmax(0,1fr)_auto]");
     const providersPage = read("(dashboard)/providers/page.tsx");
     expect(providersPage).toContain('data-testid="providers-master-detail"');
     expect(providersPage).toContain(

@@ -40,16 +40,34 @@ test("the masthead routes each module to its own page and follows the chosen the
         // Each module owns its view choices. Leaving and returning through the
         // masthead restores them instead of rebuilding the module defaults.
         await page.getByRole("link", { name: "7d", exact: true }).click();
+        await expect(page).toHaveURL(`${baseUrl}/?window=7d`);
         await page.getByRole("link", { name: "Hide", exact: true }).click();
+        await expect(page).toHaveURL(`${baseUrl}/?window=7d&setup=closed`);
         await expect(nav.getByRole("link", { name: "Overview", exact: true })).toHaveAttribute(
           "href",
           "/?window=7d&setup=closed",
         );
+        await expect
+          .poll(() =>
+            page.evaluate(() => {
+              const state = JSON.parse(
+                window.localStorage.getItem("llmingress:console-module-state:v1") ?? "{}",
+              ) as Record<string, string>;
+              return state["/"];
+            }),
+          )
+          .toBe("window=7d&setup=closed");
         await nav.getByRole("link", { name: "Usage", exact: true }).click();
+        await expect(page).toHaveURL(`${baseUrl}/usage`);
         await page.getByRole("link", { name: "30d", exact: true }).click();
+        await expect(page).toHaveURL(`${baseUrl}/usage?window=30d`);
         await expect(nav.getByRole("link", { name: "Usage", exact: true })).toHaveAttribute(
           "href",
           "/usage?window=30d",
+        );
+        await expect(nav.getByRole("link", { name: "Overview", exact: true })).toHaveAttribute(
+          "href",
+          "/?window=7d&setup=closed",
         );
         await nav.getByRole("link", { name: "Overview", exact: true }).click();
         await expect(page).toHaveURL(`${baseUrl}/?window=7d&setup=closed`);

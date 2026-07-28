@@ -965,7 +965,7 @@ test("a refused form states why in the dialog it was submitted from", async ({ b
           .getByLabel(/BUDGET/)
           .first()
           .fill("0");
-        await drawer.getByRole("button", { name: /Save/ }).click();
+        await drawer.getByRole("button", { name: /Enable limits|Save rules/ }).click();
 
         await expect(drawer.getByRole("alert")).toBeVisible();
         await expect(drawer.getByRole("alert")).toContainText(/greater than zero/i);

@@ -169,7 +169,7 @@ async function seedConsoleData(databaseUrl: string) {
     }
   });
 
-  return { apiKeyId, apiKeyName, providerId, virtualModelId };
+  return { apiKeyId, apiKeyName, providerId, virtualModelId, virtualModelName };
 }
 
 test("console keeps layout integrity with real data: cells clip, no page overflow, empty states are explicit, and every module stays reachable below the target width", async ({
@@ -260,7 +260,20 @@ test("console keeps layout integrity with real data: cells clip, no page overflo
         // --- The Playground knows which endpoint a model is routed to, so it
         // says so rather than letting the gateway refuse the request and
         // leaving the operator to guess which control was wrong.
+        await page.route("**/v1/models", async (route) => {
+          await route.fulfill({
+            body: JSON.stringify({
+              data: [{ id: seeded.virtualModelName }],
+              object: "list",
+            }),
+            contentType: "application/json",
+            headers: { "access-control-allow-origin": "*" },
+            status: 200,
+          });
+        });
         await page.goto(`${baseUrl}/playground`, { waitUntil: "networkidle" });
+        await page.getByLabel("API key", { exact: true }).fill("llmi_layout_probe_secret");
+        await expect(page.getByLabel("Virtual model")).toHaveValue(seeded.virtualModelName);
         await expect(page.getByText("is routed to")).toHaveCount(0);
         await page.getByRole("button", { name: "messages", exact: true }).click();
         const mismatch = page.getByText("is routed to /v1/chat/completions");

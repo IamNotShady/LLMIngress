@@ -239,9 +239,11 @@ test("route dialog allows capability differences to be selected and explains the
         await page.getByLabel("DESCRIPTION").fill("Two near-identical context windows");
         await page.getByRole("button", { name: "Create virtual model" }).click();
         await expect(page).toHaveURL(/dialog=new/);
-        await expect(page.getByRole("alert")).toContainText("must agree on maxContextTokens");
-        await expect(page.getByRole("alert")).toContainText("1000000");
-        await expect(page.getByRole("alert")).toContainText("1048576");
+        const capabilityError = page
+          .locator('p[role="alert"]')
+          .filter({ hasText: "must agree on maxContextTokens" });
+        await expect(capabilityError).toContainText("1000000");
+        await expect(capabilityError).toContainText("1048576");
       } finally {
         await context.close();
       }

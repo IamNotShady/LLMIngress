@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CopyButton } from "./copy-button";
 import { activityHref } from "./cross-links";
@@ -27,12 +27,16 @@ export function Masthead({
   failedRequestCount,
 }: MastheadProps) {
   const pathname = usePathname() || "/";
+  const router = useRouter();
   const search = useSearchParams().toString();
   const [rememberedQueries, setRememberedQueries] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setRememberedQueries((current) => {
-      const remembered = { ...readRememberedQueries(), ...current };
+      // A click writes the module being left before navigation. On the next
+      // route, that durable snapshot is newer than a stale in-memory value
+      // carried by the reused masthead.
+      const remembered = { ...current, ...readRememberedQueries() };
       const activeModule = findActiveNavItem(pathname);
       if (activeModule) {
         remembered[activeModule.href] = rememberedModuleQuery(activeModule.href, search);
@@ -45,6 +49,21 @@ export function Masthead({
       return remembered;
     });
   }, [pathname, search]);
+
+  const rememberCurrentModule = () => {
+    const latest = readRememberedQueries();
+    const activeModule = findActiveNavItem(pathname);
+    if (activeModule) {
+      latest[activeModule.href] = rememberedModuleQuery(activeModule.href, search);
+      try {
+        window.localStorage.setItem(MODULE_STATE_STORAGE_KEY, JSON.stringify(latest));
+      } catch {
+        // Navigation still works when storage is unavailable.
+      }
+    }
+    setRememberedQueries(latest);
+    return latest;
+  };
 
   return (
     <div className="sticky top-0 z-40 flex h-[54px] items-center gap-6 overflow-x-auto border-b border-hair bg-bg px-8">
@@ -61,7 +80,9 @@ export function Masthead({
         {consoleNavItems.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const badged = item.href === "/activity" && failedRequestCount > 0;
-          const rememberedQuery = rememberedQueries[item.href];
+          const rememberedQuery = active
+            ? rememberedModuleQuery(item.href, search)
+            : rememberedQueries[item.href];
           return (
             <span
               key={item.href}
@@ -78,6 +99,37 @@ export function Masthead({
                     ? item.href
                     : rememberedModuleHref(item.href, rememberedQuery)
                 }
+                onClick={(event) => {
+                  if (
+                    event.defaultPrevented ||
+                    event.button !== 0 ||
+                    event.metaKey ||
+                    event.ctrlKey ||
+                    event.shiftKey ||
+                    event.altKey
+                  ) {
+                    return;
+                  }
+                  // Persist the module being left in the same event that starts
+                  // navigation. The rendered href can already show the latest
+                  // search while the effect has not written it yet.
+                  const latest = rememberCurrentModule();
+                  if (active) {
+                    return;
+                  }
+                  // A server navigation can remount the masthead with empty
+                  // client state. Read the durable snapshot at click time.
+                  const storedQuery = latest[item.href];
+                  if (storedQuery === undefined) {
+                    return;
+                  }
+                  const storedHref = rememberedModuleHref(item.href, storedQuery);
+                  if (storedHref !== item.href) {
+                    event.preventDefault();
+                    router.push(storedHref);
+                  }
+                }}
+                onPointerDown={rememberCurrentModule}
                 aria-current={active ? "page" : undefined}
                 className={`flex h-[54px] items-center ${
                   active ? "font-semibold text-ink" : "text-dim"

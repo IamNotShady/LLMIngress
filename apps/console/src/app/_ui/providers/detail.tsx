@@ -76,7 +76,7 @@ export function ProviderDetail({
   const pageSize = readPageSizeParam(params, "modelPageSize", 20);
 
   return (
-    <div key={provider.id} className="min-w-0 pl-6 pt-[18px]">
+    <div key={provider.id} className="min-w-0 pt-[18px] lg:pl-6">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="m-0 font-sans text-19 font-semibold text-ink">{provider.displayName}</h2>
         <span className="font-mono text-13 text-dim">{provider.providerType}</span>
@@ -255,13 +255,13 @@ export function ProviderDetail({
 
       <PlanQuotaPanel now={now} summaries={quotas} />
 
-      <div className="mt-5 flex items-center gap-[10px]">
+      <div className="mt-5 flex flex-wrap items-center gap-[10px]">
         <span className="flex-none font-sans text-155 font-semibold text-ink">Models</span>
         <form
           key={providerModelFilterFormKey}
           method="get"
           action="/providers"
-          className="flex items-center gap-2"
+          className="flex min-w-0 flex-wrap items-center gap-2"
         >
           <input type="hidden" name="selected" value={provider.id} />
           <input type="hidden" name="modelPageSize" value={String(pageSize)} />
@@ -270,13 +270,13 @@ export function ProviderDetail({
             defaultValue={modelQuery}
             placeholder="search model id…"
             aria-label="Search models"
-            className={`${filterControlClass} w-[150px]`}
+            className={`${filterControlClass} w-[150px] max-w-full`}
           />
           <select
             name="availability"
             defaultValue={availability}
             aria-label="Filter by availability"
-            className={filterControlClass}
+            className={`${filterControlClass} max-w-full`}
           >
             <option value="available">Availability: available</option>
             <option value="all">all</option>

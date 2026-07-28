@@ -134,9 +134,9 @@ export default async function ProvidersPage({
       ) : (
         <div
           data-testid="providers-master-detail"
-          className="mt-4 grid min-w-0 grid-cols-[minmax(0,344px)_minmax(0,1fr)] border-t border-hair"
+          className="mt-4 grid min-w-0 grid-cols-1 border-t border-hair lg:grid-cols-[minmax(0,344px)_minmax(0,1fr)]"
         >
-          <div className="min-w-0 border-r border-rule pr-5">
+          <div className="min-w-0 border-b border-rule pb-4 lg:border-r lg:border-b-0 lg:pb-0 lg:pr-5">
             {providers.map((provider) => {
               const connections = connectionsByProvider.get(provider.id) ?? [];
               const providerHealth = describeProviderHealth(connections);

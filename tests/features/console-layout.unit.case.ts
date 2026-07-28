@@ -156,6 +156,8 @@ describe("console layout contract", () => {
 
     const providerDetail = read("_ui/providers/detail.tsx");
     expect(providerDetail).toContain("flex-wrap");
+    expect(providerDetail).toContain('className="mt-5 flex flex-wrap items-center gap-[10px]"');
+    expect(providerDetail).toContain('className="flex min-w-0 flex-wrap items-center gap-2"');
     expect(providerDetail).toContain(
       'className="ml-auto flex max-w-full flex-nowrap items-center justify-end gap-2 overflow-x-auto"',
     );
@@ -165,7 +167,9 @@ describe("console layout contract", () => {
     expect(providerDetail).not.toContain("grid-cols-[minmax(0,1fr)_auto]");
     const providersPage = read("(dashboard)/providers/page.tsx");
     expect(providersPage).toContain('data-testid="providers-master-detail"');
-    expect(providersPage).toContain("grid-cols-[minmax(0,344px)_minmax(0,1fr)]");
+    expect(providersPage).toContain("grid-cols-1");
+    expect(providersPage).toContain("lg:grid-cols-[minmax(0,344px)_minmax(0,1fr)]");
+    expect(providersPage).toContain("lg:border-r");
     expect(
       providersPage.match(/data-testid="providers-master-detail"[\s\S]*?className="([^"]+)"/)?.[1],
     ).not.toContain("overflow-x-auto");

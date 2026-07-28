@@ -152,17 +152,18 @@ test("the console's editors carry only the draft they belong to, and a refused s
         //    every provider-scoped URL draft.
         await page.goto(`${baseUrl}/providers?selected=${seeded.subscriptionProviderId}`);
         await page.getByRole("button", { name: "Refresh models" }).click();
-        await expect(page.getByRole("alert")).toContainText(
-          "Provider credentials are required before refreshing models.",
-        );
-        await expect(page.getByRole("alert").locator(".text-redtx")).toBeVisible();
+        const refreshError = page
+          .locator('output[role="alert"]')
+          .filter({ hasText: "Provider credentials are required before refreshing models." });
+        await expect(refreshError).toBeVisible();
+        await expect(refreshError.locator(".text-redtx")).toBeVisible();
         await expect(page.getByTestId("providers-master-detail").getByRole("alert")).toHaveCount(0);
         await page.getByRole("button", { name: "Dismiss notification" }).click();
         await page.getByRole("link", { name: /Editor Provider/ }).click();
         await expect(page).toHaveURL(
           `${baseUrl}/providers?selected=${seeded.messagesOnlyProviderId}`,
         );
-        await expect(page.getByRole("alert")).toHaveCount(0);
+        await expect(page.locator('output[role="alert"]')).toHaveCount(0);
         await expect(page.locator("dialog[open]")).toHaveCount(0);
 
         // 3. A draft belongs to the model it was typed for. Closing the editor

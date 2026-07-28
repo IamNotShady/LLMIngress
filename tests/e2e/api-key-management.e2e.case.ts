@@ -386,7 +386,9 @@ test("an enabled limit set rejects empty fields without changing stored rules", 
         [apiKeyId],
       ),
     );
-    const save = (fields: Omit<Parameters<typeof normalizeApiKeyLimitFormInput>[0], "apiKeyId">) =>
+    const save = async (
+      fields: Omit<Parameters<typeof normalizeApiKeyLimitFormInput>[0], "apiKeyId">,
+    ) =>
       saveApiKeyLimitRules({
         databaseUrl: fixture.databaseUrl,
         limits: normalizeApiKeyLimitFormInput({ apiKeyId, ...fields }),

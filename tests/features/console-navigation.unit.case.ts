@@ -112,7 +112,14 @@ describe("console module navigation config", () => {
     expect(MODULE_STATE_STORAGE_KEY).toContain("console-module-state");
     const masthead = readFileSync("apps/console/src/app/_ui/masthead.tsx", "utf8");
     expect(masthead).toContain("readRememberedQueries()");
+    expect(masthead).toContain("{ ...current, ...readRememberedQueries() }");
     expect(masthead).toContain("window.localStorage.setItem(MODULE_STATE_STORAGE_KEY");
+    expect(masthead).toMatch(
+      /active\s*\?\s*rememberedModuleQuery\(item\.href, search\)\s*:\s*rememberedQueries\[item\.href\]/,
+    );
+    expect(masthead).toContain("const rememberCurrentModule = () =>");
+    expect(masthead).toContain("const storedQuery = latest[item.href]");
+    expect(masthead).toContain("onPointerDown={rememberCurrentModule}");
     expect(masthead).toContain("rememberedModuleHref(item.href, rememberedQuery)");
   });
 });

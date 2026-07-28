@@ -467,6 +467,7 @@ async function assertVirtualModelNameAvailable(
       "Virtual Model name already exists.",
       "virtual_model_name_conflict",
       {
+        field: "name",
         name,
       },
     );

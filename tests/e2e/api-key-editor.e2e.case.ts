@@ -73,12 +73,14 @@ test("the API key editor browses grants, keeps the typed name, and saves the lim
         // name and the limits.
         await expect(dialog.getByText(`1–${PAGE_SIZE} of ${MODEL_COUNT}`)).toBeVisible();
         await expect(dialog.getByRole("link", { name: /^Grant / })).toHaveCount(PAGE_SIZE);
-        const lastName = names[names.length - 1] as string;
-        await expect(dialog.getByRole("link", { name: `Grant ${lastName}` })).toHaveCount(0);
+        const newestName = names[names.length - 1] as string;
+        const oldestName = names[0] as string;
+        await expect(dialog.getByRole("link", { name: `Grant ${newestName}` })).toBeVisible();
+        await expect(dialog.getByRole("link", { name: `Grant ${oldestName}` })).toHaveCount(0);
         await dialog.getByRole("link", { name: "Next page of models" }).click();
         await page.waitForURL((url) => url.searchParams.get("grantPage") === "2");
         await expect(dialog.getByText(`9–${MODEL_COUNT} of ${MODEL_COUNT}`)).toBeVisible();
-        await expect(dialog.getByRole("link", { name: `Grant ${lastName}` })).toBeVisible();
+        await expect(dialog.getByRole("link", { name: `Grant ${oldestName}` })).toBeVisible();
 
         // --- The name is typed before any of that and has to survive it: every
         // filter click re-renders the dialog from the server.

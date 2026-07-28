@@ -211,10 +211,12 @@ test("console audit fixes keep time windows honest and prevent activity timestam
         await expect(page.getByText("$0.42").first()).toBeVisible();
         await expect(page.getByText("buckets are daily")).toBeVisible();
 
-        await page.goto(`${baseUrl}/activity?window=7d`, { waitUntil: "networkidle" });
+        await page.goto(`${baseUrl}/activity?window=7d&q=gw_audit_old_request`, {
+          waitUntil: "networkidle",
+        });
         await expect(page.getByRole("link", { name: /gw_audit_old_request/ })).toBeVisible();
         await expectActivityTimeCellContained(page);
-        await page.goto(`${baseUrl}/activity`, { waitUntil: "networkidle" });
+        await page.goto(`${baseUrl}/activity?q=gw_audit_old_request`, { waitUntil: "networkidle" });
         await expect(page.getByRole("link", { name: /gw_audit_old_request/ })).toHaveCount(0);
         await expect(page.getByText("No requests match these filters")).toBeVisible();
 

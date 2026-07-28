@@ -113,6 +113,10 @@ previous Provider are not carried forward. Failures from button-only idempotent 
 Refresh models and Re-check use the shared four-second Toast in a red error state; form validation
 and mutation refusals that require user correction stay beside their fields. Provider Edit,
 Enable/Disable, Delete, and Refresh models actions share one unbroken toolbar row.
+The masthead remembers each URL-driven module's durable view choices independently, so switching
+modules and returning restores that module's selected window, filters, paging, and primary row.
+Transient dialogs, drawers, mutation drafts, OAuth callback values, Toasts, and Playground secrets
+are excluded; clearing a module updates its remembered state to that module's defaults.
 
 Persistent Worker jobs are exactly `model_refresh`, `provider_connection_probe`, `price_sync`, and
 `provider_quota_probe`.

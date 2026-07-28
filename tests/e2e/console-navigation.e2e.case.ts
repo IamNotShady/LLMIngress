@@ -37,6 +37,24 @@ test("the masthead routes each module to its own page and follows the chosen the
         const nav = page.getByRole("navigation", { name: "Console modules" });
         await expect(nav).toBeVisible();
 
+        // Each module owns its view choices. Leaving and returning through the
+        // masthead restores them instead of rebuilding the module defaults.
+        await page.getByRole("link", { name: "7d", exact: true }).click();
+        await page.getByRole("link", { name: "Hide", exact: true }).click();
+        await expect(
+          nav.getByRole("link", { name: "Overview", exact: true }),
+        ).toHaveAttribute("href", "/?window=7d&setup=closed");
+        await nav.getByRole("link", { name: "Usage", exact: true }).click();
+        await page.getByRole("link", { name: "30d", exact: true }).click();
+        await expect(nav.getByRole("link", { name: "Usage", exact: true })).toHaveAttribute(
+          "href",
+          "/usage?window=30d",
+        );
+        await nav.getByRole("link", { name: "Overview", exact: true }).click();
+        await expect(page).toHaveURL(`${baseUrl}/?window=7d&setup=closed`);
+        await expect(page.getByRole("link", { name: "7d", exact: true })).toHaveClass(/bg-seg/);
+        await expect(page.getByRole("link", { name: "Show", exact: true })).toBeVisible();
+
         // One row, eight modules, each rendering only its own page.
         for (const item of consoleNavItems) {
           await nav.getByRole("link", { name: item.label, exact: true }).click();

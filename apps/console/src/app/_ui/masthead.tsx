@@ -1,10 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { CopyButton } from "./copy-button";
 import { activityHref } from "./cross-links";
-import { consoleNavItems } from "./nav";
+import { consoleNavItems, findActiveNavItem } from "./nav";
+import {
+  MODULE_STATE_STORAGE_KEY,
+  rememberedModuleHref,
+  rememberedModuleQuery,
+} from "./nav-state";
 import { ThemeToggle } from "./theme-toggle";
 
 export type MastheadProps = {
@@ -25,6 +31,24 @@ export function Masthead({
   failedRequestCount,
 }: MastheadProps) {
   const pathname = usePathname() || "/";
+  const search = useSearchParams().toString();
+  const [rememberedQueries, setRememberedQueries] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setRememberedQueries((current) => {
+      const remembered = { ...readRememberedQueries(), ...current };
+      const activeModule = findActiveNavItem(pathname);
+      if (activeModule) {
+        remembered[activeModule.href] = rememberedModuleQuery(activeModule.href, search);
+      }
+      try {
+        window.localStorage.setItem(MODULE_STATE_STORAGE_KEY, JSON.stringify(remembered));
+      } catch {
+        // The current tab still remembers state when storage is unavailable.
+      }
+      return remembered;
+    });
+  }, [pathname, search]);
 
   return (
     <div className="sticky top-0 z-40 flex h-[54px] items-center gap-6 overflow-x-auto border-b border-hair bg-bg px-8">
@@ -41,6 +65,7 @@ export function Masthead({
         {consoleNavItems.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const badged = item.href === "/activity" && failedRequestCount > 0;
+          const rememberedQuery = rememberedQueries[item.href];
           return (
             <span
               key={item.href}
@@ -52,7 +77,11 @@ export function Masthead({
                   stylesheet's accent link colour, which turned the whole module
                   row blue. */}
               <Link
-                href={item.href}
+                href={
+                  rememberedQuery === undefined
+                    ? item.href
+                    : rememberedModuleHref(item.href, rememberedQuery)
+                }
                 aria-current={active ? "page" : undefined}
                 className={`flex h-[54px] items-center ${
                   active ? "font-semibold text-ink" : "text-dim"
@@ -109,4 +138,22 @@ export function Masthead({
       </div>
     </div>
   );
+}
+
+function readRememberedQueries(): Record<string, string> {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(MODULE_STATE_STORAGE_KEY) ?? "{}") as
+      | Record<string, unknown>
+      | null;
+    const remembered: Record<string, string> = {};
+    for (const item of consoleNavItems) {
+      const query = stored?.[item.href];
+      if (typeof query === "string") {
+        remembered[item.href] = rememberedModuleQuery(item.href, query);
+      }
+    }
+    return remembered;
+  } catch {
+    return {};
+  }
 }

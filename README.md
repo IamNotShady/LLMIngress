@@ -49,7 +49,8 @@ cd LLMIngress
 ```
 
 `./scripts/deploy.sh` writes a random `ENCRYPTION_KEY` into a gitignored `.env` when missing,
-then runs `docker compose up --build`. Compose still uses a local-only default PostgreSQL
+then rebuilds and recreates the Compose containers so stale container-network state is repaired.
+The named PostgreSQL data volume is preserved. Compose still uses a local-only default PostgreSQL
 password (`llmi-local-db`). Published ports bind to `127.0.0.1` by default. Keep a backup of
 `.env` — the same `ENCRYPTION_KEY` is required to decrypt stored provider credentials.
 

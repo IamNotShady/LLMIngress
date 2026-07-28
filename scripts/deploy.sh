@@ -12,4 +12,4 @@ if [ "${1:-}" = "--ensure-env" ]; then
   exit 0
 fi
 
-exec docker compose up --build "$@"
+exec docker compose up --build --force-recreate --remove-orphans "$@"

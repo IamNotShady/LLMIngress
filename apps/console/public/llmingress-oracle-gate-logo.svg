@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="512"
+     height="512"
+     viewBox="0 0 512 512"
+     role="img"
+     aria-labelledby="logo-title logo-description">
+  <title id="logo-title">LLMIngress 甲骨文门标</title>
+  <desc id="logo-description">蓝色圆角方形中的白色甲骨文门图形</desc>
+  <rect x="16" y="16" width="480" height="480" rx="24" fill="#3b93d5"/>
+  <g transform="translate(12.8 -6.2) scale(15.2)"
+     fill="none"
+     stroke="#ffffff"
+     stroke-width="2.2"
+     stroke-linecap="round"
+     stroke-linejoin="round">
+    <path d="M5.5 7.5L26.5 6.5M7.5 7L6.5 27M24.5 7L25.5 27M9 11L16 16L23 10.5M16 16L16 28"/>
+  </g>
+</svg>

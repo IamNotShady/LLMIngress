@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="apps/console/public/llmingress-icon.svg" alt="LLMIngress" width="96" />
+  <img src="apps/console/public/llmingress-oracle-gate-logo.svg" alt="LLMIngress" width="96" />
 </p>
 
 <h1 align="center">LLMIngress</h1>

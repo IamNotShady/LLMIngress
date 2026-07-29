@@ -53,6 +53,27 @@ describe("console secure bootstrap", () => {
     expect(compose).not.toContain('"3000:3000"');
     expect(compose).not.toContain(`"${shell}{POSTGRES_PORT:-55432}:5432"`);
 
+    for (const key of [
+      "GATEWAY_BODY_LIMIT_BYTES",
+      "GATEWAY_BREAKER_ENABLED",
+      "GATEWAY_CONFIG_NOTIFICATIONS",
+      "GATEWAY_PROVIDER_RETRIES",
+      "GATEWAY_STREAM_CONNECT_TIMEOUT_MS",
+      "GATEWAY_STREAM_IDLE_TIMEOUT_MS",
+      "GROK_OAUTH_CLIENT_ID",
+      "LLMINGRESS_DB_POOL_MAX",
+      "LOG_LEVEL",
+      "MINIMAX_OAUTH_CLIENT_ID",
+      "PROVIDER_REQUEST_TIMEOUT_MS",
+      "RETENTION_CLEANUP_INTERVAL_MS",
+      "WORKER_ACTIVITY_RETENTION_DAYS",
+      "WORKER_HEARTBEAT_MS",
+      "WORKER_JOB_LEASE_MS",
+      "WORKER_MAX_JOB_DURATION_MS",
+    ]) {
+      expect(compose, key).toMatch(new RegExp(`^  ${key}:`, "m"));
+    }
+
     accessSync("scripts/deploy.sh", constants.X_OK);
     expect(deploy).toContain("openssl rand -base64 32");
     expect(deploy).toContain("^ENCRYPTION_KEY=");

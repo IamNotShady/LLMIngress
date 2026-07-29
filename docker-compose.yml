@@ -1,6 +1,6 @@
 x-llmingress-env: &llmingress-env
   NODE_ENV: production
-  DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:llmi-local-db@postgres:5432/postgres}
+  DATABASE_URL: ${COMPOSE_DATABASE_URL:-postgresql://postgres:llmi-local-db@postgres:5432/postgres}
   ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
   GATEWAY_PORT: 4000
   GATEWAY_HOST: 0.0.0.0

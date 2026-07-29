@@ -49,7 +49,9 @@ describe("platform foundation", () => {
       scripts?: Record<string, string>;
     };
 
-    expect(packageJson.scripts?.dev).toBe("tsx scripts/run-with-env.ts turbo run dev --parallel");
+    expect(packageJson.scripts?.dev).toBe(
+      "tsx scripts/run-with-env.ts turbo run dev --parallel --env-mode=loose",
+    );
     expect(gatewayPublicBaseUrl({ GATEWAY_PORT: "4100" })).toBe("http://127.0.0.1:4100");
     expect(
       gatewayPublicBaseUrl({

@@ -25,8 +25,9 @@ describe("console secure bootstrap", () => {
     expect(compose).toContain(`${shell}{ENCRYPTION_KEY:?ENCRYPTION_KEY is required}`);
     expect(compose).not.toContain("llmi-local-master");
     expect(compose).toContain(
-      `${shell}{DATABASE_URL:-postgresql://postgres:llmi-local-db@postgres:5432/postgres}`,
+      `${shell}{COMPOSE_DATABASE_URL:-postgresql://postgres:llmi-local-db@postgres:5432/postgres}`,
     );
+    expect(compose).not.toContain(`DATABASE_URL: ${shell}{DATABASE_URL:-`);
     expect(compose).toContain("POSTGRES_PASSWORD: llmi-local-db");
     expect(compose).not.toContain("CONSOLE_SETUP_TOKEN");
     expect(compose).not.toContain(`${shell}{ENCRYPTION_KEY:-`);

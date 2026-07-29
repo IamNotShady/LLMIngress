@@ -65,6 +65,8 @@ URL is required.
 Every repository startup path resolves each variable in the same order: the current shell,
 `.env.local`, `.env`, then its code default. `./scripts/deploy.sh` passes both files to Compose when
 `.env.local` exists, while `./init.sh` and `pnpm dev` use the shared repository env loader.
+`DATABASE_URL` is the host-process connection string; Docker uses `COMPOSE_DATABASE_URL` instead
+because the app container reaches PostgreSQL through the Compose service name.
 
 Compose runs two containers: the app (Console, Gateway, and Worker in one process group) and
 PostgreSQL.

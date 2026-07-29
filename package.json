@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@11.5.1",
   "scripts": {
-    "dev": "turbo run dev --parallel",
+    "dev": "tsx scripts/run-with-env.ts turbo run dev --parallel --env-mode=loose",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "biome check .",

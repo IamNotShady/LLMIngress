@@ -1,8 +1,9 @@
+import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadBootstrapRuntimeConfig } from "../../packages/config/src";
+import { gatewayPublicBaseUrl, loadBootstrapRuntimeConfig } from "../../packages/config/src";
 import { loadSqlMigrations } from "../../packages/db/src";
 import { readPostgresDatabaseUrl } from "../../packages/db/src/client";
 import { shippedSqlMigrations } from "../../packages/db/src/migration-status";
@@ -41,6 +42,98 @@ describe("platform foundation", () => {
       SHELL_ONLY: "from-shell",
       TEST_DATABASE_URL: "postgresql://from-env",
     });
+  });
+
+  it("loads root dev through the shared env precedence and derives the public Gateway URL", () => {
+    const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.scripts?.dev).toBe(
+      "tsx scripts/run-with-env.ts turbo run dev --parallel --env-mode=loose",
+    );
+    expect(gatewayPublicBaseUrl({ GATEWAY_PORT: "4100" })).toBe("http://127.0.0.1:4100");
+    expect(
+      gatewayPublicBaseUrl({
+        GATEWAY_PORT: "4100",
+        GATEWAY_URL: " https://gateway.example.test ",
+      }),
+    ).toBe("https://gateway.example.test");
+  });
+
+  it("documents supported environment variables by module without stale or active empty entries", () => {
+    const exampleEnv = readFileSync(".env.example", "utf8");
+    const sectionNames = [
+      "Shared service endpoints",
+      "Docker Compose",
+      "Local init.sh and pnpm dev",
+      "Tests",
+      "Gateway",
+      "Worker",
+      "Provider OAuth",
+    ];
+    const documentedKeys = [
+      "COMPOSE_DATABASE_URL",
+      "CONSOLE_HOST",
+      "CONSOLE_PORT",
+      "CONSOLE_PUBLISH_HOST",
+      "DATABASE_URL",
+      "ENCRYPTION_KEY",
+      "ENCRYPTION_KEY_FILE",
+      "GATEWAY_BODY_LIMIT_BYTES",
+      "GATEWAY_BREAKER_ENABLED",
+      "GATEWAY_BREAKER_ERROR_THRESHOLD_PERCENT",
+      "GATEWAY_BREAKER_HALF_OPEN_AFTER_MS",
+      "GATEWAY_BREAKER_HALF_OPEN_CALLS",
+      "GATEWAY_BREAKER_MIN_REQUESTS",
+      "GATEWAY_BREAKER_WINDOW_MS",
+      "GATEWAY_CONFIG_NOTIFICATIONS",
+      "GATEWAY_CONFIG_RECONCILE_INTERVAL_MS",
+      "GATEWAY_CORS_ALLOWED_ORIGINS",
+      "GATEWAY_DEBUG_REQUEST_METADATA",
+      "GATEWAY_HEALTH_SUMMARY_CACHE_TTL_MS",
+      "GATEWAY_HOST",
+      "GATEWAY_PORT",
+      "GATEWAY_PROVIDER_RETRIES",
+      "GATEWAY_PROVIDER_RETRY_INITIAL_DELAY_MS",
+      "GATEWAY_PUBLISH_HOST",
+      "GATEWAY_READINESS_TIMEOUT_MS",
+      "GATEWAY_SHUTDOWN_DRAIN_MS",
+      "GATEWAY_STREAM_CONNECT_TIMEOUT_MS",
+      "GATEWAY_STREAM_IDLE_TIMEOUT_MS",
+      "GATEWAY_URL",
+      "GROK_OAUTH_CLIENT_ID",
+      "LLMINGRESS_BOOTSTRAP_CONFIG",
+      "LLMINGRESS_DB_POOL_MAX",
+      "LOG_LEVEL",
+      "MINIMAX_OAUTH_CLIENT_ID",
+      "POSTGRES_PORT",
+      "POSTGRES_PUBLISH_HOST",
+      "PROVIDER_REQUEST_TIMEOUT_MS",
+      "RETENTION_CLEANUP_INTERVAL_MS",
+      "SKIP_VERIFY",
+      "TEST_DATABASE_URL",
+      "WORKER_ACTIVITY_RETENTION_DAYS",
+      "WORKER_HEALTH_EVENT_RETENTION_DAYS",
+      "WORKER_HEARTBEAT_MS",
+      "WORKER_ID",
+      "WORKER_JOB_LEASE_MS",
+      "WORKER_JOB_RETENTION_DAYS",
+      "WORKER_MAX_JOB_DURATION_MS",
+      "WORKER_MODEL_CATALOG_CACHE_TTL_MS",
+      "WORKER_SHUTDOWN_GRACE_MS",
+    ];
+
+    for (const sectionName of sectionNames) {
+      expect(exampleEnv).toContain(`# ${sectionName}`);
+    }
+    for (const key of documentedKeys) {
+      expect(exampleEnv, key).toMatch(new RegExp(`^#? ${key}=|^${key}=`, "m"));
+    }
+    expect(exampleEnv).not.toMatch(/^[A-Z][A-Z0-9_]*=$/m);
+    expect(exampleEnv).not.toMatch(
+      /^(?:# )?(?:LLMINGRESS_REAL_SMOKE|OPENAI_API_KEY|ANTHROPIC_API_KEY)=/m,
+    );
   });
 
   it("parses shell env syntax and formats safe exports", () => {

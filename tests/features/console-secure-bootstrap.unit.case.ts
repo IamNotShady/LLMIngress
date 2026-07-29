@@ -19,6 +19,7 @@ describe("console secure bootstrap", () => {
   it("requires ENCRYPTION_KEY from env and keeps host publishes loopback-bound by default", () => {
     const compose = readFileSync("docker-compose.yml", "utf8");
     const deploy = readFileSync("scripts/deploy.sh", "utf8");
+    const exampleEnv = readFileSync(".env.example", "utf8");
     const shell = "$";
 
     expect(compose).toContain(`${shell}{ENCRYPTION_KEY:?ENCRYPTION_KEY is required}`);
@@ -43,6 +44,10 @@ describe("console secure bootstrap", () => {
     expect(compose).toContain(
       `"${shell}{POSTGRES_PUBLISH_HOST:-127.0.0.1}:${shell}{POSTGRES_PORT:-55432}:5432"`,
     );
+    expect(compose).toContain(
+      `GATEWAY_URL: "${shell}{GATEWAY_URL:-http://127.0.0.1:${shell}{GATEWAY_PORT:-4000}}"`,
+    );
+    expect(exampleEnv).not.toMatch(/^GATEWAY_URL=/m);
     expect(compose).not.toContain('"4000:4000"');
     expect(compose).not.toContain('"3000:3000"');
     expect(compose).not.toContain(`"${shell}{POSTGRES_PORT:-55432}:5432"`);

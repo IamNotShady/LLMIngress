@@ -57,7 +57,9 @@ cd LLMIngress
 `.env` —— 解密该分支已存储的 Provider 凭证需要同一个 `ENCRYPTION_KEY`。
 
 不同分支默认发布相同端口；启动另一分支前应先停止当前分支，或者覆盖
-`CONSOLE_PORT`、`GATEWAY_PORT` 和 `POSTGRES_PORT`。
+`CONSOLE_PORT`、`GATEWAY_PORT` 和 `POSTGRES_PORT`。Compose 会根据 `GATEWAY_PORT`
+自动生成 Console 使用的公开 Gateway 地址；只有需要指定外部地址时才设置
+`GATEWAY_URL`。
 
 Compose 会运行两个容器：应用容器（同一进程组内包含 Console、Gateway 与 Worker）和
 PostgreSQL。

@@ -58,7 +58,9 @@ uses a local-only default PostgreSQL password (`llmi-local-db`). Published ports
 required to decrypt that branch's stored provider credentials.
 
 Branch projects use the same published ports by default, so stop the active branch before starting
-another one, or override `CONSOLE_PORT`, `GATEWAY_PORT`, and `POSTGRES_PORT`.
+another one, or override `CONSOLE_PORT`, `GATEWAY_PORT`, and `POSTGRES_PORT`. Compose derives the
+Console's public Gateway URL from `GATEWAY_PORT`; set `GATEWAY_URL` only when an explicit external
+URL is required.
 
 Compose runs two containers: the app (Console, Gateway, and Worker in one process group) and
 PostgreSQL.

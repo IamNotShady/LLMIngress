@@ -50,9 +50,14 @@ cd LLMIngress
 
 `./scripts/deploy.sh` 会在缺少配置时把随机 `ENCRYPTION_KEY` 写入已被 gitignore 的 `.env`，
 然后重新构建并创建 Compose 容器，以修复陈旧的容器网络状态；PostgreSQL 命名数据卷会被保留。
-Compose 仍使用仅限本地的默认 PostgreSQL 密码（`llmi-local-db`）。对外端口默认绑定到
-`127.0.0.1`。请妥善备份 `.env` —— 解密已存储的 Provider 凭证需要同一个
-`ENCRYPTION_KEY`。
+`main` 分支使用 Compose project `llmingress`；其它分支使用隔离的
+`llmingress-<规范化分支名>`，并各自拥有容器、网络和 PostgreSQL 数据卷。重新部署时只保留
+当前分支对应的命名卷。Compose 仍使用仅限本地的默认 PostgreSQL 密码
+（`llmi-local-db`）。对外端口默认绑定到 `127.0.0.1`。请妥善备份每个 worktree 的
+`.env` —— 解密该分支已存储的 Provider 凭证需要同一个 `ENCRYPTION_KEY`。
+
+不同分支默认发布相同端口；启动另一分支前应先停止当前分支，或者覆盖
+`CONSOLE_PORT`、`GATEWAY_PORT` 和 `POSTGRES_PORT`。
 
 Compose 会运行两个容器：应用容器（同一进程组内包含 Console、Gateway 与 Worker）和
 PostgreSQL。

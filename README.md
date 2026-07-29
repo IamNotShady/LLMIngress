@@ -50,9 +50,15 @@ cd LLMIngress
 
 `./scripts/deploy.sh` writes a random `ENCRYPTION_KEY` into a gitignored `.env` when missing,
 then rebuilds and recreates the Compose containers so stale container-network state is repaired.
-The named PostgreSQL data volume is preserved. Compose still uses a local-only default PostgreSQL
-password (`llmi-local-db`). Published ports bind to `127.0.0.1` by default. Keep a backup of
-`.env` — the same `ENCRYPTION_KEY` is required to decrypt stored provider credentials.
+The `main` branch uses the Compose project `llmingress`; every other branch gets an isolated
+project named `llmingress-<normalized-branch-name>`, including its own containers, network, and
+PostgreSQL volume. The selected branch's named volume is preserved across redeploys. Compose still
+uses a local-only default PostgreSQL password (`llmi-local-db`). Published ports bind to
+`127.0.0.1` by default. Keep a backup of each worktree's `.env` — the same `ENCRYPTION_KEY` is
+required to decrypt that branch's stored provider credentials.
+
+Branch projects use the same published ports by default, so stop the active branch before starting
+another one, or override `CONSOLE_PORT`, `GATEWAY_PORT`, and `POSTGRES_PORT`.
 
 Compose runs two containers: the app (Console, Gateway, and Worker in one process group) and
 PostgreSQL.

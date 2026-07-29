@@ -1,6 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { accessSync, constants, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTestPostgresFixture, runMigrations } from "@llmingress/db";
@@ -44,9 +51,9 @@ describe("console secure bootstrap", () => {
     expect(deploy).toContain("openssl rand -base64 32");
     expect(deploy).toContain("^ENCRYPTION_KEY=");
     expect(deploy).toContain("--ensure-env");
-    expect(deploy).toContain(
-      'exec docker compose up --build --force-recreate --remove-orphans "$@"',
-    );
+    expect(deploy).toContain("--project-name");
+    expect(deploy).toContain("--force-recreate");
+    expect(deploy).toContain("--remove-orphans");
   });
 
   it("writes ENCRYPTION_KEY into .env only when missing", () => {
@@ -69,6 +76,29 @@ describe("console secure bootstrap", () => {
     writeFileSync(join(directory, ".env"), "ENCRYPTION_KEY=keep-me\n");
     execFileSync("bash", ["-c", ensureEncryptionKey, "bash", directory]);
     expect(readFileSync(join(directory, ".env"), "utf8")).toBe("ENCRYPTION_KEY=keep-me\n");
+  });
+
+  it("isolates Compose projects by branch while keeping main on the default name", () => {
+    expect(runDeployWithMockedDocker("main")).toEqual([
+      "compose",
+      "--project-name",
+      "llmingress",
+      "up",
+      "--build",
+      "--force-recreate",
+      "--remove-orphans",
+      "-d",
+    ]);
+    expect(runDeployWithMockedDocker("feat/console-ui-redesign")).toEqual([
+      "compose",
+      "--project-name",
+      "llmingress-feat-console-ui-redesign",
+      "up",
+      "--build",
+      "--force-recreate",
+      "--remove-orphans",
+      "-d",
+    ]);
   });
 
   it("has no setup token runtime or documented configuration surface", () => {
@@ -116,3 +146,36 @@ describe("console secure bootstrap", () => {
     }
   });
 });
+
+function runDeployWithMockedDocker(branchName: string): string[] {
+  const directory = mkdtempSync(join(tmpdir(), "llmingress-deploy-project-"));
+  const scriptsDirectory = join(directory, "scripts");
+  const binDirectory = join(directory, "bin");
+  const dockerArgumentsPath = join(directory, "docker-arguments");
+  mkdirSync(scriptsDirectory);
+  mkdirSync(binDirectory);
+  writeFileSync(join(directory, ".env"), "ENCRYPTION_KEY=test-key\n");
+  writeFileSync(join(scriptsDirectory, "deploy.sh"), readFileSync("scripts/deploy.sh"), {
+    mode: 0o755,
+  });
+  writeFileSync(join(binDirectory, "git"), '#!/bin/sh\nprintf "%s\\n" "$TEST_GIT_BRANCH"\n', {
+    mode: 0o755,
+  });
+  writeFileSync(
+    join(binDirectory, "docker"),
+    '#!/bin/sh\nprintf "%s\\n" "$@" > "$TEST_DOCKER_ARGUMENTS_PATH"\n',
+    { mode: 0o755 },
+  );
+
+  execFileSync(join(scriptsDirectory, "deploy.sh"), ["-d"], {
+    cwd: directory,
+    env: {
+      ...process.env,
+      PATH: `${binDirectory}:${process.env.PATH}`,
+      TEST_DOCKER_ARGUMENTS_PATH: dockerArgumentsPath,
+      TEST_GIT_BRANCH: branchName,
+    },
+  });
+
+  return readFileSync(dockerArgumentsPath, "utf8").trim().split("\n");
+}

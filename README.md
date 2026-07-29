@@ -62,6 +62,10 @@ another one, or override `CONSOLE_PORT`, `GATEWAY_PORT`, and `POSTGRES_PORT`. Co
 Console's public Gateway URL from `GATEWAY_PORT`; set `GATEWAY_URL` only when an explicit external
 URL is required.
 
+Every repository startup path resolves each variable in the same order: the current shell,
+`.env.local`, `.env`, then its code default. `./scripts/deploy.sh` passes both files to Compose when
+`.env.local` exists, while `./init.sh` and `pnpm dev` use the shared repository env loader.
+
 Compose runs two containers: the app (Console, Gateway, and Worker in one process group) and
 PostgreSQL.
 
@@ -160,7 +164,8 @@ Compose builds one multi-role application image, runs it as a single app contain
 PostgreSQL (published on `127.0.0.1:55432` for development).
 
 `./init.sh` runs lint, type-checking, unit tests, and the build before starting Console, Gateway,
-and Worker. The standalone verification commands are:
+and Worker. `pnpm dev` uses the same environment-file precedence without the verification gate.
+The standalone verification commands are:
 
 ```bash
 pnpm run verify

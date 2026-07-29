@@ -86,6 +86,8 @@ describe("console secure bootstrap", () => {
   it("isolates Compose projects by branch while keeping main on the default name", () => {
     expect(runDeployWithMockedDocker("main")).toEqual([
       "compose",
+      "--env-file",
+      ".env",
       "--project-name",
       "llmingress",
       "up",
@@ -94,8 +96,12 @@ describe("console secure bootstrap", () => {
       "--remove-orphans",
       "-d",
     ]);
-    expect(runDeployWithMockedDocker("feat/console-ui-redesign")).toEqual([
+    expect(runDeployWithMockedDocker("feat/console-ui-redesign", true)).toEqual([
       "compose",
+      "--env-file",
+      ".env",
+      "--env-file",
+      ".env.local",
       "--project-name",
       "llmingress-feat-console-ui-redesign",
       "up",
@@ -152,7 +158,7 @@ describe("console secure bootstrap", () => {
   });
 });
 
-function runDeployWithMockedDocker(branchName: string): string[] {
+function runDeployWithMockedDocker(branchName: string, withLocalEnv = false): string[] {
   const directory = mkdtempSync(join(tmpdir(), "llmingress-deploy-project-"));
   const scriptsDirectory = join(directory, "scripts");
   const binDirectory = join(directory, "bin");
@@ -160,6 +166,9 @@ function runDeployWithMockedDocker(branchName: string): string[] {
   mkdirSync(scriptsDirectory);
   mkdirSync(binDirectory);
   writeFileSync(join(directory, ".env"), "ENCRYPTION_KEY=test-key\n");
+  if (withLocalEnv) {
+    writeFileSync(join(directory, ".env.local"), "GATEWAY_PORT=4001\n");
+  }
   writeFileSync(join(scriptsDirectory, "deploy.sh"), readFileSync("scripts/deploy.sh"), {
     mode: 0o755,
   });

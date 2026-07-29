@@ -1,8 +1,9 @@
+import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadBootstrapRuntimeConfig } from "../../packages/config/src";
+import { gatewayPublicBaseUrl, loadBootstrapRuntimeConfig } from "../../packages/config/src";
 import { loadSqlMigrations } from "../../packages/db/src";
 import { readPostgresDatabaseUrl } from "../../packages/db/src/client";
 import { shippedSqlMigrations } from "../../packages/db/src/migration-status";
@@ -41,6 +42,21 @@ describe("platform foundation", () => {
       SHELL_ONLY: "from-shell",
       TEST_DATABASE_URL: "postgresql://from-env",
     });
+  });
+
+  it("loads root dev through the shared env precedence and derives the public Gateway URL", () => {
+    const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.scripts?.dev).toBe("tsx scripts/run-with-env.ts turbo run dev --parallel");
+    expect(gatewayPublicBaseUrl({ GATEWAY_PORT: "4100" })).toBe("http://127.0.0.1:4100");
+    expect(
+      gatewayPublicBaseUrl({
+        GATEWAY_PORT: "4100",
+        GATEWAY_URL: " https://gateway.example.test ",
+      }),
+    ).toBe("https://gateway.example.test");
   });
 
   it("parses shell env syntax and formats safe exports", () => {

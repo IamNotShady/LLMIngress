@@ -33,6 +33,12 @@ else
   compose_project_name="llmingress-$normalized_branch_name"
 fi
 
+compose_env_args=(--env-file .env)
+if [ -f .env.local ]; then
+  compose_env_args+=(--env-file .env.local)
+fi
+
 exec docker compose \
+  "${compose_env_args[@]}" \
   --project-name "$compose_project_name" \
   up --build --force-recreate --remove-orphans "$@"

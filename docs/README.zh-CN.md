@@ -61,6 +61,10 @@ cd LLMIngress
 自动生成 Console 使用的公开 Gateway 地址；只有需要指定外部地址时才设置
 `GATEWAY_URL`。
 
+仓库的所有启动入口都按同一优先级解析每个变量：当前 Shell、`.env.local`、`.env`、
+最后是代码默认值。存在 `.env.local` 时，`./scripts/deploy.sh` 会把两个文件依次传给
+Compose；`./init.sh` 和 `pnpm dev` 则使用仓库共享的环境变量加载器。
+
 Compose 会运行两个容器：应用容器（同一进程组内包含 Console、Gateway 与 Worker）和
 PostgreSQL。
 
@@ -155,7 +159,7 @@ Compose 会构建一个多角色应用镜像，并以单个应用容器与 Postg
 （开发时发布在 `127.0.0.1:55432`）。
 
 `./init.sh` 会先运行 lint、类型检查、单元测试与构建，再启动 Console、Gateway
-与 Worker。独立的验证命令为：
+与 Worker。`pnpm dev` 使用相同的环境文件优先级，但不会执行验证门禁。独立的验证命令为：
 
 ```bash
 pnpm run verify

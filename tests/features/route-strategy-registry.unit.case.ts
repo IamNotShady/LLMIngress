@@ -270,7 +270,7 @@ describe("route strategy registry", () => {
     });
   });
 
-  it("keeps the configured order when no candidate carries the default tag", () => {
+  it("fails closed when no candidate carries the default tag", () => {
     const result = selectTag(
       "fast",
       tagPolicy([
@@ -279,7 +279,7 @@ describe("route strategy registry", () => {
       ]),
     );
 
-    expect(result.chain.map((c) => c.candidateOrder)).toEqual([1, 2]);
+    expect(result).toEqual({ chain: [], decision: undefined });
   });
 
   it("reports the capability contract scope each strategy checks", () => {

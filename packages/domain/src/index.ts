@@ -517,7 +517,7 @@ const routeStrategyHandlers: Record<RoutePolicyStrategy, RouteStrategyHandler> =
         routeCandidateHasTag(candidate, ROUTE_TAG_DEFAULT),
       );
       if (!defaultCandidate) {
-        return candidates;
+        return [];
       }
 
       const requestedTag = readRequestedRouteTag(context);

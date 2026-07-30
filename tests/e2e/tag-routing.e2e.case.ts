@@ -157,6 +157,74 @@ test("a route tag selects its candidate and everything else falls back to the de
   }
 });
 
+test("a tag route fails closed when its default candidate is unavailable", async () => {
+  test.setTimeout(180_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_tag_default_unavailable_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const defaultProvider = await createFakeProviderServer();
+  const fastProvider = await createFakeProviderServer();
+  const cheapProvider = await createFakeProviderServer();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const seeded = await seedOpenAIGatewayRoute({
+      apiKey,
+      fixture,
+      modelId: "default-model",
+      providerBaseUrl: defaultProvider.url,
+      strategy: "tag",
+      tags: ["default"],
+      virtualModelName,
+    });
+    await seedGatewayRouteCandidate({
+      candidateOrder: 2,
+      fixture,
+      modelId: "fast-model",
+      providerBaseUrl: fastProvider.url,
+      routePolicyId: seeded.routePolicyId,
+      tags: ["fast"],
+    });
+    await seedGatewayRouteCandidate({
+      candidateOrder: 3,
+      fixture,
+      modelId: "cheap-model",
+      providerBaseUrl: cheapProvider.url,
+      routePolicyId: seeded.routePolicyId,
+      tags: ["cheap"],
+    });
+    await fixture.query("update provider_models set availability = 'unavailable' where id = $1", [
+      seeded.providerModelId,
+    ]);
+
+    const gateway = startGatewayProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${gateway.port}`;
+      await waitForGateway(baseUrl, gateway);
+
+      const response = await postChatCompletion({ baseUrl, routeTag: "cheap" });
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "provider_unavailable" },
+      });
+      expect(defaultProvider.requests).toHaveLength(0);
+      expect(fastProvider.requests).toHaveLength(0);
+      expect(cheapProvider.requests).toHaveLength(0);
+    } finally {
+      await stopGatewayProcess(gateway);
+    }
+  } finally {
+    await cheapProvider.close();
+    await fastProvider.close();
+    await defaultProvider.close();
+    await fixture.dispose();
+  }
+});
+
 test("a failing tagged candidate falls back only to the default one, and never past it", async () => {
   test.setTimeout(180_000);
   const fixture = await createTestPostgresFixture({

@@ -16,6 +16,4 @@ ALTER TABLE public.route_policy_candidates
 
 ALTER TABLE public.route_policy_candidates
     ADD CONSTRAINT route_policy_candidates_tags_no_null_check
-        CHECK (array_position(tags, NULL::text) IS NULL),
-    ADD CONSTRAINT route_policy_candidates_tags_cardinality_check
-        CHECK (cardinality(tags) <= 32);
+        CHECK (array_position(tags, NULL::text) IS NULL);

@@ -63,7 +63,7 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     name: "provider_oauth_device",
   },
   {
-    checksum: "e26a5759f9a364b42112976221fdfc2f187be4f3757a3e32bc207104d8a05334",
+    checksum: "28110df9a9239371e672fc700788beb738d82c1b61de173a44880b16953c603f",
     id: "0004",
     name: "route_policy_candidate_tags",
   },

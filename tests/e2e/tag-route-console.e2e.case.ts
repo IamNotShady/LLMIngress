@@ -105,8 +105,15 @@ test("the route editor saves candidate tags, refuses a duplicate, and shows cove
         await expect(dialog.locator("[role=alert]")).toContainText(/more than one candidate/i);
         expect(await readVirtualModelId(fixture.databaseUrl, "vm-tag-console")).toBeUndefined();
 
-        // 2. A tag route with exactly one default saves, and the tag it stores is
-        //    the normalized one so a header never has to match the typed casing.
+        // 2. A tag route with exactly one default saves, including more than 32
+        //    tags on one candidate; tag count is not a database-owned limit.
+        await tagFields
+          .nth(0)
+          .fill(
+            Array.from({ length: 33 }, (_, index) =>
+              index === 0 ? "default" : `tag-${index}`,
+            ).join(", "),
+          );
         await tagFields.nth(1).fill("Long-Context");
         await page.getByRole("button", { name: "Create virtual model" }).click();
         await expect(page.locator("dialog[open]")).toHaveCount(0);
@@ -118,6 +125,7 @@ test("the route editor saves candidate tags, refuses a duplicate, and shows cove
         await page.goto(`${baseUrl}/models?selected=${virtualModelId}`);
         await expect(page.getByText("TAGS", { exact: true })).toBeVisible();
         await expect(page.getByText("long-context", { exact: true })).toBeVisible();
+        await expect(page.getByText(/tag-32/)).toBeVisible();
         const warnings = page.getByTestId("route-warnings");
         await expect(warnings).toBeVisible();
         await expect(warnings).toContainText("Tag coverage warning");

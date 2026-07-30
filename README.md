@@ -76,7 +76,7 @@ PostgreSQL.
 | Console | [http://localhost:3000](http://localhost:3000) | Configure and observe LLMIngress |
 | Gateway | [http://localhost:4000](http://localhost:4000) | Serve API key traffic |
 | PostgreSQL | `localhost:55432` | Store configuration and operational metadata |
-| Worker | Inside the app container | Refresh models, probe connections, and synchronize prices |
+| Worker | Inside the app container | Refresh models, probe connections and quota, and synchronize prices |
 
 Runtime and port overrides are documented in [`.env.example`](.env.example).
 
@@ -106,8 +106,8 @@ built-in templates are:
 
 | Connection type | Built-in templates |
 | --- | --- |
-| Subscription | OpenAI Codex, Claude Code |
-| API key | Google Gemini, OpenRouter, DeepSeek, xAI, Qwen, Moonshot/Kimi, MiniMax, Z.ai |
+| Subscription | Claude Code, OpenAI Codex, Grok, MiniMax Coding Plan |
+| API key | Anthropic, AWS Bedrock, BytePlus ModelArk, Cerebras, ClinePass, Command Code, DeepSeek, Fireworks AI, GLM Coding Plan, Google Gemini, Groq, Kimi Coding Plan, MiniMax, Mistral, Mistral Vibe, Moonshot/Kimi, NousResearch, NVIDIA NIM, Ollama Cloud, OpenAI, OpenCode Go, OpenRouter, Qwen, Qwen Token Plan, xAI, Xiaomi MiMo, Xiaomi MiMo Token Plan, Z.ai |
 | Local | Ollama, LM Studio, llama.cpp |
 
 Model refresh can enrich Provider catalogs with capability and price data from models.dev,
@@ -117,6 +117,9 @@ precedence.
 Health belongs to a Provider connection: each API key or OAuth token is checked independently,
 while a Local Provider has one logical connection. Confirmed unhealthy connections are filtered
 from routing until a successful probe recovers them.
+
+Providers that report upstream usage — subscription windows, monthly budgets, or token plans —
+get a periodic quota probe, and the Console shows the remaining quota per connection.
 
 ## Gateway APIs
 
@@ -146,7 +149,8 @@ Gateway health endpoints do not require an API key:
   fallback, and records request metadata.
 - **Console** owns configuration and operational views. It does not proxy API key traffic or call
   Providers.
-- **Worker** performs model discovery, exact Provider-connection probes, and price synchronization.
+- **Worker** performs model discovery, exact Provider-connection probes, upstream quota probes,
+  and price synchronization.
 - **PostgreSQL** stores durable configuration, jobs, usage, cost, fallback, and connection health.
 
 ## Local development

@@ -75,7 +75,7 @@ PostgreSQL。
 | Console | [http://localhost:3000](http://localhost:3000) | 配置与观测 LLMIngress |
 | Gateway | [http://localhost:4000](http://localhost:4000) | 承载 API Key 流量 |
 | PostgreSQL | `localhost:55432` | 存储配置与运维元数据 |
-| Worker | 应用容器内部 | 刷新模型、探测连接并同步价格 |
+| Worker | 应用容器内部 | 刷新模型、探测连接与配额并同步价格 |
 
 运行时与端口覆盖说明见 [`.env.example`](../.env.example)。
 
@@ -104,8 +104,8 @@ LLMIngress 支持远程 API Key、订阅 OAuth 与本地模型服务。当前内
 
 | 连接类型 | 内置模板 |
 | --- | --- |
-| 订阅 | OpenAI Codex、Claude Code |
-| API Key | Google Gemini、OpenRouter、DeepSeek、xAI、Qwen、Moonshot/Kimi、MiniMax、Z.ai |
+| 订阅 | Claude Code、OpenAI Codex、Grok、MiniMax Coding Plan |
+| API Key | Anthropic、AWS Bedrock、BytePlus ModelArk、Cerebras、ClinePass、Command Code、DeepSeek、Fireworks AI、GLM Coding Plan、Google Gemini、Groq、Kimi Coding Plan、MiniMax、Mistral、Mistral Vibe、Moonshot/Kimi、NousResearch、NVIDIA NIM、Ollama Cloud、OpenAI、OpenCode Go、OpenRouter、Qwen、Qwen Token Plan、xAI、Xiaomi MiMo、Xiaomi MiMo Token Plan、Z.ai |
 | 本地 | Ollama、LM Studio、llama.cpp |
 
 模型刷新可从 models.dev、OpenRouter、LiteLLM 与 Vercel 补充 Provider 目录中的能力与价格数据。
@@ -114,6 +114,9 @@ LLMIngress 支持远程 API Key、订阅 OAuth 与本地模型服务。当前内
 健康状态归属 Provider 连接：每个 API Key 或 OAuth Token 都会独立检查，
 而本地 Provider 只有一个逻辑连接。已确认不健康的连接会从路由中过滤，
 直到探测成功后恢复。
+
+对于会报告上游用量的 Provider —— 订阅窗口、月度预算或 Token 套餐 ——
+会定期执行配额探测，Console 中按连接展示剩余配额。
 
 ## Gateway API
 
@@ -141,7 +144,7 @@ Gateway 健康检查端点不需要 API Key：
 
 - **Gateway** 认证 API Key、执行已启用的限制、解析虚拟模型、执行回退，并记录请求元数据。
 - **Console** 负责配置与运维视图。它不代理 API Key 流量，也不直接调用 Provider。
-- **Worker** 负责模型发现、精确的 Provider 连接探测，以及价格同步。
+- **Worker** 负责模型发现、精确的 Provider 连接探测、上游配额探测，以及价格同步。
 - **PostgreSQL** 存储持久化配置、任务、用量、成本、回退与连接健康数据。
 
 ## 本地开发

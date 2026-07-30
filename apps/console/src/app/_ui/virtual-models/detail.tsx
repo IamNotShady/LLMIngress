@@ -34,6 +34,8 @@ import { GridRow } from "../table";
 import { strategyRouteNote } from "./strategy";
 
 const ROUTE_COLUMNS = "26px 252px 150px 156px 78px 140px 1fr";
+/** A tag route is read by tag first, so the tags sit right after the candidate. */
+const TAG_ROUTE_COLUMNS = "26px 252px 132px 150px 156px 78px 140px 1fr";
 const KEY_COLUMNS = "148px 104px 1fr";
 const FAILURE_COLUMNS = "64px 1fr 126px";
 
@@ -76,6 +78,8 @@ export function VirtualModelDetail({
     ]),
   );
   const href = (changes: Record<string, string | null>) => buildHref("/models", params, changes);
+  const routesByTag = policy?.strategy === "tag";
+  const routeColumns = routesByTag ? TAG_ROUTE_COLUMNS : ROUTE_COLUMNS;
 
   return (
     <div className="min-w-0 pl-6 pt-[18px]">
@@ -107,9 +111,10 @@ export function VirtualModelDetail({
         Route
       </SectionTitle>
       <div className="mt-2 overflow-x-auto">
-        <GridRow columns={ROUTE_COLUMNS} head>
+        <GridRow columns={routeColumns} head>
           <span>#</span>
           <span>CANDIDATE</span>
+          {routesByTag ? <span>TAGS</span> : null}
           <span>PRICE</span>
           <span>HEALTH</span>
           <span className="text-right">CTX</span>
@@ -123,11 +128,20 @@ export function VirtualModelDetail({
             const traffic = trafficByModelId.get(candidate.id);
             const metered = provider ? providerIsMetered(provider) : true;
             return (
-              <GridRow key={candidate.id} columns={ROUTE_COLUMNS} className="py-2">
+              <GridRow key={candidate.id} columns={routeColumns} className="py-2">
                 <span className="text-faint tabnum">{candidate.candidateOrder}</span>
                 <span className="font-medium cell-clip">
                   {candidate.providerDisplayName} · {candidate.modelId}
                 </span>
+                {routesByTag ? (
+                  <span
+                    className={`cell-clip ${
+                      candidate.tags.includes("default") ? "text-ambtx" : "text-dim"
+                    }`}
+                  >
+                    {candidate.tags.join(", ") || "—"}
+                  </span>
+                ) : null}
                 <span className="text-dim cell-clip">
                   {formatPricePair({
                     inputUsdPerMillionTokens: candidate.inputUsdPerMillionTokens,
@@ -169,6 +183,18 @@ export function VirtualModelDetail({
           </p>
         )}
       </div>
+
+      {/* Soft warnings: the route saved, but these candidates behave in a way the
+          operator would otherwise only discover from a failed request. */}
+      {policy && policy.routeWarnings.length > 0 ? (
+        <ul data-testid="route-warnings" className="mt-3 list-none space-y-1 p-0">
+          {policy.routeWarnings.map((warning) => (
+            <li key={warning} className="font-mono text-12 leading-[1.6] text-ambtx">
+              {warning}
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <div className="mt-5 grid grid-cols-2 gap-x-8">
         <div>

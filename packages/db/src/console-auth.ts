@@ -6,7 +6,11 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { promisify } from "node:util";
-import { readPostgresDatabaseUrl, withPooledPostgresClient } from "@llmingress/db/client";
+import {
+  readPostgresDatabaseUrl,
+  withPooledPostgresClient,
+  withPostgresTransaction,
+} from "@llmingress/db/client";
 import { consoleConflictError, consoleValidationError } from "./console-operation-error.ts";
 
 export const sessionCookieName = "llmingress_console_session";
@@ -109,7 +113,7 @@ export async function createAdminPassword(
   const passwordHash = await hashAdminPassword(password);
 
   try {
-    await withPooledPostgresClient(databaseUrl ?? readPostgresDatabaseUrl(), async (client) => {
+    await withPostgresTransaction(databaseUrl ?? readPostgresDatabaseUrl(), async (client) => {
       await client.query("insert into console_admins (id, password_hash) values (1, $1)", [
         passwordHash,
       ]);
@@ -138,18 +142,26 @@ export async function loginConsoleAdmin(
       field: "password",
     });
   }
-  const admin = await withPooledPostgresClient(databaseUrl, async (client) => {
+  return withPostgresTransaction(databaseUrl, async (client) => {
     const result = await client.query<AdminRow>(
       "select password_hash from console_admins where id = 1",
     );
-    return result.rows[0];
+    const admin = result.rows[0];
+    if (!admin || !(await verifyAdminPassword(password, admin.password_hash))) {
+      return null;
+    }
+
+    const token = randomBytes(32).toString("base64url");
+    const expiresAt = new Date(Date.now() + sessionDurationMs);
+    await client.query(
+      `
+        insert into console_sessions (id, token_hash, expires_at)
+        values ($1, $2, $3)
+      `,
+      [randomUUID(), hashSessionToken(token), expiresAt],
+    );
+    return { expiresAt, token };
   });
-
-  if (!admin || !(await verifyAdminPassword(password, admin.password_hash))) {
-    return null;
-  }
-
-  return createConsoleSession(databaseUrl);
 }
 
 export async function verifyConsoleSession(sessionToken?: string): Promise<boolean>;
@@ -235,23 +247,6 @@ function isUniqueViolation(error: unknown): boolean {
     "code" in error &&
     (error as { code?: unknown }).code === "23505"
   );
-}
-
-async function createConsoleSession(databaseUrl: string | undefined): Promise<ConsoleSession> {
-  const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + sessionDurationMs);
-
-  await withPooledPostgresClient(databaseUrl, async (client) => {
-    await client.query(
-      `
-        insert into console_sessions (id, token_hash, expires_at)
-        values ($1, $2, $3)
-      `,
-      [randomUUID(), hashSessionToken(token), expiresAt],
-    );
-  });
-
-  return { expiresAt, token };
 }
 
 function hashSessionToken(token: string): string {

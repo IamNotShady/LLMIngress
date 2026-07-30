@@ -1,4 +1,4 @@
-import { isRecord } from "@llmingress/util";
+import { isRecord, joinUrl } from "@llmingress/util";
 import {
   fetchCredentialedProviderRequest,
   isProviderRedirectRejectedError,
@@ -9,6 +9,8 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
+  buildGrokSubscriptionHeaders,
+  buildMiniMaxSubscriptionHeaders,
   withClaudeCodeSystemPrompt,
 } from "../subscription.js";
 import {
@@ -23,6 +25,7 @@ import {
   buildAnthropicMessagesPayload,
 } from "./anthropic.js";
 import type {
+  NormalizedOpenAIChatRequest,
   NormalizedOpenAIResponsesRequest,
   OpenAIAdapterResult,
   OpenAIProviderAdapter,
@@ -76,6 +79,72 @@ export function createCodexSubscriptionAdapter(
   };
 }
 
+export function createGrokSubscriptionAdapter(
+  options: CreateSubscriptionAdapterOptions = {},
+): OpenAIProviderAdapter {
+  const fetchImpl = options.fetch ?? globalThis.fetch;
+  const timeoutMs = options.timeoutMs ?? providerRequestTimeoutMs();
+
+  const call = async (
+    pathSuffix: "chat/completions" | "responses",
+    payload: Record<string, unknown>,
+    headers: Record<string, string> | undefined,
+    apiKey: string | null | undefined,
+    baseUrl: string,
+  ): Promise<OpenAIAdapterResult> => {
+    try {
+      const response = await fetchCredentialedProviderRequest(
+        fetchImpl,
+        joinUrl(baseUrl, pathSuffix),
+        {
+          body: JSON.stringify(payload),
+          // The proxy inference endpoint owns auth via the OAuth Bearer and
+          // requires the upstream client's versioned identity headers (426 gate).
+          headers: {
+            "content-type": "application/json",
+            ...buildGrokSubscriptionHeaders(apiKey ?? "", headers),
+          },
+          method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
+        },
+      );
+      const body = await readResponseBody(response);
+      const responseHeaders = readProviderResponseHeaders(response.headers);
+      if (!response.ok) {
+        return mapOpenAIProviderError(response.status, body, responseHeaders);
+      }
+      return {
+        body,
+        headers: responseHeaders,
+        ok: true,
+        providerRequestId: readProviderRequestId(body),
+        statusCode: response.status,
+      };
+    } catch (error) {
+      return requestFailed(error, timeoutMs);
+    }
+  };
+
+  return {
+    chatCompletion: ({ headers, request, target }) =>
+      call(
+        "chat/completions",
+        buildGrokChatPayload(request, target.modelId),
+        headers,
+        target.apiKey,
+        target.baseUrl,
+      ),
+    response: ({ headers, request, target }) =>
+      call(
+        "responses",
+        buildGrokResponsesPayload(request, target.modelId),
+        headers,
+        target.apiKey,
+        target.baseUrl,
+      ),
+  };
+}
+
 export function createClaudeCodeProviderAdapter(
   options: CreateSubscriptionAdapterOptions = {},
 ): AnthropicProviderAdapter {
@@ -119,10 +188,74 @@ export function createClaudeCodeProviderAdapter(
   };
 }
 
+export function createMiniMaxProviderAdapter(
+  options: CreateSubscriptionAdapterOptions = {},
+): AnthropicProviderAdapter {
+  const fetchImpl = options.fetch ?? globalThis.fetch;
+  const timeoutMs = options.timeoutMs ?? providerRequestTimeoutMs();
+
+  return {
+    messages: async ({ headers, request, target }): Promise<AnthropicAdapterResult> => {
+      try {
+        const payload = buildAnthropicMessagesPayload(request, target);
+        const response = await fetchCredentialedProviderRequest(
+          fetchImpl,
+          // target.baseUrl is already resolved to the token's resource_url
+          // (or the registry base); both already carry /anthropic/v1, so a
+          // plain joinUrl is correct here — do not reuse claude_code's
+          // appendV1Path, which would double the /v1 segment.
+          joinUrl(target.baseUrl, "messages"),
+          {
+            body: JSON.stringify({
+              ...payload,
+              // The coding-plan endpoint expects the subscription identity
+              // system block (the same withClaudeCodeSystemPrompt text);
+              // the HTTP headers stay a plain Bearer with no client
+              // impersonation.
+              system: withClaudeCodeSystemPrompt(payload.system),
+            }),
+            headers: buildMiniMaxSubscriptionHeaders(target.apiKey ?? "", headers),
+            method: "POST",
+            signal: AbortSignal.timeout(timeoutMs),
+          },
+        );
+        const body = await readResponseBody(response);
+        const responseHeaders = readProviderResponseHeaders(response.headers);
+        if (!response.ok) {
+          return mapOpenAIProviderError(response.status, body, responseHeaders);
+        }
+        return {
+          body,
+          headers: responseHeaders,
+          ok: true,
+          providerRequestId: readProviderRequestId(body),
+          statusCode: response.status,
+        };
+      } catch (error) {
+        return requestFailed(error, timeoutMs);
+      }
+    },
+  };
+}
+
 function buildCodexResponsesPayload(
   request: NormalizedOpenAIResponsesRequest,
   modelId: string,
 ): CodexResponsesPayload {
+  return { ...request.payload, model: modelId };
+}
+
+function buildGrokChatPayload(
+  request: NormalizedOpenAIChatRequest,
+  modelId: string,
+): Record<string, unknown> {
+  return { ...request.payload, model: modelId };
+}
+
+function buildGrokResponsesPayload(
+  request: NormalizedOpenAIResponsesRequest,
+  modelId: string,
+): Record<string, unknown> {
   return { ...request.payload, model: modelId };
 }
 

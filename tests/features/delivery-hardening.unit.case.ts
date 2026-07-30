@@ -4,21 +4,27 @@ import { describe, expect, it } from "vitest";
 const read = (path: string) => readFileSync(path, "utf8");
 
 describe("core delivery hardening", () => {
-  it("uses one native ConsoleDialog contract for every retained modal", () => {
-    const component = read("apps/console/src/app/_components/console-dialog.tsx");
-    expect(component).toContain("<dialog");
-    expect(component).toContain("showModal()");
-    expect(component).toContain("event.preventDefault()");
-    expect(component).toContain("router.push(closeHref)");
-    expect(component).toContain("triggerId");
+  it("uses one overlay contract for every modal and drawer", () => {
+    const overlay = read("apps/console/src/app/_ui/overlay.tsx");
+    // Native modals: the browser owns focus, Tab and Escape, which is why the
+    // ARIA role is not hand-written here.
+    expect(overlay).toContain("<dialog");
+    expect(overlay).toContain("showModal()");
+    // Open state is a URL, so closing is a navigation and every dialog is
+    // server-rendered from the selected object rather than client state.
+    expect(overlay).toContain("closeHref");
+    expect(overlay).toContain("export function Drawer");
 
-    const modules = readdirSync("apps/console/src/app/_modules")
-      .filter((file) => file.endsWith(".tsx"))
-      .map((file) => read(`apps/console/src/app/_modules/${file}`))
-      .join("\n");
-    expect(modules).not.toContain('role="dialog"');
-    expect(modules).not.toContain("console-dialog-scrim");
-    expect(modules).toContain("<ConsoleDialog");
+    const uiFiles = readdirSync("apps/console/src/app/_ui", { recursive: true })
+      .map(String)
+      .filter((file) => file.endsWith(".tsx") && !file.endsWith("overlay.tsx"));
+    for (const file of uiFiles) {
+      const source = read(`apps/console/src/app/_ui/${file}`);
+      // No module builds its own scrim, modal element or dialog role.
+      expect(source, file).not.toContain('role="dialog"');
+      expect(source, file).not.toContain("aria-modal");
+      expect(source, file).not.toContain("showModal");
+    }
   });
 
   it("builds one non-root multi-role runtime image without repository source", () => {

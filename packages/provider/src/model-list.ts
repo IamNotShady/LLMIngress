@@ -1,5 +1,6 @@
+import { defaultModelListPath } from "@llmingress/config/provider-registry";
 import type { ModelInputModality, ModelOutputModality } from "@llmingress/domain";
-import { isRecord } from "@llmingress/util";
+import { isRecord, joinUrl } from "@llmingress/util";
 
 export type ListedProviderModel = {
   capabilityMetadata?: Record<string, unknown>;
@@ -22,6 +23,7 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexModelListUrl,
   buildCodexSubscriptionHeaders,
+  buildGrokSubscriptionHeaders,
 } from "./subscription.js";
 
 const defaultModelListTimeoutMs = 15_000;
@@ -84,6 +86,16 @@ export function buildProviderModelListRequest(input: {
     return {
       init,
       url: buildClaudeCodeModelListUrl(input.baseUrl),
+    };
+  }
+
+  if (style === "grok" && input.apiKey) {
+    // Default /models URL, but the proxy may require the versioned client
+    // headers on every endpoint (the Bearer superset is harmless where not).
+    init.headers = buildGrokSubscriptionHeaders(input.apiKey);
+    return {
+      init,
+      url: buildModelsUrl(input.baseUrl),
     };
   }
 
@@ -235,10 +247,7 @@ function readSupportsTools(entry: Record<string, unknown>): boolean | null {
 }
 
 function buildModelsUrl(baseUrl: string): string {
-  const url = new URL(baseUrl);
-  const path = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
-  url.pathname = `${path}/models`.replaceAll(/\/{2,}/g, "/");
-  return url.toString();
+  return joinUrl(baseUrl, defaultModelListPath);
 }
 
 function buildLmStudioModelListUrl(baseUrl: string): string {

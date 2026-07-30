@@ -8,7 +8,10 @@ import {
   type NormalizedAnthropicMessagesRequest,
 } from "@llmingress/provider/anthropic";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
-import { createClaudeCodeProviderAdapter } from "@llmingress/provider/subscription-adapters";
+import {
+  createClaudeCodeProviderAdapter,
+  createMiniMaxProviderAdapter,
+} from "@llmingress/provider/subscription-adapters";
 import { isRecord, omitUndefined } from "@llmingress/util";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import {
@@ -114,6 +117,7 @@ export async function executeGatewayAnthropicMessages(input: {
 }): Promise<GatewayAnthropicMessagesResponse> {
   const genericAdapter = input.adapter ?? createAnthropicProviderAdapter();
   const claudeCodeAdapter = input.adapter ? null : createClaudeCodeProviderAdapter();
+  const minimaxAdapter = input.adapter ? null : createMiniMaxProviderAdapter();
 
   return executeGatewayProtocolRequest<NormalizedAnthropicMessagesRequest, AnthropicAdapterSuccess>(
     {
@@ -122,17 +126,23 @@ export async function executeGatewayAnthropicMessages(input: {
       spec: {
         buildRequestMetadata: buildAnthropicMessagesRequestMetadata,
         callProvider: ({ candidate, providerApiKey, providerRequestHeaders, request }) => {
+          const subscriptionAdapter = resolveProviderDescriptor(
+            candidate.providerKey,
+          ).subscriptionAdapter;
           const adapter =
-            resolveProviderDescriptor(candidate.providerKey).subscriptionAdapter ===
-              "claude_code" && claudeCodeAdapter
+            subscriptionAdapter === "claude_code" && claudeCodeAdapter
               ? claudeCodeAdapter
-              : genericAdapter;
+              : subscriptionAdapter === "minimax_anthropic" && minimaxAdapter
+                ? minimaxAdapter
+                : genericAdapter;
           return adapter.messages({
             headers: providerRequestHeaders,
             request,
             target: {
               apiKey: providerApiKey.apiKey,
-              baseUrl: candidate.baseUrl,
+              // Per-token resource_url overrides the provider base and follows
+              // the key across fallback rotation.
+              baseUrl: providerApiKey.baseUrl ?? candidate.baseUrl,
               modelId: candidate.modelId,
             },
           });
@@ -147,7 +157,9 @@ export async function executeGatewayAnthropicMessages(input: {
           supported: candidates.filter((candidate) => {
             const descriptor = resolveProviderDescriptor(candidate.providerKey);
             return (
-              descriptor.subscription !== true || descriptor.subscriptionAdapter === "claude_code"
+              descriptor.subscription !== true ||
+              descriptor.subscriptionAdapter === "claude_code" ||
+              descriptor.subscriptionAdapter === "minimax_anthropic"
             );
           }),
         }),

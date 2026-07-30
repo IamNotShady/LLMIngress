@@ -74,90 +74,102 @@ test("ApiKey dialogs show endpoint groups and integration tabs without the platf
         await page.setViewportSize({ width: 1280, height: 800 });
         await signInFromFirstRun(page, baseUrl);
 
-        // Platform filter is gone from the ApiKeys list.
-        await page.goto(`${baseUrl}/api-keys`);
-        await expect(page.getByRole("heading", { name: "API Key list" })).toBeVisible();
-        await expect(page.locator("#api-key-filter-platform")).toHaveCount(0);
-
-        // Detail dialog: no Platform row, endpoint groups, 8 integration tabs.
-        await page.goto(`${baseUrl}/api-keys?apiKeyView=${apiKeyId}`);
-        const dialog = page.getByRole("dialog", { name: "guide-apiKey" });
-        await expect(dialog).toBeVisible();
-        await expect(dialog.locator("dt").filter({ hasText: "Platform" })).toHaveCount(0);
-
-        await expect(dialog).toContainText(`${gatewayUrl}/v1/messages`);
-        const routedGroup = dialog.locator(".api-key-endpoint-group", {
-          hasText: "/v1/messages",
+        // --- A key is not bound to one platform: the list has no platform
+        // filter and the detail states the integration base once.
+        await page.goto(`${baseUrl}/api-keys?selected=${apiKeyId}`, {
+          waitUntil: "networkidle",
         });
-        await expect(routedGroup).toContainText("guide-routed-vm");
-        const unroutedGroup = dialog.locator(".api-key-endpoint-group-unrouted");
-        await expect(unroutedGroup).toContainText("No route policy configured");
-        await expect(unroutedGroup).toContainText("guide-unrouted-vm");
+        await expect(page.getByRole("heading", { level: 1, name: "API Keys" })).toBeVisible();
+        await expect(page.locator("#api-key-filter-platform")).toHaveCount(0);
+        await expect(page.getByText(`OpenAI-compatible base ${gatewayUrl}/v1`)).toBeVisible();
+        await expect(page.getByText("guide-routed-vm").first()).toBeVisible();
 
-        const tablist = dialog.getByRole("tablist", { name: "Integration platform" });
+        // The setup instructions stay available after creation, from the key's
+        // own dialog rather than under the detail.
+        await expect(page.getByRole("tablist", { name: "Integration platform" })).toHaveCount(0);
+        await page.getByRole("link", { name: "Set up an agent" }).click();
+        const setupDialog = page.getByRole("dialog", { name: "Set up an agent" });
+        await expect(setupDialog).toContainText("guide-apiKey");
+        await expect(setupDialog).toContainText("default model guide-routed-vm");
+
+        const tablist = setupDialog.getByRole("tablist", { name: "Integration platform" });
         await expect(tablist.getByRole("tab")).toHaveCount(8);
-        await expect(tablist.getByRole("tab", { name: "Codex" })).toHaveAttribute(
-          "aria-selected",
-          "true",
-        );
-        await tablist.getByRole("tab", { name: "Claude Code" }).click();
-        await expect(dialog).toContainText("ANTHROPIC_BASE_URL=");
-        await expect(dialog).toContainText("<YOUR_API_KEY>");
-        await expect(dialog).toContainText("llmi_guide_k");
-
-        // The allowed-VM list is redundant with the endpoint groups.
-        await expect(dialog.getByRole("heading", { name: "Allowed Virtual Models" })).toHaveCount(
+        // The secret is stored hashed, so the snippets carry a placeholder. The
+        // prefix would make a complete-looking line holding a truncated key —
+        // copied from beside its own Copy button, it fails as a wrong secret
+        // rather than as a line that was never filled in.
+        await expect(
+          setupDialog.getByText("export LLMINGRESS_API_KEY='<YOUR_API_KEY>'"),
+        ).toBeVisible();
+        await expect(setupDialog.getByText("export LLMINGRESS_API_KEY='llmi_guide_k'")).toHaveCount(
           0,
         );
+        // Which key it is still says so, in the note rather than in the snippet.
+        await expect(setupDialog.getByText(/key starting llmi_guide_k/)).toBeVisible();
+        await tablist.getByRole("tab", { name: "Claude Code" }).click();
+        await expect(page.getByText(/ANTHROPIC_BASE_URL=/)).toBeVisible();
 
-        // Two columns side by side with aligned bottoms on desktop, stacked
-        // on mobile, and no horizontal overflow at both checkpoints.
-        const dialogColumns = dialog.locator(".api-key-view-column");
-        await expect(dialogColumns).toHaveCount(2);
+        // --- Creating a key hands over every platform's setup, with the real
+        // secret substituted for the placeholder.
+        await page.goto(`${baseUrl}/api-keys?dialog=new`, { waitUntil: "networkidle" });
+        const createDialog = page.getByRole("dialog", { name: "New API Key" });
+        // A key is not created for one platform; the guides cover them all.
+        await expect(createDialog.getByRole("combobox", { name: /platform/i })).toHaveCount(0);
+        await expect(createDialog.getByLabel("Integration platform")).toHaveCount(0);
+        await page.getByRole("link", { name: "Grant guide-routed-vm" }).click();
+        await page.waitForURL((url) => url.searchParams.get("grantIds") !== null);
+        await page.getByLabel("API key name").fill("guide-created-apiKey");
+        await page.getByRole("button", { name: "Create key" }).click();
+
+        await expect(page.getByText("SECRET · SHOWN ONCE")).toBeVisible();
+        const apiKey = await page.getByLabel("API key secret").inputValue();
+        expect(apiKey.startsWith("llmi_")).toBe(true);
+        await expect(page.getByRole("radio")).toHaveCount(8);
+        await expect(page.getByText(`export LLMINGRESS_API_KEY='${apiKey}'`)).toBeVisible();
+        // The one-time screen is the only place the whole secret exists, so it
+        // carries it rather than the prefix the detail has to fall back to.
+        await expect(page.getByText("llmi_guide_k", { exact: true })).toHaveCount(0);
+
+        await page.getByText("Other / curl", { exact: true }).click();
+        await expect(page.getByText(`Use ${gatewayUrl} as the Gateway URL.`)).toBeVisible();
+
+        // Both the one-time screen and the detail hold their layout at the
+        // desktop target and on a phone.
+        await page.evaluate(() => document.fonts.ready);
         for (const viewport of [
           { width: 1280, height: 800 },
           { width: 390, height: 844 },
         ]) {
           await page.setViewportSize(viewport);
-          expect(await pageOverflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
-          const leftBox = await dialogColumns.nth(0).boundingBox();
-          const rightBox = await dialogColumns.nth(1).boundingBox();
-          if (!leftBox || !rightBox) {
-            throw new Error(`ApiKey view columns are not visible at ${viewport.width}px.`);
-          }
-          if (viewport.width === 1280) {
-            expect(rightBox.x, "columns sit side by side at 1280px").toBeGreaterThanOrEqual(
-              leftBox.x + leftBox.width - 1,
-            );
-            expect(
-              Math.abs(leftBox.y + leftBox.height - (rightBox.y + rightBox.height)),
-              "column bottoms align at 1280px",
-            ).toBeLessThanOrEqual(2);
-          } else {
-            expect(rightBox.y, "columns stack at 390px").toBeGreaterThanOrEqual(
-              leftBox.y + leftBox.height - 1,
-            );
-          }
+          await expect
+            .poll(() => pageOverflowPx(page), { message: `created @ ${viewport.width}px` })
+            .toBeLessThanOrEqual(0);
         }
-
-        // Create flow: no platform field; created dialog reuses the tabs with
-        // the one-time plaintext key; DB stores the default platform.
+        // --- The secret the page was created with follows the operator into
+        // the Playground, so the one moment it exists is not spent copying it
+        // back out of a screen they have already left.
         await page.setViewportSize({ width: 1280, height: 800 });
-        await page.goto(`${baseUrl}/api-keys?apiKeyDialog=new`);
-        await expect(page.getByLabel("Name")).toBeVisible();
-        await expect(page.getByLabel("Integration platform")).toHaveCount(0);
-        await page.getByLabel("Name").fill("guide-created-apiKey");
-        await page.getByLabel("guide-routed-vm").check();
-        await page.getByRole("button", { name: "Create" }).click();
+        await page.getByRole("link", { name: "Test in Playground" }).click();
+        await page.waitForURL(/\/playground$/);
+        await expect(page.getByLabel("API key", { exact: true })).toHaveValue(apiKey);
+        // It travels in sessionStorage, never in the URL, and is consumed once.
+        expect(page.url()).not.toContain(apiKey);
+        expect(
+          await page.evaluate(() => sessionStorage.getItem("llmingress-playground-key")),
+        ).toBeNull();
+        await page.reload({ waitUntil: "networkidle" });
+        await expect(page.getByLabel("API key", { exact: true })).toHaveValue("");
 
-        const createdDialog = page.getByRole("dialog", { name: "API Key created" });
-        await expect(createdDialog).toBeVisible();
-        const apiKey = await createdDialog.getByRole("textbox", { name: "API key" }).inputValue();
-        expect(apiKey.startsWith("llmi_")).toBe(true);
-        await expect(createdDialog.getByRole("tab")).toHaveCount(8);
-        await expect(createdDialog).toContainText(`export LLMINGRESS_API_KEY='${apiKey}'`);
-        await createdDialog.getByRole("tab", { name: "Other" }).click();
-        await expect(createdDialog).toContainText(`Use ${gatewayUrl} as the Gateway URL.`);
+        await page.goto(`${baseUrl}/api-keys?selected=${apiKeyId}`, { waitUntil: "networkidle" });
+        for (const viewport of [
+          { width: 1280, height: 800 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          await expect
+            .poll(() => pageOverflowPx(page), { message: `detail @ ${viewport.width}px` })
+            .toBeLessThanOrEqual(0);
+        }
       } finally {
         await context.close();
       }

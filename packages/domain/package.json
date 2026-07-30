@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./quota": {
+      "types": "./src/quota.ts",
+      "default": "./src/quota.ts"
     }
   },
   "scripts": {
@@ -15,6 +19,7 @@
   },
   "dependencies": {
     "@llmingress/billing": "workspace:*",
+    "@llmingress/config": "workspace:*",
     "@llmingress/util": "workspace:*"
   }
 }

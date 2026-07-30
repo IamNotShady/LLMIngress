@@ -1,11 +1,13 @@
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { type ChildProcessByStdio, spawn } from "node:child_process";
 import { rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { resolve } from "node:path";
+import type { Readable } from "node:stream";
 import { expect, type Page } from "@playwright/test";
 
 export type ConsoleProcess = {
-  child: ChildProcessWithoutNullStreams;
+  /** stdin is ignored; stdout and stderr are piped so failures can be read. */
+  child: ChildProcessByStdio<null, Readable, Readable>;
   distDirectory: string;
   port: number;
   stderr: string[];
@@ -17,15 +19,16 @@ export async function signInFromFirstRun(page: Page, baseUrl: string) {
   const navigationTimeout = 15_000;
 
   await page.goto(baseUrl);
-  await expect(page.getByRole("heading", { name: "First run setup" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: "Create the console admin" })).toBeVisible({
     timeout: navigationTimeout,
   });
-  await page.getByLabel("Admin password").fill(password);
+  await page.getByLabel("Admin password", { exact: true }).fill(password);
+  await page.getByLabel("Confirm admin password").fill(password);
   await page.getByRole("button", { name: "Create admin" }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
     timeout: navigationTimeout,
   });
-  await page.getByLabel("Admin password").fill(password);
+  await page.getByLabel("Admin password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible({
     timeout: navigationTimeout,
@@ -48,7 +51,15 @@ export async function getFreePort(): Promise<number> {
   });
 }
 
-export async function waitForConsole(baseUrl: string, consoleApp: ConsoleProcess): Promise<void> {
+/**
+ * `timeoutMs` exists for callers outside the suite: a dev tool starting a
+ * console on a cold Next cache can wait well past the 30s a test should.
+ */
+export async function waitForConsole(
+  baseUrl: string,
+  consoleApp: ConsoleProcess,
+  timeoutMs = 30_000,
+): Promise<void> {
   try {
     await expect
       .poll(
@@ -66,7 +77,7 @@ export async function waitForConsole(baseUrl: string, consoleApp: ConsoleProcess
         },
         {
           message: "Console did not start.",
-          timeout: 30_000,
+          timeout: timeoutMs,
         },
       )
       .toBe(200);

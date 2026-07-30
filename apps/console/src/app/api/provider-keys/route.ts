@@ -3,6 +3,8 @@ import {
   readConsoleEncryptionKeySource,
   saveProviderApiKey,
   setProviderApiKeyEnabled,
+  setProviderApiKeyQuotaProbeEnabled,
+  updateProviderApiKeySettings,
 } from "@llmingress/db/console-provider-keys";
 import {
   enqueueProviderConnectionProbeJob,
@@ -12,6 +14,7 @@ import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { consoleActionErrorResponse } from "../_errors";
 import { readNumber, readRequiredText, readText } from "../_form";
+import { renderOneTimeProviderKeyPage } from "./_created-page";
 
 export const POST = withConsoleAuth(async (request) => {
   try {
@@ -21,6 +24,14 @@ export const POST = withConsoleAuth(async (request) => {
     if (action === "delete") {
       const providerApiKeyId = readRequiredText(form, "providerApiKeyId");
       const result = await deleteProviderApiKey({ providerApiKeyId });
+      return providerApiKeyMutationResponse(request, result.providerId);
+    }
+
+    if (action === "quota-probe-enable" || action === "quota-probe-disable") {
+      const result = await setProviderApiKeyQuotaProbeEnabled({
+        providerApiKeyId: readRequiredText(form, "providerApiKeyId"),
+        quotaProbeEnabled: action === "quota-probe-enable",
+      });
       return providerApiKeyMutationResponse(request, result.providerId);
     }
 
@@ -46,36 +57,67 @@ export const POST = withConsoleAuth(async (request) => {
     }
 
     const providerId = readRequiredText(form, "providerId");
+    const providerApiKeyId = readText(form, "providerApiKeyId");
+    const pastedKey = readText(form, "providerApiKey");
+
+    // The connection dialog saves everything about a connection at once: its
+    // credential, what it is called, where it sits in the order, and whether it
+    // routes and is probed. State is a field of the form, not a separate act.
+    const enabled = readText(form, "enabled") !== "false";
+    const quotaProbeEnabled = readText(form, "quotaProbeEnabled") !== "false";
+
+    // Saving an existing connection without a new key keeps the stored one —
+    // renaming a connection must not mean rotating a working credential.
+    if (providerApiKeyId && !pastedKey) {
+      const updated = await updateProviderApiKeySettings({
+        enabled,
+        label: readText(form, "label") ?? null,
+        priority: readNumber(form, "priority") ?? 100,
+        providerApiKeyId,
+        quotaProbeEnabled,
+      });
+      if (updated.enabled) {
+        await enqueueProviderConnectionProbeJob({
+          providerConnectionId: updated.id,
+          providerId: updated.providerId,
+          resetHealth: true,
+          source: "api_key_saved",
+        });
+      }
+      return providerApiKeyMutationResponse(request, updated.providerId);
+    }
+
     const plaintext = readRequiredText(form, "providerApiKey");
     const result = await saveProviderApiKey({
+      enabled,
       label: readText(form, "label"),
       encryptionKeySource: readConsoleEncryptionKeySource(),
       plaintext,
       priority: readNumber(form, "priority"),
-      providerApiKeyId: readText(form, "providerApiKeyId"),
+      providerApiKeyId,
       providerId,
+      quotaProbeEnabled,
     });
-    await enqueueProviderConnectionProbeJob({
-      providerConnectionId: result.metadata.id,
-      providerId,
-      resetHealth: true,
-      source: "api_key_saved",
-    });
-    await enqueueProviderModelRefreshJob({
-      providerId,
-      source: "api_key_saved",
-      trigger: "system",
-    });
+    if (result.metadata.enabled) {
+      await enqueueProviderConnectionProbeJob({
+        providerConnectionId: result.metadata.id,
+        providerId,
+        resetHealth: true,
+        source: "api_key_saved",
+      });
+      await enqueueProviderModelRefreshJob({
+        providerId,
+        source: "api_key_saved",
+        trigger: "system",
+      });
+    }
 
+    // The console posts this form through MutationForm, which needs nothing
+    // back but the outcome. The secret the operator pasted is stored encrypted
+    // and read again only as a prefix; answering with it would put it in the
+    // page's scripts, where nothing asked for it and nothing can account for it.
     if (request.headers.get("accept")?.includes("application/json")) {
-      return NextResponse.json(
-        {
-          action: result.action,
-          apiKey: plaintext.trim(),
-          keyPrefix: result.metadata.keyPrefix,
-        },
-        { headers: { "cache-control": "no-store" } },
-      );
+      return providerApiKeyMutationResponse(request, providerId);
     }
 
     return new NextResponse(
@@ -106,59 +148,4 @@ function providerApiKeyMutationResponse(request: Request, providerId: string): N
     new URL(`/providers?selected=${encodeURIComponent(providerId)}`, request.url),
     303,
   );
-}
-
-function renderOneTimeProviderKeyPage(input: {
-  action: "created" | "rotated";
-  keyPrefix: string;
-  plaintext: string;
-}): string {
-  const heading =
-    input.action === "created" ? "Provider API key saved" : "Provider API key rotated";
-
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(heading)}</title>
-    <style>
-      :root { color: #101828; background: #f6f7f9; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      * { box-sizing: border-box; }
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 32px; }
-      main { width: min(560px, 100%); border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; padding: 28px; }
-      h1 { margin: 0 0 16px; font-size: 28px; line-height: 1.2; }
-      dl { display: grid; gap: 10px; margin: 0 0 24px; }
-      dt { color: #667085; font-size: 13px; font-weight: 700; }
-      dd { margin: 0; color: #101828; font-size: 16px; overflow-wrap: anywhere; }
-      code { border: 1px solid #d0d5dd; border-radius: 6px; background: #f9fafb; display: block; padding: 12px; }
-      a { display: inline-flex; min-height: 44px; align-items: center; border-radius: 6px; background: #175cd3; color: #fff; font-weight: 700; padding: 10px 14px; text-decoration: none; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>${escapeHtml(heading)}</h1>
-      <dl>
-        <div>
-          <dt>Provider API key</dt>
-          <dd><code>${escapeHtml(input.plaintext)}</code></dd>
-        </div>
-        <div>
-          <dt>Provider API key prefix</dt>
-          <dd>${escapeHtml(input.keyPrefix)}</dd>
-        </div>
-      </dl>
-      <a href="/providers">Back to dashboard</a>
-    </main>
-  </body>
-</html>`;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
 }

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildConfigurationGuide,
   integrationGuidePlatforms,
-} from "../../apps/console/src/app/_modules/api-key-integration-guide.ts";
+} from "../../apps/console/src/app/_ui/api-keys/integration-guide.ts";
 import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page.ts";
 import { normalizeApiKeyVirtualModelSelectionInput } from "../../packages/db/src/console-api-keys.ts";
 import { enforceGatewayApiKeyLimitsIfEnabled } from "../../packages/gateway-runtime/src/gateway-api-key-limits.ts";
@@ -66,10 +66,17 @@ describe("apiKey management contract", () => {
       "html",
     );
     const html = await response.text();
-    expect(html).not.toContain("<script>");
     expect(html).not.toContain("<img src=x");
     expect(html).toContain("&lt;script&gt;");
     expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+    // The page carries its own scripts — the theme bootstrap and the copy
+    // buttons — so "no script tags" is no longer the test. What must hold is
+    // that none of them contains anything the caller supplied.
+    for (const tag of html.match(/<script[\s\S]*?<\/script>/g) ?? []) {
+      expect(tag).not.toContain("alert");
+      expect(tag).not.toContain("llmi_");
+      expect(tag).not.toContain("xss-probe");
+    }
   });
 
   it("does not read or enforce ApiKey limits when the ApiKey switch is off", async () => {
@@ -87,19 +94,26 @@ describe("apiKey management contract", () => {
     ).resolves.toEqual({ ok: true });
   });
 
+  it("ignores submitted rules while the ApiKey limits switch is off", () => {
+    const route = readFileSync("apps/console/src/app/api/api-keys/route.ts", "utf8");
+    const db = readFileSync("packages/db/src/console-api-keys.ts", "utf8");
+
+    expect(route).toContain("limitRules: limitsEnabled ? readApiKeyLimitRules(form) : []");
+    expect(db).toContain("if (input.limitsEnabled)");
+    expect(db).toContain("replaceApiKeyLimitRulesWithClient(client, input.id, [])");
+  });
+
   it("removes derived ApiKey status and exposes explicit Enabled and Virtual Models columns", () => {
     const apiKeysDb = readFileSync("packages/db/src/console-api-keys.ts", "utf8");
-    const apiKeysUi = readFileSync("apps/console/src/app/_modules/api-keys-section.tsx", "utf8");
+    const detail = readFileSync("apps/console/src/app/_ui/api-keys/detail.tsx", "utf8");
+    const dialogs = readFileSync("apps/console/src/app/_ui/api-keys/dialogs.tsx", "utf8");
 
     expect(apiKeysDb).not.toContain("ApiKeyDerivedStatus");
     expect(apiKeysDb).not.toContain("deriveApiKeyStatus");
     expect(apiKeysDb).not.toContain("unhealthy_reachable_provider_count");
-    expect(apiKeysUi).not.toContain("apiKeyStatusFilter");
-    expect(apiKeysUi).not.toContain("<th>Status</th>");
-    expect(apiKeysUi).not.toContain("Available VM");
-    expect(apiKeysUi).toContain("<th>Virtual Models</th>");
-    expect(apiKeysUi).toContain("<th>Enabled</th>");
-    expect(apiKeysUi).toContain('value="enable"');
-    expect(apiKeysUi).toContain('value="disable"');
+    // A key's state is its own stored flag, never derived from provider health.
+    expect(detail).toContain("Virtual Model access");
+    expect(detail).toContain("apiKey.enabled");
+    expect(dialogs).toContain('action: enable ? "enable" : "disable"');
   });
 });

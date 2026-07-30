@@ -1,4 +1,5 @@
 import type { Readable } from "node:stream";
+import { defaultEndpointPathByProtocol } from "@llmingress/config/provider-registry";
 import { selectRouteAttempts } from "@llmingress/domain";
 import type { NormalizedAnthropicMessagesRequest } from "@llmingress/provider/anthropic";
 import {
@@ -451,6 +452,9 @@ function buildStreamingAttemptCandidate(input: {
   return {
     ...candidateWithoutKey,
     apiKey: input.providerApiKey.apiKey,
+    // A per-token resource_url (MiniMax subscription) rides on the key, so the
+    // streaming base follows the rotated key rather than the provider base.
+    ...(input.providerApiKey.baseUrl ? { baseUrl: input.providerApiKey.baseUrl } : {}),
     ...(input.providerApiKey.providerApiKeyId
       ? { providerApiKeyId: input.providerApiKey.providerApiKeyId }
       : {}),
@@ -585,7 +589,7 @@ function buildStreamingPayload(input: {
           "content-type": "application/json",
         }),
       ok: true,
-      pathSuffix: "chat/completions",
+      pathSuffix: defaultEndpointPathByProtocol.chat_completions,
       payload: buildOpenAIChatStreamingPayload(normalized.request),
       requestMetadata,
     };
@@ -612,7 +616,7 @@ function buildStreamingPayload(input: {
           "content-type": "application/json",
         }),
       ok: true,
-      pathSuffix: "responses",
+      pathSuffix: defaultEndpointPathByProtocol.responses,
       payload: buildOpenAIResponsesStreamingPayload(normalized.request),
       requestMetadata,
     };
@@ -640,7 +644,7 @@ function buildStreamingPayload(input: {
         "x-api-key": apiKey,
       }),
     ok: true,
-    pathSuffix: "messages",
+    pathSuffix: defaultEndpointPathByProtocol.messages,
     payload: buildAnthropicMessagesStreamingPayload(normalized.request),
     requestMetadata,
   };

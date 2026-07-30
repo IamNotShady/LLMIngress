@@ -21,24 +21,19 @@ async function pageOverflowPx(page: Page): Promise<number> {
   );
 }
 
-// Both dialogs must present the same blocks in the same shell. Returns the
-// Budget section text so the two dialogs can be compared against each other
-// without hard-coding the console's number formatting.
-async function expectSharedDetailLayout(dialog: Locator): Promise<string> {
-  await expect(dialog).toHaveClass(/api-key-view-dialog/);
-  await expect(dialog.locator(".api-key-view-column")).toHaveCount(2);
-  await expect(dialog.getByRole("heading", { name: "Budget / Limit" })).toBeVisible();
-  await expect(dialog.getByRole("heading", { name: "Endpoints" })).toBeVisible();
-  await expect(dialog.getByRole("heading", { name: "Integration guide" })).toBeVisible();
-  await expect(dialog.locator("dt").filter({ hasText: "Created" })).toHaveCount(1);
-  await expect(dialog.locator("dt").filter({ hasText: "Enabled" })).toHaveCount(1);
-  await expect(dialog.locator("dt").filter({ hasText: "Default model" })).toHaveCount(1);
-  await expect(dialog.getByRole("tab")).toHaveCount(8);
-
-  const budget = dialog.locator(".api-key-detail-section", { hasText: "Budget / Limit" });
-  // The limits were saved with the key, so nothing may render as unconfigured.
-  await expect(budget).not.toContainText("Not configured");
-  return (await budget.innerText()).trim();
+// Both views hand over the same setup: the same platforms, and the same
+// snippets for the one on screen. Returns them without hard-coding formatting,
+// so the comparison survives a restyle of either side.
+async function readSharedGuide(scope: Locator | Page): Promise<{
+  platforms: string[];
+  snippets: string[];
+  steps: string;
+}> {
+  const platforms = await scope.locator("[data-guide-tab]").allInnerTexts();
+  const panel = scope.locator("[data-guide-panel]:visible").first();
+  const snippets = await panel.locator("pre").allInnerTexts();
+  const steps = await panel.locator("ol").first().innerText();
+  return { platforms, snippets: snippets.map((entry) => entry.trim()), steps: steps.trim() };
 }
 
 async function expectNoOverflow(page: Page, label: string): Promise<void> {
@@ -95,73 +90,70 @@ test("API key created and detail dialogs share one layout and differ only in the
         await signInFromFirstRun(page, baseUrl);
 
         // --- Create -----------------------------------------------------
-        await page.goto(`${baseUrl}/api-keys?apiKeyDialog=new`);
-        await expect(page.getByLabel("Name")).toBeVisible();
-        await page.getByLabel("Name").fill("parity-key");
-        await page.getByLabel("parity-vm").check();
-        await page.getByLabel("Enable limits").check();
-        await page.getByRole("button", { name: "Create" }).click();
+        await page.goto(`${baseUrl}/api-keys?dialog=new`, { waitUntil: "networkidle" });
+        await page.getByRole("link", { name: "Grant parity-vm" }).click();
+        await page.waitForURL((url) => url.searchParams.get("grantIds") !== null);
+        await page.getByLabel("API key name").fill("parity-key");
+        await page.getByRole("button", { name: "Create key" }).click();
 
-        const created = page.getByRole("dialog", { name: "API Key created" });
-        await expect(created).toBeVisible();
-        const createdBudget = await expectSharedDetailLayout(created);
-        await expect(created).toContainText(`${gatewayUrl}/v1/messages`);
-        await expect(created).toContainText("parity-vm");
-
-        // The plaintext key is shown outright.
-        const createdField = created.getByRole("textbox", { name: "API key" });
-        const plaintext = await createdField.inputValue();
+        // --- The one-time screen is the only place the plaintext exists.
+        await expect(page.getByText("SECRET · SHOWN ONCE")).toBeVisible();
+        const plaintext = await page.getByLabel("API key secret").inputValue();
         expect(plaintext.startsWith("llmi_")).toBe(true);
+        await expect(page.getByText("parity-vm").first()).toBeVisible();
+        await expect(page.getByText(`${gatewayUrl}`).first()).toBeVisible();
+        await expect(page.getByText("Stored hashed")).toBeVisible();
+        await expect(page.getByText("CONFIGURATION", { exact: true })).toBeVisible();
+        const created = await readSharedGuide(page);
+        await expectNoOverflow(page, "created page");
 
-        // The eye masks it without losing the real value, and toggles back.
-        await created.getByRole("button", { name: "Hide API key" }).click();
-        const masked = await createdField.inputValue();
-        expect(masked).not.toContain("llmi_");
-        expect(masked).toMatch(/^•+$/);
-        await created.getByRole("button", { name: "Copy API key" }).click();
-        // The title only flips once writeText resolves, so waiting on it first
-        // keeps the clipboard read from racing the copy.
-        await expect(created.getByRole("button", { name: "Copy API key" })).toHaveAttribute(
-          "title",
-          "Copied",
-        );
-        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(plaintext);
-        await created.getByRole("button", { name: "Show API key" }).click();
-        expect(await createdField.inputValue()).toBe(plaintext);
-
-        await expectNoOverflow(page, "created dialog");
-        await created.getByRole("link", { name: "Close" }).click();
-
-        // --- Detail -----------------------------------------------------
-        // The list row is a plain anchor, so this is a full navigation. The
-        // dialog paints before React hydrates, so wait for the load to settle
-        // or the interaction assertions below land on a dead dialog.
-        await page.getByRole("link", { name: "parity-key", exact: true }).first().click();
+        // --- The key's own dialog hands over the same setup, with the prefix.
+        await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
+        await page
+          .getByRole("link", { name: /parity-key/ })
+          .first()
+          .click();
         await page.waitForLoadState("networkidle");
-        const detail = page.getByRole("dialog", { name: "parity-key" });
-        await expect(detail).toBeVisible();
-        const detailBudget = await expectSharedDetailLayout(detail);
-        await expect(detail).toContainText(`${gatewayUrl}/v1/messages`);
+        await expect(page.getByText("Virtual Model access")).toBeVisible();
+        await expect(page.getByText("parity-vm").first()).toBeVisible();
 
-        // Same key, same limits, rendered identically in both dialogs.
-        expect(detailBudget).toBe(createdBudget);
+        // The detail's own prefix cell: the list row beside it now reads
+        // "llmi_… · 1 model", which is a different string about the same key.
+        const shownPrefix = await page
+          .getByText(/^llmi_\S+$/)
+          .first()
+          .innerText();
 
-        // The stored prefix shows directly, has no eye toggle, and is never
-        // the full key.
-        const detailField = detail.getByRole("textbox", { name: "API key prefix" });
-        const shownPrefix = await detailField.inputValue();
-        expect(shownPrefix).toBe(plaintext.slice(0, 12));
-        expect(shownPrefix.length).toBeLessThan(plaintext.length);
-        await expect(detail.getByRole("button", { name: /^(Show|Hide) API key/ })).toHaveCount(0);
-
-        await detail.getByRole("button", { name: "Copy API key prefix" }).click();
-        await expect(detail.getByRole("button", { name: "Copy API key prefix" })).toHaveAttribute(
-          "title",
-          "Copied",
+        await page.getByRole("link", { name: "Set up an agent" }).click();
+        const setup = page.getByRole("dialog", { name: "Set up an agent" });
+        // No grant was starred, so the dialog says so and falls back to the one
+        // model the key does have — the same one the created page named.
+        await expect(setup).toContainText("parity-key");
+        await expect(setup).toContainText("default model none");
+        const detail = await readSharedGuide(setup);
+        expect(detail.platforms).toEqual(created.platforms);
+        expect(detail.steps).toBe(created.steps);
+        // The same snippets, with a placeholder standing in for the secret that
+        // was shown once and is stored hashed. Not the prefix: that would make a
+        // complete-looking line carrying a truncated key, beside a Copy button,
+        // and it would fail as a wrong secret rather than as a blank.
+        expect(detail.snippets).toEqual(
+          created.snippets.map((snippet) => snippet.replaceAll(plaintext, "<YOUR_API_KEY>")),
         );
-        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(shownPrefix);
+        expect(detail.snippets.join("\n")).not.toContain(shownPrefix.replace(/…$/, ""));
+        await expectNoOverflow(page, "setup dialog");
 
-        await expectNoOverflow(page, "detail dialog");
+        expect(plaintext.startsWith(shownPrefix.replace(/…$/, ""))).toBe(true);
+        expect(shownPrefix.length).toBeLessThan(plaintext.length);
+        // Nothing on this page can reveal the rest of it.
+        await expect(page.getByText(plaintext)).toHaveCount(0);
+
+        // Every snippet is offered with its own Copy: what the operator does
+        // next with this dialog is paste it somewhere else. (What a click does
+        // — the copy, its fallback and the toast — is held by
+        // console-copy-text.unit; a synthetic click does not reach the handler
+        // in this harness, which is a harness question, not a product one.)
+        await expect(setup.getByRole("button", { name: "Copy" }).first()).toBeVisible();
       } finally {
         await context.close();
       }

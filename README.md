@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="apps/console/public/llmingress-icon.svg" alt="LLMIngress" width="96" />
+  <img src="apps/console/public/llmingress-oracle-gate-logo.svg" alt="LLMIngress" width="96" />
 </p>
 
 <h1 align="center">LLMIngress</h1>
@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/console-demo.gif" alt="LLMIngress Console demo" />
+  <img src="docs/assets/console-demo.gif" alt="LLMIngress Console workflow demo" />
 </p>
 
 <p align="center">
@@ -49,9 +49,24 @@ cd LLMIngress
 ```
 
 `./scripts/deploy.sh` writes a random `ENCRYPTION_KEY` into a gitignored `.env` when missing,
-then runs `docker compose up --build`. Compose still uses a local-only default PostgreSQL
-password (`llmi-local-db`). Published ports bind to `127.0.0.1` by default. Keep a backup of
-`.env` — the same `ENCRYPTION_KEY` is required to decrypt stored provider credentials.
+then rebuilds and recreates the Compose containers so stale container-network state is repaired.
+The `main` branch uses the Compose project `llmingress`; every other branch gets an isolated
+project named `llmingress-<normalized-branch-name>`, including its own containers, network, and
+PostgreSQL volume. The selected branch's named volume is preserved across redeploys. Compose still
+uses a local-only default PostgreSQL password (`llmi-local-db`). Published ports bind to
+`127.0.0.1` by default. Keep a backup of each worktree's `.env` — the same `ENCRYPTION_KEY` is
+required to decrypt that branch's stored provider credentials.
+
+Branch projects use the same published ports by default, so stop the active branch before starting
+another one, or override `CONSOLE_PORT`, `GATEWAY_PORT`, and `POSTGRES_PORT`. Compose derives the
+Console's public Gateway URL from `GATEWAY_PORT`; set `GATEWAY_URL` only when an explicit external
+URL is required.
+
+Every repository startup path resolves each variable in the same order: the current shell,
+`.env.local`, `.env`, then its code default. `./scripts/deploy.sh` passes both files to Compose when
+`.env.local` exists, while `./init.sh` and `pnpm dev` use the shared repository env loader.
+`DATABASE_URL` is the host-process connection string; Docker uses `COMPOSE_DATABASE_URL` instead
+because the app container reaches PostgreSQL through the Compose service name.
 
 Compose runs two containers: the app (Console, Gateway, and Worker in one process group) and
 PostgreSQL.
@@ -151,7 +166,8 @@ Compose builds one multi-role application image, runs it as a single app contain
 PostgreSQL (published on `127.0.0.1:55432` for development).
 
 `./init.sh` runs lint, type-checking, unit tests, and the build before starting Console, Gateway,
-and Worker. The standalone verification commands are:
+and Worker. `pnpm dev` uses the same environment-file precedence without the verification gate.
+The standalone verification commands are:
 
 ```bash
 pnpm run verify

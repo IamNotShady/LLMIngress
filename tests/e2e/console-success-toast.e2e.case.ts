@@ -19,9 +19,9 @@ async function overflowPx(page: Page): Promise<number> {
   );
 }
 
-// A provider plus one enabled API key so the key row exposes the enable/disable
-// toggle (a toast-mode, refresh-path mutation). The toggle only flips `enabled`,
-// so a placeholder encrypted_key object is sufficient.
+// A provider plus one enabled connection, so the connection row offers Re-check
+// — an idempotent action, which is the only kind that reports through a toast.
+// The probe only reads the stored credential, so a placeholder object is enough.
 async function seedProviderWithKey(databaseUrl: string): Promise<string> {
   const providerId = randomUUID();
   await withDedicatedPostgresClient(databaseUrl, async (client) => {
@@ -39,7 +39,7 @@ async function seedProviderWithKey(databaseUrl: string): Promise<string> {
   return providerId;
 }
 
-test("a refresh-path mutation surfaces a success toast, with no overflow", async ({ browser }) => {
+test("an idempotent action reports through a toast that clears itself", async ({ browser }) => {
   test.setTimeout(240_000);
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_console_toast_${randomUUID().replaceAll("-", "_")}`,
@@ -59,11 +59,33 @@ test("a refresh-path mutation surfaces a success toast, with no overflow", async
         await waitForConsole(baseUrl, consoleApp);
         await page.setViewportSize({ width: 1280, height: 800 });
         await signInFromFirstRun(page, baseUrl);
-        await page.goto(`${baseUrl}/providers?selected=${providerId}`);
-        await page.getByRole("button", { name: "Disable API key" }).click();
-        const toast = page.locator(".console-mutation-toast--success");
+        await page.goto(`${baseUrl}/providers?selected=${providerId}&modelPageSize=50`);
+        const before = page.url();
+
+        await page.getByRole("button", { name: "Re-check" }).first().click();
+        const toast = page.getByRole("status");
         await expect(toast).toBeVisible();
-        await expect(toast).toContainText("Provider API key updated");
+        // Reporting is not navigating: the selection, the filters and the
+        // scroll position the operator left behind are all still theirs.
+        expect(page.url()).toBe(before);
+        await expect(toast).toContainText("Connection re-check queued");
+        // It says what did and did not happen: a queued probe is not a result,
+        // and nothing about the stored credential changed.
+        await expect(toast).toContainText("nothing about the credential changed");
+
+        // It sits out of the way, bottom-right, above the page.
+        const box = await toast.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            bottom: rect.bottom,
+            position: getComputedStyle(element).position,
+            right: rect.right,
+          };
+        });
+        expect(box.position).toBe("fixed");
+        expect(box.right).toBeLessThanOrEqual(1280);
+        expect(box.bottom).toBeLessThanOrEqual(800);
+
         for (const viewport of [
           { width: 1280, height: 800 },
           { width: 390, height: 844 },
@@ -71,6 +93,10 @@ test("a refresh-path mutation surfaces a success toast, with no overflow", async
           await page.setViewportSize(viewport);
           expect(await overflowPx(page), `${viewport.width}px`).toBeLessThanOrEqual(0);
         }
+        await page.setViewportSize({ width: 1280, height: 800 });
+
+        // Nobody has to dismiss it: it clears itself after four seconds.
+        await expect(toast).toBeHidden({ timeout: 8_000 });
       } finally {
         await context.close();
       }

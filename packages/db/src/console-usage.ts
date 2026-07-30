@@ -17,6 +17,8 @@ export type ConsoleUsageBreakdown = {
 
 export type ConsoleUsageDimensionBreakdown = {
   avgLatencyMs: number | null;
+  /** Requests whose cost the gateway priced itself, the provider not saying. */
+  estimatedCostRequests: number;
   failureCount: number;
   id: string;
   label: string;
@@ -27,19 +29,37 @@ export type ConsoleUsageDimensionBreakdown = {
 
 export type ConsoleUsageTrendPoint = {
   bucketStart: Date;
+  cachedInputTokens: number;
+  /** Requests whose status is 'failed' — canceled requests are neither. */
+  failureCount: number;
   inputTokens: number;
   outputTokens: number;
+  reasoningTokens: number;
   requestCount: number;
   totalCostUsd: string | null;
   totalTokens: number;
 };
 
+/** One route candidate's share of a virtual model's traffic in the window. */
+export type ConsoleVirtualModelCandidateTraffic = {
+  failureCount: number;
+  providerModelId: string;
+  requestCount: number;
+  /** 0–1 of the virtual model's requests in the window; 0 when it saw none. */
+  share: number;
+};
+
 export type ConsoleUsageSummary = {
   apiKeyBreakdowns: ConsoleUsageDimensionBreakdown[];
   avgLatencyMs: number | null;
+  /** Requests that succeeded only after an earlier candidate had failed. */
+  fallbackRecoveredCount: number;
   breakdowns: ConsoleUsageBreakdown[];
+  /** Input tokens the provider served from its cache, a subset of inputTokens. */
+  cachedInputTokens: number;
   failureCount: number;
   inputTokens: number;
+  reasoningTokens: number;
   modelBreakdowns: ConsoleUsageDimensionBreakdown[];
   outputTokens: number;
   providerBreakdowns: ConsoleUsageDimensionBreakdown[];
@@ -60,8 +80,10 @@ export type ConsoleUsageKpis = {
 
 type UsageSummaryRow = {
   avg_latency_ms: number | string | null;
+  cached_input_tokens?: string | null;
   failure_count: number;
   input_tokens: string | null;
+  reasoning_tokens?: string | null;
   output_tokens: string | null;
   request_count: number;
   total_cost_usd: string | null;
@@ -82,6 +104,7 @@ type UsageBreakdownRow = {
 
 type UsageDimensionBreakdownRow = {
   avg_latency_ms: number | string | null;
+  estimated_cost_requests: number;
   failure_count: number;
   id: string | null;
   label: string | null;
@@ -92,8 +115,11 @@ type UsageDimensionBreakdownRow = {
 
 type UsageTrendRow = {
   bucket_start: Date | string;
+  cached_input_tokens: string | null;
+  failure_count: number;
   input_tokens: string | null;
   output_tokens: string | null;
+  reasoning_tokens: string | null;
   request_count: number;
   total_cost_usd: string | null;
   total_tokens: string | null;
@@ -130,6 +156,8 @@ export async function getConsoleUsageSummary(input: {
                    where request_activity.latency_ms is not null
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.input_tokens), 0)::text as input_tokens,
+                 coalesce(sum(request_usage.cached_input_tokens), 0)::text as cached_input_tokens,
+                 coalesce(sum(request_usage.reasoning_tokens), 0)::text as reasoning_tokens,
                  coalesce(sum(request_usage.output_tokens), 0)::text as output_tokens,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
@@ -205,14 +233,19 @@ export async function getConsoleUsageSummary(input: {
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd
+                   as total_cost_usd,
+                 count(request_costs.request_activity_id) filter (
+                   where request_costs.cost_source = 'estimated'
+                 )::integer as estimated_cost_requests
           from request_activity
           left join api_keys on api_keys.id = request_activity.api_key_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
           where ${scope.whereSql}
           group by request_activity.api_key_id
-          order by min(request_activity.created_at),
+          -- Busiest first: every reader of these rows shows a share and caps
+          -- the list, and "the first ones recorded" is not what a share ranks.
+          order by request_count desc,
                    label
         `,
       scope.values,
@@ -241,14 +274,19 @@ export async function getConsoleUsageSummary(input: {
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd
+                   as total_cost_usd,
+                 count(request_costs.request_activity_id) filter (
+                   where request_costs.cost_source = 'estimated'
+                 )::integer as estimated_cost_requests
           from request_activity
           left join virtual_models on virtual_models.id = request_activity.virtual_model_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
           where ${scope.whereSql}
           group by request_activity.virtual_model_id
-          order by min(request_activity.created_at),
+          -- Busiest first: every reader of these rows shows a share and caps
+          -- the list, and "the first ones recorded" is not what a share ranks.
+          order by request_count desc,
                    label
         `,
       scope.values,
@@ -272,14 +310,19 @@ export async function getConsoleUsageSummary(input: {
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd
+                   as total_cost_usd,
+                 count(request_costs.request_activity_id) filter (
+                   where request_costs.cost_source = 'estimated'
+                 )::integer as estimated_cost_requests
           from request_activity
           left join providers on providers.id = request_activity.provider_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
           where ${scope.whereSql}
           group by request_activity.provider_id
-          order by min(request_activity.created_at),
+          -- Busiest first: every reader of these rows shows a share and caps
+          -- the list, and "the first ones recorded" is not what a share ranks.
+          order by request_count desc,
                    label
         `,
       scope.values,
@@ -342,14 +385,19 @@ export async function getConsoleUsageSummary(input: {
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd
+                   as total_cost_usd,
+                 count(request_costs.request_activity_id) filter (
+                   where request_costs.cost_source = 'estimated'
+                 )::integer as estimated_cost_requests
           from request_activity
           left join provider_models on provider_models.id = request_activity.provider_model_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
           where ${scope.whereSql}
           group by request_activity.provider_model_id
-          order by min(request_activity.created_at),
+          -- Busiest first: every reader of these rows shows a share and caps
+          -- the list, and "the first ones recorded" is not what a share ranks.
+          order by request_count desc,
                    label
         `,
       scope.values,
@@ -358,8 +406,12 @@ export async function getConsoleUsageSummary(input: {
       `
           select date_trunc('${bucketUnit}', request_activity.started_at) as bucket_start,
                  count(request_activity.id)::integer as request_count,
+                 count(request_activity.id) filter (where request_activity.status = 'failed')::integer
+                   as failure_count,
                  coalesce(sum(request_usage.input_tokens), 0)::text as input_tokens,
+                 coalesce(sum(request_usage.cached_input_tokens), 0)::text as cached_input_tokens,
                  coalesce(sum(request_usage.output_tokens), 0)::text as output_tokens,
+                 coalesce(sum(request_usage.reasoning_tokens), 0)::text as reasoning_tokens,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                    as total_cost_usd
@@ -372,16 +424,32 @@ export async function getConsoleUsageSummary(input: {
         `,
       scope.values,
     );
+    // What the failure count does not say: requests that did fail somewhere and
+    // were served anyway. One indexed pass over the window's fallback rows.
+    const fallbackResult = await client.query<{ recovered: number }>(
+      `
+          select count(distinct fallback_events.request_activity_id)::integer as recovered
+          from fallback_events
+          join request_activity on request_activity.id = fallback_events.request_activity_id
+          where ${scope.whereSql}
+            and fallback_events.status = 'failed'
+            and request_activity.status = 'succeeded'
+        `,
+      scope.values,
+    );
     const summaryRow = summaryResult.rows[0];
 
     return {
       apiKeyBreakdowns: apiKeyBreakdownResult.rows.map(rowToConsoleUsageDimensionBreakdown),
       avgLatencyMs: readOptionalNumber(summaryRow?.avg_latency_ms),
+      fallbackRecoveredCount: fallbackResult.rows[0]?.recovered ?? 0,
       breakdowns: breakdownResult.rows.map(rowToConsoleUsageBreakdown),
+      cachedInputTokens: readInteger(summaryRow?.cached_input_tokens),
       failureCount: summaryRow?.failure_count ?? 0,
       inputTokens: readInteger(summaryRow?.input_tokens),
       modelBreakdowns: modelBreakdownResult.rows.map(rowToConsoleUsageDimensionBreakdown),
       outputTokens: readInteger(summaryRow?.output_tokens),
+      reasoningTokens: readInteger(summaryRow?.reasoning_tokens),
       providerBreakdowns: providerBreakdownResult.rows.map(rowToConsoleUsageDimensionBreakdown),
       requestCount: summaryRow?.request_count ?? 0,
       totalCostUsd: summaryRow?.total_cost_usd ?? null,
@@ -395,12 +463,31 @@ export async function getConsoleUsageSummary(input: {
   });
 }
 
+const usageWindowMs: Record<ConsoleUsageWindow, number> = {
+  "24h": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+  "30d": 30 * 24 * 60 * 60 * 1000,
+};
+
 export async function getConsolePrevious24HourKpis(
   input: { databaseUrl?: string; now?: Date } = {},
 ): Promise<ConsoleUsageKpis> {
+  return getConsolePreviousWindowKpis({ ...input, window: "24h" });
+}
+
+/**
+ * KPIs for the window immediately before the one on screen, so the Overview can
+ * show a period-over-period delta for whichever window is selected.
+ */
+export async function getConsolePreviousWindowKpis(input: {
+  databaseUrl?: string;
+  now?: Date;
+  window: ConsoleUsageWindow;
+}): Promise<ConsoleUsageKpis> {
   const now = input.now ?? new Date();
-  const end = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+  const span = usageWindowMs[input.window];
+  const end = new Date(now.getTime() - span);
+  const start = new Date(end.getTime() - span);
 
   return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<UsageSummaryRow>(
@@ -434,6 +521,51 @@ export async function getConsolePrevious24HourKpis(
   });
 }
 
+/**
+ * Traffic per route candidate of one virtual model. modelBreakdowns aggregates a
+ * provider model across every virtual model that routes to it, which would
+ * overstate a candidate shared by two routes; this groups by the pair instead.
+ */
+export async function listConsoleVirtualModelCandidateTraffic(input: {
+  databaseUrl?: string;
+  now?: Date;
+  virtualModelId: string;
+  window: ConsoleUsageWindow;
+}): Promise<ConsoleVirtualModelCandidateTraffic[]> {
+  const now = input.now ?? new Date();
+  const start = new Date(now.getTime() - usageWindowMs[input.window]);
+
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
+    const result = await client.query<{
+      failure_count: number;
+      provider_model_id: string;
+      request_count: number;
+    }>(
+      `
+        select request_activity.provider_model_id::text as provider_model_id,
+               count(request_activity.id)::integer as request_count,
+               count(request_activity.id) filter (where request_activity.status = 'failed')::integer
+                 as failure_count
+        from request_activity
+        where request_activity.virtual_model_id = $1
+          and request_activity.provider_model_id is not null
+          and request_activity.started_at >= $2
+          and request_activity.started_at <= $3
+        group by request_activity.provider_model_id
+      `,
+      [input.virtualModelId, start.toISOString(), now.toISOString()],
+    );
+
+    const total = result.rows.reduce((sum, row) => sum + row.request_count, 0);
+    return result.rows.map((row) => ({
+      failureCount: row.failure_count,
+      providerModelId: row.provider_model_id,
+      requestCount: row.request_count,
+      share: total > 0 ? row.request_count / total : 0,
+    }));
+  });
+}
+
 export function formatConsoleUsageCost(totalCostUsd: string | null): string {
   return formatConsoleUsd(totalCostUsd);
 }
@@ -457,6 +589,7 @@ function rowToConsoleUsageDimensionBreakdown(
 ): ConsoleUsageDimensionBreakdown {
   return {
     avgLatencyMs: readOptionalNumber(row.avg_latency_ms),
+    estimatedCostRequests: row.estimated_cost_requests ?? 0,
     failureCount: row.failure_count,
     id: row.id ?? "unknown",
     label: row.label ?? "Unknown",
@@ -469,8 +602,11 @@ function rowToConsoleUsageDimensionBreakdown(
 function rowToConsoleUsageTrendPoint(row: UsageTrendRow): ConsoleUsageTrendPoint {
   return {
     bucketStart: row.bucket_start instanceof Date ? row.bucket_start : new Date(row.bucket_start),
+    cachedInputTokens: readInteger(row.cached_input_tokens),
+    failureCount: row.failure_count,
     inputTokens: readInteger(row.input_tokens),
     outputTokens: readInteger(row.output_tokens),
+    reasoningTokens: readInteger(row.reasoning_tokens),
     requestCount: row.request_count,
     totalCostUsd: row.total_cost_usd,
     totalTokens: readInteger(row.total_tokens),
@@ -524,14 +660,9 @@ function buildUsageScope(
   return { values, whereSql: clauses.join("\n            and ") };
 }
 
-function getUsageWindowStart(now: Date, window: ConsoleUsageWindow): Date {
-  const durationMs = {
-    "24h": 24 * 60 * 60 * 1000,
-    "30d": 30 * 24 * 60 * 60 * 1000,
-    "7d": 7 * 24 * 60 * 60 * 1000,
-  }[window];
-
-  return new Date(now.getTime() - durationMs);
+/** Where a window begins — exported so a page can filter by the same edge. */
+export function getUsageWindowStart(now: Date, window: ConsoleUsageWindow): Date {
+  return new Date(now.getTime() - usageWindowMs[window]);
 }
 
 function readInteger(value: string | null | undefined): number {
@@ -550,4 +681,181 @@ function readOptionalNumber(value: number | string | null | undefined): number |
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.round(parsed) : null;
+}
+
+/**
+ * The distribution panels on Usage. Each answers a different question about the
+ * same window, so they are gathered in one call rather than one query per panel.
+ */
+export type ConsoleUsageBreakouts = {
+  costSources: Array<{ requestCount: number; source: string; totalCostUsd: string | null }>;
+  fallback: {
+    /** Succeeded only after an earlier candidate failed. */
+    recoveredOnRetry: number;
+    /** Failed with no candidate left to try. */
+    failedAfterLastCandidate: number;
+  };
+  protocols: Array<{ avgLatencyMs: number | null; protocol: string; requestCount: number }>;
+  statuses: Array<{ requestCount: number; status: string }>;
+  streaming: { nonStreamed: number; streamed: number };
+  tokenSources: Array<{ requestCount: number; source: string }>;
+  topErrors: Array<{ count: number; errorCode: string; httpStatus: number | null }>;
+};
+
+export async function getConsoleUsageBreakouts(input: {
+  databaseUrl?: string;
+  now?: Date;
+  window: ConsoleUsageWindow;
+}): Promise<ConsoleUsageBreakouts> {
+  const now = input.now ?? new Date();
+  const start = new Date(now.getTime() - usageWindowMs[input.window]);
+  const range = [start.toISOString(), now.toISOString()];
+
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
+    const scope = "request_activity.started_at >= $1 and request_activity.started_at <= $2";
+
+    // One pooled client cannot run these concurrently — pg serialises them and
+    // warns about it — so each query awaits in turn.
+    const tokenSources = await client.query<{ request_count: number; source: string }>(
+      `
+        select coalesce(request_usage.token_source, 'unavailable') as source,
+               count(*)::integer as request_count
+        from request_activity
+        left join request_usage on request_usage.request_activity_id = request_activity.id
+        where ${scope}
+        group by source
+        order by request_count desc
+      `,
+      range,
+    );
+    const costSources = await client.query<{
+      request_count: number;
+      source: string;
+      total_cost_usd: string | null;
+    }>(
+      `
+        select coalesce(request_costs.cost_source, 'unavailable') as source,
+               count(*)::integer as request_count,
+               sum(request_costs.total_cost_usd)::numeric(20, 8)::text as total_cost_usd
+        from request_activity
+        left join request_costs on request_costs.request_activity_id = request_activity.id
+        where ${scope}
+        group by source
+        order by request_count desc
+      `,
+      range,
+    );
+    const protocols = await client.query<{
+      avg_latency_ms: number | null;
+      protocol: string;
+      request_count: number;
+    }>(
+      `
+        select request_activity.protocol,
+               count(*)::integer as request_count,
+               avg(request_activity.latency_ms) filter (
+                 where request_activity.latency_ms is not null
+               )::double precision as avg_latency_ms
+        from request_activity
+        where ${scope}
+        group by request_activity.protocol
+        order by request_count desc
+      `,
+      range,
+    );
+    const statuses = await client.query<{ request_count: number; status: string }>(
+      `
+        select request_activity.status, count(*)::integer as request_count
+        from request_activity
+        where ${scope}
+        group by request_activity.status
+        order by request_count desc
+      `,
+      range,
+    );
+    const streaming = await client.query<{ non_streamed: number; streamed: number }>(
+      `
+        select count(*) filter (where request_activity.stream)::integer as streamed,
+               count(*) filter (where not request_activity.stream)::integer as non_streamed
+        from request_activity
+        where ${scope}
+      `,
+      range,
+    );
+    const fallback = await client.query<{
+      failed_after_last_candidate: number;
+      recovered_on_retry: number;
+    }>(
+      `
+        with attempts as (
+          select request_activity.id,
+                 request_activity.status,
+                 count(fallback_events.id) filter (where fallback_events.status = 'failed')
+                   as failed_attempts
+          from request_activity
+          join fallback_events on fallback_events.request_activity_id = request_activity.id
+          where ${scope}
+          group by request_activity.id, request_activity.status
+        )
+        select count(*) filter (where status = 'succeeded' and failed_attempts > 0)::integer
+                 as recovered_on_retry,
+               count(*) filter (where status = 'failed')::integer as failed_after_last_candidate
+        from attempts
+      `,
+      range,
+    );
+    const topErrors = await client.query<{
+      count: number;
+      error_code: string;
+      http_status: number | null;
+    }>(
+      `
+        select request_activity.error_code,
+               max(request_activity.http_status)::integer as http_status,
+               count(*)::integer as count
+        from request_activity
+        where ${scope}
+          and request_activity.status = 'failed'
+          and request_activity.error_code is not null
+        group by request_activity.error_code
+        order by count desc, request_activity.error_code
+        limit 5
+      `,
+      range,
+    );
+
+    return {
+      costSources: costSources.rows.map((row) => ({
+        requestCount: row.request_count,
+        source: row.source,
+        totalCostUsd: row.total_cost_usd,
+      })),
+      fallback: {
+        failedAfterLastCandidate: fallback.rows[0]?.failed_after_last_candidate ?? 0,
+        recoveredOnRetry: fallback.rows[0]?.recovered_on_retry ?? 0,
+      },
+      protocols: protocols.rows.map((row) => ({
+        avgLatencyMs: readOptionalNumber(row.avg_latency_ms),
+        protocol: row.protocol,
+        requestCount: row.request_count,
+      })),
+      statuses: statuses.rows.map((row) => ({
+        requestCount: row.request_count,
+        status: row.status,
+      })),
+      streaming: {
+        nonStreamed: streaming.rows[0]?.non_streamed ?? 0,
+        streamed: streaming.rows[0]?.streamed ?? 0,
+      },
+      tokenSources: tokenSources.rows.map((row) => ({
+        requestCount: row.request_count,
+        source: row.source,
+      })),
+      topErrors: topErrors.rows.map((row) => ({
+        count: row.count,
+        errorCode: row.error_code,
+        httpStatus: row.http_status,
+      })),
+    };
+  });
 }

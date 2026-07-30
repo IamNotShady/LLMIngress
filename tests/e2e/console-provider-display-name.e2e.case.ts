@@ -26,16 +26,22 @@ test("template Provider creation persists the submitted display name", async ({ 
       await waitForConsole(baseUrl, consoleApp);
       await signInFromFirstRun(page, baseUrl);
 
-      await page.goto(`${baseUrl}/providers?providerDialog=new`);
+      await page.goto(`${baseUrl}/providers?dialog=new`);
       const dialog = page.getByRole("dialog", { name: "Add Provider" });
       await dialog.getByRole("tab", { name: "Local" }).click();
-      await dialog.getByLabel("Provider type", { exact: true }).selectOption("ollama");
+      await page.waitForURL(/dialogTab=local/);
+      await dialog.getByRole("link", { name: "Ollama", exact: true }).click();
+      await page.waitForURL(/template=ollama(&|$)/);
       await dialog.getByLabel("Provider display name").fill("  Home Ollama  ");
       await dialog.getByLabel("Provider base URL").fill("http://127.0.0.1:11434/v1");
       await dialog.getByRole("button", { name: "Create" }).click();
 
       await expect(page).toHaveURL(`${baseUrl}/providers`);
-      await expect(page.getByText("Home Ollama", { exact: true })).toBeVisible();
+      // The trimmed name is what the list and its detail both carry.
+      await expect(page.getByRole("link", { name: /Home Ollama/ })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { level: 2, name: "Home Ollama", exact: true }),
+      ).toBeVisible();
       const stored = await fixture.query(
         "select display_name from providers where provider_key = 'ollama'",
       );
@@ -68,9 +74,17 @@ test("allows multiple providers of the same type including duplicate display nam
       await signInFromFirstRun(page, baseUrl);
 
       const createOpenAIProvider = async (input?: { baseUrl: string; displayName: string }) => {
-        await page.goto(`${baseUrl}/providers?providerDialog=new`);
+        await page.goto(`${baseUrl}/providers?dialog=new`);
         const dialog = page.getByRole("dialog", { name: "Add Provider" });
-        await expect(dialog.getByLabel("Provider type", { exact: true })).toHaveValue("openai");
+        await dialog.getByRole("tab", { name: "API Keys" }).click();
+        await page.waitForURL(/dialogTab=remote_api_key/);
+        await dialog.getByRole("link", { name: "OpenAI", exact: true }).click();
+        await page.waitForURL(/template=openai(&|$)/);
+        // The template's own defaults are what a plain Create stores.
+        await expect(dialog.getByLabel("Provider display name")).toHaveValue("OpenAI");
+        await expect(dialog.getByLabel("Provider base URL")).toHaveValue(
+          "https://api.openai.com/v1",
+        );
         if (input) {
           await dialog.getByLabel("Provider display name").fill(input.displayName);
           await dialog.getByLabel("Provider base URL").fill(input.baseUrl);
@@ -86,9 +100,9 @@ test("allows multiple providers of the same type including duplicate display nam
       });
       await createOpenAIProvider();
 
-      const providerRows = page.locator(".providers-table tbody tr");
-      await expect(providerRows).toHaveCount(3);
-      await expect(providerRows.filter({ hasText: "OpenAI EU" })).toHaveCount(1);
+      // Three separate providers of one type, told apart by their names.
+      await expect(page.getByRole("link", { name: /OpenAI/ })).toHaveCount(3);
+      await expect(page.getByRole("link", { name: /OpenAI EU/ })).toHaveCount(1);
       const stored = await fixture.query(
         `
           select display_name, base_url

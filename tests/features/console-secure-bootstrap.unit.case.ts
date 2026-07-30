@@ -1,6 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { accessSync, constants, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTestPostgresFixture, runMigrations } from "@llmingress/db";
@@ -12,13 +19,15 @@ describe("console secure bootstrap", () => {
   it("requires ENCRYPTION_KEY from env and keeps host publishes loopback-bound by default", () => {
     const compose = readFileSync("docker-compose.yml", "utf8");
     const deploy = readFileSync("scripts/deploy.sh", "utf8");
+    const exampleEnv = readFileSync(".env.example", "utf8");
     const shell = "$";
 
     expect(compose).toContain(`${shell}{ENCRYPTION_KEY:?ENCRYPTION_KEY is required}`);
     expect(compose).not.toContain("llmi-local-master");
     expect(compose).toContain(
-      `${shell}{DATABASE_URL:-postgresql://postgres:llmi-local-db@postgres:5432/postgres}`,
+      `${shell}{COMPOSE_DATABASE_URL:-postgresql://postgres:llmi-local-db@postgres:5432/postgres}`,
     );
+    expect(compose).not.toContain(`DATABASE_URL: ${shell}{DATABASE_URL:-`);
     expect(compose).toContain("POSTGRES_PASSWORD: llmi-local-db");
     expect(compose).not.toContain("CONSOLE_SETUP_TOKEN");
     expect(compose).not.toContain(`${shell}{ENCRYPTION_KEY:-`);
@@ -36,15 +45,42 @@ describe("console secure bootstrap", () => {
     expect(compose).toContain(
       `"${shell}{POSTGRES_PUBLISH_HOST:-127.0.0.1}:${shell}{POSTGRES_PORT:-55432}:5432"`,
     );
+    expect(compose).toContain(
+      `GATEWAY_URL: "${shell}{GATEWAY_URL:-http://127.0.0.1:${shell}{GATEWAY_PORT:-4000}}"`,
+    );
+    expect(exampleEnv).not.toMatch(/^GATEWAY_URL=/m);
     expect(compose).not.toContain('"4000:4000"');
     expect(compose).not.toContain('"3000:3000"');
     expect(compose).not.toContain(`"${shell}{POSTGRES_PORT:-55432}:5432"`);
+
+    for (const key of [
+      "GATEWAY_BODY_LIMIT_BYTES",
+      "GATEWAY_BREAKER_ENABLED",
+      "GATEWAY_CONFIG_NOTIFICATIONS",
+      "GATEWAY_PROVIDER_RETRIES",
+      "GATEWAY_STREAM_CONNECT_TIMEOUT_MS",
+      "GATEWAY_STREAM_IDLE_TIMEOUT_MS",
+      "GROK_OAUTH_CLIENT_ID",
+      "LLMINGRESS_DB_POOL_MAX",
+      "LOG_LEVEL",
+      "MINIMAX_OAUTH_CLIENT_ID",
+      "PROVIDER_REQUEST_TIMEOUT_MS",
+      "RETENTION_CLEANUP_INTERVAL_MS",
+      "WORKER_ACTIVITY_RETENTION_DAYS",
+      "WORKER_HEARTBEAT_MS",
+      "WORKER_JOB_LEASE_MS",
+      "WORKER_MAX_JOB_DURATION_MS",
+    ]) {
+      expect(compose, key).toMatch(new RegExp(`^  ${key}:`, "m"));
+    }
 
     accessSync("scripts/deploy.sh", constants.X_OK);
     expect(deploy).toContain("openssl rand -base64 32");
     expect(deploy).toContain("^ENCRYPTION_KEY=");
     expect(deploy).toContain("--ensure-env");
-    expect(deploy).toContain('exec docker compose up --build "$@"');
+    expect(deploy).toContain("--project-name");
+    expect(deploy).toContain("--force-recreate");
+    expect(deploy).toContain("--remove-orphans");
   });
 
   it("writes ENCRYPTION_KEY into .env only when missing", () => {
@@ -69,6 +105,35 @@ describe("console secure bootstrap", () => {
     expect(readFileSync(join(directory, ".env"), "utf8")).toBe("ENCRYPTION_KEY=keep-me\n");
   });
 
+  it("isolates Compose projects by branch while keeping main on the default name", () => {
+    expect(runDeployWithMockedDocker("main")).toEqual([
+      "compose",
+      "--env-file",
+      ".env",
+      "--project-name",
+      "llmingress",
+      "up",
+      "--build",
+      "--force-recreate",
+      "--remove-orphans",
+      "-d",
+    ]);
+    expect(runDeployWithMockedDocker("feat/console-ui-redesign", true)).toEqual([
+      "compose",
+      "--env-file",
+      ".env",
+      "--env-file",
+      ".env.local",
+      "--project-name",
+      "llmingress-feat-console-ui-redesign",
+      "up",
+      "--build",
+      "--force-recreate",
+      "--remove-orphans",
+      "-d",
+    ]);
+  });
+
   it("has no setup token runtime or documented configuration surface", () => {
     const files = [
       ".env.example",
@@ -76,8 +141,7 @@ describe("console secure bootstrap", () => {
       "docs/PRODUCT.md",
       "packages/config/src/index.ts",
       "apps/console/src/app/(dashboard)/layout.tsx",
-      "apps/console/src/app/_components/auth-screens.tsx",
-      "apps/console/src/app/_components/console-mutation-form.tsx",
+      "apps/console/src/app/_ui/auth.tsx",
       "apps/console/src/app/api/auth/setup/route.ts",
     ];
 
@@ -115,3 +179,39 @@ describe("console secure bootstrap", () => {
     }
   });
 });
+
+function runDeployWithMockedDocker(branchName: string, withLocalEnv = false): string[] {
+  const directory = mkdtempSync(join(tmpdir(), "llmingress-deploy-project-"));
+  const scriptsDirectory = join(directory, "scripts");
+  const binDirectory = join(directory, "bin");
+  const dockerArgumentsPath = join(directory, "docker-arguments");
+  mkdirSync(scriptsDirectory);
+  mkdirSync(binDirectory);
+  writeFileSync(join(directory, ".env"), "ENCRYPTION_KEY=test-key\n");
+  if (withLocalEnv) {
+    writeFileSync(join(directory, ".env.local"), "GATEWAY_PORT=4001\n");
+  }
+  writeFileSync(join(scriptsDirectory, "deploy.sh"), readFileSync("scripts/deploy.sh"), {
+    mode: 0o755,
+  });
+  writeFileSync(join(binDirectory, "git"), '#!/bin/sh\nprintf "%s\\n" "$TEST_GIT_BRANCH"\n', {
+    mode: 0o755,
+  });
+  writeFileSync(
+    join(binDirectory, "docker"),
+    '#!/bin/sh\nprintf "%s\\n" "$@" > "$TEST_DOCKER_ARGUMENTS_PATH"\n',
+    { mode: 0o755 },
+  );
+
+  execFileSync(join(scriptsDirectory, "deploy.sh"), ["-d"], {
+    cwd: directory,
+    env: {
+      ...process.env,
+      PATH: `${binDirectory}:${process.env.PATH}`,
+      TEST_DOCKER_ARGUMENTS_PATH: dockerArgumentsPath,
+      TEST_GIT_BRANCH: branchName,
+    },
+  });
+
+  return readFileSync(dockerArgumentsPath, "utf8").trim().split("\n");
+}

@@ -21,6 +21,11 @@ Browser  -> Console -> PostgreSQL <- Worker
 - Code shared by applications belongs under `packages/`; app directories contain process or UI
   entrypoints only.
 
+Console API actions commit all database reads and writes that make up one business mutation in one
+PostgreSQL transaction owned by `packages/db`. Upstream network calls run outside that transaction;
+after an upstream call succeeds, its related database state is committed atomically. Durable jobs
+are enqueued only after the business transaction commits and are not part of that transaction.
+
 ## Request and configuration flow
 
 ```text
@@ -69,6 +74,7 @@ The durable Job Runner accepts exactly:
 - `model_refresh`
 - `provider_connection_probe`
 - `price_sync`
+- `provider_quota_probe`
 
 Jobs use `FOR UPDATE SKIP LOCKED`, leases, heartbeat renewal, attempt fencing, bounded retries, and
 `AbortSignal`. A Worker that loses its lease cannot overwrite a newer attempt.
@@ -76,6 +82,12 @@ Jobs use `FOR UPDATE SKIP LOCKED`, leases, heartbeat renewal, attempt fencing, b
 Retention and stale-concurrency repair are idempotent in-process tasks protected by PostgreSQL
 advisory locks. They create no `jobs` or `job_attempts`. Retention deletes in batches of at most
 1,000 and preserves the health event referenced by the current summary.
+
+Model refresh keeps every catalog source section (not just the price-sync allowlist) and, when a
+model's own catalog misses, resolves its metadata by model id across the other catalogs, trusted
+sources first, leaving genuinely ambiguous matches unresolved. Catalog source fetches share a
+per-URL in-memory cache (`WORKER_MODEL_CATALOG_CACHE_TTL_MS`, 0 disables) with single-flight and
+stale-on-error.
 
 ## Data invariants
 

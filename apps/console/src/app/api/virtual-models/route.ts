@@ -1,13 +1,10 @@
-import {
-  createRoutePolicy,
-  normalizeRoutePolicyFormInput,
-  updateRoutePolicy,
-} from "@llmingress/db/console-route-policies";
+import { normalizeRoutePolicyFormInput } from "@llmingress/db/console-route-policies";
 import {
   createVirtualModelWithRoute,
   deleteVirtualModel,
   normalizeVirtualModelFormInput,
   updateVirtualModel,
+  updateVirtualModelWithRoute,
 } from "@llmingress/db/console-virtual-models";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
@@ -41,35 +38,28 @@ export const POST = withConsoleAuth(async (request) => {
         }),
       });
     } else if (action === "updateWithRoute") {
-      await updateVirtualModel({
-        id: readRequiredText(form, "id"),
+      // The editor saves the model and its route with one button, so they are
+      // one write: a route the contract refuses must not leave a rename behind.
+      const virtualModelId = readRequiredText(form, "id");
+      const routePolicyId = readText(form, "routePolicyId");
+      const providerModelIds = readTextValues(form, "providerModelIds");
+      await updateVirtualModelWithRoute({
+        id: virtualModelId,
+        routePolicy:
+          providerModelIds.length > 0
+            ? normalizeRoutePolicyFormInput({
+                endpointProtocol: readText(form, "endpointProtocol"),
+                providerModelIds,
+                strategy: readText(form, "strategy"),
+                virtualModelId,
+              })
+            : null,
+        routePolicyId: routePolicyId ?? null,
         virtualModel: normalizeVirtualModelFormInput({
           description: readText(form, "description"),
           name: readText(form, "name"),
         }),
       });
-      const routePolicyId = readText(form, "routePolicyId");
-      const providerModelIds = readTextValues(form, "providerModelIds");
-      if (routePolicyId && providerModelIds.length > 0) {
-        await updateRoutePolicy({
-          id: routePolicyId,
-          routePolicy: normalizeRoutePolicyFormInput({
-            endpointProtocol: readText(form, "endpointProtocol"),
-            providerModelIds,
-            strategy: readText(form, "strategy"),
-            virtualModelId: readRequiredText(form, "id"),
-          }),
-        });
-      } else if (!routePolicyId && providerModelIds.length > 0) {
-        await createRoutePolicy({
-          routePolicy: normalizeRoutePolicyFormInput({
-            endpointProtocol: readText(form, "endpointProtocol"),
-            providerModelIds,
-            strategy: readText(form, "strategy"),
-            virtualModelId: readRequiredText(form, "id"),
-          }),
-        });
-      }
     } else if (action === "delete") {
       await deleteVirtualModel({
         id: readRequiredText(form, "id"),

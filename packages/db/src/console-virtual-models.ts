@@ -9,8 +9,10 @@ import {
 import {
   type ConsoleRoutePolicy,
   createRoutePolicyWithClient,
+  type NormalizedRoutePolicyFormInput,
   normalizeRoutePolicyFormInput,
   type RoutePolicyFormInput,
+  updateRoutePolicyWithClient,
 } from "./console-route-policies.ts";
 
 export type VirtualModelFormInput = {
@@ -255,10 +257,30 @@ export async function updateVirtualModel(input: {
     description: `Update virtual model ${input.id}`,
     changes: [{ table: "virtual_models", recordId: input.id }],
     write: async (client) => {
-      await assertVirtualModelExists(client, input.id);
-      await assertVirtualModelNameAvailable(client, input.virtualModel.name, input.id);
-      const result = await client.query<VirtualModelRow>(
-        `
+      virtualModel = await updateVirtualModelWithClient({
+        client,
+        id: input.id,
+        virtualModel: input.virtualModel,
+      });
+    },
+  });
+
+  return requireSavedVirtualModel(virtualModel);
+}
+
+/**
+ * The write half on a caller's client, so a save that changes both the model
+ * and its route commits or fails as one.
+ */
+export async function updateVirtualModelWithClient(input: {
+  client: QueryClient;
+  id: string;
+  virtualModel: NormalizedVirtualModelFormInput;
+}): Promise<ConsoleVirtualModel> {
+  await assertVirtualModelExists(input.client, input.id);
+  await assertVirtualModelNameAvailable(input.client, input.virtualModel.name, input.id);
+  const result = await input.client.query<VirtualModelRow>(
+    `
           update virtual_models
           set name = $2,
               description = $3,
@@ -309,9 +331,53 @@ export async function updateVirtualModel(input: {
                         and request_activity.started_at >= now() - interval '24 hours'
                     ) as cost_24h_usd
         `,
-        [input.id, input.virtualModel.name, input.virtualModel.description],
-      );
-      virtualModel = rowToConsoleVirtualModel(requireRow(result.rows[0]));
+    [input.id, input.virtualModel.name, input.virtualModel.description],
+  );
+  return rowToConsoleVirtualModel(requireRow(result.rows[0]));
+}
+
+/**
+ * A model and its route saved together. The editor puts both behind one button,
+ * so a route the contract refuses has to take the rename down with it — two
+ * publishes would leave the operator reading "refused" over a model that had
+ * already been renamed.
+ */
+export async function updateVirtualModelWithRoute(input: {
+  databaseUrl?: string;
+  id: string;
+  routePolicy: NormalizedRoutePolicyFormInput | null;
+  routePolicyId: string | null;
+  virtualModel: NormalizedVirtualModelFormInput;
+}): Promise<ConsoleVirtualModel> {
+  let virtualModel: ConsoleVirtualModel | undefined;
+
+  const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
+  await publisher.publish({
+    source: "console",
+    description: `Update virtual model ${input.id}`,
+    changes: [{ table: "virtual_models", recordId: input.id }],
+    write: async (client) => {
+      virtualModel = await updateVirtualModelWithClient({
+        client,
+        id: input.id,
+        virtualModel: input.virtualModel,
+      });
+      if (!input.routePolicy) {
+        return;
+      }
+      if (input.routePolicyId) {
+        await updateRoutePolicyWithClient({
+          client,
+          id: input.routePolicyId,
+          routePolicy: input.routePolicy,
+        });
+        return;
+      }
+      await createRoutePolicyWithClient({
+        client,
+        routePolicy: input.routePolicy,
+        routePolicyId: randomUUID(),
+      });
     },
   });
 
@@ -401,6 +467,7 @@ async function assertVirtualModelNameAvailable(
       "Virtual Model name already exists.",
       "virtual_model_name_conflict",
       {
+        field: "name",
         name,
       },
     );
@@ -495,7 +562,8 @@ function buildVirtualModelListSql(): string {
            ) as cost_24h_usd
     from virtual_models
     where virtual_models.deleted_at is null
-    order by virtual_models.name
+    order by virtual_models.created_at desc,
+             virtual_models.id desc
   `;
 }
 
@@ -536,4 +604,44 @@ function requireSavedRoutePolicy(routePolicy: ConsoleRoutePolicy | undefined): C
     throw new Error("Virtual Model route policy was not saved.");
   }
   return routePolicy;
+}
+
+/** One api_key_virtual_models row, resolved for display on both sides. */
+export type ConsoleApiKeyVirtualModelGrant = {
+  apiKeyId: string;
+  apiKeyName: string;
+  /** True when this virtual model is the key's default_virtual_model_id. */
+  isDefault: boolean;
+  virtualModelId: string;
+};
+
+export async function listConsoleApiKeyVirtualModelGrants(
+  input: { databaseUrl?: string } = {},
+): Promise<ConsoleApiKeyVirtualModelGrant[]> {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
+    const result = await client.query<{
+      api_key_id: string;
+      api_key_name: string;
+      is_default: boolean;
+      virtual_model_id: string;
+    }>(
+      `
+        select api_keys.id::text as api_key_id,
+               api_keys.name as api_key_name,
+               (api_keys.default_virtual_model_id = api_key_virtual_models.virtual_model_id)
+                 as is_default,
+               api_key_virtual_models.virtual_model_id::text as virtual_model_id
+        from api_key_virtual_models
+        join api_keys on api_keys.id = api_key_virtual_models.api_key_id
+        where api_keys.deleted_at is null
+        order by api_keys.name
+      `,
+    );
+    return result.rows.map((row) => ({
+      apiKeyId: row.api_key_id,
+      apiKeyName: row.api_key_name,
+      isDefault: row.is_default ?? false,
+      virtualModelId: row.virtual_model_id,
+    }));
+  });
 }

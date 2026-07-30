@@ -2,6 +2,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { gatewayBackgroundTasks } from "../../packages/gateway-runtime/src/gateway-background-tasks";
+import {
+  createGatewayCircuitBreakerRegistry,
+  type GatewayCircuitBreakerRegistry,
+} from "../../packages/gateway-runtime/src/gateway-circuit-breaker";
 import type { GatewayRouteCandidateSnapshot } from "../../packages/gateway-runtime/src/gateway-config-reload";
 import {
   buildGatewayProviderErrorLog,
@@ -82,6 +86,7 @@ describe("gateway fallback health", () => {
         }),
         fallbackCandidate({ providerModelId: "pm-should-not-run" }),
       ],
+      circuitBreakerRegistry: passthroughBreaker(),
       fallbackAttempts,
       enqueueConnectionProbe,
     });
@@ -144,6 +149,7 @@ describe("gateway fallback health", () => {
           providerApiKeys: [providerKey({ keyPrefix: "fallback-key" })],
         }),
       ],
+      circuitBreakerRegistry: passthroughBreaker(),
       fallbackAttempts,
       enqueueConnectionProbe,
     });
@@ -196,6 +202,7 @@ describe("gateway fallback health", () => {
           providerApiKeys: [providerKey({ keyPrefix: "fallback-key" })],
         }),
       ],
+      circuitBreakerRegistry: passthroughBreaker(),
       fallbackAttempts,
       enqueueConnectionProbe,
     });
@@ -257,4 +264,11 @@ function providerKey(overrides: Partial<FallbackProviderApiKey> = {}): FallbackP
     providerConnectionId: "connection-1",
     ...overrides,
   };
+}
+
+// These chain-classification tests predate the circuit breaker; a disabled
+// registry keeps them exercising the pure fallback path (one call per attempt,
+// no breaker/retry state) so their assertions stay at the chain-logic altitude.
+function passthroughBreaker(): GatewayCircuitBreakerRegistry {
+  return createGatewayCircuitBreakerRegistry({ config: { enabled: false } });
 }

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   normalizeModelInputModalities,
   normalizeModelOutputModalities,
@@ -12,11 +12,16 @@ import {
   normalizeModelsDevProviderModelRegistryEntries,
   normalizeOpenRouterProviderModelRegistryEntries,
   normalizeVercelAiGatewayProviderModelRegistryEntries,
+  resetProviderModelCatalogCacheForTests,
 } from "../../packages/provider/src/price-source.ts";
 
 const syncedAt = new Date("2026-07-10T00:00:00.000Z");
 
 describe("provider model capability sync", () => {
+  beforeEach(() => {
+    resetProviderModelCatalogCacheForTests();
+  });
+
   it("normalizes core modality aliases in stable enum order", () => {
     expect(normalizeModelInputModalities(["vision", "file", "text", "TEXT", "pdf"])).toEqual([
       "text",

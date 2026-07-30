@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { withPooledPostgresClient } from "@llmingress/db/client";
+import { withPooledPostgresClient, withPostgresTransaction } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import { clearProviderConnectionHealthWithClient } from "@llmingress/db/provider-health";
+import { clearProviderQuotaWithClient } from "@llmingress/db/provider-quota";
 import type { EncryptionKeySource } from "@llmingress/security/encryption-key";
 import {
   createSecretEncryption,
@@ -136,6 +137,7 @@ export async function saveProviderApiKey(input: {
   priority?: number;
   providerApiKeyId?: string;
   providerId: string;
+  quotaProbeEnabled?: boolean;
 }): Promise<ProviderApiKeySaveResult> {
   const stored = prepareProviderApiKeyForStorage({
     encryptionKeySource: input.encryptionKeySource,
@@ -184,6 +186,7 @@ export async function saveProviderApiKey(input: {
                   label = $6,
                   enabled = $7,
                   priority = $8,
+                  quota_probe_enabled = $9,
                   rotated_at = now(),
                   updated_at = now()
               where id = $1
@@ -210,6 +213,7 @@ export async function saveProviderApiKey(input: {
               normalizeOptionalLabel(input.label),
               input.enabled ?? true,
               normalizePriority(input.priority),
+              input.quotaProbeEnabled ?? true,
             ],
           )
         : await client.query<ProviderApiKeyStorageRow>(
@@ -222,9 +226,10 @@ export async function saveProviderApiKey(input: {
             key_id,
             label,
             enabled,
-            priority
+            priority,
+            quota_probe_enabled
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
           returning id::text,
                     provider_id::text,
                     key_prefix,
@@ -246,6 +251,7 @@ export async function saveProviderApiKey(input: {
               normalizeOptionalLabel(input.label),
               input.enabled ?? true,
               normalizePriority(input.priority),
+              input.quotaProbeEnabled ?? true,
             ],
           );
       const row = requireProviderApiKeyRow(result.rows[0]);
@@ -255,6 +261,18 @@ export async function saveProviderApiKey(input: {
           providerConnectionId: row.id,
           providerId: row.provider_id,
         });
+      }
+      if (input.quotaProbeEnabled) {
+        await client.query(
+          `
+            update provider_quota_summary
+            set next_refresh_at = now(),
+                updated_at = now()
+            where provider_id = $1
+              and provider_connection_id = $2
+          `,
+          [row.provider_id, row.id],
+        );
       }
     },
   });
@@ -295,6 +313,10 @@ export async function deleteProviderApiKey(input: {
           providerConnectionId: input.providerApiKeyId,
           providerId,
         });
+        await clearProviderQuotaWithClient(client, {
+          providerConnectionId: input.providerApiKeyId,
+          providerId,
+        });
       }
     },
   });
@@ -303,6 +325,113 @@ export async function deleteProviderApiKey(input: {
     throw consoleNotFoundError("Provider API key was not found.", "provider_api_key_not_found");
   }
   return { providerId };
+}
+
+/**
+ * The label and routing priority of a stored key. Rotating the secret is a
+ * separate act — an operator changing a label should not have to produce a new
+ * credential to do it.
+ */
+export async function updateProviderApiKeySettings(input: {
+  databaseUrl?: string;
+  enabled: boolean;
+  label: string | null;
+  priority: number;
+  providerApiKeyId: string;
+  quotaProbeEnabled?: boolean;
+}): Promise<{ enabled: boolean; id: string; providerId: string }> {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
+    const result = await client.query<{ enabled: boolean; id: string; provider_id: string }>(
+      `
+        update provider_api_keys
+        set label = $2,
+            priority = $3,
+            enabled = $4,
+            quota_probe_enabled = coalesce($5, quota_probe_enabled),
+            updated_at = now()
+        where id = $1
+          and deleted_at is null
+        returning enabled, id::text, provider_id::text
+      `,
+      // The same rules as the paste path: renaming a connection is not a way
+      // past the label length or the 0-100 integer the column stores.
+      [
+        input.providerApiKeyId,
+        normalizeOptionalLabel(input.label),
+        normalizePriority(input.priority),
+        input.enabled,
+        input.quotaProbeEnabled,
+      ],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw consoleNotFoundError("Provider API key was not found.", "provider_api_key_not_found", {
+        providerApiKeyId: input.providerApiKeyId,
+      });
+    }
+    if (input.quotaProbeEnabled) {
+      await client.query(
+        `
+          update provider_quota_summary
+          set next_refresh_at = now(),
+              updated_at = now()
+          where provider_id = $1
+            and provider_connection_id = $2
+        `,
+        [row.provider_id, row.id],
+      );
+    }
+    return { enabled: row.enabled, id: row.id, providerId: row.provider_id };
+  });
+}
+
+export async function setProviderApiKeyQuotaProbeEnabled(input: {
+  databaseUrl?: string;
+  providerApiKeyId: string;
+  quotaProbeEnabled: boolean;
+}): Promise<{ id: string; providerId: string; quotaProbeEnabled: boolean }> {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
+    const result = await client.query<{
+      id: string;
+      provider_id: string;
+      quota_probe_enabled: boolean;
+    }>(
+      `
+        update provider_api_keys
+        set quota_probe_enabled = $2,
+            updated_at = now()
+        where id = $1
+          and deleted_at is null
+        returning id::text, provider_id::text, quota_probe_enabled
+      `,
+      [input.providerApiKeyId, input.quotaProbeEnabled],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw consoleNotFoundError("Provider API key was not found.", "provider_api_key_not_found", {
+        providerApiKeyId: input.providerApiKeyId,
+      });
+    }
+    if (input.quotaProbeEnabled) {
+      // Pull the stored schedule up so the 5-minute scan probes promptly
+      // instead of waiting out the previous next_refresh_at.
+      await client.query(
+        `
+          update provider_quota_summary
+          set next_refresh_at = now(),
+              updated_at = now()
+          where provider_id = $1
+            and provider_connection_id = $2
+        `,
+        [row.provider_id, row.id],
+      );
+    }
+    return {
+      id: row.id,
+      providerId: row.provider_id,
+      quotaProbeEnabled: row.quota_probe_enabled,
+    };
+  });
 }
 
 export async function setProviderApiKeyEnabled(input: {

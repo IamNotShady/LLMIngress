@@ -1,5 +1,10 @@
 import { PostgresClient } from "@llmingress/db/client";
+import {
+  enqueueProviderQuotaProbeJob,
+  listDueProviderQuotaProbeConnections,
+} from "@llmingress/db/provider-jobs";
 import { createLogger } from "@llmingress/logging";
+import { readModelCatalogCacheTtlMs } from "@llmingress/provider/price-source";
 import {
   cleanupExpiredOperationalData,
   readRetentionCleanupSettings,
@@ -40,11 +45,15 @@ type CreateCoreMaintenanceTasksOptions = {
 const logger = createLogger("worker");
 const defaultTickIntervalMs = 30_000;
 const staleConcurrencyIntervalMs = 5 * 60_000;
+const providerQuotaProbeIntervalMs = 5 * 60_000;
 
 export function createCoreMaintenanceTasks(
   options: CreateCoreMaintenanceTasksOptions = {},
 ): WorkerMaintenanceTask[] {
   const retention = readRetentionCleanupSettings();
+  // Fail fast at startup on a malformed model catalog cache TTL rather than degrading silently at
+  // refresh time (where Promise.allSettled would swallow the error).
+  readModelCatalogCacheTtlMs();
   return [
     {
       id: "stale-concurrency-reconcile",
@@ -66,6 +75,28 @@ export function createCoreMaintenanceTasks(
           settings: retention,
           signal,
         });
+      },
+    },
+    {
+      // Scheduling lives here rather than in the job handler so a chain broken
+      // by a lost or failed job self-heals on the next cycle.
+      id: "provider-quota-probe-enqueue",
+      intervalMs: providerQuotaProbeIntervalMs,
+      run: async (signal) => {
+        const connections = await listDueProviderQuotaProbeConnections({
+          databaseUrl: options.databaseUrl,
+        });
+        for (const connection of connections) {
+          if (signal.aborted) {
+            return;
+          }
+          await enqueueProviderQuotaProbeJob({
+            databaseUrl: options.databaseUrl,
+            providerConnectionId: connection.providerConnectionId,
+            providerId: connection.providerId,
+            source: "scheduled_probe",
+          });
+        }
       },
     },
   ];

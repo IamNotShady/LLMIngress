@@ -20,7 +20,7 @@ import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
 const apiKey = "llmi_virtual_model_capability_contract_key";
 
-test("route policy save allows unknown and rejects mismatched provider model capabilities", async () => {
+test("route policy save allows unknown and rejects differing provider model capabilities", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_vm_contract_console_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -61,7 +61,7 @@ test("route policy save allows unknown and rejects mismatched provider model cap
   }
 });
 
-test("route policy save reports the exact conflicting context windows that both round to ~1M", async () => {
+test("route policy save reports exact conflicting context windows", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_vm_ctx_conflict_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -145,6 +145,9 @@ test("virtual model creation atomically requires and writes its route", async ()
         }),
       }),
     ).rejects.toMatchObject({ code: "route_policy_candidates_required" });
+
+    expect(await countVirtualModelsByName(fixture, ["vm-atomic-empty"])).toBe(0);
+    expect(await countRows(fixture, "config_versions")).toBe(versionBefore);
 
     await expect(
       createVirtualModelWithRoute({

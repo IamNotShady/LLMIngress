@@ -4,6 +4,7 @@ import { createConfigPublisher } from "@llmingress/db/config-versions";
 import type { RouteEndpointProtocol } from "@llmingress/domain";
 import {
   type ApiKeyLimitRuleInput,
+  assertCompleteApiKeyLimitRules,
   type ConsoleApiKeyLimit,
   readApiKeyLimitsWithClient,
   replaceApiKeyLimitRulesWithClient,
@@ -23,6 +24,11 @@ export type ConsoleApiKey = NormalizedApiKeyFormInput & {
   enabled: boolean;
   id: string;
   keyPrefix: string;
+  /**
+   * Derived from the key's most recent request — api_keys has no such column,
+   * so a key that has never served traffic reports null.
+   */
+  lastUsedAt: Date | null;
   limitsEnabled: boolean;
   requestAttributionCount: number;
   updatedAt: Date;
@@ -72,6 +78,7 @@ type ApiKeyRow = {
   enabled: boolean;
   id: string;
   key_prefix: string;
+  last_used_at?: Date | string | null;
   limits_enabled: boolean;
   name: string;
   request_attribution_count: number;
@@ -155,10 +162,16 @@ export async function listApiKeys(databaseUrl?: string): Promise<ConsoleApiKey[]
                  select count(*)::integer
                  from request_activity
                  where request_activity.api_key_id = api_keys.id
-               ) as request_attribution_count
+               ) as request_attribution_count,
+               (
+                 select max(request_activity.started_at)
+                 from request_activity
+                 where request_activity.api_key_id = api_keys.id
+               ) as last_used_at
         from api_keys
         where api_keys.deleted_at is null
-        order by api_keys.name
+        order by api_keys.created_at desc,
+                 api_keys.id desc
       `,
     );
     return result.rows.map(rowToConsoleApiKey);
@@ -261,7 +274,7 @@ export async function createApiKeyWithSettings(input: {
     changes: [
       { table: "api_keys", recordId: apiKeyId },
       { table: "api_key_virtual_models", recordId: apiKeyId },
-      { table: "api_key_limits", recordId: apiKeyId },
+      ...(input.limitsEnabled ? [{ table: "api_key_limits" as const, recordId: apiKeyId }] : []),
     ],
     write: async (client) => {
       await assertVirtualModelsAvailable(client, input.virtualModels.allowedVirtualModelIds);
@@ -289,6 +302,7 @@ export async function createApiKeyWithSettings(input: {
       );
       await replaceApiKeyVirtualModelsWithClient(client, apiKeyId, input.virtualModels);
       if (input.limitsEnabled) {
+        assertCompleteApiKeyLimitRules(input.limitRules);
         await replaceApiKeyLimitRulesWithClient(client, apiKeyId, input.limitRules);
       }
       apiKey = {
@@ -338,7 +352,10 @@ export async function updateApiKeyWithSettings(input: {
       );
       await replaceApiKeyVirtualModelsWithClient(client, input.id, input.virtualModels);
       if (input.limitsEnabled) {
+        assertCompleteApiKeyLimitRules(input.limitRules);
         await replaceApiKeyLimitRulesWithClient(client, input.id, input.limitRules);
+      } else {
+        await replaceApiKeyLimitRulesWithClient(client, input.id, []);
       }
     },
   });
@@ -588,6 +605,7 @@ function rowToConsoleApiKey(row: ApiKeyRow): ConsoleApiKey {
     enabled: row.enabled,
     id: row.id,
     keyPrefix: row.key_prefix,
+    lastUsedAt: row.last_used_at ? new Date(row.last_used_at) : null,
     limitsEnabled: row.limits_enabled,
     name: row.name,
     requestAttributionCount: row.request_attribution_count,
@@ -669,4 +687,39 @@ function requireApiKeyVirtualModelAccess(
     throw new Error("API key virtual model access was not saved.");
   }
   return access;
+}
+
+export async function setApiKeyLimitsEnabled(input: {
+  databaseUrl?: string;
+  enabled: boolean;
+  id: string;
+}): Promise<void> {
+  const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
+  await publisher.publish({
+    source: "console",
+    description: `${input.enabled ? "Enable" : "Disable"} API key limits ${input.id}`,
+    changes: [
+      { table: "api_keys", recordId: input.id },
+      { table: "api_key_limits", recordId: input.id },
+    ],
+    write: async (client) => {
+      if (input.enabled) {
+        const rules = await readApiKeyLimitsWithClient(client, input.id);
+        assertCompleteApiKeyLimitRules(rules);
+      }
+      const result = await client.query(
+        `update api_keys
+           set limits_enabled = $2, updated_at = now()
+         where id = $1::uuid and deleted_at is null
+         returning id`,
+        [input.id, input.enabled],
+      );
+      if (result.rows.length === 0) {
+        throw consoleNotFoundError("API key not found.", "api_key_not_found");
+      }
+      if (!input.enabled) {
+        await replaceApiKeyLimitRulesWithClient(client, input.id, []);
+      }
+    },
+  });
 }

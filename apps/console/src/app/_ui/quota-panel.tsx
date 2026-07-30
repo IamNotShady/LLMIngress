@@ -1,0 +1,167 @@
+import type { ConsoleProviderQuotaSummary } from "@llmingress/db/console-provider-quota";
+import { isWindowEntry } from "@llmingress/domain/quota";
+import Link from "next/link";
+import type { ReactNode } from "react";
+import { Meter } from "./controls";
+import { SectionTitle } from "./layout";
+import {
+  buildProviderQuotaConnectionView,
+  findSharedProviderBalances,
+} from "./provider-quota-format";
+
+/**
+ * Plan quota. A provider reports either rolling windows (utilization plus a
+ * reset time) or a balance — both render, and balances get no progress bar
+ * because there is nothing for them to be a fraction of.
+ *
+ * The states that are not numbers matter just as much: a local provider has no
+ * billing to report, a paused probe means the stored row is only ageing, and a
+ * provider documented not to expose quota is not a failure.
+ */
+export function PlanQuotaPanel({
+  bodyClassName = "",
+  limit,
+  moreHref,
+  now,
+  summaries,
+  testId,
+  title = "Plan quota",
+  titleClassName = "mt-5",
+  trailing,
+}: {
+  /** Height and overflow for the list itself, where a band aligns its panels. */
+  bodyClassName?: string;
+  /** Plans to draw. Unset lists them all, which is what a Provider's own page wants. */
+  limit?: number;
+  /** Where the plans this panel is not showing can be read. */
+  moreHref?: string;
+  now: Date;
+  summaries: ConsoleProviderQuotaSummary[];
+  testId?: string;
+  title?: string;
+  titleClassName?: string;
+  trailing?: ReactNode;
+}) {
+  if (summaries.length === 0) {
+    return null;
+  }
+  const referenceTimeMs = now.getTime();
+  const shared = findSharedProviderBalances(summaries);
+  const sharedBalanceKeys = new Set(shared.map((entry) => entry.key));
+
+  const rows = summaries.map((summary) => ({
+    summary,
+    view: buildProviderQuotaConnectionView({ referenceTimeMs, sharedBalanceKeys, summary }),
+    windowEntries: summary.entries.filter(isWindowEntry),
+  }));
+  // Closest to its limit first: a capped list has to spend its rows on the
+  // plans that are about to stop serving, not on the ones with room to spare.
+  const ranked =
+    limit === undefined
+      ? rows
+      : [...rows].sort((left, right) => peakUtilization(right) - peakUtilization(left));
+  const shown = limit === undefined ? ranked : ranked.slice(0, limit);
+  const hiddenCount = ranked.length - shown.length;
+
+  return (
+    <div data-testid={testId}>
+      <SectionTitle className={titleClassName} trailing={trailing}>
+        {title}
+      </SectionTitle>
+      <div className={`mt-2 border-t border-hair ${bodyClassName}`}>
+        {shared.map((balance) => (
+          <div key={balance.key} className="border-b border-rule2 py-[9px]">
+            <div className="flex justify-between gap-3 font-mono text-13 text-ink">
+              <span className="cell-clip">{balance.label}</span>
+              <span className="flex-none text-dim">
+                shared by {balance.connectionCount} connections
+              </span>
+            </div>
+          </div>
+        ))}
+
+        {shown.map(({ summary, view, windowEntries }) => (
+          <div key={summary.id} className="border-b border-rule2 py-[9px]">
+            <div className="flex justify-between gap-3 font-mono text-13 text-ink">
+              <span className="cell-clip">
+                {summary.providerDisplayName} · {summary.connectionLabel}
+              </span>
+              {view.pausedLabel ? (
+                <span className="flex-none text-faint">{view.pausedLabel}</span>
+              ) : view.reason ? (
+                <span className={`flex-none ${view.tone === "warn" ? "text-ambtx" : "text-faint"}`}>
+                  {view.reason}
+                </span>
+              ) : view.emptyLabel ? (
+                <span className="flex-none text-faint">{view.emptyLabel}</span>
+              ) : null}
+            </div>
+
+            {view.windows.map((windowView, index) => {
+              const utilization = windowEntries[index]?.utilization ?? 0;
+              const tone =
+                utilization >= 0.9
+                  ? { fill: "bg-red", text: "text-redtx" }
+                  : utilization >= 0.6
+                    ? { fill: "bg-amber", text: "text-ambtx" }
+                    : { fill: "bg-green", text: "text-green" };
+              return (
+                <div key={windowView.label} className="mt-[5px]">
+                  <div className="flex justify-between font-mono text-13 text-ink">
+                    <span>{windowView.label}</span>
+                    <span className={`font-medium ${tone.text}`}>{windowView.percent} used</span>
+                  </div>
+                  <Meter className="mt-[5px]" fillClassName={tone.fill} ratio={utilization} />
+                  {windowView.resetLabel ? (
+                    <div className="mt-1 font-mono text-12 text-faint">{windowView.resetLabel}</div>
+                  ) : null}
+                </div>
+              );
+            })}
+
+            {view.balances.map((balance) => (
+              <div key={balance.label} className="mt-[5px]">
+                <div className="flex justify-between font-mono text-13 text-ink">
+                  <span>balance</span>
+                  <span className="font-medium">{balance.label}</span>
+                </div>
+                {/* Where the credit came from, when the provider reports it. */}
+                {balance.breakdown ? (
+                  <div className="mt-px text-right font-mono text-12 text-faint">
+                    {balance.breakdown}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+
+            {view.sharedBalanceNote ? (
+              <div className="mt-1 font-mono text-12 text-faint">{view.sharedBalanceNote}</div>
+            ) : null}
+            {view.observedLabel ? (
+              <div className="mt-1 font-mono text-12 text-faint">{view.observedLabel}</div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      {/* Below the list, not inside it: the panels in a band are the same
+          height, and what a list leaves out is a note about the list. */}
+      {hiddenCount > 0 ? (
+        <p className="mt-2 flex items-center gap-2 font-mono text-12 text-faint">
+          <span className="min-w-0 cell-clip">
+            {hiddenCount} more {hiddenCount === 1 ? "plan" : "plans"} with more room
+          </span>
+          {moreHref ? (
+            <Link href={moreHref} className="flex-none">
+              →
+            </Link>
+          ) : null}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** How close a plan is to its ceiling; a plan without windows has no answer. */
+function peakUtilization(row: { windowEntries: Array<{ utilization: number }> }): number {
+  return row.windowEntries.reduce((peak, entry) => Math.max(peak, entry.utilization), -1);
+}

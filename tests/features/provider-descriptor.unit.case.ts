@@ -12,6 +12,11 @@ describe("provider descriptors", () => {
       subscription: true,
       subscriptionAdapter: "claude_code",
     });
+    expect(resolveProviderDescriptor("minimax_coding")).toMatchObject({
+      metadataKey: "minimax",
+      subscription: true,
+      subscriptionAdapter: "minimax_anthropic",
+    });
     expect(resolveProviderDescriptor("OpenRouter")).toMatchObject({
       fixedApiKeyBaseUrl: "https://openrouter.ai/api/v1",
       openRouterAttribution: true,
@@ -23,17 +28,25 @@ describe("provider descriptors", () => {
   it("derives the price sync allowlist from descriptors", () => {
     expect(listPriceSyncSupportedProviderKeys().sort()).toEqual([
       "anthropic",
+      "bedrock",
+      "cerebras",
+      "cline_pass",
       "deepseek",
+      "fireworks",
       "google",
+      "groq",
       "llama_cpp",
       "lmstudio",
       "minimax",
+      "mistral",
       "moonshot",
+      "nvidia",
       "ollama",
       "openai",
       "openrouter",
       "qwen",
       "xai",
+      "xiaomi",
       "zai",
     ]);
   });

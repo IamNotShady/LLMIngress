@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { formatConsoleTimestamp } from "../../packages/db/src/console-format";
 import {
   createTestPostgresFixture,
   runMigrations,
@@ -129,43 +128,39 @@ test("console formats counts, costs, missing values and timestamps consistently 
           page.getByRole("heading", { level: 1, name: "Overview", exact: true }),
         ).toBeVisible();
 
-        // --- Overview recent requests: full token counts, smart-precision
-        // cost, em-dash blanks, and 24h-only recency.
-        const recentTable = page.locator(".chart-card", { hasText: "Recent requests" });
-        const todayRow = recentTable.locator("tbody tr", { hasText: "92,535" });
-        await expect(todayRow).toHaveCount(1);
-        await expect(todayRow).toContainText("$0.0000843");
-        expect(await todayRow.locator("td").first().innerText()).toBe(
-          formatConsoleTimestamp(formatterData.todayStartedAt),
-        );
-
-        const oldRow = recentTable.locator("tbody tr", { hasText: "81,269" });
-        await expect(oldRow).toHaveCount(0);
-
-        const failedRow = recentTable.locator("tbody tr", { hasText: "Failed" });
-        const failedCells = await failedRow.locator("td").allInnerTexts();
-        expect(failedCells).toContain("—");
-        expect(failedCells.join(" ")).not.toMatch(/N\/A|Unavailable/);
-
-        // --- Activity page shows the same request with identical formatting.
+        // --- Activity rows: exact token counts, smart-precision cost, an em
+        // dash for what is missing, and never the old null vocabulary.
         await page.goto(`${baseUrl}/activity`);
-        const activityRow = page.locator("tbody tr", { hasText: "92,535" });
-        await expect(activityRow).toHaveCount(1);
-        await expect(activityRow).toContainText("$0.0000843");
-        const oldActivityRow = page.locator("tbody tr", { hasText: "81,269" });
-        await expect(oldActivityRow).toContainText("$0.14");
-        expect(await oldActivityRow.locator("td").first().innerText()).toBe(
-          formatConsoleTimestamp(formatterData.oldStartedAt),
-        );
-        const failedActivityRow = page.locator("tbody tr", { hasText: "Failed" });
-        await expect(failedActivityRow).toContainText("—");
-        await expect(failedActivityRow).not.toContainText("N/A");
+        // IN and OUT are the request's own token counts, stated exactly.
+        const recent = page.getByRole("link", { name: /92,435/ });
+        await expect(recent).toHaveCount(1);
+        await expect(recent).toContainText("$0.0000843");
 
-        // --- Usage KPIs: no eight-decimal noise.
+        // The older request is outside the default window; widening the window
+        // finds it, still formatted the same way.
+        await page.goto(`${baseUrl}/activity?window=7d`);
+        const older = page.getByRole("link", { name: /81,169/ });
+        await expect(older).toHaveCount(1);
+        await expect(older).toContainText("$0.14");
+
+        const failed = page.getByRole("link", { name: /502/ }).first();
+        await expect(failed).toContainText("—");
+        const body = await page.locator("body").innerText();
+        expect(body).not.toMatch(/N\/A|Unavailable/);
+
+        // --- One instant reads the same on the row and in its detail: the row
+        // to the minute, the drawer to the second, both in UTC.
+        const stamp = formatterData.oldStartedAt.toISOString();
+        await expect(older).toContainText(stamp.slice(11, 16));
+        await older.click();
+        await expect(
+          page.getByText(`${stamp.slice(0, 10)} ${stamp.slice(11, 19)} UTC`),
+        ).toBeVisible();
+
+        // --- Usage KPIs: no eight-decimal noise anywhere.
         await page.goto(`${baseUrl}/usage`);
-        const totalCostCard = page.locator(".stat-card", { hasText: "Total cost" });
-        await expect(totalCostCard).not.toContainText("$0.00000000");
-        await expect(totalCostCard.locator(".stat-card-value")).toHaveText(/^\$0\.0000843|\$0\.14/);
+        const usageBody = await page.locator("body").innerText();
+        expect(usageBody).not.toContain("0.00000000");
       } finally {
         await context.close();
       }

@@ -26,7 +26,7 @@ import {
   readPlaygroundResponseText,
   readPlaygroundStreamResponseText,
   retryPlaygroundRequestDetail,
-} from "../../apps/console/src/app/playground-helpers.ts";
+} from "../../apps/console/src/app/_ui/playground/helpers.ts";
 
 const listed = (modelId: string, overrides: Partial<ListedProviderModel> = {}) => ({
   displayName: modelId,
@@ -41,6 +41,7 @@ describe("core delivery behavior coverage", () => {
       budgetPeriod: "week",
       budgetUsd: "12.5",
       concurrency: "3",
+      enforcementPolicy: "block",
       rpm: "60",
       tokenLimit: "4096",
       tpm: "120000",
@@ -281,5 +282,39 @@ describe("core delivery behavior coverage", () => {
       true,
       false,
     ]);
+  });
+
+  it("stamps cross-catalog provenance into enriched capability metadata", () => {
+    const syncedAt = new Date("2026-01-02T03:04:05.000Z");
+    const registry: ProviderModelRegistryEntry[] = [
+      {
+        maxContextTokens: 111,
+        modelId: "own-model",
+        providerKey: "openai",
+        registrySources: { maxContextTokens: "models.dev" },
+        syncedAt,
+      },
+      {
+        maxContextTokens: 222,
+        modelId: "foreign-model",
+        providerKey: "deepseek",
+        registrySources: { maxContextTokens: "models.dev" },
+        syncedAt,
+      },
+    ];
+    const enriched = enrichListedProviderModels({
+      listedModels: [listed("own-model"), listed("foreign-model")],
+      providerKey: "openai",
+      registryEntries: registry,
+    });
+
+    // Provider-scoped hit: no provenance keys.
+    expect(enriched[0]?.capabilityMetadata).not.toHaveProperty("resolvedVia");
+    expect(enriched[0]?.capabilityMetadata).not.toHaveProperty("resolvedFromCatalog");
+    // Cross-catalog hit: provenance stamped with the foreign catalog key.
+    expect(enriched[1]?.capabilityMetadata).toMatchObject({
+      resolvedFromCatalog: "deepseek",
+      resolvedVia: "cross-catalog",
+    });
   });
 });

@@ -164,3 +164,9 @@ next-env.d.ts
 
 # Local marketing/launch drafts (never committed)
 docs/marketing/
+
+# Local design sources for the Console redesign (prototype, tokens, screens)
+docs/ConsoleUIRedesign/
+
+# pnpm run preview:console output
+preview/

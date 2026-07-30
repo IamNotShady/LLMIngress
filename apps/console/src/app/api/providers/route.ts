@@ -13,7 +13,6 @@ import {
 } from "@llmingress/db/provider-jobs";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
-import { classifyConsoleActionError } from "../_error-classify";
 import { consoleActionErrorResponse } from "../_errors";
 import { readRequiredText, readText } from "../_form";
 import { redirectToConsolePath } from "../_redirect";
@@ -91,51 +90,11 @@ export const POST = withConsoleAuth(async (request) => {
       );
     }
   } catch (error) {
-    if (request.headers.get("accept")?.includes("application/json")) {
-      return consoleActionErrorResponse(error, "Provider action failed.");
-    }
-    const verdict = classifyConsoleActionError(error, "Provider action failed.");
-    if (verdict.status === 500) {
-      return consoleActionErrorResponse(error, "Provider action failed.");
-    }
-    if (action === "disable" || action === "delete") {
-      return consoleActionErrorResponse(error, "Provider action failed.");
-    }
-    if (action === "create" || action === "createFromTemplate") {
-      const redirectUrl = new URL("/providers", request.url);
-      redirectUrl.searchParams.set("providerDialog", "new");
-      redirectUrl.searchParams.set("providerError", verdict.message);
-      redirectUrl.searchParams.set("providerErrorCode", verdict.code);
-      redirectUrl.searchParams.set(
-        "providerErrorField",
-        typeof verdict.details?.field === "string" ? verdict.details.field : "providerKey",
-      );
-      setSearchParam(redirectUrl, "providerKeyValue", readText(form, "providerKey"));
-      setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
-      setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
-      return redirectToConsolePath(redirectUrl);
-    }
-    if (action === "update") {
-      const redirectUrl = new URL("/providers", request.url);
-      setSearchParam(redirectUrl, "providerDialog", readText(form, "id"));
-      redirectUrl.searchParams.set("providerError", verdict.message);
-      redirectUrl.searchParams.set("providerErrorCode", verdict.code);
-      redirectUrl.searchParams.set(
-        "providerErrorField",
-        typeof verdict.details?.field === "string" ? verdict.details.field : "form",
-      );
-      setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
-      setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
-      return redirectToConsolePath(redirectUrl);
-    }
-    return redirectToConsolePath("/providers");
+    // Every console form posts through MutationForm, which renders the refusal
+    // where the operator was working — so a refusal is an error response, not a
+    // redirect carrying an error the page would have to re-render itself.
+    return consoleActionErrorResponse(error, "Provider action failed.");
   }
 
   return redirectToConsolePath("/providers");
 });
-
-function setSearchParam(url: URL, name: string, value: string | undefined): void {
-  if (value) {
-    url.searchParams.set(name, value);
-  }
-}

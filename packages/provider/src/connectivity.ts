@@ -6,8 +6,9 @@ export type ConnectivityCheckProvider = {
   providerKey: string;
 };
 
+import { defaultEndpointPathByProtocol } from "@llmingress/config/provider-registry";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
-import { isRecord } from "@llmingress/util";
+import { isRecord, joinUrl } from "@llmingress/util";
 import { buildAnthropicMessagesUrl, buildAnthropicProviderHeaders } from "./adapters/anthropic.js";
 import {
   fetchCredentialedProviderRequest,
@@ -18,6 +19,7 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
+  buildGrokSubscriptionHeaders,
 } from "./subscription.js";
 
 export type ProviderProbeModelCandidate = {
@@ -187,7 +189,7 @@ export async function checkProviderConnectivity(
   }
 }
 
-function buildProviderConnectivityRequest(input: {
+export function buildProviderConnectivityRequest(input: {
   apiKey?: string | null;
   provider: ConnectivityCheckProvider;
 }): { init: RequestInit; url: string } {
@@ -223,6 +225,24 @@ function buildProviderConnectivityRequest(input: {
         method: "POST",
       },
       url: buildClaudeCodeMessagesUrl(input.provider.baseUrl),
+    };
+  }
+
+  if (descriptor.connectivityProbeStyle === "grok") {
+    return {
+      init: {
+        body: JSON.stringify({
+          max_tokens: 1,
+          messages: [{ content: "ping", role: "user" }],
+          model: input.provider.modelId,
+          stream: false,
+        }),
+        headers: buildGrokSubscriptionHeaders(input.apiKey ?? "", {
+          "content-type": "application/json",
+        }),
+        method: "POST",
+      },
+      url: buildChatCompletionsUrl(input.provider.baseUrl),
     };
   }
 
@@ -449,10 +469,7 @@ async function fetchWithTimeout(
 }
 
 function buildChatCompletionsUrl(baseUrl: string): string {
-  const url = new URL(baseUrl);
-  const path = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
-  url.pathname = `${path}/chat/completions`.replaceAll(/\/{2,}/g, "/");
-  return url.toString();
+  return joinUrl(baseUrl, defaultEndpointPathByProtocol.chat_completions);
 }
 
 async function readResponseBody(response: Response): Promise<unknown> {

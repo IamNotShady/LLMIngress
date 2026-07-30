@@ -30,12 +30,20 @@ test("provider delete dialog shows real route-policy blockers and POST returns 4
       await waitForConsole(baseUrl, consoleApp);
       await signInFromFirstRun(page, baseUrl);
 
-      await page.goto(`${baseUrl}/providers?providerDelete=${ids.providerId}`);
-      const dialog = page.getByRole("dialog", { name: "Delete provider?" });
+      await page.goto(`${baseUrl}/providers?selected=${ids.providerId}&dialog=delete`);
+      const dialog = page.getByRole("dialog", { name: "Delete provider" });
       await expect(dialog).toBeVisible();
-      await expect(dialog).toContainText("Dependency VM");
-      await expect(dialog).toContainText("Dependency ApiKey");
+
+      // The confirm names the route that holds the provider — by name, which is
+      // what the Virtual Models list it sends the operator to is keyed by — says
+      // the save would be refused, and offers a way forward that works. Disabling
+      // is not one: the API refuses it on the same dependency.
+      await expect(dialog).toContainText("dependency-vm");
+      await expect(dialog).toContainText("would be refused");
+      await expect(dialog).toContainText("switch its connections off");
+      await expect(dialog).not.toContainText("or disable the provider");
       await expect(dialog.getByRole("button", { name: "Delete provider" })).toHaveCount(0);
+      await expect(dialog.getByRole("link", { name: "Open Virtual Models" })).toBeVisible();
 
       const response = await page.request.post(`${baseUrl}/api/providers`, {
         form: { action: "delete", id: ids.providerId },

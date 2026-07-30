@@ -28,8 +28,12 @@ test("non-loopback fresh console creates the first admin with a password only", 
       const baseUrl = `http://localhost:${consoleApp.port}`;
       await waitForConsole(baseUrl, consoleApp);
       await page.goto(baseUrl);
-      await expect(page.getByRole("heading", { name: "First run setup" })).toBeVisible();
-      await expect(page.getByLabel("Admin password")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Create the console admin" })).toBeVisible();
+      await expect(page.getByLabel("Admin password", { exact: true })).toBeVisible();
+      // The panel exists to take this password, so it is where the cursor lands.
+      await expect(page.getByLabel("Admin password", { exact: true })).toBeFocused();
+      // A password is the only thing standing between a fresh console and its
+      // first admin — there is no setup token to configure or leak.
       await expect(page.getByLabel("Setup token")).toHaveCount(0);
 
       const created = await fetch(`${baseUrl}/api/auth/setup`, {

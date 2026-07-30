@@ -2,12 +2,12 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  API_KEY_PLACEHOLDER,
   buildIntegrationGuides,
   endpointPathByProtocol,
   groupVirtualModelEndpoints,
   integrationGuidePlatforms,
-} from "../../apps/console/src/app/_modules/api-key-integration-guide.ts";
+} from "../../apps/console/src/app/_ui/api-keys/integration-guide.ts";
+
 import { renderOneTimeApiKeyResponse } from "../../apps/console/src/app/api/api-keys/_created-page.ts";
 import { listApiKeyVirtualModelAccess } from "../../packages/db/src/console-api-keys.ts";
 import {
@@ -16,8 +16,14 @@ import {
   withDedicatedPostgresClient,
 } from "../../packages/db/src/index.ts";
 
+/**
+ * What the key's own dialog passes: the stored prefix, because the secret was
+ * shown once. Every guide that names a key must carry it through verbatim.
+ */
+const KEY_STAND_IN = "llmi_stand_in…";
+
 describe("apiKey integration guidance", () => {
-  it("builds guides for every Integration Platform with the key placeholder", () => {
+  it("builds guides for every Integration Platform with the key it was given", () => {
     expect([...integrationGuidePlatforms]).toEqual([
       "codex",
       "claude-code",
@@ -30,7 +36,7 @@ describe("apiKey integration guidance", () => {
     ]);
 
     const guides = buildIntegrationGuides({
-      apiKey: API_KEY_PLACEHOLDER,
+      apiKey: KEY_STAND_IN,
       gatewayBaseUrl: "http://127.0.0.1:4000",
       model: "guide-vm",
     });
@@ -44,15 +50,18 @@ describe("apiKey integration guidance", () => {
       "Hermes",
       "OpenClaw",
       "GitHub Copilot",
-      "Other",
+      "Other / curl",
     ]);
     for (const entry of guides) {
       expect(entry.guide.title).toBeTruthy();
       expect(entry.guide.steps.length).toBeGreaterThan(0);
       expect(JSON.stringify(entry.guide)).toContain("http://127.0.0.1:4000");
+      // Which endpoint the agent speaks is a precondition, not a step: it
+      // decides how the virtual model must be routed before any of this works.
+      expect(entry.guide.note ?? "", entry.platform).toContain("/v1/");
     }
     // OpenCode stores the key via /connect; every other platform must surface
-    // the placeholder literally.
+    // the key it was handed literally.
     for (const platform of [
       "codex",
       "claude-code",
@@ -63,7 +72,7 @@ describe("apiKey integration guidance", () => {
       "other",
     ]) {
       const entry = guides.find((candidate) => candidate.platform === platform);
-      expect(JSON.stringify(entry?.guide), platform).toContain(API_KEY_PLACEHOLDER);
+      expect(JSON.stringify(entry?.guide), platform).toContain(KEY_STAND_IN);
     }
   });
 
@@ -146,26 +155,23 @@ describe("apiKey integration guidance", () => {
   });
 
   it("removes the Integration Platform field from ApiKey UI and API surfaces", () => {
-    const apiKeysUi = readFileSync("apps/console/src/app/_modules/api-keys-section.tsx", "utf8");
     const apiKeysRoute = readFileSync("apps/console/src/app/api/api-keys/route.ts", "utf8");
-    // The guide tabs and the Endpoints section now live in the panels module
-    // that both the created and the detail dialog render.
-    const detailPanels = readFileSync(
-      "apps/console/src/app/_modules/api-key-detail-panels.tsx",
-      "utf8",
-    );
+    const detail = readFileSync("apps/console/src/app/_ui/api-keys/detail.tsx", "utf8");
+    const dialogs = readFileSync("apps/console/src/app/_ui/api-keys/dialogs.tsx", "utf8");
+    // A key is not bound to one platform: every guide is offered on the page
+    // that shows the secret, and no platform is stored against the key.
+    const createdPage = readFileSync("apps/console/src/app/api/api-keys/_created-page.ts", "utf8");
 
     for (const [label, source] of [
-      ["api-keys-section", apiKeysUi],
-      ["api-key-detail-panels", detailPanels],
+      ["api-key detail", detail],
+      ["api-key dialogs", dialogs],
+      ["created page", createdPage],
     ] as const) {
       expect(source, label).not.toContain('name="integrationPlatform"');
       expect(source, label).not.toContain("apiKeyPlatform");
-      expect(source, label).not.toContain("<dt>Platform</dt>");
-      expect(source, label).not.toContain("api-key-filter-platform");
     }
-    expect(detailPanels).toContain("IntegrationGuideTabs");
-    expect(detailPanels).toContain("<h3>Endpoints</h3>");
+    expect(createdPage).toContain("buildIntegrationGuides");
+    expect(createdPage).toContain("SET UP YOUR AGENT");
     expect(apiKeysRoute).not.toContain("integrationPlatform");
   });
 

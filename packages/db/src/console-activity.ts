@@ -1,4 +1,4 @@
-import { withPooledPostgresClient } from "@llmingress/db/client";
+import { withPooledPostgresClient, withPostgresTransaction } from "@llmingress/db/client";
 import { isRecord } from "@llmingress/util";
 import { consoleValidationError } from "./console-operation-error.ts";
 
@@ -85,11 +85,32 @@ export type ConsoleFallbackEvent = {
   statusCode: number | null;
 };
 
+/**
+ * A candidate the route policy offered for this request, and what became of it.
+ *
+ * The router does not eliminate candidates before attempting them: it orders
+ * them by strategy and the fallback chain walks that order until one serves. So
+ * "what became of it" is an attempt outcome, and a candidate with no attempt is
+ * one the chain never reached — not one that was ruled out. The recorded
+ * explanations carry the list and its order; the attempts carry the rest.
+ */
+export type ConsoleActivityRouteCandidate = {
+  /** What the attempt for this candidate recorded, or "none" if it never ran. */
+  attempt: "failed" | "none" | "served" | "skipped";
+  candidateOrder: number;
+  /** The provider and model, resolved for reading; the id when it is gone. */
+  label: string;
+  providerModelId: string;
+  /** Why the attempt ended that way, when the attempt recorded a reason. */
+  reasons: string[];
+};
+
 export type ConsoleActivityDetail = {
   activity: ConsoleActivity;
   fallbackEvents: ConsoleFallbackEvent[];
   requestMetadata: unknown;
   responseMetadata: unknown;
+  routeCandidates: ConsoleActivityRouteCandidate[];
 };
 
 type ConsoleActivityProtocol = "chat_completions" | "messages" | "responses";
@@ -230,8 +251,8 @@ export async function listConsoleActivities(
             and fallback_events.status = 'failed'
         ) fallback_counts on true
         ${where.sql}
-        order by request_activity.started_at desc,
-                 request_activity.created_at desc
+        order by request_activity.created_at desc,
+                 request_activity.id desc
         limit $${where.values.length + 1}
         offset $${where.values.length + 2}
       `,
@@ -277,7 +298,7 @@ export async function getConsoleActivityDetail(input: {
     );
   }
 
-  return withPooledPostgresClient(input.databaseUrl, async (client) => {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
     const result = await client.query<ActivityRow>(
       `
         select request_activity.id::text,
@@ -369,11 +390,63 @@ export async function getConsoleActivityDetail(input: {
       [row.id],
     );
 
+    // The recorded explanations carry ids; what an operator can read is the
+    // provider and model they name, so they are resolved here in one query
+    // rather than rendered as uuids.
+    const recorded = readConsoleActivityRouteCandidates(row.route_reason);
+    const labels = new Map<string, string>();
+    if (recorded.length > 0) {
+      const named = await client.query<{
+        display_name: string | null;
+        id: string;
+        model_id: string;
+        provider_display_name: string | null;
+      }>(
+        `
+          select provider_models.id::text as id,
+                 provider_models.model_id,
+                 provider_models.display_name,
+                 providers.display_name as provider_display_name
+          from provider_models
+          left join providers on providers.id = provider_models.provider_id
+          where provider_models.id = any($1::uuid[])
+        `,
+        [recorded.map((candidate) => candidate.providerModelId)],
+      );
+      for (const model of named.rows) {
+        const name = model.display_name ?? model.model_id;
+        labels.set(
+          model.id,
+          model.provider_display_name ? `${model.provider_display_name} · ${name}` : name,
+        );
+      }
+    }
+
+    const attempts = fallbackEvents.rows.map(rowToConsoleFallbackEvent);
     return {
       activity: rowToConsoleActivity(row),
-      fallbackEvents: fallbackEvents.rows.map(rowToConsoleFallbackEvent),
+      fallbackEvents: attempts,
       requestMetadata: row.request_metadata ?? {},
       responseMetadata: row.response_metadata ?? {},
+      routeCandidates: recorded.map((candidate) => {
+        // What happened to this candidate is what its attempt recorded. There
+        // is no earlier verdict to read: nothing filters the list before the
+        // chain walks it.
+        const attempt = attempts.find(
+          (event) => event.providerModelId === candidate.providerModelId,
+        );
+        return {
+          attempt: readAttemptOutcome(attempt?.status),
+          candidateOrder: candidate.candidateOrder,
+          label: labels.get(candidate.providerModelId) ?? "model no longer in the catalog",
+          providerModelId: candidate.providerModelId,
+          reasons: attempt?.errorCode
+            ? [attempt.errorCode, attempt.errorMessage].filter(
+                (part): part is string => typeof part === "string" && part.length > 0,
+              )
+            : [],
+        };
+      }),
     };
   });
 }
@@ -460,6 +533,46 @@ function buildActivityWhereClause(filters: ConsoleActivityFilters): {
     sql: clauses.length > 0 ? `where ${clauses.join(" and ")}` : "",
     values,
   };
+}
+
+/**
+ * The candidate explanations as recorded, without the names: reading them is
+ * separable from resolving what each id is called, and a request whose route
+ * predates this field simply has none.
+ */
+function readAttemptOutcome(status: string | undefined): ConsoleActivityRouteCandidate["attempt"] {
+  if (status === "succeeded") {
+    return "served";
+  }
+  if (status === "failed" || status === "skipped") {
+    return status;
+  }
+  return "none";
+}
+
+/**
+ * The candidate list the router recorded, in policy order. `eligible` is part
+ * of the recorded shape and is always true — nothing eliminates a candidate
+ * before the chain reaches it — so it is read for completeness and not used to
+ * decide anything.
+ */
+export function readConsoleActivityRouteCandidates(
+  routeReason: unknown,
+): Array<Pick<ConsoleActivityRouteCandidate, "candidateOrder" | "providerModelId">> {
+  if (!isRecord(routeReason) || !Array.isArray(routeReason.candidateExplanations)) {
+    return [];
+  }
+  return routeReason.candidateExplanations
+    .filter(isRecord)
+    .filter((entry) => typeof entry.providerModelId === "string" && entry.providerModelId)
+    .map((entry, index) => ({
+      candidateOrder:
+        typeof entry.candidateOrder === "number" && Number.isFinite(entry.candidateOrder)
+          ? entry.candidateOrder
+          : index + 1,
+      providerModelId: String(entry.providerModelId),
+    }))
+    .sort((left, right) => left.candidateOrder - right.candidateOrder);
 }
 
 export function formatConsoleActivityRouteReason(routeReason: unknown): string {

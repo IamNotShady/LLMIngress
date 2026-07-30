@@ -14,9 +14,10 @@ type LoadEnvFilesOptions = {
   fileNames?: string[];
 };
 
-export function loadEnvFiles(
-  options: LoadEnvFilesOptions = {},
-): { loadedFiles: LoadedEnvFile[]; loadedValues: Record<string, string> } {
+export function loadEnvFiles(options: LoadEnvFilesOptions = {}): {
+  loadedFiles: LoadedEnvFile[];
+  loadedValues: Record<string, string>;
+} {
   const cwd = options.cwd ?? process.cwd();
   const env = options.env ?? process.env;
   const fileNames = options.fileNames ?? [".env", ".env.local"];
@@ -48,9 +49,7 @@ export function loadEnvFiles(
 }
 
 export function formatShellExports(values: Record<string, string>): string {
-  const lines = Object.entries(values).map(
-    ([key, value]) => `export ${key}=${shellQuote(value)}`,
-  );
+  const lines = Object.entries(values).map(([key, value]) => `export ${key}=${shellQuote(value)}`);
   return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
 }
 
@@ -69,6 +68,9 @@ export function parseEnvFile(content: string): Record<string, string> {
     }
 
     const [, key, rawValue = ""] = match;
+    if (!key) {
+      continue;
+    }
     values[key] = readEnvValue(rawValue.trim());
   }
 

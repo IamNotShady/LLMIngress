@@ -1,3 +1,4 @@
+import { defaultEndpointPathByProtocol } from "@llmingress/config/provider-registry";
 import { isRecord, joinUrl, omitUndefined } from "@llmingress/util";
 import {
   fetchCredentialedProviderRequest,
@@ -222,8 +223,8 @@ function buildChatCompletionsPayload(
   }) as OpenAIChatCompletionsPayload;
 }
 
-function buildChatCompletionsUrl(baseUrl: string): string {
-  return joinUrl(baseUrl, "chat/completions");
+export function buildChatCompletionsUrl(baseUrl: string): string {
+  return joinUrl(baseUrl, defaultEndpointPathByProtocol.chat_completions);
 }
 
 function buildResponsesPayload(
@@ -234,7 +235,7 @@ function buildResponsesPayload(
 }
 
 function buildResponsesUrl(baseUrl: string): string {
-  return joinUrl(baseUrl, "responses");
+  return joinUrl(baseUrl, defaultEndpointPathByProtocol.responses);
 }
 
 function mapProviderError(

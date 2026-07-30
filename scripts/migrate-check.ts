@@ -1,9 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  createTestPostgresFixture,
-  loadSqlMigrations,
-  runMigrations,
-} from "@llmingress/db";
+import { createTestPostgresFixture, loadSqlMigrations, runMigrations } from "@llmingress/db";
 
 async function main(): Promise<void> {
   const migrations = loadSqlMigrations();

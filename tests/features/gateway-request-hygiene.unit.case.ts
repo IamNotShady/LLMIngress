@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
-import { gatewayCorsHeaders } from "../../apps/gateway/src/cors";
+import { gatewayCorsHeaders, mergeAccessControlExposeHeaders } from "../../apps/gateway/src/cors";
 import { closePostgresPools } from "../../packages/db/src/client";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { readGatewayRequestId } from "../../packages/gateway-runtime/src/gateway-auth";
@@ -14,7 +14,10 @@ import {
 } from "../../packages/gateway-runtime/src/gateway-provider-credentials";
 import { estimateTextTokens } from "../../packages/gateway-runtime/src/gateway-request-metadata";
 import { normalizeOpenAIResponsesRequest } from "../../packages/gateway-runtime/src/gateway-responses";
-import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
+import {
+  createSecretEncryption,
+  type EncryptedSecret,
+} from "../../packages/security/src/secret-encryption";
 
 describe("gateway request hygiene", () => {
   afterAll(async () => {
@@ -73,6 +76,19 @@ describe("gateway request hygiene", () => {
     expect(headers["access-control-expose-headers"]).toContain(
       "anthropic-ratelimit-requests-remaining",
     );
+  });
+
+  it("appends gateway exposed headers without replacing the provider value", () => {
+    const providerValue = "x-provider-trace, X-Request-ID";
+    const gatewayValue =
+      gatewayCorsHeaders("http://localhost:3000")["access-control-expose-headers"];
+
+    const merged = mergeAccessControlExposeHeaders(providerValue, gatewayValue);
+
+    expect(merged).toMatch(/^x-provider-trace, X-Request-ID,/);
+    expect(merged).toContain("x-llmingress-request-id");
+    expect(merged?.match(/x-request-id/gi)).toHaveLength(1);
+    expect(mergeAccessControlExposeHeaders(providerValue, undefined)).toBe(providerValue);
   });
 
   it("estimates CJK text as one token per character", () => {
@@ -558,6 +574,176 @@ describe("gateway request hygiene", () => {
         process.env.LLMINGRESS_DB_POOL_MAX = originalPoolMax;
       }
       await closePostgresPools();
+      await fixture.dispose();
+    }
+  });
+
+  it("anchors a subscription candidate to the provider base so a bare connection never inherits a sibling's resource_url", async () => {
+    const fixture = await createTestPostgresFixture({
+      databaseNamePrefix: `llmingress_oauth_base_anchor_${randomUUID().replaceAll("-", "_")}`,
+    });
+    try {
+      await runMigrations({ databaseUrl: fixture.databaseUrl });
+      const encryption = createSecretEncryption({ kind: "inline", value: "test-master-key" });
+      const providerId = randomUUID();
+      const providerBase = "https://provider-base.test/anthropic/v1";
+      const withResourceOAuthId = randomUUID();
+      const bareOAuthId = randomUUID();
+      const resourceUrl = "https://token-a.test/anthropic/v1";
+
+      await fixture.query(
+        `
+          insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+          values ($1, 'subscription', 'minimax_coding', 'MiniMax', $2, true)
+        `,
+        [providerId, providerBase],
+      );
+      // Primary connection (priority 0) carries a per-token resource_url.
+      await fixture.query(
+        `
+          insert into provider_oauth (
+            id, provider_id, priority, enabled, encrypted_token, token_expires_at, completed_at
+          )
+          values ($1, $2, 0, true, $3, null, now())
+        `,
+        [
+          withResourceOAuthId,
+          providerId,
+          JSON.stringify(
+            encryption.encrypt(
+              JSON.stringify({
+                accessToken: "token-a",
+                expiresAt: null,
+                refreshToken: null,
+                resourceUrl,
+                scopes: [],
+                tokenType: "Bearer",
+              }),
+            ),
+          ),
+        ],
+      );
+      // Second connection (priority 1) has no resource_url.
+      await fixture.query(
+        `
+          insert into provider_oauth (
+            id, provider_id, priority, enabled, encrypted_token, token_expires_at, completed_at
+          )
+          values ($1, $2, 1, true, $3, null, now())
+        `,
+        [
+          bareOAuthId,
+          providerId,
+          JSON.stringify(
+            encryption.encrypt(
+              JSON.stringify({
+                accessToken: "token-b",
+                expiresAt: null,
+                refreshToken: null,
+                scopes: [],
+                tokenType: "Bearer",
+              }),
+            ),
+          ),
+        ],
+      );
+
+      const [candidate] = await attachGatewayProviderCredentials({
+        candidates: [candidateSnapshot({ providerId, providerKey: "minimax_coding" })],
+        databaseUrl: fixture.databaseUrl,
+        encryptionKeySource: { kind: "inline", value: "test-master-key" },
+      });
+
+      // candidate.baseUrl is the provider base anchor, never the primary token's
+      // resource_url — otherwise the bare rotated key would egress to the first
+      // connection's base.
+      expect(candidate?.baseUrl).toBe(providerBase);
+
+      const keyA = candidate?.providerApiKeys?.find(
+        (key) => key.providerOAuthId === withResourceOAuthId,
+      );
+      const keyB = candidate?.providerApiKeys?.find((key) => key.providerOAuthId === bareOAuthId);
+      expect(keyA?.baseUrl).toBe(resourceUrl);
+      expect(keyB?.baseUrl).toBeUndefined();
+      // Per-token override resolves at each call site: the resource_url key uses
+      // its own base; the bare key falls back to the provider base, not keyA's.
+      expect(keyA?.baseUrl ?? candidate?.baseUrl).toBe(resourceUrl);
+      expect(keyB?.baseUrl ?? candidate?.baseUrl).toBe(providerBase);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it("preserves a prior resource_url when an OAuth refresh response omits one", async () => {
+    const fixture = await createTestPostgresFixture({
+      databaseNamePrefix: `llmingress_oauth_refresh_resource_${randomUUID().replaceAll("-", "_")}`,
+    });
+    try {
+      await runMigrations({ databaseUrl: fixture.databaseUrl });
+      const encryption = createSecretEncryption({ kind: "inline", value: "test-master-key" });
+      const providerId = randomUUID();
+      const providerOAuthId = randomUUID();
+      const resourceUrl = "https://api.minimax.io/anthropic/v1";
+      const expired = {
+        accessToken: "expired-token",
+        expiresAt: Date.now() - 60_000,
+        refreshToken: "refresh-token",
+        resourceUrl,
+        scopes: [],
+        tokenType: "Bearer",
+      };
+
+      await fixture.query(
+        `
+          insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+          values ($1, 'subscription', 'minimax_coding', 'MiniMax', $2, true)
+        `,
+        [providerId, resourceUrl],
+      );
+      await fixture.query(
+        `
+          insert into provider_oauth (
+            id, provider_id, encrypted_token, token_expires_at, completed_at
+          )
+          values ($1, $2, $3, $4, now())
+        `,
+        [
+          providerOAuthId,
+          providerId,
+          JSON.stringify(encryption.encrypt(JSON.stringify(expired))),
+          new Date(expired.expiresAt),
+        ],
+      );
+
+      const refreshed = await refreshProviderOAuthTokenWithLock({
+        databaseUrl: fixture.databaseUrl,
+        encryption,
+        providerKey: "minimax_coding",
+        providerOAuthId,
+        // MiniMax's refresh response frequently omits resource_url.
+        refresh: async () => ({
+          accessToken: "fresh-token",
+          expiresAt: Date.now() + 600_000,
+          refreshToken: "refresh-token-2",
+          scopes: [],
+          tokenType: "Bearer",
+        }),
+      });
+
+      // The returned blob keeps the prior resource_url so egress still targets
+      // the per-token base after a refresh...
+      expect(refreshed.resourceUrl).toBe(resourceUrl);
+      // ...and the persisted ciphertext carries it too.
+      const stored = await fixture.query<{ encrypted_token: EncryptedSecret }>(
+        "select encrypted_token from provider_oauth where id = $1",
+        [providerOAuthId],
+      );
+      const storedBlob = JSON.parse(
+        encryption.decrypt(stored.rows[0]?.encrypted_token as EncryptedSecret),
+      );
+      expect(storedBlob.resourceUrl).toBe(resourceUrl);
+      expect(storedBlob.accessToken).toBe("fresh-token");
+    } finally {
       await fixture.dispose();
     }
   });

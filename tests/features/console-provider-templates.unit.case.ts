@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { listProviderTemplateEntries } from "../../packages/config/src/provider-registry";
 import {
+  getAnthropicCompatibleProviderTemplate,
+  isAnthropicCompatibleProviderTemplateId,
   isKnownProviderTemplateKey,
+  listAnthropicCompatibleProviderTemplates,
   listOpenAICompatibleProviderTemplates,
   listProviderTemplateSelectorGroups,
   normalizeProviderTemplateFormInput,
@@ -17,8 +21,35 @@ describe("console provider template registry", () => {
 
     expect(groups.map((group) => group.id)).toEqual(["subscription", "remote_api_key", "local"]);
     expect(groups.map((group) => group.templates.map((template) => template.id))).toEqual([
-      ["openai_codex", "claude_code"],
-      ["google", "openrouter", "deepseek", "xai", "qwen", "moonshot", "minimax", "zai"],
+      ["openai_codex", "claude_code", "minimax_coding", "grok"],
+      [
+        "google",
+        "openrouter",
+        "deepseek",
+        "bedrock",
+        "xai",
+        "qwen",
+        "qwen_token_plan",
+        "moonshot",
+        "kimi_coding",
+        "minimax",
+        "zai",
+        "glm_coding",
+        "command_code",
+        "cline_pass",
+        "byteplus_coding",
+        "nous",
+        "mistral",
+        "groq",
+        "cerebras",
+        "fireworks",
+        "nvidia",
+        "xiaomi",
+        "ollama_cloud",
+        "opencode_go",
+        "xiaomi_token_plan",
+        "mistral_vibe",
+      ],
       ["ollama", "lmstudio", "llama_cpp"],
     ]);
 
@@ -30,6 +61,31 @@ describe("console provider template registry", () => {
       }
     }
     expect(isKnownProviderTemplateKey("future-provider")).toBe(false);
+  });
+
+  it("derives selector groups directly from the provider registry template entries", () => {
+    const groups = listProviderTemplateSelectorGroups();
+    const registryTemplateKeys = listProviderTemplateEntries().map((entry) => entry.providerKey);
+
+    // Every selector template is a registry template entry, and vice versa.
+    expect(
+      groups.flatMap((group) => group.templates.map((template) => template.id)).sort(),
+    ).toEqual([...registryTemplateKeys].sort());
+    for (const group of groups) {
+      for (const template of group.templates) {
+        const entry = listProviderTemplateEntries().find(
+          (candidate) => candidate.providerKey === template.id,
+        );
+        expect(entry).toBeDefined();
+        expect(template.displayName).toBe(entry?.displayName);
+        expect(template.providerType).toBe(entry?.providerType);
+        // The routable endpoints survive; the models catalog is folded back in.
+        for (const protocol of Object.keys(entry?.endpoints ?? {})) {
+          expect(template.endpoints).toHaveProperty(protocol);
+        }
+        expect(template.endpoints).toHaveProperty("models");
+      }
+    }
   });
 
   it("describes remote API key providers with editable default URLs and endpoints", () => {
@@ -117,6 +173,18 @@ describe("console provider template registry", () => {
       },
       providerKey: "claude_code",
     });
+    // MiniMax Coding Plan is the first subscription-type coding plan (device
+    // code OAuth), distinct from the Batch 1 paste-key coding plans.
+    expect(readTemplate("subscription", "minimax_coding")).toMatchObject({
+      baseUrlMode: "user_remote",
+      fixedBaseUrl: "https://api.minimax.io/anthropic/v1",
+      endpoints: {
+        messages: messagesEndpoint,
+        models: modelsEndpoint,
+      },
+      providerKey: "minimax_coding",
+      providerType: "subscription",
+    });
     expect(
       normalizeProviderTemplateFormInput({
         baseUrl: "https://example.com/codex",
@@ -126,6 +194,52 @@ describe("console provider template registry", () => {
     ).toBe("https://example.com/codex");
   });
 
+  it("registers a whitelisted anthropic-compatible template category for kimi_coding (W1)", () => {
+    const templates = listAnthropicCompatibleProviderTemplates();
+    expect(templates.map((template) => template.id)).toEqual(["kimi_coding"]);
+    expect(templates[0]).toMatchObject({
+      auth: { header: "x-api-key", scheme: "" },
+      baseUrl: "https://api.kimi.com/coding/v1",
+      endpoints: {
+        messages: messagesEndpoint,
+        models: modelsEndpoint,
+      },
+      id: "kimi_coding",
+      providerKey: "kimi_coding",
+      providerType: "api_key",
+    });
+
+    expect(isAnthropicCompatibleProviderTemplateId("kimi_coding")).toBe(true);
+    expect(isAnthropicCompatibleProviderTemplateId("moonshot")).toBe(false);
+    expect(isAnthropicCompatibleProviderTemplateId(null)).toBe(false);
+
+    expect(getAnthropicCompatibleProviderTemplate("kimi_coding").providerKey).toBe("kimi_coding");
+    expect(() => getAnthropicCompatibleProviderTemplate("moonshot")).toThrow(
+      /whitelisted provider template/,
+    );
+
+    // The category is distinct from the OpenAI-compatible list.
+    expect(listOpenAICompatibleProviderTemplates().map((template) => template.id)).not.toContain(
+      "kimi_coding",
+    );
+
+    // The generic create main path handles kimi_coding with no category switch.
+    expect(
+      normalizeProviderTemplateFormInput({
+        baseUrl: "https://api.kimi.com/coding/v1",
+        displayName: "My Kimi",
+        templateId: "kimi_coding",
+      }),
+    ).toMatchObject({
+      baseUrl: "https://api.kimi.com/coding/v1",
+      displayName: "My Kimi",
+      id: "kimi_coding",
+      providerKey: "kimi_coding",
+      providerTemplateId: "kimi_coding",
+      providerType: "api_key",
+    });
+  });
+
   it("keeps long-tail OpenAI-compatible list scoped to long-tail providers", () => {
     const templates = listOpenAICompatibleProviderTemplates();
 
@@ -133,9 +247,26 @@ describe("console provider template registry", () => {
       "deepseek",
       "xai",
       "qwen",
+      "qwen_token_plan",
       "moonshot",
       "minimax",
       "zai",
+      "glm_coding",
+      "command_code",
+      "nous",
+      "cline_pass",
+      "byteplus_coding",
+      "mistral",
+      "groq",
+      "cerebras",
+      "fireworks",
+      "nvidia",
+      "xiaomi",
+      "ollama_cloud",
+      "opencode_go",
+      "xiaomi_token_plan",
+      "mistral_vibe",
+      "bedrock",
     ]);
     for (const template of templates) {
       expect(template.endpoints).toEqual({
@@ -143,6 +274,11 @@ describe("console provider template registry", () => {
         models: modelsEndpoint,
         ...(template.id === "xai" || template.id === "qwen" || template.id === "minimax"
           ? { responses: responsesEndpoint }
+          : {}),
+        // command_code and opencode_go carry a second routable face (Anthropic
+        // messages) that rides on the same base; the Console renders both chips.
+        ...(template.id === "command_code" || template.id === "opencode_go"
+          ? { messages: messagesEndpoint }
           : {}),
       });
       expect(template).not.toHaveProperty("capabilities");

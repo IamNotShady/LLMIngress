@@ -1,8 +1,12 @@
+import {
+  resolveProviderRegistryEntry,
+  type SubscriptionProviderKey,
+} from "@llmingress/config/provider-registry";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import { isRecord } from "@llmingress/util";
 import type { AnthropicContentBlock } from "./adapters/anthropic.js";
 
-export type SubscriptionProviderKey = "claude_code" | "openai_codex";
+export type { SubscriptionProviderKey };
 
 export const claudeCodeSystemPrompt =
   "You are a Claude agent, built on Anthropic's Claude Agent SDK.";
@@ -28,6 +32,12 @@ export function withClaudeCodeSystemPrompt(system: unknown): AnthropicContentBlo
 export const codexClientVersion = "0.128.0";
 export const codexOriginator = "codex_cli_rs";
 export const codexUserAgent = "codex_cli_rs/0.0.0 (Unknown 0; unknown) unknown";
+// The proxy inference endpoints gate on a versioned client User-Agent: an
+// unversioned agent is rejected with HTTP 426 Upgrade Required. This single
+// constant feeds both the User-Agent and the x-grok-client-version header; bump
+// it here if the upstream proxy raises its minimum accepted client version.
+export const grokClientVersion = "1.0.0";
+export const grokTokenAuthHeaderValue = "xai-grok-cli";
 export const claudeCodeBetaFlags =
   "claude-code-20250219,oauth-2025-04-20,context-management-2025-06-27,effort-2025-11-24";
 export const claudeCodeStainlessPackageVersion = "0.80.0";
@@ -84,24 +94,89 @@ export function buildClaudeCodeSubscriptionHeaders(
   });
 }
 
+export function buildMiniMaxSubscriptionHeaders(
+  accessToken: string,
+  requestHeaders?: Record<string, string>,
+): Record<string, string> {
+  // MiniMax Coding Plan authenticates with a plain OAuth Bearer and Anthropic
+  // version only: no claude-cli user-agent, no x-stainless-*, no anthropic-beta
+  // impersonation. The subscription Bearer owns auth, so drop any forwarded
+  // x-api-key (the streaming path injects `x-api-key: <credential>` for generic
+  // Anthropic) rather than send it alongside the Bearer.
+  const forwarded = stripHeader(requestHeaders, "x-api-key");
+  return mergeHttpHeaders(forwarded, {
+    "anthropic-version": readHttpHeader(forwarded, "anthropic-version") ?? "2023-06-01",
+    authorization: `Bearer ${accessToken}`,
+    "content-type": "application/json",
+  });
+}
+
+export function buildGrokSubscriptionHeaders(
+  accessToken: string,
+  requestHeaders?: Record<string, string>,
+): Record<string, string> {
+  // Mirror the upstream client's identity headers so the proxy's version gate
+  // (HTTP 426 without a versioned User-Agent) passes. The subscription Bearer
+  // owns auth, so the grok headers are merged last and win over any forwarded
+  // authorization. content-type is intentionally omitted here — the POST callers
+  // add it; this builder owns only the six client-identity headers.
+  return mergeHttpHeaders(requestHeaders, {
+    accept: "application/json",
+    authorization: `Bearer ${accessToken}`,
+    "user-agent": `grok-shell/${grokClientVersion}`,
+    "x-grok-client-mode": "headless",
+    "x-grok-client-version": grokClientVersion,
+    "x-xai-token-auth": grokTokenAuthHeaderValue,
+  });
+}
+
 export function buildCodexModelListUrl(baseUrl: string): string {
-  const url = appendPath(baseUrl, "codex/models");
+  const url = appendPath(baseUrl, subscriptionModelListPath("openai_codex"));
   url.searchParams.set("client_version", codexClientVersion);
   return url.toString();
 }
 
 export function buildClaudeCodeModelListUrl(baseUrl: string): string {
-  const url = appendV1Path(baseUrl, "models");
+  const url = appendV1Path(baseUrl, stripV1Prefix(subscriptionModelListPath("claude_code")));
   url.searchParams.set("limit", "100");
   return url.toString();
 }
 
 export function buildCodexResponsesUrl(baseUrl: string): string {
-  return appendPath(baseUrl, "codex/responses").toString();
+  return appendPath(baseUrl, subscriptionRoutePath("openai_codex", "responses")).toString();
 }
 
 export function buildClaudeCodeMessagesUrl(baseUrl: string): string {
-  return appendV1Path(baseUrl, "messages").toString();
+  return appendV1Path(
+    baseUrl,
+    stripV1Prefix(subscriptionRoutePath("claude_code", "messages")),
+  ).toString();
+}
+
+function subscriptionModelListPath(providerKey: SubscriptionProviderKey): string {
+  const path = resolveProviderRegistryEntry(providerKey)?.modelListEndpoint?.path;
+  if (!path) {
+    throw new Error(`Missing model list endpoint for ${providerKey}.`);
+  }
+  return path;
+}
+
+function subscriptionRoutePath(
+  providerKey: SubscriptionProviderKey,
+  protocol: "messages" | "responses",
+): string {
+  const path = resolveProviderRegistryEntry(providerKey)?.endpoints[protocol]?.path;
+  if (!path) {
+    throw new Error(`Missing ${protocol} endpoint for ${providerKey}.`);
+  }
+  return path;
+}
+
+// The registry stores subscription catalog/route paths with their "v1/" prefix
+// (e.g. "v1/models"); appendV1Path re-adds that prefix, so strip it first to
+// keep the historical single-"/v1/" behavior for custom API roots unchanged.
+function stripV1Prefix(path: string): string {
+  return path.startsWith("v1/") ? path.slice("v1/".length) : path;
 }
 
 function appendV1Path(baseUrl: string, pathSuffix: string): URL {

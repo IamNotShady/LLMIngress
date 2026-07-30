@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/console-demo.gif" alt="LLMIngress Console 演示" />
+  <img src="assets/console-demo.gif" alt="LLMIngress Console 工作流演示" />
 </p>
 
 <p align="center">
@@ -49,9 +49,23 @@ cd LLMIngress
 ```
 
 `./scripts/deploy.sh` 会在缺少配置时把随机 `ENCRYPTION_KEY` 写入已被 gitignore 的 `.env`，
-然后执行 `docker compose up --build`。Compose 仍使用仅限本地的默认 PostgreSQL
-密码（`llmi-local-db`）。对外端口默认绑定到 `127.0.0.1`。请妥善备份
-`.env` —— 解密已存储的 Provider 凭证需要同一个 `ENCRYPTION_KEY`。
+然后重新构建并创建 Compose 容器，以修复陈旧的容器网络状态；PostgreSQL 命名数据卷会被保留。
+`main` 分支使用 Compose project `llmingress`；其它分支使用隔离的
+`llmingress-<规范化分支名>`，并各自拥有容器、网络和 PostgreSQL 数据卷。重新部署时只保留
+当前分支对应的命名卷。Compose 仍使用仅限本地的默认 PostgreSQL 密码
+（`llmi-local-db`）。对外端口默认绑定到 `127.0.0.1`。请妥善备份每个 worktree 的
+`.env` —— 解密该分支已存储的 Provider 凭证需要同一个 `ENCRYPTION_KEY`。
+
+不同分支默认发布相同端口；启动另一分支前应先停止当前分支，或者覆盖
+`CONSOLE_PORT`、`GATEWAY_PORT` 和 `POSTGRES_PORT`。Compose 会根据 `GATEWAY_PORT`
+自动生成 Console 使用的公开 Gateway 地址；只有需要指定外部地址时才设置
+`GATEWAY_URL`。
+
+仓库的所有启动入口都按同一优先级解析每个变量：当前 Shell、`.env.local`、`.env`、
+最后是代码默认值。存在 `.env.local` 时，`./scripts/deploy.sh` 会把两个文件依次传给
+Compose；`./init.sh` 和 `pnpm dev` 则使用仓库共享的环境变量加载器。
+`DATABASE_URL` 用于宿主机进程；Docker 改用 `COMPOSE_DATABASE_URL`，因为应用容器需要
+通过 Compose 服务名连接 PostgreSQL。
 
 Compose 会运行两个容器：应用容器（同一进程组内包含 Console、Gateway 与 Worker）和
 PostgreSQL。
@@ -147,7 +161,7 @@ Compose 会构建一个多角色应用镜像，并以单个应用容器与 Postg
 （开发时发布在 `127.0.0.1:55432`）。
 
 `./init.sh` 会先运行 lint、类型检查、单元测试与构建，再启动 Console、Gateway
-与 Worker。独立的验证命令为：
+与 Worker。`pnpm dev` 使用相同的环境文件优先级，但不会执行验证门禁。独立的验证命令为：
 
 ```bash
 pnpm run verify

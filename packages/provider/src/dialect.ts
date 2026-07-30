@@ -1,3 +1,7 @@
+import {
+  providerSupportsRouteEndpointProtocol,
+  type RouteEndpointProtocol,
+} from "@llmingress/config/provider-registry";
 import { joinUrl } from "@llmingress/util";
 import { openRouterAttributionHeaders } from "./adapters/openrouter.js";
 import { mergeHttpHeaders } from "./headers.js";
@@ -6,6 +10,8 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
+  buildGrokSubscriptionHeaders,
+  buildMiniMaxSubscriptionHeaders,
   withClaudeCodeSystemPrompt,
 } from "./subscription.js";
 
@@ -19,11 +25,18 @@ export type ProviderStreamingDialect = {
   transformBody: (body: Record<string, unknown>, pathSuffix: string) => Record<string, unknown>;
 };
 
-const defaultDialect: ProviderStreamingDialect = {
+const defaultDialect: Omit<ProviderStreamingDialect, "supportsPathSuffix"> = {
   buildHeaders: (apiKey, protocolHeaders) => protocolHeaders(apiKey),
   buildUrl: joinUrl,
-  supportsPathSuffix: () => true,
   transformBody: (body) => body,
+};
+
+// The streaming layer keys dialects by wire path suffix; map each suffix back
+// to its routable protocol so support can be answered from the registry.
+const routeProtocolByPathSuffix: Record<string, RouteEndpointProtocol> = {
+  "chat/completions": "chat_completions",
+  responses: "responses",
+  messages: "messages",
 };
 
 const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
@@ -34,7 +47,6 @@ const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
       pathSuffix === "messages"
         ? buildClaudeCodeMessagesUrl(baseUrl)
         : joinUrl(baseUrl, pathSuffix),
-    supportsPathSuffix: (pathSuffix) => pathSuffix === "messages",
     transformBody: (body, pathSuffix) =>
       pathSuffix === "messages"
         ? { ...body, system: withClaudeCodeSystemPrompt(body.system) }
@@ -45,7 +57,25 @@ const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
       buildCodexSubscriptionHeaders(apiKey, protocolHeaders(apiKey)),
     buildUrl: (baseUrl, pathSuffix) =>
       pathSuffix === "responses" ? buildCodexResponsesUrl(baseUrl) : joinUrl(baseUrl, pathSuffix),
-    supportsPathSuffix: (pathSuffix) => pathSuffix === "responses",
+  },
+  grok: {
+    // Default joinUrl and body: grok's proxy is OpenAI-protocol, so only the
+    // headers change — the versioned client identity headers the proxy's 426
+    // gate requires, layered on the protocol Bearer/content-type.
+    buildHeaders: (apiKey, protocolHeaders) =>
+      buildGrokSubscriptionHeaders(apiKey, protocolHeaders(apiKey)),
+  },
+  minimax_coding: {
+    // Bearer + anthropic-version only (strip x-api-key); no stainless/beta/UA
+    // impersonation. buildUrl stays the default joinUrl since the base already
+    // carries /anthropic/v1. transformBody injects the same identity system
+    // block the non-streaming adapter does.
+    buildHeaders: (apiKey, protocolHeaders) =>
+      buildMiniMaxSubscriptionHeaders(apiKey, protocolHeaders(apiKey)),
+    transformBody: (body, pathSuffix) =>
+      pathSuffix === "messages"
+        ? { ...body, system: withClaudeCodeSystemPrompt(body.system) }
+        : body,
   },
   openrouter: {
     buildHeaders: (apiKey, protocolHeaders) =>
@@ -54,5 +84,12 @@ const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
 };
 
 export function resolveProviderStreamingDialect(providerKey: string): ProviderStreamingDialect {
-  return { ...defaultDialect, ...dialects[providerKey] };
+  return {
+    ...defaultDialect,
+    supportsPathSuffix: (pathSuffix) => {
+      const protocol = routeProtocolByPathSuffix[pathSuffix];
+      return protocol ? providerSupportsRouteEndpointProtocol(providerKey, protocol) : false;
+    },
+    ...dialects[providerKey],
+  };
 }

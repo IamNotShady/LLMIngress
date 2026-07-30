@@ -61,7 +61,7 @@ describe("virtual model capability contract", () => {
     }
   });
 
-  it("names the exact conflicting values when two context windows round to the same display", () => {
+  it("names the exact conflicting values for different context windows", () => {
     const result = resolveVirtualModelCapabilityContract([
       { ...completeCandidate, id: "candidate-round", maxContextTokens: 1_000_000 },
       { ...completeCandidate, id: "candidate-nonround", maxContextTokens: 1_048_576 },
@@ -78,30 +78,38 @@ describe("virtual model capability contract", () => {
     }
   });
 
-  it("rejects candidates whose capability contract differs from the first candidate", () => {
+  it("reports every capability difference with candidate names and values", () => {
     const result = resolveVirtualModelCapabilityContract([
-      completeCandidate,
       {
         ...completeCandidate,
-        id: "candidate-b",
-        inputModalities: ["image", "text"],
-        maxOutputTokens: 4_096,
+        id: "candidate-wide",
+        label: "Nous - Aion 2.0 (aion-2.0)",
+      },
+      {
+        ...completeCandidate,
+        id: "candidate-narrow",
+        label: "Grok - Grok 4.5 (grok-4.5)",
+        inputModalities: ["text"],
+        maxContextTokens: 500_000,
       },
     ]);
 
     expect(result).toMatchObject({
       code: "route_policy_candidate_capability_mismatch",
       details: {
-        referenceProviderModelId: "candidate-a",
-        field: "maxOutputTokens",
-        providerModelId: "candidate-b",
+        field: "inputModalities",
+        mismatches: [{ field: "inputModalities" }, { field: "maxContextTokens" }],
       },
       ok: false,
     });
     if (!result.ok) {
-      expect(result.message).toContain("maxOutputTokens");
-      expect(result.message).toContain("8192");
-      expect(result.message).toContain("4096");
+      expect(result.message).toContain("must agree on inputModalities and maxContextTokens");
+      expect(result.message).toContain(
+        "inputModalities: Nous - Aion 2.0 (aion-2.0) has text, image",
+      );
+      expect(result.message).toContain("Grok - Grok 4.5 (grok-4.5) has text.");
+      expect(result.message).toContain("maxContextTokens: Nous - Aion 2.0 (aion-2.0) has 128000");
+      expect(result.message).toContain("Grok - Grok 4.5 (grok-4.5) has 500000.");
     }
   });
 

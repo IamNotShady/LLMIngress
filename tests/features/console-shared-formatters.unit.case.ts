@@ -1,31 +1,28 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import {
-  formatConsoleCompactCount,
-  formatConsoleCount,
-  formatConsoleTimestamp,
-  formatConsoleUsd,
-  MISSING_VALUE,
-} from "../../packages/db/src/console-format";
+  formatCapabilities,
+  formatClock,
+  formatClockSeconds,
+  formatCompact,
+  formatCost,
+  formatCount,
+  formatStamp,
+} from "../../apps/console/src/app/_ui/format";
+import { formatConsoleUsd } from "../../packages/db/src/console-format";
+
+const MISSING_VALUE = "—";
 
 const rootDir = process.cwd();
 const appDir = join(rootDir, "apps/console/src/app");
-const moduleSource = (file: string) => readFileSync(join(appDir, "_modules", file), "utf8");
-const consoleSectionSource = () =>
-  [
-    "sections.tsx",
-    "overview-section.tsx",
-    "usage-section.tsx",
-    "activity-section.tsx",
-    "virtual-models-section.tsx",
-    "api-keys-section.tsx",
-    "limits-section.tsx",
-    "models-section.tsx",
-    "providers-section.tsx",
-  ]
-    .map(moduleSource)
-    .join("\n");
+
+function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap((entry) => {
+    const path = join(dir, entry);
+    return statSync(path).isDirectory() ? walk(path) : [path];
+  });
+}
 
 describe("shared console formatters", () => {
   test("USD uses smart precision: cents at 2 decimals, sub-cent at 3 significant digits", () => {
@@ -41,43 +38,81 @@ describe("shared console formatters", () => {
   });
 
   test("counts are full locale numbers; compact only for KPI cards", () => {
-    expect(formatConsoleCount(null)).toBe(MISSING_VALUE);
-    expect(formatConsoleCount(92535)).toBe("92,535");
-    expect(formatConsoleCount(0)).toBe("0");
-    expect(formatConsoleCompactCount(92535)).toBe("92.5K");
-    expect(formatConsoleCompactCount(1_250_000)).toBe("1.3M");
-    expect(formatConsoleCompactCount(999)).toBe("999");
-    expect(formatConsoleCompactCount(null)).toBe(MISSING_VALUE);
+    expect(formatCount(92535)).toBe("92,535");
+    expect(formatCount(0)).toBe("0");
+    expect(formatCompact(92535)).toBe("92.5k");
+    expect(formatCompact(1_250_000)).toBe("1.3M");
+    expect(formatCompact(999)).toBe("999");
   });
 
-  test("timestamps outside the current day carry a date qualifier", () => {
-    const now = new Date("2026-07-03T22:00:00");
-    expect(formatConsoleTimestamp(new Date("2026-07-03T21:48:19"), now)).toBe("21:48:19");
-    expect(formatConsoleTimestamp(new Date("2026-06-26T21:48:19"), now)).toBe("Jun 26 21:48:19");
-    expect(formatConsoleTimestamp(new Date("2025-12-31T09:05:00"), now)).toBe(
-      "Dec 31, 2025 09:05:00",
-    );
+  test("timestamps read in UTC, to the minute in a row and to the second in a detail", () => {
+    const at = new Date("2026-07-03T21:48:19Z");
+    expect(formatClock(at)).toBe("21:48");
+    expect(formatStamp(at)).toBe("2026-07-03 21:48:19 UTC");
+    // A missing moment is an em dash, never a zero clock.
+    expect(formatClock(null)).toBe(MISSING_VALUE);
+    expect(formatStamp(null)).toBe(MISSING_VALUE);
   });
 });
 
 describe("console pages consume the shared formatters", () => {
-  test("console section modules import the shared module and drop local look-alikes", () => {
-    const source = consoleSectionSource();
-    expect(source).toContain('from "@llmingress/db/console-format"');
-    for (const orphan of [
-      "function formatCompactNumber",
-      "function formatFullNumber",
-      "function formatActivityTableTokens",
-      "function formatActivityTableCost",
-      "function formatOverviewMoney",
-      "function formatOverviewActivityCost",
-      "function formatTime",
-    ]) {
-      expect(source, `${orphan} should be replaced by the shared module`).not.toContain(orphan);
+  test("the console money formatter delegates to the shared USD rule", () => {
+    // A fraction of a cent must not collapse to $0.00 on one page only.
+    expect(formatCost("0.00008428")).toBe(formatConsoleUsd(0.00008428));
+    expect(formatCost("0.13614875")).toBe("$0.14");
+    expect(formatCost(null)).toBe(MISSING_VALUE);
+    // Subscription traffic is unmetered, which is not the same as costing zero.
+    expect(formatCost("0", { metered: false })).toBe("plan");
+  });
+
+  test("no page grows a local money or count formatter of its own", () => {
+    const sources = walk(appDir)
+      .filter((path) => /\.tsx?$/.test(path) && !path.endsWith("_ui/format.ts"))
+      .map((path) => [path, readFileSync(path, "utf8")] as const);
+
+    for (const [path, source] of sources) {
+      expect(source, path).not.toMatch(/function format(Compact|Full)?(Number|Money|Usd)/);
+      expect(source, path).not.toContain('"N/A"');
     }
-    // The old null vocabulary is gone from data cells.
-    expect(source).not.toContain('"N/A"');
-    expect(source).not.toContain('? "Unavailable" :');
+  });
+
+  test("a request list says which second a request started in", () => {
+    // Two calls a second apart are two rows, and 14:32 twice reads as one of
+    // them repeated. The wider clock stays minute-only: nothing there is a list
+    // of individual requests.
+    const at = new Date("2026-07-27T14:32:05.400Z");
+    expect(formatClockSeconds(at)).toBe("14:32:05");
+    expect(formatClock(at)).toBe("14:32");
+    expect(formatClockSeconds(null)).toBe("—");
+  });
+
+  test("capabilities are said in the vocabulary the design uses", () => {
+    // tools · vision · reasoning. Streaming is not among them — every routable
+    // model streams — and the modalities decide whether an image can be sent.
+    expect(
+      formatCapabilities({
+        inputModalities: ["text", "image"],
+        outputModalities: ["text"],
+        supportsFunctionCalling: true,
+        supportsReasoning: true,
+      }),
+    ).toBe("tools · vision · reasoning");
+    expect(
+      formatCapabilities({
+        inputModalities: ["text"],
+        outputModalities: ["text"],
+        supportsFunctionCalling: true,
+        supportsReasoning: false,
+      }),
+    ).toBe("tools");
+    expect(
+      formatCapabilities({
+        inputModalities: null,
+        outputModalities: null,
+        supportsFunctionCalling: null,
+        supportsReasoning: null,
+      }),
+    ).toBe("—");
   });
 
   test("db display formatters delegate to the shared USD rule", () => {

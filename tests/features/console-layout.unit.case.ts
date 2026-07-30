@@ -1,107 +1,184 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
-const rootDir = process.cwd();
-const appDir = join(rootDir, "apps/console/src/app");
-const css = () => readFileSync(join(appDir, "globals.css"), "utf8");
+const appDir = join(process.cwd(), "apps/console/src/app");
+const read = (rel: string) => readFileSync(join(appDir, rel), "utf8");
 
-const currentListTables = [
-  ["_modules/overview-section.tsx", "overview-requests-table"],
-  ["_modules/api-keys-section.tsx", "api-keys-table"],
-  ["_modules/providers-client-section.tsx", "providers-table"],
-  ["_modules/providers-client-section.tsx", "provider-key-table"],
-  ["_modules/providers-client-section.tsx", "model-library-table"],
-  ["_modules/virtual-models-section.tsx", "vm-table"],
-  ["_modules/usage-section.tsx", "usage-summary-table"],
-  ["_modules/limits-section.tsx", "limits-rule-table"],
-  ["_modules/activity-section.tsx", "activity-table"],
-  ["_modules/virtual-model-route-dialog.tsx", "vm-candidate-table"],
-  ["_modules/virtual-model-route-dialog.tsx", "vm-model-picker-table"],
-] as const;
+function uiSources(): Array<readonly [string, string]> {
+  return readdirSync(join(appDir, "_ui"), { recursive: true })
+    .map(String)
+    .filter((file) => /\.tsx$/.test(file))
+    .map((file) => [`_ui/${file}`, read(`_ui/${file}`)] as const);
+}
 
-describe("console P0 layout static contract", () => {
-  test("chart cards cannot widen their grid track past the container", () => {
-    // Grid/flex items default to min-width:auto, so a nowrap table inside a
-    // chart card blows the track out to the table's intrinsic width.
-    expect(css()).toMatch(/\.chart-card\s*\{[^}]*min-width:\s*0/s);
+function pageSources(): Array<readonly [string, string]> {
+  return [
+    "(dashboard)/page.tsx",
+    "(dashboard)/providers/page.tsx",
+    "(dashboard)/models/page.tsx",
+    "(dashboard)/api-keys/page.tsx",
+    "(dashboard)/limits/page.tsx",
+    "(dashboard)/activity/page.tsx",
+    "(dashboard)/usage/page.tsx",
+    "(dashboard)/playground/page.tsx",
+  ].map((file) => [file, read(file)] as const);
+}
+
+describe("console layout contract", () => {
+  test("every table declares fixed pixel column tracks", () => {
+    // Auto-sized tracks are what let one long cell push a table past the
+    // container; each table states its widths and shares them with its header.
+    const columnDeclarations = [...uiSources(), ...pageSources()]
+      .flatMap(([, source]) => source.match(/const [A-Z_]*COLUMNS = "[^"]+"/g) ?? [])
+      .map((line) => line.split('"')[1] ?? "");
+
+    expect(columnDeclarations.length).toBeGreaterThan(5);
+    for (const declaration of columnDeclarations) {
+      expect(declaration, declaration).toMatch(/px/);
+      expect(declaration, declaration).not.toMatch(/auto/);
+    }
   });
 
-  test("mobile detail-layout override keeps the zero-minimum track", () => {
-    // A bare `1fr` track resolves to minmax(auto, 1fr), which reintroduces
-    // the intrinsic-width blowout the desktop minmax(0, …) tracks prevent.
-    expect(css()).toMatch(
-      /\.detail-layout,\s*\.overview-dashboard \.detail-layout,\s*\.api-keys-shell\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+  test("a table row and its header share one column declaration", () => {
+    for (const [file, source] of [...uiSources(), ...pageSources()]) {
+      const heads = source.match(/columns=\{([A-Z_]+)\}[^>]*head/g) ?? [];
+      for (const head of heads) {
+        const name = head.match(/columns=\{([A-Z_]+)\}/)?.[1];
+        expect(name, file).toBeTruthy();
+        // The same constant is used by at least one body row.
+        expect(source.match(new RegExp(`columns=\\{${name}\\}`, "g"))?.length ?? 0).toBeGreaterThan(
+          1,
+        );
+      }
+    }
+  });
+
+  test("long-text cells clip instead of wrapping", () => {
+    // The 1440px target leaves no room for a second line; a wrapped cell breaks
+    // the row rhythm of every row beside it.
+    const clipUsers = [...uiSources(), ...pageSources()].filter(([, source]) =>
+      source.includes("cell-clip"),
     );
+    expect(clipUsers.length).toBeGreaterThan(5);
+
+    const css = read("globals.css");
+    expect(css).toMatch(/@utility cell-clip \{[\s\S]*?white-space: nowrap;/);
+    expect(css).toMatch(/@utility cell-clip \{[\s\S]*?text-overflow: ellipsis;/);
   });
 
-  test("limits rules table fits the 1280px content column", () => {
-    // 64rem (1024px) exceeded the ~930px content column at 1280 and clipped
-    // the row actions behind the card edge.
-    expect(css()).toMatch(/\.limits-rule-table\s*\{[^}]*min-width:\s*56rem/s);
-    expect(css()).not.toMatch(/\.limits-rule-table\s*\{[^}]*min-width:\s*64rem/s);
+  test("every paginated list uses the one Pagination component", () => {
+    const paginated = [...uiSources(), ...pageSources()].filter(([, source]) =>
+      source.includes("<Pagination"),
+    );
+    expect(paginated.length).toBeGreaterThan(1);
+    for (const [file, source] of paginated) {
+      expect(source, file).toContain("formatRange(");
+    }
+    // Nothing renders its own prev/next pair.
+    for (const [file, source] of [...uiSources(), ...pageSources()]) {
+      if (file.endsWith("table.tsx")) {
+        continue;
+      }
+      expect(source, file).not.toMatch(/←\s*Prev/);
+    }
   });
 
-  test("every current list uses a fixed bounded table contract", () => {
-    for (const [file, tableClass] of currentListTables) {
-      const source = readFileSync(join(appDir, file), "utf8");
-      expect(source, tableClass).toMatch(
-        new RegExp(
-          `className="[^"]*bounded-table[^"]*${tableClass}|className="[^"]*${tableClass}[^"]*bounded-table`,
-        ),
-      );
+  test("activity pages twenty rows and counts with the same denominator", () => {
+    const activity = read("(dashboard)/activity/page.tsx");
+    expect(activity).toContain("const PAGE_SIZE = 20");
+    expect(activity).toContain("countConsoleActivities({ filters })");
+    // The header count and the range are both derived from that one total.
+    expect(activity).toContain("{formatCount(total)} matching");
+    expect(activity).toContain("total }");
+  });
+
+  test("the content container is declared once, at the shell", () => {
+    const layout = read("_ui/layout.tsx");
+    expect(layout).toContain("max-w-[1560px]");
+    for (const [file, source] of pageSources()) {
+      expect(source, file).toContain("<PageShell");
+      expect(source, file).not.toContain("max-w-[1560px]");
+    }
+  });
+
+  test("filters distinguish no matches from nothing configured", () => {
+    const models = read("(dashboard)/models/page.tsx");
+    expect(models).toContain("No virtual model uses this strategy.");
+    expect(models).toContain("No virtual models yet");
+
+    const apiKeys = read("(dashboard)/api-keys/page.tsx");
+    expect(apiKeys).toContain("No API key matches that name.");
+    expect(apiKeys).toContain("No API keys yet");
+  });
+
+  test("URL-driven filter forms remount when their displayed parameters change", () => {
+    const filterForms = [
+      ["(dashboard)/activity/page.tsx", "activityFilterFormKey"],
+      ["(dashboard)/models/page.tsx", "modelFilterFormKey"],
+      ["(dashboard)/api-keys/page.tsx", "apiKeyFilterFormKey"],
+      ["(dashboard)/limits/page.tsx", "limitsFilterFormKey"],
+      ["_ui/providers/detail.tsx", "providerModelFilterFormKey"],
+    ] as const;
+
+    for (const [file, key] of filterForms) {
+      const source = read(file);
+      expect(source, file).toContain(`const ${key} = urlFormStateKey(`);
+      expect(source, file).toContain(`key={${key}}`);
     }
 
-    const stylesheet = css();
-    expect(stylesheet).toMatch(/\.bounded-table\s*\{[^}]*table-layout:\s*fixed/s);
-    expect(stylesheet).toMatch(
-      /\.bounded-table\s*>\s*thead\s*>\s*tr\s*>\s*th,[\s\S]*?\.bounded-table\s*>\s*tbody\s*>\s*tr\s*>\s*td\s*\{[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis/s,
-    );
+    const syncedSearch = read("_ui/synced-search.tsx");
+    expect(syncedSearch).toContain("setTyped(value)");
+    expect(syncedSearch).toContain("settled.current = value");
+
+    const syncedSelect = read("_ui/synced-select.tsx");
+    expect(syncedSelect).toContain("setPending(value)");
   });
 
-  test("activity allocates Request ID explicitly instead of giving it leftover width", () => {
-    const stylesheet = css();
-    expect(stylesheet).toMatch(
-      /\.activity-table th:nth-child\(2\),\s*\.activity-table td:nth-child\(2\)\s*\{[^}]*width:\s*8\.4rem/s,
-    );
-    expect(stylesheet).toMatch(
-      /\.activity-table th,[\s\S]*?\.activity-table td\s*\{[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis/s,
-    );
+  test("the playground key hint names the console's own key format", () => {
+    const playground = read("_ui/playground/playground.tsx");
+    expect(playground).toContain("llmi_");
+    expect(playground).toContain("never stored");
   });
 
-  test("trend chart renders an explicit empty state for empty windows", () => {
-    const chart = readFileSync(join(appDir, "_components/charts/trend-line-chart.tsx"), "utf8");
-    expect(chart).toContain("data.length === 0");
-    expect(chart).toContain("chart-empty");
-    expect(chart).toContain("emptyMessage");
-    expect(css()).toMatch(/\.chart-empty\s*\{[^}]*place-items:\s*center/s);
+  test("an authorization url is actionable, not just printed", () => {
+    const dialogs = read("_ui/providers/dialogs.tsx");
+    expect(dialogs).toMatch(/href=\{authorizeUrl\}/);
+    expect(dialogs).toContain("Open in browser");
+    expect(dialogs).toContain("Copy url");
   });
 
-  test("sidebar exposes a mobile menu toggle that hides nav until opened", () => {
-    const sidebar = readFileSync(join(appDir, "_components/sidebar.tsx"), "utf8");
-    expect(sidebar).toContain("sidebar-menu-toggle");
-    expect(sidebar).toContain("aria-expanded");
-    expect(sidebar).toContain('aria-controls="console-sidebar-nav"');
-    expect(sidebar).toContain("is-menu-open");
-    // Drawer closes again after client-side navigation.
-    expect(sidebar).toMatch(/useEffect\(\(\) => \{\s*setMenuOpen\(false\);\s*\}, \[pathname\]\)/);
+  test("mutation errors stay bounded and provider header actions share one row", () => {
+    const mutationForm = read("_ui/mutation-form.tsx");
+    expect(mutationForm).toContain(["className={`min-w-0 ", "$", '{className ?? ""}`}'].join(""));
+    expect(mutationForm).toContain("max-w-full");
+    expect(mutationForm).toContain("break-words");
 
-    const stylesheet = css();
-    // Hidden on desktop, shown inside the collapsed top bar.
-    expect(stylesheet).toMatch(/\.sidebar-menu-toggle\s*\{[^}]*display:\s*none/s);
-    expect(stylesheet).toMatch(
-      /\.sidebar:not\(\.is-menu-open\) \.sidebar-nav,\s*\.sidebar:not\(\.is-menu-open\) \.sidebar-footer\s*\{\s*display:\s*none/,
+    const providerDetail = read("_ui/providers/detail.tsx");
+    expect(providerDetail).toContain("flex-wrap");
+    expect(providerDetail).toContain('className="mt-5 flex flex-wrap items-center gap-[10px]"');
+    expect(providerDetail).toContain('className="flex min-w-0 flex-wrap items-center gap-2"');
+    expect(providerDetail).toContain(
+      'className="ml-auto flex max-w-full flex-nowrap items-center justify-end gap-2 overflow-x-auto"',
     );
+    expect(providerDetail).toMatch(
+      /Edit[\s\S]*?Disable[\s\S]*?Enable[\s\S]*?Delete[\s\S]*?Refresh models/,
+    );
+    expect(providerDetail).not.toContain("grid-cols-[minmax(0,1fr)_auto]");
+    const providersPage = read("(dashboard)/providers/page.tsx");
+    expect(providersPage).toContain('data-testid="providers-master-detail"');
+    expect(providersPage).toContain("grid-cols-1");
+    expect(providersPage).toContain("lg:grid-cols-[minmax(0,344px)_minmax(0,1fr)]");
+    expect(providersPage).toContain("lg:border-r");
+    expect(
+      providersPage.match(/data-testid="providers-master-detail"[\s\S]*?className="([^"]+)"/)?.[1],
+    ).not.toContain("overflow-x-auto");
   });
 
-  test("strategy radio hit areas stay inside their option cards", () => {
-    const stylesheet = css();
-    expect(stylesheet).toMatch(/\.option-card\s*\{[^}]*position:\s*relative/s);
-    expect(stylesheet).toMatch(
-      /\.option-card input\[type="radio"\]\s*\{[^}]*inset:\s*0[^}]*width:\s*100%[^}]*height:\s*100%/s,
-    );
-    expect(stylesheet).not.toMatch(
-      /\.option-card input\[type="radio"\]\s*\{[^}]*pointer-events:\s*none/s,
+  test("the limits drawer keeps its three enabled-state actions in one row", () => {
+    const limitsDrawer = read("_ui/limits/drawer.tsx");
+    expect(limitsDrawer).toMatch(
+      /mt-\[18px\] flex flex-wrap items-center gap-2[\s\S]*?Save rules[\s\S]*?Disable limits[\s\S]*?Delete rules[\s\S]*?<\/MutationForm>/,
     );
   });
 });

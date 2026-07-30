@@ -138,24 +138,20 @@ async function seedProviderApiKeyInteractionData(databaseUrl: string) {
   return { failureKeyId, lifecycleKeyId, providerId };
 }
 
+// The timestamp is the one cell that must never be cut: a clipped clock reads
+// as a different time. Long free-text cells beside it clip instead.
 async function expectActivityTimeCellContained(page: Page) {
-  const metrics = await page
-    .locator(".activity-table tbody tr", { hasText: "gw_audit_old_request" })
-    .evaluate((row) => {
-      const [timeCell, requestCell] = Array.from(row.querySelectorAll("td"));
-      const timeStyle = getComputedStyle(timeCell);
-      return {
-        requestCellOverflow: getComputedStyle(requestCell).overflow,
-        timeCellClientWidth: timeCell.clientWidth,
-        timeCellOverflow: timeStyle.overflow,
-        timeCellScrollWidth: timeCell.scrollWidth,
-      };
-    });
+  const row = page.getByRole("link", { name: /gw_audit_old_request/ }).first();
+  const metrics = await row.evaluate((element) => {
+    const [timeCell, requestCell] = Array.from(element.children) as HTMLElement[];
+    return {
+      requestCellOverflow: getComputedStyle(requestCell).overflow,
+      timeCellClientWidth: timeCell.clientWidth,
+      timeCellScrollWidth: timeCell.scrollWidth,
+    };
+  });
   expect(metrics.requestCellOverflow).toBe("hidden");
-  expect(
-    metrics.timeCellScrollWidth <= metrics.timeCellClientWidth ||
-      metrics.timeCellOverflow === "hidden",
-  ).toBe(true);
+  expect(metrics.timeCellScrollWidth).toBeLessThanOrEqual(metrics.timeCellClientWidth);
 }
 
 test("console audit fixes keep time windows honest and prevent activity timestamp overlap", async ({
@@ -168,7 +164,7 @@ test("console audit fixes keep time windows honest and prevent activity timestam
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    const seeded = await seedAuditData(fixture.databaseUrl);
+    await seedAuditData(fixture.databaseUrl);
 
     const consoleApp = startConsoleProcess({
       databaseUrl: fixture.databaseUrl,
@@ -205,155 +201,54 @@ test("console audit fixes keep time windows honest and prevent activity timestam
         await waitForConsole(baseUrl, consoleApp);
         await signInFromFirstRun(page, baseUrl);
 
+        // --- A window means what it says: a request older than 24h is absent
+        // from the 24h board and present once the window is widened.
         await page.goto(baseUrl, { waitUntil: "networkidle" });
-        await expect(page.locator(".stat-card", { hasText: "Requests 24h" })).toContainText("0");
-        await expect(page.locator(".chart-card", { hasText: "Recent requests" })).not.toContainText(
-          "audit-old-apiKey",
-        );
-        await expect(
-          page.locator(".chart-card", { hasText: "Top API keys by cost" }),
-        ).not.toContainText("$0.42");
+        await expect(page.getByRole("heading", { name: "No traffic yet" })).toBeVisible();
+        await expect(page.getByText("$0.42")).toHaveCount(0);
 
-        await page.goto(`${baseUrl}/usage`, { waitUntil: "networkidle" });
-        const daySpan = await page.evaluate(() => {
-          const from = (document.querySelector("#usage-date-from") as HTMLInputElement).value;
-          const to = (document.querySelector("#usage-date-to") as HTMLInputElement).value;
-          return (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
-        });
-        expect(daySpan).toBe(6);
-        await expect(page.locator(".stat-card", { hasText: "Total cost" })).toContainText("$0.42");
+        await page.goto(`${baseUrl}/usage?window=7d`, { waitUntil: "networkidle" });
+        await expect(page.getByText("$0.42").first()).toBeVisible();
+        await expect(page.getByText("buckets are daily")).toBeVisible();
 
-        await page.goto(`${baseUrl}/api-keys`, { waitUntil: "networkidle" });
-        await expect(page.locator(".stat-card", { hasText: "Enabled" })).toContainText("2");
-        await expect(page.locator(".stat-card", { hasText: "Cost 24h" })).toContainText("$0.00");
-
-        await page.goto(`${baseUrl}/models`, { waitUntil: "networkidle" });
-        await expect(page.locator(".vm-table thead")).toContainText("Failure rate total");
-        expect(consoleErrors.filter((error) => error.includes("hydration"))).toEqual([]);
-        await page.getByLabel("Search Virtual Model Name").fill("no-such-virtual-model");
-        await page.getByRole("button", { name: "Filter" }).click();
-        await expect(page.getByText("No Virtual Models match the selected filters.")).toBeVisible();
-        await expect(page.getByText(/Add a Provider and refresh its models/)).toHaveCount(0);
-
-        await page.goto(`${baseUrl}/api-keys?apiKeyDialog=new`, { waitUntil: "networkidle" });
-        await expect(page.locator("#api-key-allowed-virtual-models")).toHaveCount(0);
-        await expect(
-          page.locator('input[name="allowedVirtualModelIds"][type="checkbox"]'),
-        ).toHaveCount(1);
-        await expect(page.locator("#api-key-type")).toHaveCount(0);
-        await page.getByLabel("Name").fill("audit-created-apiKey");
-        await expect(page.getByLabel("Default virtual model").locator("option")).toHaveCount(1);
-        await page.getByRole("button", { name: "Create" }).click();
-        await expect(page.getByText("Select at least one allowed Virtual Model.")).toBeVisible();
-        await page.getByLabel("audit-probe-vm").check();
-        await expect(page.getByLabel("Default virtual model").locator("option")).toHaveCount(2);
-        await page.getByLabel("Default virtual model").selectOption({ label: "audit-probe-vm" });
-        await page.getByLabel("audit-probe-vm").uncheck();
-        await expect(page.getByLabel("Default virtual model")).toHaveValue("");
-        await page.getByLabel("audit-probe-vm").check();
-        await page.getByLabel("Default virtual model").selectOption({ label: "audit-probe-vm" });
-        await page.getByRole("button", { name: "Create" }).click();
-        const createdApiKeyDialog = page.getByRole("dialog", { name: "API Key created" });
-        await expect(createdApiKeyDialog).toBeVisible();
-        await expect(createdApiKeyDialog).toContainText("audit-probe-vm");
-        await expect(createdApiKeyDialog).not.toContainText("<Virtual Model Name>");
-        await expect(createdApiKeyDialog).not.toContainText("API key prefix");
-        await createdApiKeyDialog.getByRole("link", { name: "Close" }).click();
-        const createdApiKeyRow = page.locator(".api-keys-table tbody tr", {
-          hasText: "audit-created-apiKey",
-        });
-        await expect(createdApiKeyRow).toContainText("audit-probe-vm");
-        await expect(createdApiKeyRow).toContainText("True");
-        await createdApiKeyRow
-          .getByRole("button", { name: "Disable audit-created-apiKey" })
-          .click();
-        await expect(createdApiKeyRow).toContainText("False");
-        await createdApiKeyRow.getByRole("button", { name: "Enable audit-created-apiKey" }).click();
-        await expect(createdApiKeyRow).toContainText("True");
-
-        for (const viewport of [
-          { width: 1280, height: 800 },
-          { width: 390, height: 844 },
-        ]) {
-          await page.setViewportSize(viewport);
-          await page.goto(`${baseUrl}/activity`, { waitUntil: "networkidle" });
-          await expect(
-            page.locator(".activity-table tbody tr", { hasText: "gw_audit_old_request" }),
-          ).toBeVisible();
-          await expectActivityTimeCellContained(page);
-          if (viewport.width === 390) {
-            const mobilePagination = page.getByRole("navigation", { name: "Activity pages" });
-            const mobileMetrics = await mobilePagination.evaluate((element) => {
-              const rect = element.getBoundingClientRect();
-              return {
-                flexDirection: getComputedStyle(element).flexDirection,
-                left: rect.left,
-                right: rect.right,
-                viewportWidth: document.documentElement.clientWidth,
-              };
-            });
-            expect(mobileMetrics.flexDirection).toBe("column");
-            expect(mobileMetrics.left).toBeGreaterThanOrEqual(0);
-            expect(mobileMetrics.right).toBeLessThanOrEqual(mobileMetrics.viewportWidth);
-          }
-        }
-
-        await page.setViewportSize({ width: 1920, height: 1080 });
-        await page.goto(`${baseUrl}/activity`, { waitUntil: "networkidle" });
-        await expect(page.locator(".activity-table tbody tr")).toHaveCount(20);
-        const activityPagination = page.getByRole("navigation", { name: "Activity pages" });
-        await expect(activityPagination).toHaveClass(/list-pagination/);
-        await expect(activityPagination.locator(".list-pagination-summary strong")).toHaveText(
-          "Page 1 of 2",
-        );
-        await expect(activityPagination.locator(".list-pagination-range")).toHaveText(
-          "1–20 of 21 activities",
-        );
-        await activityPagination.getByRole("link", { name: "Next page" }).click();
-        await expect(page).toHaveURL(`${baseUrl}/activity?page=2`);
-        await expect(page.locator(".activity-table tbody tr")).toHaveCount(1);
-        await activityPagination.getByRole("link", { name: "Previous page" }).click();
-        await expect(page).toHaveURL(`${baseUrl}/activity`);
-        await expect(page.locator(".activity-table tbody tr")).toHaveCount(20);
-
-        await page.getByRole("link", { name: "gw_audit_old_request" }).click();
-        const activityDetail = page.getByRole("dialog", { name: "Request detail" });
-        await expect(activityDetail.getByText("Cost First", { exact: true })).toBeVisible();
-        await expect(activityDetail.getByText("cost_first", { exact: true })).toHaveCount(0);
-
-        await page.goto(`${baseUrl}/limits`, { waitUntil: "networkidle" });
-        await page.getByRole("searchbox", { name: "Search limit rules" }).fill("audit-old");
-        await page.getByRole("button", { name: "Search" }).click();
-        await expect(page).toHaveURL(/\/limits\?q=audit-old$/);
-
-        const sidebarMetrics = await page.locator(".sidebar").evaluate((sidebar) => ({
-          labelFontSize: getComputedStyle(sidebar.querySelector(".nav-item-label") as HTMLElement)
-            .fontSize,
-          width: getComputedStyle(sidebar).width,
-        }));
-        expect(sidebarMetrics).toEqual({ labelFontSize: "15px", width: "280px" });
-
-        const pageWidths: number[] = [];
-        for (const path of ["/providers", "/models", "/activity", "/limits"]) {
-          await page.goto(`${baseUrl}${path}`, { waitUntil: "networkidle" });
-          pageWidths.push(
-            await page
-              .locator(".page")
-              .evaluate((pageElement) => pageElement.getBoundingClientRect().width),
-          );
-        }
-        expect(pageWidths).toEqual([1600, 1600, 1600, 1600]);
-
-        await page.goto(`${baseUrl}/activity?apiKeyId=${seeded.apiKeyId}`, {
+        await page.goto(`${baseUrl}/activity?window=7d&q=gw_audit_old_request`, {
           waitUntil: "networkidle",
         });
-        await expect(page.locator("#activity-api-key")).toHaveValue(seeded.apiKeyId);
-        await expect(
-          page.locator(".activity-table tbody tr", { hasText: "gw_audit_old_request" }),
-        ).toBeVisible();
-        await expect(
-          page.locator(".activity-table tbody tr", { hasText: "gw_audit_other_request" }),
-        ).toHaveCount(0);
+        await expect(page.getByRole("link", { name: /gw_audit_old_request/ })).toBeVisible();
+        await expectActivityTimeCellContained(page);
+        await page.goto(`${baseUrl}/activity?q=gw_audit_old_request`, { waitUntil: "networkidle" });
+        await expect(page.getByRole("link", { name: /gw_audit_old_request/ })).toHaveCount(0);
+        await expect(page.getByText("No requests match these filters")).toBeVisible();
+
+        // --- A filter that matches nothing is not the same as nothing being
+        // configured, and says so.
+        await page.goto(`${baseUrl}/models?strategy=cost_first`, { waitUntil: "networkidle" });
+        await expect(page.getByText("No virtual model uses this strategy.")).toBeVisible();
+        await expect(page.getByRole("heading", { name: "No virtual models yet" })).toHaveCount(0);
+        expect(consoleErrors.filter((error) => error.includes("hydration"))).toEqual([]);
+
+        // --- New API key: a key with no grant cannot be created, and the
+        // default follows the grants rather than outliving them. (Creating one
+        // end to end is covered by the api-key suites.)
+        await page.goto(`${baseUrl}/api-keys?dialog=new`, { waitUntil: "networkidle" });
+        const dialog = page.getByRole("dialog", { name: "New API Key" });
+        await expect(dialog.getByRole("button", { name: "Create key" })).toBeDisabled();
+
+        await dialog.getByRole("link", { name: "Grant audit-probe-vm" }).click();
+        await page.waitForURL((url) => url.searchParams.get("grantIds") !== null);
+        await expect(page.getByRole("button", { name: "Create key" })).toBeEnabled();
+
+        await page.getByRole("link", { name: "☆ set default" }).click();
+        await page.waitForURL((url) => Boolean(url.searchParams.get("defaultGrant")));
+        await expect(page.getByRole("link", { name: "★ default" })).toBeVisible();
+
+        // Revoking the grant that was the default drops the default with it.
+        // "none" rather than an empty value: an empty parameter reads as absent,
+        // and absent is answered by falling back to what the key already has.
+        await page.getByRole("link", { name: "Revoke audit-probe-vm" }).click();
+        await page.waitForURL((url) => url.searchParams.get("defaultGrant") === "none");
+        await expect(page.getByRole("link", { name: "★ default" })).toHaveCount(0);
+        await expect(page.getByRole("button", { name: "Create key" })).toBeDisabled();
       } finally {
         await context.close();
       }
@@ -365,7 +260,7 @@ test("console audit fixes keep time windows honest and prevent activity timestam
   }
 });
 
-test("Provider API key actions refresh immediately and render real failures in a toast", async ({
+test("a connection state change and its deletion are driven from the connection dialog, which reports refusals in place", async ({
   browser,
 }) => {
   test.setTimeout(240_000);
@@ -403,13 +298,19 @@ test("Provider API key actions refresh immediately and render real failures in a
           waitUntil: "networkidle",
         });
 
-        const lifecycleRow = page.locator(".provider-key-table tbody tr", {
-          hasText: "Lifecycle key",
-        });
-        await lifecycleRow.getByRole("button", { name: "Disable API key" }).click();
-        await expect(lifecycleRow).toContainText("Disabled");
-        await expect(lifecycleRow.getByRole("button", { name: "Enable API key" })).toBeVisible();
-        await expect(page.getByText("Provider API key update failed.")).toHaveCount(0);
+        // A connection's state lives with the connection, in the dialog that
+        // holds its credential — the row itself only reports.
+        await page.goto(
+          `${baseUrl}/providers?selected=${seeded.providerId}` +
+            `&providerKeyDialog=${seeded.providerId}&connection=${seeded.lifecycleKeyId}`,
+          { waitUntil: "networkidle" },
+        );
+        const dialog = page.getByRole("dialog", { name: "Edit connection" });
+        // State is part of what a connection is, so it is a field of the form
+        // that holds the credential — saved with everything else, in one post.
+        await dialog.getByLabel("STATE").selectOption("false");
+        await dialog.getByRole("button", { name: "Save connection" }).click();
+
         await expect
           .poll(async () => {
             const result = await fixture.query<{ enabled: boolean }>(
@@ -419,26 +320,49 @@ test("Provider API key actions refresh immediately and render real failures in a
             return result.rows[0]?.enabled;
           })
           .toBe(false);
+        // (Scoped to the dialog: `next dev` injects its own alert region.)
+        await expect(dialog.getByRole("alert")).toHaveCount(0);
 
-        await lifecycleRow.getByRole("button", { name: "Enable API key" }).click();
-        await expect(lifecycleRow.getByRole("button", { name: "Disable API key" })).toBeVisible();
-        await expect(lifecycleRow).not.toContainText("Disabled");
+        // Saving without pasting a key keeps the stored one — a rename must not
+        // cost a rotation.
+        const storedBefore = await fixture.query<{ key_prefix: string }>(
+          "select key_prefix from provider_api_keys where id = $1",
+          [seeded.lifecycleKeyId],
+        );
+        await page.goto(
+          `${baseUrl}/providers?selected=${seeded.providerId}` +
+            `&providerKeyDialog=${seeded.providerId}&connection=${seeded.lifecycleKeyId}`,
+          { waitUntil: "networkidle" },
+        );
+        await dialog.getByLabel(/LABEL/).fill("renamed-key");
+        await dialog.getByLabel("STATE").selectOption("true");
+        await dialog.getByRole("button", { name: "Save connection" }).click();
+
         await expect
           .poll(async () => {
-            const result = await fixture.query<{ enabled: boolean }>(
-              "select enabled from provider_api_keys where id = $1",
+            const result = await fixture.query<{ enabled: boolean; label: string | null }>(
+              "select enabled, label from provider_api_keys where id = $1",
               [seeded.lifecycleKeyId],
             );
-            return result.rows[0]?.enabled;
+            return result.rows[0];
           })
-          .toBe(true);
+          .toEqual({ enabled: true, label: "renamed-key" });
+        const storedAfter = await fixture.query<{ key_prefix: string }>(
+          "select key_prefix from provider_api_keys where id = $1",
+          [seeded.lifecycleKeyId],
+        );
+        expect(storedAfter.rows[0]?.key_prefix).toBe(storedBefore.rows[0]?.key_prefix);
 
-        await lifecycleRow.getByRole("link", { name: "Delete API key" }).click();
-        const deleteDialog = page.getByRole("dialog", { name: "Delete API key?" });
-        await deleteDialog.getByRole("button", { name: "Delete key" }).click();
+        // Deleting says what is lost, then closes back onto the provider.
+        await page.goto(
+          `${baseUrl}/providers?selected=${seeded.providerId}` +
+            `&dialog=deleteConnection&connection=${seeded.lifecycleKeyId}`,
+          { waitUntil: "networkidle" },
+        );
+        const deleteDialog = page.getByRole("dialog", { name: "Delete connection" });
+        await expect(deleteDialog).toContainText("cannot be recovered");
+        await deleteDialog.getByRole("button", { name: "Delete connection" }).click();
         await expect(deleteDialog).toBeHidden();
-        await expect(lifecycleRow).toHaveCount(0);
-        await expect(page).toHaveURL(`${baseUrl}/providers?selected=${seeded.providerId}`);
         await expect
           .poll(async () => {
             const result = await fixture.query<{ deleted: boolean }>(
@@ -449,41 +373,38 @@ test("Provider API key actions refresh immediately and render real failures in a
           })
           .toBe(true);
 
-        const failureRow = page.locator(".provider-key-table tbody tr", {
-          hasText: "Failure key",
-        });
-        await expect(failureRow).toBeVisible();
+        // A connection that disappears from under the operator is stated, not
+        // ignored: the click has somewhere to land and says nothing changed.
+        await page.goto(
+          `${baseUrl}/providers?selected=${seeded.providerId}` +
+            `&providerKeyDialog=${seeded.providerId}&connection=${seeded.failureKeyId}`,
+          { waitUntil: "networkidle" },
+        );
+        const failureDialog = page.getByRole("dialog", { name: "Edit connection" });
         await fixture.query("delete from provider_api_keys where id = $1", [seeded.failureKeyId]);
-        await failureRow.getByRole("button", { name: "Disable API key" }).click();
+        await failureDialog.getByRole("button", { name: "Save connection" }).click();
 
-        const toast = page.locator(".console-mutation-toast");
-        await expect(toast).toBeVisible();
-        await expect(toast).toHaveAttribute("role", "alert");
-        await expect(failureRow.getByRole("alert")).toHaveCount(0);
-        const desktopToast = await toast.evaluate((element) => {
-          const rect = element.getBoundingClientRect();
-          const style = getComputedStyle(element);
-          return {
-            bottom: rect.bottom,
-            left: rect.left,
-            position: style.position,
-            right: rect.right,
-            top: rect.top,
-            zIndex: style.zIndex,
-          };
-        });
-        expect(desktopToast.position).toBe("fixed");
-        expect(desktopToast.zIndex).toBe("70");
-        expect(desktopToast.top).toBeGreaterThanOrEqual(0);
-        expect(desktopToast.right).toBeLessThanOrEqual(1280);
+        // The connection is gone from under the operator: the refusal is stated
+        // where they were working, not in a toast and not by silence.
+        const refusal = failureDialog.getByRole("alert");
+        await expect(refusal).toBeVisible();
+        await expect(refusal).toContainText(/not found|could not be saved/i);
+        await expect(page.getByRole("status")).toHaveCount(0);
 
-        await page.setViewportSize({ height: 844, width: 390 });
-        const mobileToast = await toast.boundingBox();
-        expect(mobileToast).not.toBeNull();
-        expect(mobileToast?.x ?? -1).toBeGreaterThanOrEqual(0);
-        expect((mobileToast?.x ?? 0) + (mobileToast?.width ?? 0)).toBeLessThanOrEqual(390);
-        await toast.getByRole("button", { name: "Dismiss error" }).click();
-        await expect(toast).toBeHidden();
+        for (const viewport of [
+          { width: 1280, height: 800 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          await expect
+            .poll(() =>
+              page.evaluate(
+                () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+              ),
+            )
+            .toBeLessThanOrEqual(0);
+        }
+
         expect(
           browserErrors.filter(
             (message) => !message.startsWith("Failed to load resource: the server responded with"),

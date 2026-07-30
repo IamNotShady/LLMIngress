@@ -19,10 +19,18 @@ export type ProviderConnectionProbeSource =
 
 export type ProviderModelRefreshSource = "api_key_saved" | "manual_refresh" | "oauth_ready";
 
+export type ProviderQuotaProbeSource = "manual_probe" | "scheduled_probe";
+
 export type ProviderConnectionProbeJobPayload = {
   providerConnectionId: string;
   providerId: string;
   source: ProviderConnectionProbeSource;
+};
+
+export type ProviderQuotaProbeJobPayload = {
+  providerConnectionId: string;
+  providerId: string;
+  source: ProviderQuotaProbeSource;
 };
 
 export type ProviderConnectionProbeJobResult =
@@ -31,6 +39,13 @@ export type ProviderConnectionProbeJobResult =
       queued: false;
       reason: "connection_disabled" | "connection_missing" | "provider_disabled";
     };
+
+export type ProviderQuotaProbeJobResult = ProviderConnectionProbeJobResult;
+
+export type ProviderQuotaProbeConnection = {
+  providerConnectionId: string;
+  providerId: string;
+};
 
 type ProviderRow = {
   enabled: boolean;
@@ -194,6 +209,130 @@ export async function enqueueProviderConnectionProbeJob(input: {
             source: input.source,
           }),
         ),
+      ],
+    );
+    await notifyJobCreated(client, jobId);
+    return { jobId, queued: true, reused: false };
+  });
+}
+
+/**
+ * Connections whose quota is due for a refresh. The left join keeps connections
+ * that have no summary row yet, so a new connection is probed on the next cycle,
+ * and `quota_probe_enabled` makes probing switchable per connection.
+ */
+export async function listDueProviderQuotaProbeConnections(
+  input: { databaseUrl?: string } = {},
+): Promise<ProviderQuotaProbeConnection[]> {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
+    const result = await client.query<{
+      provider_connection_id: string;
+      provider_id: string;
+    }>(
+      `
+        select connections.provider_id::text,
+               connections.connection_id::text as provider_connection_id
+        from (
+          select keys.id as connection_id, keys.provider_id
+          from provider_api_keys as keys
+          join providers on providers.id = keys.provider_id
+          where keys.enabled = true
+            and keys.deleted_at is null
+            and keys.quota_probe_enabled = true
+            and providers.enabled = true
+            and providers.deleted_at is null
+            and providers.provider_type = 'api_key'
+          union all
+          select oauth.id as connection_id, oauth.provider_id
+          from provider_oauth as oauth
+          join providers on providers.id = oauth.provider_id
+          where oauth.enabled = true
+            and oauth.deleted_at is null
+            and oauth.quota_probe_enabled = true
+            and oauth.completed_at is not null
+            and oauth.encrypted_token is not null
+            and providers.enabled = true
+            and providers.deleted_at is null
+            and providers.provider_type = 'subscription'
+        ) as connections
+        left join provider_quota_summary as summary
+          on summary.provider_id = connections.provider_id
+         and summary.provider_connection_id = connections.connection_id
+        where summary.next_refresh_at is null
+           or summary.next_refresh_at <= now()
+        order by connections.provider_id, connections.connection_id
+      `,
+    );
+    return result.rows.map((row) => ({
+      providerConnectionId: row.provider_connection_id,
+      providerId: row.provider_id,
+    }));
+  });
+}
+
+export async function enqueueProviderQuotaProbeJob(input: {
+  databaseUrl?: string;
+  providerConnectionId: string;
+  providerId: string;
+  source: ProviderQuotaProbeSource;
+  trigger?: "manual" | "scheduled" | "system";
+}): Promise<ProviderQuotaProbeJobResult> {
+  const providerId = requireId(input.providerId, "Provider id");
+  const providerConnectionId = requireId(input.providerConnectionId, "Provider connection id");
+
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
+    const provider = await readProviderForUpdate(client, providerId);
+    if (!provider.enabled) {
+      return { queued: false, reason: "provider_disabled" };
+    }
+    const connectionState = await readConnectionState(client, {
+      provider,
+      providerConnectionId,
+    });
+    if (connectionState === "missing") {
+      return { queued: false, reason: "connection_missing" };
+    }
+    if (connectionState === "disabled") {
+      return { queued: false, reason: "connection_disabled" };
+    }
+
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [
+      `provider_quota_probe:${providerId}:${providerConnectionId}`,
+    ]);
+    const existing = await client.query<{ id: string }>(
+      `
+        select id::text
+        from jobs
+        where job_type = 'provider_quota_probe'
+          and status in ('pending', 'running')
+          and payload ->> 'providerId' = $1
+          and payload ->> 'providerConnectionId' = $2
+        order by case when status = 'pending' then 0 else 1 end, created_at
+        limit 1
+        for update
+      `,
+      [providerId, providerConnectionId],
+    );
+    const active = existing.rows[0];
+    if (active) {
+      await notifyJobCreated(client, active.id);
+      return { jobId: active.id, queued: true, reused: true };
+    }
+
+    const jobId = randomUUID();
+    await client.query(
+      `
+        insert into jobs (id, job_type, status, trigger, payload, max_attempts)
+        values ($1, 'provider_quota_probe', 'pending', $2, $3::jsonb, 3)
+      `,
+      [
+        jobId,
+        input.trigger ?? (input.source === "manual_probe" ? "manual" : "scheduled"),
+        JSON.stringify({
+          providerConnectionId,
+          providerId,
+          source: input.source,
+        } satisfies ProviderQuotaProbeJobPayload),
       ],
     );
     await notifyJobCreated(client, jobId);

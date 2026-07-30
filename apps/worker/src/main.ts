@@ -12,6 +12,7 @@ import {
 import { createModelRefreshJobHandler } from "@llmingress/worker-runtime/worker-model-refresh";
 import { createPriceSyncJobHandler } from "@llmingress/worker-runtime/worker-price-sync";
 import { createProviderConnectionProbeJobHandler } from "@llmingress/worker-runtime/worker-provider-connection-probe";
+import { createProviderQuotaProbeJobHandler } from "@llmingress/worker-runtime/worker-provider-quota-probe";
 
 const logger = createLogger("worker");
 
@@ -21,8 +22,9 @@ export async function startWorker() {
   const jobRunner = createPostgresJobRunner({
     handlers: {
       model_refresh: createModelRefreshJobHandler({}),
-      provider_connection_probe: createProviderConnectionProbeJobHandler({}),
       price_sync: createPriceSyncJobHandler({}),
+      provider_connection_probe: createProviderConnectionProbeJobHandler({}),
+      provider_quota_probe: createProviderQuotaProbeJobHandler({}),
     },
     leaseMs: readWorkerJobLeaseMs(),
     maxJobDurationMs: readWorkerMaxJobDurationMs(),

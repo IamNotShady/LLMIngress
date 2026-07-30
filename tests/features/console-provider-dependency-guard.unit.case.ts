@@ -33,17 +33,21 @@ describe("console provider dependency guard", () => {
           modelId: "dependency-model",
         },
       ]);
+      // The name, not the description: a refused delete tells the operator
+      // which route to go and edit, and the Virtual Models list is keyed by
+      // name — the description would send them looking for a string no screen
+      // shows.
       expect(impact.routePolicies).toEqual([
         {
           id: ids.routePolicyId,
           virtualModelId: ids.virtualModelId,
-          virtualModelName: "Dependency VM",
+          virtualModelName: "dependency-vm",
         },
       ]);
       expect(impact.virtualModels).toEqual([
         {
           id: ids.virtualModelId,
-          name: "Dependency VM",
+          name: "dependency-vm",
         },
       ]);
       expect(impact.apiKeys).toEqual([

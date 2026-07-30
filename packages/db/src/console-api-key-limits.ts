@@ -31,6 +31,8 @@ export type ApiKeyLimitFormInput = {
   budgetPeriod?: string | null;
   budgetUsd?: string | number | null;
   concurrency?: string | number | null;
+  /** One policy per key: the Limits drawer offers a single control for it. */
+  enforcementPolicy?: string | null;
   rpm?: string | number | null;
   tokenLimit?: string | number | null;
   tpm?: string | number | null;
@@ -98,15 +100,6 @@ export type ApiKeyLimitQueryClient = {
 
 const budgetPeriods = ["day", "week", "month"] as const;
 
-export const defaultApiKeyLimitFormValues = {
-  budgetPeriod: "month",
-  budgetUsd: 10,
-  concurrency: 10,
-  rpm: 60,
-  tokenLimit: 200_000,
-  tpm: 1_000_000,
-} as const;
-
 export function normalizeApiKeyLimitFormInput(
   input: ApiKeyLimitFormInput,
 ): NormalizedApiKeyLimitFormInput {
@@ -118,52 +111,52 @@ export function normalizeApiKeyLimitRulesInput(
   input: Omit<ApiKeyLimitFormInput, "apiKeyId">,
 ): ApiKeyLimitRuleInput[] {
   const budgetPeriod = normalizeBudgetPeriod(input.budgetPeriod);
+  const enforcementPolicy = normalizeEnforcementPolicy(input.enforcementPolicy);
 
-  return [
-    {
-      enforcementPolicy: "block",
-      limitType: "budget",
-      limitValue: normalizePositiveNumber(input.budgetUsd, "Budget USD limit"),
-      manualBypass: false,
-      period: budgetPeriod,
-      unit: "usd",
-    },
-    {
-      enforcementPolicy: "block",
-      limitType: "rpm",
-      limitValue: normalizePositiveNumber(input.rpm, "RPM limit"),
-      manualBypass: false,
-      period: "minute",
-      unit: "requests",
-    },
-    {
-      enforcementPolicy: "block",
-      limitType: "tpm",
-      limitValue: normalizePositiveNumber(input.tpm, "TPM limit"),
-      manualBypass: false,
-      period: "minute",
-      unit: "tokens",
-    },
-    {
-      enforcementPolicy: "block",
-      limitType: "concurrency",
-      limitValue: normalizePositiveNumber(
-        input.concurrency ?? defaultApiKeyLimitFormValues.concurrency,
-        "Concurrency limit",
-      ),
-      manualBypass: false,
-      period: "request",
-      unit: "requests",
-    },
-    {
-      enforcementPolicy: "block",
-      limitType: "token",
-      limitValue: normalizePositiveNumber(input.tokenLimit, "Token limit"),
-      manualBypass: false,
-      period: "request",
-      unit: "tokens",
-    },
-  ];
+  const rules: ApiKeyLimitRuleInput[] = [];
+  const add = (
+    limitType: ApiKeyLimitRuleInput["limitType"],
+    value: string | number | null | undefined,
+    label: string,
+    field: string,
+    period: ApiKeyLimitRuleInput["period"],
+    unit: ApiKeyLimitRuleInput["unit"],
+  ) => {
+    const limitValue = normalizeRequiredPositiveNumber(value, label, field);
+    rules.push({ enforcementPolicy, limitType, limitValue, manualBypass: false, period, unit });
+  };
+
+  add("budget", input.budgetUsd, "Budget USD limit", "budgetUsd", budgetPeriod, "usd");
+  add("rpm", input.rpm, "RPM limit", "rpm", "minute", "requests");
+  add("tpm", input.tpm, "TPM limit", "tpm", "minute", "tokens");
+  add("concurrency", input.concurrency, "Concurrency limit", "concurrency", "request", "requests");
+  add("token", input.tokenLimit, "Token limit", "tokenLimit", "request", "tokens");
+  return rules;
+}
+
+function normalizeRequiredPositiveNumber(
+  value: string | number | null | undefined,
+  label: string,
+  field: string,
+): number {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    throw consoleValidationError(`${label} is required.`, "form_field_required", { field });
+  }
+  return normalizePositiveNumber(value, label, field);
+}
+
+function normalizeEnforcementPolicy(
+  value: string | null | undefined,
+): ApiKeyLimitEnforcementPolicy {
+  const normalized = normalizeRequiredText(value, "Limit enforcement", "enforcementPolicy");
+  if (normalized === "block" || normalized === "warn_only") {
+    return normalized;
+  }
+  throw consoleValidationError(
+    "Limit enforcement must be block or warn_only.",
+    "api_key_limit_enforcement_invalid",
+    { field: "enforcementPolicy" },
+  );
 }
 
 export function formatApiKeyLimitSummaries(
@@ -245,10 +238,20 @@ export async function saveApiKeyLimitRules(input: {
   await publisher.publish({
     source: "console",
     description: `Update API key limits ${input.limits.apiKeyId}`,
-    changes: [{ table: "api_key_limits", recordId: input.limits.apiKeyId }],
+    changes: [
+      { table: "api_keys", recordId: input.limits.apiKeyId },
+      { table: "api_key_limits", recordId: input.limits.apiKeyId },
+    ],
     write: async (client) => {
       await assertApiKeyExists(client, input.limits.apiKeyId);
+      assertCompleteApiKeyLimitRules(input.limits.rules);
       await replaceApiKeyLimitRulesWithClient(client, input.limits.apiKeyId, input.limits.rules);
+      await client.query(
+        `update api_keys
+         set limits_enabled = true, updated_at = now()
+         where id = $1`,
+        [input.limits.apiKeyId],
+      );
 
       savedLimits = await readApiKeyLimitsWithClient(client, input.limits.apiKeyId);
     },
@@ -265,14 +268,7 @@ export async function replaceApiKeyLimitRulesWithClient(
   apiKeyId: string,
   rules: readonly ApiKeyLimitRuleInput[],
 ): Promise<void> {
-  await client.query(
-    `
-      delete from api_key_limits
-      where api_key_id = $1
-        and limit_type = any($2::text[])
-    `,
-    [apiKeyId, rules.map((rule) => rule.limitType)],
-  );
+  await client.query("delete from api_key_limits where api_key_id = $1", [apiKeyId]);
 
   for (const rule of rules) {
     await client.query(
@@ -304,6 +300,48 @@ export async function replaceApiKeyLimitRulesWithClient(
   }
 }
 
+const REQUIRED_LIMITS = {
+  budget: { field: "budgetUsd", label: "Budget USD" },
+  concurrency: { field: "concurrency", label: "Concurrency" },
+  rpm: { field: "rpm", label: "RPM" },
+  token: { field: "tokenLimit", label: "Token" },
+  tpm: { field: "tpm", label: "TPM" },
+} as const;
+
+export function assertCompleteApiKeyLimitRules(rules: readonly ApiKeyLimitRuleInput[]): void {
+  for (const [limitType, requirement] of Object.entries(REQUIRED_LIMITS)) {
+    const matches = rules.filter((rule) => rule.limitType === limitType);
+    if (matches.length !== 1) {
+      throw consoleValidationError(
+        `${requirement.label} limit is required.`,
+        "form_field_required",
+        { field: requirement.field },
+      );
+    }
+    const rule = matches[0];
+    if (!rule || !Number.isFinite(rule.limitValue) || rule.limitValue <= 0) {
+      throw consoleValidationError(
+        `${requirement.label} limit must be greater than zero.`,
+        "api_key_limit_value_invalid",
+        { field: requirement.field },
+      );
+    }
+    if (rule.enforcementPolicy !== "block" && rule.enforcementPolicy !== "warn_only") {
+      throw consoleValidationError(
+        "Limit enforcement must be block or warn_only.",
+        "api_key_limit_enforcement_invalid",
+        { field: "enforcementPolicy" },
+      );
+    }
+  }
+  if (rules.length !== Object.keys(REQUIRED_LIMITS).length) {
+    throw consoleValidationError(
+      "Limits contain an unsupported rule.",
+      "api_key_limit_type_invalid",
+    );
+  }
+}
+
 export async function deleteApiKeyLimitRules(input: {
   apiKeyId: string;
   databaseUrl?: string;
@@ -312,10 +350,19 @@ export async function deleteApiKeyLimitRules(input: {
   await publisher.publish({
     source: "console",
     description: `Delete API key limits ${input.apiKeyId}`,
-    changes: [{ table: "api_key_limits", recordId: input.apiKeyId }],
+    changes: [
+      { table: "api_keys", recordId: input.apiKeyId },
+      { table: "api_key_limits", recordId: input.apiKeyId },
+    ],
     write: async (client) => {
       await assertApiKeyExists(client, input.apiKeyId);
       await client.query("delete from api_key_limits where api_key_id = $1", [input.apiKeyId]);
+      await client.query(
+        `update api_keys
+         set limits_enabled = false, updated_at = now()
+         where id = $1`,
+        [input.apiKeyId],
+      );
     },
   });
 }
@@ -514,24 +561,32 @@ function normalizeBudgetPeriod(value: string | null | undefined): (typeof budget
   return period as (typeof budgetPeriods)[number];
 }
 
-function normalizePositiveNumber(value: string | number | null | undefined, label: string): number {
+function normalizePositiveNumber(
+  value: string | number | null | undefined,
+  label: string,
+  field: string,
+): number {
   const numberValue = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(numberValue) || numberValue <= 0) {
     throw consoleValidationError(
       `${label} must be greater than zero.`,
       "api_key_limit_value_invalid",
       {
-        field: label,
+        field,
       },
     );
   }
   return numberValue;
 }
 
-function normalizeRequiredText(value: string | null | undefined, label: string): string {
+function normalizeRequiredText(
+  value: string | null | undefined,
+  label: string,
+  field = label,
+): string {
   const normalized = value?.trim();
   if (!normalized) {
-    throw consoleValidationError(`${label} is required.`, "form_field_required", { field: label });
+    throw consoleValidationError(`${label} is required.`, "form_field_required", { field });
   }
   return normalized;
 }
@@ -545,4 +600,66 @@ function clampPercent(value: number): number {
     return 0;
   }
   return Math.min(999, value);
+}
+
+/** The budget window a key is inside right now — what SPENT is measured against. */
+export type ConsoleBudgetPeriod = {
+  apiKeyId: string;
+  costUsedUsd: string;
+  periodEnd: Date;
+  periodStart: Date;
+  periodType: string;
+  tokensUsed: number;
+};
+
+export async function listConsoleCurrentBudgetPeriods(
+  input: { databaseUrl?: string; now?: Date } = {},
+): Promise<ConsoleBudgetPeriod[]> {
+  const now = input.now ?? new Date();
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
+    const result = await client.query<{
+      api_key_id: string;
+      cost_used_usd: string;
+      period_end: Date;
+      period_start: Date;
+      period_type: string;
+      tokens_used: string;
+    }>(
+      // The window has to be the one the key's own budget rule defines. A key
+      // whose period changed keeps its old rows, so picking the latest window
+      // that merely contains "now" would measure SPENT against a period the
+      // rule no longer uses. Keys with no budget rule still report their
+      // window — the spend is real, it just has no ceiling to sit under.
+      `
+        select distinct on (budget_periods.api_key_id)
+               budget_periods.api_key_id::text,
+               budget_periods.cost_used_usd::text,
+               budget_periods.period_end,
+               budget_periods.period_start,
+               budget_periods.period_type,
+               budget_periods.tokens_used::text
+        from budget_periods
+        left join api_key_limits
+          on api_key_limits.api_key_id = budget_periods.api_key_id
+         and api_key_limits.limit_type = 'budget'
+         and api_key_limits.enabled = true
+        where budget_periods.period_start <= $1 and budget_periods.period_end > $1
+          -- A key whose rule has no window yet reports no window: pairing last
+          -- month's spend with today's ceiling reads as far over budget.
+          and (api_key_limits.period is null
+               or api_key_limits.period = budget_periods.period_type)
+        order by budget_periods.api_key_id,
+                 budget_periods.period_start desc
+      `,
+      [now.toISOString()],
+    );
+    return result.rows.map((row) => ({
+      apiKeyId: row.api_key_id,
+      costUsedUsd: row.cost_used_usd,
+      periodEnd: row.period_end,
+      periodStart: row.period_start,
+      periodType: row.period_type,
+      tokensUsed: Number(row.tokens_used),
+    }));
+  });
 }

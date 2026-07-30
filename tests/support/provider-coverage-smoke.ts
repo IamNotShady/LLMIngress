@@ -2,11 +2,14 @@ import { listOpenAICompatibleProviderTemplates } from "@llmingress/db/console-pr
 
 export type ProviderCoverageScenarioId =
   | "anthropic"
+  | "command_code"
   | "google"
+  | "kimi_coding"
   | "lmstudio"
   | "llama_cpp"
   | "ollama"
   | "openai"
+  | "opencode_go"
   | "openrouter";
 
 export type ProviderCoverageEndpoint = "chat_completions" | "messages";
@@ -90,6 +93,70 @@ export function buildProviderCoverageSmokePlan(
         requestId: "req_v1_provider_anthropic_094",
         virtualModelDisplayName: "Provider Smoke Anthropic",
         virtualModelName: "coverage-smoke-anthropic",
+      },
+      {
+        // Kimi Coding Plan: Anthropic messages protocol + x-api-key (W1 category),
+        // mirroring the anthropic scenario but as a paste-key template provider.
+        baseUrl: `${baseUrl}/kimi/coding/v1`,
+        displayName: "Kimi Coding Plan",
+        endpoint: "messages",
+        expectedAuthHeader: "x-api-key",
+        expectedAuthValue: "sk-coverage-kimi-coding-smoke-094",
+        expectedProviderPath: "/kimi/coding/v1/messages",
+        id: "kimi_coding",
+        modelDisplayName: "Kimi For Coding",
+        modelId: "kimi-for-coding",
+        providerApiKey: "sk-coverage-kimi-coding-smoke-094",
+        providerKey: "kimi_coding",
+        providerTemplateId: "kimi_coding",
+        providerType: "api_key",
+        requestId: "req_v1_provider_kimi_coding_094",
+        virtualModelDisplayName: "Provider Smoke Kimi",
+        virtualModelName: "coverage-smoke-kimi",
+      },
+      {
+        // Command Code: OpenAI chat template category, but its second routable
+        // face is Anthropic messages + x-api-key. This scenario pins the
+        // messages egress (path + x-api-key, not authorization); the chat face
+        // is covered by the long-tail smoke and the batch3 egress e2e.
+        baseUrl: `${baseUrl}/command_code/provider/v1`,
+        displayName: "Command Code",
+        endpoint: "messages",
+        expectedAuthHeader: "x-api-key",
+        expectedAuthValue: "user_command-code-coverage-smoke-094",
+        expectedProviderPath: "/command_code/provider/v1/messages",
+        id: "command_code",
+        modelDisplayName: "Claude Sonnet 4.5",
+        modelId: "claude-sonnet-4-5",
+        providerApiKey: "user_command-code-coverage-smoke-094",
+        providerKey: "command_code",
+        providerTemplateId: "command_code",
+        providerType: "api_key",
+        requestId: "req_v1_provider_command_code_094",
+        virtualModelDisplayName: "Provider Smoke Command Code",
+        virtualModelName: "coverage-smoke-command-code",
+      },
+      {
+        // OpenCode Go: OpenAI chat template category, but its second routable
+        // face is Anthropic messages + x-api-key riding on the same base. This
+        // scenario pins the messages egress (path + x-api-key, not
+        // authorization); the chat face is covered by the batch5 egress e2e.
+        baseUrl: `${baseUrl}/opencode_go/zen/go/v1`,
+        displayName: "OpenCode Go",
+        endpoint: "messages",
+        expectedAuthHeader: "x-api-key",
+        expectedAuthValue: "sk-opencode-go-coverage-smoke-094",
+        expectedProviderPath: "/opencode_go/zen/go/v1/messages",
+        id: "opencode_go",
+        modelDisplayName: "Claude Sonnet 4.5",
+        modelId: "claude-sonnet-4-5",
+        providerApiKey: "sk-opencode-go-coverage-smoke-094",
+        providerKey: "opencode_go",
+        providerTemplateId: "opencode_go",
+        providerType: "api_key",
+        requestId: "req_v1_provider_opencode_go_094",
+        virtualModelDisplayName: "Provider Smoke OpenCode Go",
+        virtualModelName: "coverage-smoke-opencode-go",
       },
       {
         baseUrl: `${baseUrl}/google/v1beta/openai`,

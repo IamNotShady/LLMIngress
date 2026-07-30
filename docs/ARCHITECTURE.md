@@ -31,9 +31,9 @@ are enqueued only after the business transaction commits and are not part of tha
 ```text
 authenticate API key
   -> resolve an allowed Virtual Model
+  -> order Route Policy candidates
   -> validate known capability requirements
   -> enforce enabled API key limits
-  -> order Route Policy candidates
   -> attach healthy credentials and execute fallback
   -> stream or return the Provider response
   -> record activity, usage, cost, and fallback metadata
@@ -55,8 +55,11 @@ responses may be logged with status and response headers for diagnosis.
 ## Routing and health invariants
 
 - One Virtual Model owns one Route Policy and at least one candidate.
-- Strategies are `fixed`, `cost_first`, and `load_balance`.
-- Capability conflicts are rejected only when every relevant value is known.
+- Strategies are `fixed`, `cost_first`, `load_balance`, and `tag`.
+- A `tag` route serves the candidate named by `x-llmingress-route-tag` with only the `default`
+  candidate behind it; requests are capability-checked against the selected candidate alone.
+- For the other strategies, capability conflicts are rejected only when every relevant value is
+  known.
 - Unknown-price candidates remain eligible at the end of `cost_first`; successful unknown-price
   requests record tokens and zero monetary cost with an unavailable price source.
 - Health identity is `(provider_id, provider_connection_id)`. API keys and OAuth tokens use their

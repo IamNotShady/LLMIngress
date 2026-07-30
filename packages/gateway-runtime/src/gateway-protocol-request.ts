@@ -34,17 +34,17 @@ import {
   readGatewayEncryptionKeySource,
   recordGatewayProviderApiKeyLastUsed,
 } from "./gateway-provider-credentials.ts";
-import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
+import {
+  type GatewayRequestMetadata,
+  withGatewayRequestedRouteTag,
+} from "./gateway-request-metadata.ts";
 import {
   assertGatewayRoutePolicyEndpointProtocol,
   buildGatewayRequestActivityRoute,
   requireGatewayRoutePolicyForVirtualModel,
 } from "./gateway-runtime-helpers.ts";
 import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
-import {
-  assertGatewayRequestWithinVirtualModelContract,
-  assertGatewayVirtualModelCapabilityContract,
-} from "./gateway-virtual-model-capabilities.ts";
+import { assertGatewayRequestWithinVirtualModelCapabilities } from "./gateway-virtual-model-capabilities.ts";
 
 const logger = createLogger("gateway");
 
@@ -100,6 +100,7 @@ export async function executeGatewayProtocolRequest<
   encryptionKeySource?: EncryptionKeySource;
   limitsEnabled?: boolean;
   requestBody: unknown;
+  requestedTag?: string;
   requestId: string;
   protocol: RouteEndpointProtocol;
   providerRequestHeaders?: Record<string, string>;
@@ -115,11 +116,14 @@ export async function executeGatewayProtocolRequest<
     };
   }
 
-  const requestMetadata = input.spec.buildRequestMetadata({
-    model: input.virtualModel.name,
-    rawBody: input.requestBody,
-    request: normalized.request,
-  });
+  const requestMetadata = withGatewayRequestedRouteTag(
+    input.spec.buildRequestMetadata({
+      model: input.virtualModel.name,
+      rawBody: input.requestBody,
+      request: normalized.request,
+    }),
+    input.requestedTag,
+  );
 
   let concurrencyLease: GatewayConcurrencyLease | undefined;
   let budgetSettlement: GatewayBudgetSettlement | undefined;
@@ -135,12 +139,14 @@ export async function executeGatewayProtocolRequest<
       protocol: input.protocol,
       routePolicy: configuredRoutePolicy,
     });
-    const capabilityContract = assertGatewayVirtualModelCapabilityContract(configuredRoutePolicy);
-    assertGatewayRequestWithinVirtualModelContract(capabilityContract, requestMetadata);
-
+    // Selection runs before the capability check because which capabilities the
+    // request must satisfy can depend on which candidate the strategy picked.
+    // It is a pure function over the snapshot, so nothing is spent by ordering
+    // a chain the check then refuses.
     const routeResult = selectRouteAttempts({
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
       estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
+      requestedTag: input.requestedTag,
       snapshot: input.snapshot,
       virtualModelId: input.virtualModel.id,
     });
@@ -152,6 +158,11 @@ export async function executeGatewayProtocolRequest<
         statusCode: mapGatewayErrorStatus("provider_unavailable"),
       };
     }
+    assertGatewayRequestWithinVirtualModelCapabilities({
+      chain: routeResult.chain,
+      requestMetadata,
+      routePolicy: configuredRoutePolicy,
+    });
 
     const routeDecision = routeResult.decision;
     const selectedCandidate = routeResult.chain[0];

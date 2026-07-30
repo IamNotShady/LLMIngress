@@ -80,11 +80,18 @@ Provider has one logical connection. Worker probes up to three chat models. The 
 ### Virtual Model routing
 
 A Virtual Model is created atomically with one Route Policy and at least one candidate. Supported
-strategies are `fixed`, `cost_first`, and `load_balance`. `cost_first` orders by input price plus output
-price and places unknown prices last. The candidate picker filters only by endpoint protocol, so
-capability differences remain selectable; saving rejects differences between known capability
+strategies are `fixed`, `cost_first`, `load_balance`, and `tag`. `cost_first` orders by input price plus
+output price and places unknown prices last. The candidate picker filters only by endpoint protocol,
+so capability differences remain selectable; saving rejects differences between known capability
 values and reports every conflicting field with both candidate names and values. Unknown values
 remain allowed and skip the corresponding request pre-check.
+
+A `tag` route mixes deliberately unequal candidates: every candidate carries its own tags, exactly
+one carries `default`, and a request names a tag through the `x-llmingress-route-tag` header. No
+tag, an unknown tag, or a failed tagged candidate is served by the default candidate, and nothing
+past it. Saving skips the shared capability agreement; a default candidate that cannot absorb a
+tagged one is reported as a warning on the Virtual Model detail, and each request is
+capability-checked against the candidate it selected.
 
 Before the first client byte, Gateway may try another credential or candidate. After streaming
 starts, it never replays the request. Confirmed unhealthy connections are filtered; models and

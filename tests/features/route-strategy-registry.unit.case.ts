@@ -2,8 +2,12 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildRouteAttemptCandidates,
+  isValidRouteTag,
+  normalizeRouteTag,
+  ROUTE_TAG_DEFAULT,
   type RouteCandidate,
   type RoutePolicy,
+  routeStrategyCapabilityContractScope,
   selectRouteAttempts,
 } from "../../packages/domain/src/index.ts";
 
@@ -74,6 +78,44 @@ function policyWith(strategy: RoutePolicy["strategy"]): RoutePolicy {
     virtualModelId: "vm-1",
     virtualModelName: "vm",
   };
+}
+
+function taggedCandidate(input: {
+  candidateOrder: number;
+  tags: readonly string[];
+}): RouteCandidate {
+  return {
+    ...pricedCandidate({
+      candidateOrder: input.candidateOrder,
+      inputUsdPerMillionTokens: 1,
+      outputUsdPerMillionTokens: 1,
+    }),
+    tags: input.tags,
+  };
+}
+
+function tagPolicy(candidates?: RouteCandidate[]): RoutePolicy {
+  return {
+    candidates: candidates ?? [
+      taggedCandidate({ candidateOrder: 1, tags: ["default", "cheap"] }),
+      taggedCandidate({ candidateOrder: 2, tags: ["fast"] }),
+      taggedCandidate({ candidateOrder: 3, tags: ["long-context"] }),
+    ],
+    id: "rp-tag",
+    strategy: "tag",
+    virtualModelId: "vm-1",
+    virtualModelName: "vm",
+  };
+}
+
+function selectTag(requestedTag?: string, routePolicy: RoutePolicy = tagPolicy()) {
+  return selectRouteAttempts({
+    estimatedInputTokens: 1_000,
+    estimatedOutputTokens: 1_000,
+    requestedTag,
+    snapshot: { routePolicies: [routePolicy] },
+    virtualModelName: "vm",
+  });
 }
 
 function select(strategy: RoutePolicy["strategy"]) {
@@ -163,5 +205,100 @@ describe("route strategy registry", () => {
       routePolicy: policyWith("cost_first"),
     });
     expect(chain.map((c) => c.candidateOrder)).toEqual([1, 2]);
+  });
+
+  it("routes a matched tag to its candidate and keeps only default behind it", () => {
+    const result = selectTag("fast");
+
+    expect(result.chain.map((c) => c.candidateOrder)).toEqual([2, 1]);
+    expect(result.decision?.routeReason).toMatchObject({
+      matchedTag: "fast",
+      requestedTag: "fast",
+      selectedCandidateOrder: 2,
+      strategy: "tag",
+      tagFallback: false,
+    });
+    expect(result.decision?.routeReason.message).toBe(
+      'tag route for vm selected candidate 2 for tag "fast".',
+    );
+  });
+
+  it("falls back to the default candidate when the requested tag matches nothing", () => {
+    const result = selectTag("slow");
+
+    expect(result.chain.map((c) => c.candidateOrder)).toEqual([1]);
+    expect(result.decision?.routeReason).toMatchObject({
+      requestedTag: "slow",
+      tagFallback: true,
+    });
+    expect(result.decision?.routeReason.matchedTag).toBeUndefined();
+    expect(result.decision?.routeReason.message).toBe(
+      'tag route for vm fell back to default candidate 1 because tag "slow" matched no candidate.',
+    );
+  });
+
+  it("routes a request that names no tag to the default candidate", () => {
+    const result = selectTag();
+
+    expect(result.chain.map((c) => c.candidateOrder)).toEqual([1]);
+    expect(result.decision?.routeReason).toMatchObject({ tagFallback: true });
+    expect(result.decision?.routeReason.matchedTag).toBeUndefined();
+    expect(result.decision?.routeReason.requestedTag).toBeUndefined();
+    expect(result.decision?.routeReason.message).toBe(
+      "tag route for vm selected default candidate 1 because the request named no tag.",
+    );
+  });
+
+  it("does not repeat the default candidate when the requested tag is the default one", () => {
+    const result = selectTag(ROUTE_TAG_DEFAULT);
+
+    expect(result.chain.map((c) => c.candidateOrder)).toEqual([1]);
+    expect(result.decision?.routeReason).toMatchObject({
+      matchedTag: "default",
+      requestedTag: "default",
+      tagFallback: false,
+    });
+  });
+
+  it("matches a candidate tag on the normalized requested tag", () => {
+    const result = selectTag(" Fast ");
+
+    expect(result.chain.map((c) => c.candidateOrder)).toEqual([2, 1]);
+    expect(result.decision?.routeReason).toMatchObject({
+      matchedTag: "fast",
+      requestedTag: "fast",
+    });
+  });
+
+  it("fails closed when no candidate carries the default tag", () => {
+    const result = selectTag(
+      "fast",
+      tagPolicy([
+        taggedCandidate({ candidateOrder: 1, tags: ["cheap"] }),
+        taggedCandidate({ candidateOrder: 2, tags: ["fast"] }),
+      ]),
+    );
+
+    expect(result).toEqual({ chain: [], decision: undefined });
+  });
+
+  it("reports the capability contract scope each strategy checks", () => {
+    expect(routeStrategyCapabilityContractScope("fixed")).toBe("all_candidates");
+    expect(routeStrategyCapabilityContractScope("cost_first")).toBe("all_candidates");
+    expect(routeStrategyCapabilityContractScope("load_balance")).toBe("all_candidates");
+    expect(routeStrategyCapabilityContractScope("tag")).toBe("selected_candidate");
+  });
+
+  it("normalizes route tags and rejects shapes a header cannot carry safely", () => {
+    expect(normalizeRouteTag("  Fast  ")).toBe("fast");
+    expect(ROUTE_TAG_DEFAULT).toBe("default");
+    expect(isValidRouteTag("default")).toBe(true);
+    expect(isValidRouteTag("long-context.v2_1")).toBe(true);
+    expect(isValidRouteTag("-leading")).toBe(false);
+    expect(isValidRouteTag("has space")).toBe(false);
+    expect(isValidRouteTag("Fast")).toBe(false);
+    expect(isValidRouteTag("")).toBe(false);
+    expect(isValidRouteTag(`a${"b".repeat(63)}`)).toBe(true);
+    expect(isValidRouteTag(`a${"b".repeat(64)}`)).toBe(false);
   });
 });

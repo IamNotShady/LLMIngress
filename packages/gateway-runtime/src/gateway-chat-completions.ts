@@ -99,6 +99,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
   encryptionKeySource?: EncryptionKeySource;
   providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
+  requestedTag?: string;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
   virtualModel: GatewayVirtualModel;

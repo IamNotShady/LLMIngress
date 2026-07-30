@@ -6,7 +6,11 @@ import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/
 import { readGatewayRequestId } from "../../packages/gateway-runtime/src/gateway-auth";
 import { normalizeOpenAIChatCompletionRequest } from "../../packages/gateway-runtime/src/gateway-chat-completions";
 import type { GatewayRouteCandidateSnapshot } from "../../packages/gateway-runtime/src/gateway-config-reload";
-import { readGatewayProviderRequestHeaders } from "../../packages/gateway-runtime/src/gateway-header-passthrough";
+import {
+  gatewayRouteTagHeader,
+  readGatewayProviderRequestHeaders,
+  readGatewayRequestedRouteTag,
+} from "../../packages/gateway-runtime/src/gateway-header-passthrough";
 import { normalizeAnthropicMessagesRequest } from "../../packages/gateway-runtime/src/gateway-messages";
 import {
   attachGatewayProviderCredentials,
@@ -51,6 +55,7 @@ describe("gateway request hygiene", () => {
         "user-agent": "browser-user-agent",
         "x-api-key": "api-key-x-key",
         "x-client-request-id": "client-req-1",
+        "x-llmingress-route-tag": "fast",
         "x-provider-feature": ["one", "two"],
       }),
     ).toEqual({
@@ -62,9 +67,25 @@ describe("gateway request hygiene", () => {
     });
   });
 
+  it("reads the requested route tag as a normalized single value", () => {
+    expect(gatewayRouteTagHeader).toBe("x-llmingress-route-tag");
+    expect(readGatewayRequestedRouteTag({ "x-llmingress-route-tag": "  Fast  " })).toBe("fast");
+    expect(
+      readGatewayRequestedRouteTag({ "x-llmingress-route-tag": ["long-context", "fast"] }),
+    ).toBe("long-context");
+    // An unusable tag is not a refusal: it simply matches nothing and the route
+    // falls back to the default candidate.
+    expect(readGatewayRequestedRouteTag({ "x-llmingress-route-tag": "not a tag!" })).toBe(
+      "not a tag!",
+    );
+    expect(readGatewayRequestedRouteTag({ "x-llmingress-route-tag": "   " })).toBeUndefined();
+    expect(readGatewayRequestedRouteTag({})).toBeUndefined();
+  });
+
   it("allows and exposes provider protocol headers for browser clients", () => {
     const headers = gatewayCorsHeaders("http://localhost:3000");
 
+    expect(headers["access-control-allow-headers"]).toContain("x-llmingress-route-tag");
     expect(headers["access-control-allow-headers"]).toContain("openai-organization");
     expect(headers["access-control-allow-headers"]).toContain("openai-project");
     expect(headers["access-control-allow-headers"]).toContain("openai-beta");

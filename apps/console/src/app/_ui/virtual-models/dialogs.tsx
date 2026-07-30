@@ -114,6 +114,11 @@ export async function VirtualModelDialogs({
     readRoutePolicyStrategy(readParam(params, "editorStrategy")) ??
     policy?.strategy ??
     "load_balance";
+  const routesByTag = strategy === "tag";
+  // candidate.id is the provider model id, which is what the selection carries.
+  const storedTagsByModelId = new Map(
+    (policy?.candidates ?? []).map((candidate) => [candidate.id, candidate.tags.join(", ")]),
+  );
 
   const withSelection = (ids: string[]) =>
     buildHref("/models", params, {
@@ -199,7 +204,9 @@ export async function VirtualModelDialogs({
 
           <div className="mt-4 flex items-baseline gap-[10px]">
             <span className="font-mono text-115 font-medium tracking-[.08em] text-dim">
-              CANDIDATES · AT LEAST ONE — KNOWN CAPABILITIES MUST AGREE
+              {routesByTag
+                ? "CANDIDATES · TAGS ROUTE REQUESTS · EXACTLY ONE DEFAULT"
+                : "CANDIDATES · AT LEAST ONE — KNOWN CAPABILITIES MUST AGREE"}
             </span>
             <span className="ml-auto font-mono text-12 text-faint">
               {formatCount(orderedSelection.length)} selected
@@ -212,7 +219,9 @@ export async function VirtualModelDialogs({
           >
             <div className="flex items-baseline gap-[10px] border-b border-rule pb-[5px] pt-[6px]">
               <span className="font-mono text-115 font-medium tracking-[.08em] text-dim">
-                SELECTED · TRIED IN THIS ORDER
+                {routesByTag
+                  ? "SELECTED · ROUTED BY TAG · FAILURES FALL TO DEFAULT"
+                  : "SELECTED · TRIED IN THIS ORDER"}
               </span>
               <span className="ml-auto whitespace-nowrap font-mono text-12 text-faint">
                 use ↑↓ to reorder
@@ -237,6 +246,27 @@ export async function VirtualModelDialogs({
                     <span className="min-w-0 flex-1 font-medium cell-clip">
                       {model.providerDisplayName} · {model.modelId}
                     </span>
+                    {/* One candidateTags field per row, in the same order as the
+                        providerModelIds hidden inputs above, so FormData pairs a
+                        tag list with the model it was typed for. Non-tag
+                        strategies still emit an empty entry to keep that pairing.
+                        Known limit: this field cannot join
+                        PRESERVED_EDITOR_FIELDS (repeated names read back as a
+                        RadioNodeList), so reordering, adding, removing a
+                        candidate or switching strategy drops unsaved tag text —
+                        the same as NAME and DESCRIPTION under plain Link
+                        navigation. */}
+                    {routesByTag ? (
+                      <TextInput
+                        aria-label={`Tags for ${model.modelId}`}
+                        className="w-[160px] flex-none"
+                        defaultValue={storedTagsByModelId.get(model.id) ?? ""}
+                        name="candidateTags"
+                        placeholder="default / fast, cheap"
+                      />
+                    ) : (
+                      <input type="hidden" name="candidateTags" value="" />
+                    )}
                     <span className="whitespace-nowrap text-dim">
                       {formatPricePair({
                         inputUsdPerMillionTokens: model.inputUsdPerMillionTokens,

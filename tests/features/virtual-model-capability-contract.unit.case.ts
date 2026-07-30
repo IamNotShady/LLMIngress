@@ -1,9 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   resolveVirtualModelCapabilityContract,
   type VirtualModelCapabilityContract,
   validateVirtualModelRequestCapabilities,
 } from "../../packages/domain/src/index.ts";
+import type {
+  GatewayRouteCandidateSnapshot,
+  GatewayRoutePolicySnapshot,
+} from "../../packages/gateway-runtime/src/gateway-config-reload.ts";
+import type { GatewayRequestMetadata } from "../../packages/gateway-runtime/src/gateway-request-metadata.ts";
+import { assertGatewayRequestWithinVirtualModelCapabilities } from "../../packages/gateway-runtime/src/gateway-virtual-model-capabilities.ts";
 
 const completeCandidate = {
   id: "candidate-a",
@@ -191,3 +198,109 @@ describe("virtual model capability contract", () => {
     });
   });
 });
+
+describe("gateway capability contract scope by strategy", () => {
+  const fastCandidate = gatewayCandidate({ maxOutputTokens: 512, tags: ["fast"] });
+  const defaultCandidate = gatewayCandidate({ maxOutputTokens: 8_192, tags: ["default"] });
+
+  it("checks a tag request against the candidate its tag selected, not the whole policy", () => {
+    const routePolicy = gatewayRoutePolicy("tag", [defaultCandidate, fastCandidate]);
+
+    // The tagged candidate cannot serve the request even though the default can.
+    expect(() =>
+      assertGatewayRequestWithinVirtualModelCapabilities({
+        chain: [fastCandidate, defaultCandidate],
+        requestMetadata: gatewayRequestMetadata({ estimatedOutputTokens: 1_024 }),
+        routePolicy,
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "virtual_model_capability_mismatch",
+        message: expect.stringContaining("maxOutputTokens"),
+      }),
+    );
+
+    // The same request against the default candidate is inside its contract, so
+    // candidates that disagree never make a tag policy unusable.
+    expect(() =>
+      assertGatewayRequestWithinVirtualModelCapabilities({
+        chain: [defaultCandidate],
+        requestMetadata: gatewayRequestMetadata({ estimatedOutputTokens: 1_024 }),
+        routePolicy,
+      }),
+    ).not.toThrow();
+  });
+
+  it("keeps the shared all-candidate contract for the ordering strategies", () => {
+    expect(() =>
+      assertGatewayRequestWithinVirtualModelCapabilities({
+        chain: [defaultCandidate, fastCandidate],
+        requestMetadata: gatewayRequestMetadata({ estimatedOutputTokens: 10 }),
+        routePolicy: gatewayRoutePolicy("fixed", [defaultCandidate, fastCandidate]),
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "virtual_model_configuration_invalid",
+        message: expect.stringContaining("maxOutputTokens"),
+      }),
+    );
+  });
+});
+
+function gatewayCandidate(input: {
+  maxOutputTokens: number;
+  tags: string[];
+}): GatewayRouteCandidateSnapshot {
+  const modelId = `model-${input.tags.join("-")}`;
+  return {
+    candidateOrder: 1,
+    contextWindow: 128_000,
+    displayName: modelId,
+    inputModalities: ["text"],
+    maxOutputTokens: input.maxOutputTokens,
+    modelId,
+    outputModalities: ["text"],
+    price: {
+      modelId,
+      priceVersion: "test",
+      providerKey: "openai",
+      reason: "no_current_price",
+      status: "unknown_price",
+    },
+    providerId: randomUUID(),
+    providerKey: "openai",
+    providerModelId: randomUUID(),
+    supportsFunctionCalling: true,
+    supportsReasoning: false,
+    tags: input.tags,
+  };
+}
+
+function gatewayRoutePolicy(
+  strategy: GatewayRoutePolicySnapshot["strategy"],
+  candidates: GatewayRouteCandidateSnapshot[],
+): GatewayRoutePolicySnapshot {
+  return {
+    candidates,
+    endpointProtocol: "chat_completions",
+    id: "rp-1",
+    strategy,
+    virtualModelId: "vm-1",
+    virtualModelName: "vm",
+  };
+}
+
+function gatewayRequestMetadata(input: { estimatedOutputTokens: number }): GatewayRequestMetadata {
+  return {
+    estimatedInputTokens: 10,
+    estimatedOutputTokens: input.estimatedOutputTokens,
+    inputModalities: ["text"],
+    messageCount: 1,
+    model: "vm",
+    outputModalities: ["text"],
+    protocol: "chat_completions",
+    stream: false,
+    usesReasoning: false,
+    usesTools: false,
+  };
+}

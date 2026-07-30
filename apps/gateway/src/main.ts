@@ -22,7 +22,10 @@ import {
   gatewayShutdownDrainMs,
 } from "@llmingress/gateway-runtime/gateway-env";
 import { gatewayRequestIdHeader } from "@llmingress/gateway-runtime/gateway-error-mapping";
-import { readGatewayProviderRequestHeaders } from "@llmingress/gateway-runtime/gateway-header-passthrough";
+import {
+  readGatewayProviderRequestHeaders,
+  readGatewayRequestedRouteTag,
+} from "@llmingress/gateway-runtime/gateway-header-passthrough";
 import { readGatewayHealthStatus } from "@llmingress/gateway-runtime/gateway-health";
 import { executeGatewayAnthropicMessages } from "@llmingress/gateway-runtime/gateway-messages";
 import {
@@ -64,6 +67,7 @@ type GatewayJsonEndpointExecutionInput = {
   limitsEnabled: boolean;
   providerRequestHeaders: Record<string, string>;
   requestBody: unknown;
+  requestedTag?: string;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
   virtualModel: GatewayVirtualModel;
@@ -245,6 +249,7 @@ function registerGatewayJsonEndpoint(
       return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
     }
     const providerRequestHeaders = readGatewayProviderRequestHeaders(request.headers);
+    const requestedTag = readGatewayRequestedRouteTag(request.headers);
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
       apiKeyId: auth.apiKey.id,
@@ -287,6 +292,7 @@ function registerGatewayJsonEndpoint(
               protocol: streamingProtocol,
               providerRequestHeaders,
               requestBody: request.body,
+              requestedTag,
               requestId: auth.requestId,
               snapshot: requireGatewayConfigSnapshot(options),
               virtualModel: virtualModelAccess.virtualModel,
@@ -310,6 +316,7 @@ function registerGatewayJsonEndpoint(
           limitsEnabled: auth.apiKey.limitsEnabled,
           providerRequestHeaders,
           requestBody: request.body,
+          requestedTag,
           requestId: auth.requestId,
           snapshot: requireGatewayConfigSnapshot(options),
           virtualModel: virtualModelAccess.virtualModel,

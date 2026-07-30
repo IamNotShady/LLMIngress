@@ -22,6 +22,7 @@ test("fallback_events is the persisted retry-chain source", async () => {
       activityId,
       apiKeyPrefix: "llmi_schema",
       apiKeyId: ids.apiKeyId,
+      completedAt: new Date("2026-07-05T00:00:01.000Z"),
       databaseUrl: fixture.databaseUrl,
       model: "schema-vm",
       protocol: "chat_completions",

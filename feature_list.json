@@ -62,7 +62,7 @@
         "api-key-access-and-limits"
       ],
       "status": "passing",
-      "evidence": "2026-07-14: usage-activity focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
+      "evidence": "2026-07-14: usage-activity focused suites passed; verify, 85 E2E, feature regression, and Compose passed. 2026-07-30: fallback activity unit and E2E fixtures now pass explicit fixed completion timestamps, preventing their fixed 2026-07-05 starts from deriving latency from wall-clock time and overflowing request_activity.latency_ms after 24.8 days. Focused unit passed 17/17, Usage and Activity E2E passed 12/12, pnpm run verify passed 574/574 unit tests and all builds, and verify:features re-verified all 33 passing features with a 150-test E2E batch."
     },
     {
       "id": "worker-model-operations",

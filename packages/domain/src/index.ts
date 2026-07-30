@@ -6,7 +6,25 @@ import {
 import { omitUndefined } from "@llmingress/util";
 
 export { type RouteEndpointProtocol, routeEndpointProtocols };
-export type RoutePolicyStrategy = "fixed" | "cost_first" | "load_balance";
+export type RoutePolicyStrategy = "fixed" | "cost_first" | "load_balance" | "tag";
+
+/** The tag every tag-routed policy must carry on exactly one candidate. */
+export const ROUTE_TAG_DEFAULT = "default";
+
+const routeTagPattern = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+
+/** Tags travel in a request header, so they compare case- and space-insensitively. */
+export function normalizeRouteTag(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+/**
+ * Checks an already normalized tag. Callers normalize first, so an operator
+ * typing "Fast" saves "fast" rather than being refused.
+ */
+export function isValidRouteTag(value: string): boolean {
+  return routeTagPattern.test(value);
+}
 
 export const modelInputModalities = ["text", "image", "audio", "video", "document"] as const;
 export const modelOutputModalities = ["text", "image", "audio", "video", "embedding"] as const;
@@ -308,6 +326,8 @@ export type RouteCandidate = {
   providerId: string;
   providerKey: string;
   providerModelId: string;
+  /** Only the tag strategy reads these; other strategies leave them empty. */
+  tags?: readonly string[];
 };
 
 export type RoutePolicy<TCandidate extends RouteCandidate = RouteCandidate> = {
@@ -326,6 +346,8 @@ export type RouteSelectionSnapshot<TCandidate extends RouteCandidate = RouteCand
 export type RouteSelectionRequest<TCandidate extends RouteCandidate = RouteCandidate> = {
   estimatedInputTokens: number;
   estimatedOutputTokens: number;
+  /** The tag the client asked for, already normalized; unknown tags are allowed. */
+  requestedTag?: string;
   snapshot: RouteSelectionSnapshot<TCandidate>;
   virtualModelId?: string;
   virtualModelName?: string;
@@ -342,10 +364,16 @@ export type RouteReason = {
   candidateExplanations: RouteCandidateExplanation[];
   endpointProtocol?: RouteEndpointProtocol;
   estimatedCostUsd?: number;
+  /** The candidate tag the request actually landed on, when one matched. */
+  matchedTag?: string;
   message: string;
   priceSource?: PricedModelTokenPrice["source"];
+  /** The tag the request named, kept even when it matched no candidate. */
+  requestedTag?: string;
   selectedCandidateOrder: number;
   strategy: RoutePolicyStrategy;
+  /** True when the default candidate was used without a tag match. */
+  tagFallback?: boolean;
 };
 
 export type RouteDecision = {
@@ -375,10 +403,34 @@ type RouteStrategyContext = {
   estimatedInputTokens: number;
   estimatedOutputTokens: number;
   random: () => number;
+  requestedTag?: string;
+};
+
+/**
+ * Which candidates a capability contract may be built from. Strategies that
+ * order the whole configured set keep the shared contract; a strategy that
+ * routes one named candidate per request checks only the candidate it picked,
+ * because its candidates are deliberately unequal.
+ */
+export type RouteStrategyCapabilityContractScope = "all_candidates" | "selected_candidate";
+
+export type RouteReasonAnnotation = {
+  matchedTag?: string;
+  requestedTag?: string;
+  tagFallback: boolean;
 };
 
 type RouteStrategyHandler = {
-  decisionMessage: (input: { selectedCandidateOrder: number; virtualModelName: string }) => string;
+  annotateReason?: <TCandidate extends RouteCandidate>(input: {
+    chain: TCandidate[];
+    context: RouteStrategyContext;
+  }) => RouteReasonAnnotation;
+  capabilityContractScope: RouteStrategyCapabilityContractScope;
+  decisionMessage: (input: {
+    annotation?: RouteReasonAnnotation;
+    selectedCandidateOrder: number;
+    virtualModelName: string;
+  }) => string;
   orderCandidates: <TCandidate extends RouteCandidate>(
     candidates: TCandidate[],
     context: RouteStrategyContext,
@@ -388,6 +440,7 @@ type RouteStrategyHandler = {
 
 const routeStrategyHandlers: Record<RoutePolicyStrategy, RouteStrategyHandler> = {
   cost_first: {
+    capabilityContractScope: "all_candidates",
     decisionMessage: ({ selectedCandidateOrder, virtualModelName }) =>
       `cost_first route for ${virtualModelName} selected cheapest eligible candidate ${selectedCandidateOrder}.`,
     orderCandidates: (candidates) =>
@@ -410,12 +463,14 @@ const routeStrategyHandlers: Record<RoutePolicyStrategy, RouteStrategyHandler> =
     reportsSelectedPrice: true,
   },
   fixed: {
+    capabilityContractScope: "all_candidates",
     decisionMessage: ({ selectedCandidateOrder, virtualModelName }) =>
       `fixed route for ${virtualModelName} selected configured candidate ${selectedCandidateOrder}.`,
     orderCandidates: (candidates) => candidates,
     reportsSelectedPrice: false,
   },
   load_balance: {
+    capabilityContractScope: "all_candidates",
     decisionMessage: ({ selectedCandidateOrder, virtualModelName }) =>
       `load balance route for ${virtualModelName} selected eligible candidate ${selectedCandidateOrder}.`,
     orderCandidates: (candidates, context) => {
@@ -429,16 +484,98 @@ const routeStrategyHandlers: Record<RoutePolicyStrategy, RouteStrategyHandler> =
     },
     reportsSelectedPrice: false,
   },
+  tag: {
+    annotateReason: ({ chain, context }) => {
+      const requestedTag = readRequestedRouteTag(context);
+      const selectedCandidate = chain[0];
+      const matchedTag =
+        requestedTag && selectedCandidate && routeCandidateHasTag(selectedCandidate, requestedTag)
+          ? requestedTag
+          : undefined;
+
+      return omitUndefined({
+        matchedTag,
+        requestedTag,
+        tagFallback: matchedTag === undefined,
+      });
+    },
+    capabilityContractScope: "selected_candidate",
+    decisionMessage: ({ annotation, selectedCandidateOrder, virtualModelName }) => {
+      if (annotation?.matchedTag) {
+        return `tag route for ${virtualModelName} selected candidate ${selectedCandidateOrder} for tag "${annotation.matchedTag}".`;
+      }
+      if (annotation?.requestedTag) {
+        return `tag route for ${virtualModelName} fell back to default candidate ${selectedCandidateOrder} because tag "${annotation.requestedTag}" matched no candidate.`;
+      }
+      return `tag route for ${virtualModelName} selected default candidate ${selectedCandidateOrder} because the request named no tag.`;
+    },
+    // A tag names one candidate, so the chain is that candidate and the default
+    // behind it. Everything else stays out: a tagged request that failed must
+    // not silently spill into a model the client did not ask for.
+    orderCandidates: (candidates, context) => {
+      const defaultCandidate = candidates.find((candidate) =>
+        routeCandidateHasTag(candidate, ROUTE_TAG_DEFAULT),
+      );
+      if (!defaultCandidate) {
+        return candidates;
+      }
+
+      const requestedTag = readRequestedRouteTag(context);
+      const matchedCandidate = requestedTag
+        ? candidates.find((candidate) => routeCandidateHasTag(candidate, requestedTag))
+        : undefined;
+
+      return matchedCandidate && matchedCandidate !== defaultCandidate
+        ? [matchedCandidate, defaultCandidate]
+        : [defaultCandidate];
+    },
+    reportsSelectedPrice: false,
+  },
 };
+
+export function routeStrategyCapabilityContractScope(
+  strategy: RoutePolicyStrategy,
+): RouteStrategyCapabilityContractScope {
+  return routeStrategyHandlers[strategy].capabilityContractScope;
+}
+
+function readRequestedRouteTag(context: RouteStrategyContext): string | undefined {
+  const requestedTag = context.requestedTag ? normalizeRouteTag(context.requestedTag) : "";
+  return requestedTag || undefined;
+}
+
+function routeCandidateHasTag(candidate: RouteCandidate, tag: string): boolean {
+  return (candidate.tags ?? []).some((entry) => normalizeRouteTag(entry) === tag);
+}
 
 export function buildRouteAttemptCandidates<TCandidate extends RouteCandidate>(input: {
   routePolicy: RoutePolicy<TCandidate>;
   estimatedInputTokens: number;
   estimatedOutputTokens: number;
   random?: () => number;
+  requestedTag?: string;
 }): TCandidate[] {
-  const { routePolicy, random } = input;
+  return orderRouteAttemptCandidates(input.routePolicy, buildRouteStrategyContext(input));
+}
 
+function buildRouteStrategyContext(input: {
+  estimatedInputTokens: number;
+  estimatedOutputTokens: number;
+  random?: () => number;
+  requestedTag?: string;
+}): RouteStrategyContext {
+  return {
+    estimatedInputTokens: input.estimatedInputTokens,
+    estimatedOutputTokens: input.estimatedOutputTokens,
+    random: input.random ?? Math.random,
+    requestedTag: input.requestedTag,
+  };
+}
+
+function orderRouteAttemptCandidates<TCandidate extends RouteCandidate>(
+  routePolicy: RoutePolicy<TCandidate>,
+  context: RouteStrategyContext,
+): TCandidate[] {
   const sortedCandidates = [...routePolicy.candidates].sort(
     (a, b) => a.candidateOrder - b.candidateOrder,
   );
@@ -447,11 +584,7 @@ export function buildRouteAttemptCandidates<TCandidate extends RouteCandidate>(i
     return [];
   }
 
-  return routeStrategyHandlers[routePolicy.strategy].orderCandidates(sortedCandidates, {
-    estimatedInputTokens: input.estimatedInputTokens,
-    estimatedOutputTokens: input.estimatedOutputTokens,
-    random: random ?? Math.random,
-  });
+  return routeStrategyHandlers[routePolicy.strategy].orderCandidates(sortedCandidates, context);
 }
 
 export function selectRouteAttempts<TCandidate extends RouteCandidate>(
@@ -476,12 +609,8 @@ export function selectRouteAttempts<TCandidate extends RouteCandidate>(
   }));
 
   // Build the ordered attempt chain ONCE (single shuffle for load_balance strategy)
-  const chain = buildRouteAttemptCandidates({
-    routePolicy,
-    estimatedInputTokens: input.estimatedInputTokens,
-    estimatedOutputTokens: input.estimatedOutputTokens,
-    random: input.random,
-  });
+  const context = buildRouteStrategyContext(input);
+  const chain = orderRouteAttemptCandidates(routePolicy, context);
 
   if (chain.length === 0) {
     return { decision: undefined, chain: [] };
@@ -500,14 +629,17 @@ export function selectRouteAttempts<TCandidate extends RouteCandidate>(
         ? selectedCandidate.price.source
         : undefined;
   }
+  const annotation = handler.annotateReason?.({ chain, context });
 
   return {
     chain,
     decision: createDecision({
+      annotation,
       candidate: selectedCandidate,
       estimatedCostUsd,
       evaluated,
       message: handler.decisionMessage({
+        annotation,
         selectedCandidateOrder: selectedCandidate.candidateOrder,
         virtualModelName: routePolicy.virtualModelName,
       }),
@@ -562,6 +694,7 @@ function buildCostCandidates<TCandidate extends RouteCandidate>(
 }
 
 function createDecision<TCandidate extends RouteCandidate>(input: {
+  annotation?: RouteReasonAnnotation;
   candidate: TCandidate;
   estimatedCostUsd?: number;
   evaluated: CandidateEligibility<TCandidate>[];
@@ -593,6 +726,7 @@ function createDecision<TCandidate extends RouteCandidate>(input: {
       priceSource: input.priceSource,
       selectedCandidateOrder: input.candidate.candidateOrder,
       strategy: input.routePolicy.strategy,
+      ...input.annotation,
     },
     strategy: input.routePolicy.strategy,
     virtualModelId: input.routePolicy.virtualModelId,

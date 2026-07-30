@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   title: "LLMIngress Console",
   description: "LLMIngress management console",
   icons: {
-    icon: "/llmingress-icon.svg",
+    icon: "/llmingress-oracle-gate-logo.svg",
   },
 };
 

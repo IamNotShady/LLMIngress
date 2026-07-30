@@ -30,7 +30,7 @@ Three words: **wired-in, deliberate, self-possessed.**
 
 Physical object: the faceplate of a rack-mounted network switch in a home lab —
 matte dark metal, engraved labels, one purposeful indicator LED. The brand icon
-(`docs/brand/llmingress-icon.svg`) already is this object: a dark rounded panel
+(`apps/console/public/llmingress-oracle-gate-logo.svg`) already is this object: a blue rounded panel
 of sockets with a single glowing violet slot.
 
 Consequences:
@@ -173,7 +173,7 @@ Single page, 10 blocks. Anchor nav: Features `#features`, How it works
   reads as floating over the star field. Height 58px. (Borrowed from the
   floating-pill nav pattern in the Convix reference, dark-adapted — no light
   theme, orange, or video.)
-- Left: brand icon (24px, from `docs/brand/llmingress-icon.svg` geometry) +
+- Left: brand icon (24px, from `apps/console/public/llmingress-oracle-gate-logo.svg` geometry) +
   wordmark "LLMIngress" (Archivo 600).
 - Center-right: anchor links (Onest 15px, `--text-2`, hover `--text`).
   Anchor targets carry `scroll-margin-top: 88px` so the floating pill never
@@ -519,7 +519,7 @@ never reads as an empty list. Five items:
 - Extract the orbital SVG into a component if the site moves to a framework;
   the prototype keeps everything inline by design.
 - OG image: reuse the hero diagram composition on `--bg` at 1200×630.
-- Favicon: `docs/brand/llmingress-icon.svg`.
+- Favicon: `apps/console/public/llmingress-oracle-gate-logo.svg`.
 - GitHub, docs, license, and changelog links point at
   `github.com/IamNotShady/LLMIngress` (docs tree, LICENSE blob, releases).
   External links open in a new tab with `rel="noopener"`.

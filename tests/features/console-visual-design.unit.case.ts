@@ -1,8 +1,10 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
+const consoleDir = join(process.cwd(), "apps/console");
 const appDir = join(process.cwd(), "apps/console/src/app");
+const publicDir = join(consoleDir, "public");
 const read = (rel: string) => readFileSync(join(appDir, rel), "utf8");
 
 function uiSources(): Array<readonly [string, string]> {
@@ -45,6 +47,14 @@ describe("console visual contract", () => {
     expect(theme).toContain("localStorage");
     // Stamped before paint, so a stored preference never flashes the other theme.
     expect(read("layout.tsx")).toContain('strategy="beforeInteractive"');
+  });
+
+  test("the console uses the current Oracle gate icon and ships no legacy icon", () => {
+    const layout = read("layout.tsx");
+    expect(layout).toContain('icon: "/llmingress-oracle-gate-logo.svg"');
+    expect(layout).not.toContain("llmingress-icon.svg");
+    expect(existsSync(join(publicDir, "llmingress-oracle-gate-logo.svg"))).toBe(true);
+    expect(existsSync(join(publicDir, "llmingress-icon.svg"))).toBe(false);
   });
 
   test("shadows belong to dialogs, drawers and toasts only", () => {

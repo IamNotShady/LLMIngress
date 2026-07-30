@@ -56,6 +56,11 @@ test("console serves the light-default token skin in both themes with no overflo
         await waitForConsole(baseUrl, consoleApp);
         await page.goto(baseUrl);
 
+        await expect(page.locator('link[rel~="icon"]')).toHaveAttribute(
+          "href",
+          "/llmingress-oracle-gate-logo.svg",
+        );
+
         // The auth panel already wears the skin: a shadowless hairline card on
         // the page background, with a full-width primary button.
         const createAdmin = page.getByRole("button", { name: "Create admin" });

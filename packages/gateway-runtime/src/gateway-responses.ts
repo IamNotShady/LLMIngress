@@ -106,6 +106,7 @@ export async function executeGatewayOpenAIResponse(input: {
   limitsEnabled?: boolean;
   providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
+  requestedTag?: string;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
   virtualModel: GatewayVirtualModel;

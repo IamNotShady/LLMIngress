@@ -57,6 +57,7 @@ import {
   buildOpenAIChatCompletionRequestMetadata,
   buildOpenAIResponsesRequestMetadata,
   type GatewayRequestMetadata,
+  withGatewayRequestedRouteTag,
 } from "./gateway-request-metadata.ts";
 import { normalizeOpenAIResponsesRequest } from "./gateway-responses.ts";
 import {
@@ -70,10 +71,7 @@ import {
 } from "./gateway-stream-pipeline.ts";
 import type { GatewayUsageCostDetails } from "./gateway-usage-recorder.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
-import {
-  assertGatewayRequestWithinVirtualModelContract,
-  assertGatewayVirtualModelCapabilityContract,
-} from "./gateway-virtual-model-capabilities.ts";
+import { assertGatewayRequestWithinVirtualModelCapabilities } from "./gateway-virtual-model-capabilities.ts";
 
 export type GatewayStreamingProtocol = "chat_completions" | "messages" | "responses";
 
@@ -119,6 +117,7 @@ export async function executeGatewayStreamingRequest(input: {
   protocol: GatewayStreamingProtocol;
   providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
+  requestedTag?: string;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
   virtualModel: GatewayVirtualModel;
@@ -127,6 +126,7 @@ export async function executeGatewayStreamingRequest(input: {
     protocol: input.protocol,
     providerRequestHeaders: input.providerRequestHeaders,
     requestBody: input.requestBody,
+    requestedTag: input.requestedTag,
     requestId: input.requestId,
     resolvedModelName: input.virtualModel.name,
   });
@@ -147,12 +147,12 @@ export async function executeGatewayStreamingRequest(input: {
       protocol: input.protocol,
       routePolicy: configuredRoutePolicy,
     });
-    const capabilityContract = assertGatewayVirtualModelCapabilityContract(configuredRoutePolicy);
-    assertGatewayRequestWithinVirtualModelContract(capabilityContract, normalized.requestMetadata);
-
+    // Selection runs before the capability check because which capabilities the
+    // request must satisfy can depend on which candidate the strategy picked.
     const routeResult = selectRouteAttempts({
       estimatedInputTokens: normalized.estimatedInputTokens,
       estimatedOutputTokens: normalized.estimatedOutputTokens,
+      requestedTag: input.requestedTag,
       snapshot: input.snapshot,
       virtualModelId: input.virtualModel.id,
     });
@@ -171,6 +171,12 @@ export async function executeGatewayStreamingRequest(input: {
         statusCode: mapGatewayErrorStatus("provider_unavailable"),
       };
     }
+
+    assertGatewayRequestWithinVirtualModelCapabilities({
+      chain: routeResult.chain,
+      requestMetadata: normalized.requestMetadata,
+      routePolicy: configuredRoutePolicy,
+    });
 
     const routeDecision = routeResult.decision;
     const gatewayChain = routeResult.chain;
@@ -556,6 +562,7 @@ function buildStreamingPayload(input: {
   protocol: GatewayStreamingProtocol;
   providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
+  requestedTag?: string;
   requestId: string;
   resolvedModelName: string;
 }):
@@ -573,11 +580,14 @@ function buildStreamingPayload(input: {
     if (!normalized.ok) {
       return normalized;
     }
-    const requestMetadata = buildOpenAIChatCompletionRequestMetadata({
-      model: input.resolvedModelName,
-      rawBody: input.requestBody,
-      request: normalized.request,
-    });
+    const requestMetadata = withGatewayRequestedRouteTag(
+      buildOpenAIChatCompletionRequestMetadata({
+        model: input.resolvedModelName,
+        rawBody: input.requestBody,
+        request: normalized.request,
+      }),
+      input.requestedTag,
+    );
 
     return {
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
@@ -600,11 +610,14 @@ function buildStreamingPayload(input: {
     if (!normalized.ok) {
       return normalized;
     }
-    const requestMetadata = buildOpenAIResponsesRequestMetadata({
-      model: input.resolvedModelName,
-      rawBody: input.requestBody,
-      request: normalized.request,
-    });
+    const requestMetadata = withGatewayRequestedRouteTag(
+      buildOpenAIResponsesRequestMetadata({
+        model: input.resolvedModelName,
+        rawBody: input.requestBody,
+        request: normalized.request,
+      }),
+      input.requestedTag,
+    );
 
     return {
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
@@ -626,11 +639,14 @@ function buildStreamingPayload(input: {
   if (!normalized.ok) {
     return normalized;
   }
-  const requestMetadata = buildAnthropicMessagesRequestMetadata({
-    model: input.resolvedModelName,
-    rawBody: input.requestBody,
-    request: normalized.request,
-  });
+  const requestMetadata = withGatewayRequestedRouteTag(
+    buildAnthropicMessagesRequestMetadata({
+      model: input.resolvedModelName,
+      rawBody: input.requestBody,
+      request: normalized.request,
+    }),
+    input.requestedTag,
+  );
 
   return {
     estimatedInputTokens: requestMetadata.estimatedInputTokens,

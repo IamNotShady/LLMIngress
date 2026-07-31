@@ -99,7 +99,11 @@ stale-on-error.
 - Completed requests use `request_activity`, `request_usage`, `request_costs`, and
   `fallback_events`.
 - Provider health uses `provider_health_events` plus the sparse `provider_health_summary`.
-- Console analytics read durable metadata and never query prompt content.
+- `api_keys.request_logging_mode` (`default` | `full`) decides whether the Gateway captures bodies.
+  What it captured lives in `request_activity.payload` (jsonb, null when nothing was captured),
+  capped at 1 MB per side with explicit truncation flags, and is deleted with its activity row.
+- Console analytics and the Activity list read durable metadata and never select `payload`; only the
+  Activity detail reads it, so bodies are visible only for keys explicitly set to `full`.
 - Provider credentials are encrypted with `ENCRYPTION_KEY`; authenticated Provider requests do not
   follow redirects.
 

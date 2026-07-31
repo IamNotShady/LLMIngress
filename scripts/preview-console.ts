@@ -274,10 +274,10 @@ async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture
           api_key_prefix, protocol, model, stream, status, error_code, http_status, latency_ms,
           started_at, completed_at, api_key_name_snapshot, virtual_model_name_snapshot,
           provider_display_name_snapshot, provider_model_name_snapshot, route_policy_strategy_snapshot,
-          request_metadata)
+          request_metadata, payload)
        values ($1, $2, $3, $4, $5, $6, $7, 'llmi_a1b2c3d4…', $8, $9, true, $10, $11, $12, $13,
                now() - ($14 || ' minutes')::interval, now() - ($14 || ' minutes')::interval,
-               $15, $16, $17, $18, $20, $19::jsonb)`,
+               $15, $16, $17, $18, $20, $19::jsonb, $21::jsonb)`,
       [
         activityId,
         `req_${activityId.slice(0, 6)}`,
@@ -303,6 +303,10 @@ async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture
           max_tokens: 4096,
         }),
         onMax ? "fixed" : "load_balance",
+        // A captured body is the widest thing the drawer ever renders, and the
+        // drawer preview opens whichever request sorts first — so every seeded
+        // request carries one, with the cut line on every third.
+        previewCapturedPayload(index % 3 === 0),
       ],
     );
     if (!canceled) {
@@ -359,6 +363,25 @@ async function seed(fixture: Awaited<ReturnType<typeof createTestPostgresFixture
       );
     }
   }
+}
+
+/** What a key on the full request logging mode had captured for one request. */
+function previewCapturedPayload(truncated: boolean): string {
+  const streamed = `data: ${"eyJkZWx0YSI6ImxvbmctdW5icm9rZW4tdG9rZW4taW4tb25lLWxpbmUi".repeat(12)}`;
+  return JSON.stringify({
+    requestBody: {
+      messages: [
+        { content: "Refactor the pricing table and keep the totals aligned.", role: "user" },
+      ],
+      model: "coding-fast",
+      stream: true,
+    },
+    requestBytes: 168,
+    requestTruncated: false,
+    responseBody: streamed,
+    responseBytes: truncated ? 4_194_304 : Buffer.byteLength(streamed),
+    responseTruncated: truncated,
+  });
 }
 
 async function main() {
@@ -449,6 +472,11 @@ async function main() {
         if (name === "drawer-activity") {
           await page.locator('a[href*="request="]').first().click();
           await page.waitForLoadState("networkidle");
+          // Captured bodies are collapsed for the operator; the preview opens
+          // them, because a block nobody expanded is a block nobody measured.
+          for (const summary of await page.locator("details summary").all()) {
+            await summary.click();
+          }
         }
         await page.waitForTimeout(300);
         await page.waitForLoadState("networkidle");

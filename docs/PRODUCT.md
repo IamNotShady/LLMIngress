@@ -107,6 +107,15 @@ Supported rules are budget, RPM, TPM, concurrency, and per-request token limits.
 operational records are request metadata, latency, status, token usage, actual or estimated cost,
 fallback attempts, and Provider-connection health history.
 
+Each API key carries a request logging mode, picked in its editor. On `default` the Gateway records
+that metadata and nothing of the bodies. On `full` it additionally stores, for every request of that
+key, the client request body and the Provider response body: a body that fits is kept as JSON, one
+past the 1 MB per-side cap is stored as the text it was cut to and marked truncated, and a streamed
+response is stored as the raw event text the client received, including a stream that failed or was
+abandoned partway. Failed requests are captured like successful ones. Request headers and
+credentials are never stored in either mode. Captured bodies live on the Activity row and are
+removed with it when the retention window passes, and only the Activity detail shows them.
+
 ### Console, Worker, and health
 
 Supported Console pages are Overview, API Keys, Providers, Virtual Models, Activity, Usage, Limits,

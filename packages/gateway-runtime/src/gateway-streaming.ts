@@ -172,29 +172,43 @@ export async function executeGatewayStreamingRequest(input: {
       };
     }
 
-    assertGatewayRequestWithinVirtualModelCapabilities({
-      chain: routeResult.chain,
-      requestMetadata: normalized.requestMetadata,
-      routePolicy: configuredRoutePolicy,
-    });
-
     const routeDecision = routeResult.decision;
     const gatewayChain = routeResult.chain;
 
     const fallbackAttempts: FallbackFailedAttempt[] = [];
     const selectedCandidate = gatewayChain[0];
-    if (!routeDecision || !selectedCandidate) {
+    if (!selectedCandidate) {
       throw new Error("Selected route candidate was not found in route policy.");
     }
-    // Built before the attempts run, like the JSON pipeline builds it: the
-    // attempts array is shared, so a request that exhausts its chain still
-    // records the route it chose, the tag it was asked for, and every attempt
-    // it burned — the failed request is the one an operator has to debug.
+    // Built before the capability check and the attempts, like the JSON
+    // pipeline builds it: a request refused for exceeding the selected
+    // candidate's contract, and a request that exhausts its chain, both still
+    // record the route they chose, the tag they were asked for, and every
+    // attempt burned — the failed request is the one an operator has to debug.
     let activity = buildGatewayRequestActivityRoute({
       candidate: selectedCandidate,
       fallbackAttempts,
       routeDecision,
     });
+
+    try {
+      assertGatewayRequestWithinVirtualModelCapabilities({
+        chain: routeResult.chain,
+        requestMetadata: normalized.requestMetadata,
+        routePolicy: configuredRoutePolicy,
+      });
+    } catch (error) {
+      await releaseGatewayConcurrency({ databaseUrl: input.databaseUrl, lease: concurrencyLease });
+      concurrencyLease = undefined;
+      const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
+      return {
+        activity,
+        body: createGatewayErrorBody(parts.code, input.requestId, parts.message),
+        ok: false,
+        requestMetadata: normalized.requestMetadata,
+        statusCode: parts.statusCode,
+      };
+    }
     let lastError: FallbackAttemptErrorLike | undefined;
     const candidates = await buildStreamingFallbackCandidates({
       candidates: gatewayChain,

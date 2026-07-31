@@ -457,9 +457,8 @@ export function Playground({
               </button>
             </span>
             <span className="mt-1 block font-mono text-115 leading-[1.5] text-faint">
-              Picked, not typed: the list holds the headers the gateway&apos;s CORS allowlist lets a
-              browser send, minus the ones this form or the gateway&apos;s own auth already owns.
-              x-llmingress-route-tag is the one a tag route reads.
+              Only headers the gateway accepts from a browser. x-llmingress-route-tag is the one a
+              tag route reads.
             </span>
           </div>
           {/* Said while the row is being filled in, and again as the reason the

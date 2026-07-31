@@ -253,6 +253,7 @@ function fallbackCandidate(
     providerId: "provider-1",
     providerKey: "openai",
     providerModelId: "pm-1",
+    weight: null,
     ...overrides,
   };
 }

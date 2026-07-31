@@ -479,6 +479,7 @@ function breakerFallbackCandidate(
     providerId: "provider-breaker-1",
     providerKey: "openai",
     providerModelId: "pm-breaker-1",
+    weight: null,
     ...overrides,
   };
 }
@@ -868,5 +869,6 @@ function breakerCredentialCandidate(providerId: string): GatewayRouteCandidateSn
     providerId,
     providerKey: "openai",
     providerModelId: "pm-breaker-cred",
+    weight: null,
   };
 }

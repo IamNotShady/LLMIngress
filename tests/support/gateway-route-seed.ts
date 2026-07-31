@@ -20,6 +20,8 @@ export type SeedOpenAIGatewayRouteInput = {
   tags?: readonly string[];
   strategy?: RoutePolicyStrategy;
   virtualModelName: string;
+  /** Weight for the seeded first candidate; only a weighted strategy reads it. */
+  weight?: number;
 };
 
 export type SeedOpenAIGatewayRouteResult = {
@@ -42,6 +44,7 @@ export type SeedGatewayRouteCandidateInput = {
   providerDisplayName?: string;
   routePolicyId: string;
   tags?: readonly string[];
+  weight?: number;
 };
 
 export type SeedGatewayRouteCandidateResult = {
@@ -154,11 +157,12 @@ export async function seedOpenAIGatewayRoute(
         route_policy_id,
         provider_model_id,
         candidate_order,
-        tags
+        tags,
+        weight
       )
-      values ($1, $2, $3, 1, $4::text[])
+      values ($1, $2, $3, 1, $4::text[], $5)
     `,
-    [randomUUID(), routePolicyId, providerModelId, input.tags ?? []],
+    [randomUUID(), routePolicyId, providerModelId, input.tags ?? [], input.weight ?? null],
   );
   await input.fixture.query(
     "insert into api_key_virtual_models (api_key_id, virtual_model_id) values ($1, $2)",
@@ -251,11 +255,19 @@ export async function seedGatewayRouteCandidate(
         route_policy_id,
         provider_model_id,
         candidate_order,
-        tags
+        tags,
+        weight
       )
-      values ($1, $2, $3, $4, $5::text[])
+      values ($1, $2, $3, $4, $5::text[], $6)
     `,
-    [randomUUID(), input.routePolicyId, providerModelId, input.candidateOrder, input.tags ?? []],
+    [
+      randomUUID(),
+      input.routePolicyId,
+      providerModelId,
+      input.candidateOrder,
+      input.tags ?? [],
+      input.weight ?? null,
+    ],
   );
 
   return { providerId, providerModelId };

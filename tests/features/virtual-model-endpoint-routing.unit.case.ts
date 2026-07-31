@@ -207,6 +207,7 @@ function candidateSnapshot(
     providerId: randomUUID(),
     providerKey: "openai",
     providerModelId: randomUUID(),
+    weight: null,
     ...overrides,
   };
 }

@@ -229,14 +229,14 @@ export function Playground({
 
       const response = await fetch(`${base}${ENDPOINT_PATH[protocol]}`, {
         body: JSON.stringify(body),
-        // The form's own two headers are spread last, so a typed line can
-        // never take over the key this request is sent with or the shape of
-        // the body — the parser already refuses both, and this is the guard
-        // that does not depend on it.
+        // The form's own three headers are spread last, so a typed line can
+        // never take over authentication, body shape, or the unique id used
+        // to find this request's trace.
         headers: {
           ...parsedHeaders.headers,
           authorization: `Bearer ${apiKey.trim()}`,
           "content-type": "application/json",
+          "x-request-id": `playground_${crypto.randomUUID()}`,
         },
         method: "POST",
       });

@@ -119,8 +119,8 @@ export type PlaygroundRouteTag = {
   tagFallback: boolean;
 };
 
-/** The two headers the form sends itself; a second copy would fight them. */
-const reservedPlaygroundHeaders = new Set(["authorization", "content-type"]);
+/** The three headers the form sends itself; a second copy would fight them. */
+const reservedPlaygroundHeaders = new Set(["authorization", "content-type", "x-request-id"]);
 const playgroundHeaderNamePattern = /^[a-z0-9!#$%&'*+.^_`|~-]+$/;
 /** Printable ASCII only: fetch refuses to build a request with anything else. */
 const playgroundHeaderValuePattern = /^[ -~]+$/;
@@ -180,9 +180,13 @@ export function formatPlaygroundHeaderIssue(issue: PlaygroundHeaderIssue): strin
     return `line ${issue.line}: use name: value`;
   }
   if (issue.reason === "reserved") {
-    return issue.name === "authorization"
-      ? `line ${issue.line}: authorization is sent from the API KEY field`
-      : `line ${issue.line}: content-type is fixed at application/json`;
+    if (issue.name === "authorization") {
+      return `line ${issue.line}: authorization is sent from the API KEY field`;
+    }
+    if (issue.name === "x-request-id") {
+      return `line ${issue.line}: x-request-id is generated for every Playground request`;
+    }
+    return `line ${issue.line}: content-type is fixed at application/json`;
   }
   return `line ${issue.line}: ${issue.name} is not in the gateway CORS allowlist — the browser refuses it before it is sent`;
 }

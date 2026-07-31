@@ -22,18 +22,20 @@ describe("the headers a Playground request may carry", () => {
     // because only the first one separates.
     expect(
       parsePlaygroundHeaders(
-        ["X-LLMIngress-Route-Tag:  Fast ", "", "   ", "x-request-id: req:1:2"].join("\n"),
+        ["X-LLMIngress-Route-Tag:  Fast ", "", "   ", "x-client-request-id: req:1:2"].join("\n"),
       ),
     ).toEqual({
-      headers: { "x-llmingress-route-tag": "Fast", "x-request-id": "req:1:2" },
+      headers: { "x-client-request-id": "req:1:2", "x-llmingress-route-tag": "Fast" },
       issues: [],
     });
   });
 
   it("lets a later line replace the same header written earlier", () => {
     expect(
-      parsePlaygroundHeaders(["x-request-id: first", "X-Request-Id: second"].join("\r\n")).headers,
-    ).toEqual({ "x-request-id": "second" });
+      parsePlaygroundHeaders(
+        ["x-client-request-id: first", "X-Client-Request-Id: second"].join("\r\n"),
+      ).headers,
+    ).toEqual({ "x-client-request-id": "second" });
   });
 
   it("refuses a line that is not a header, naming the line it was on", () => {
@@ -53,18 +55,20 @@ describe("the headers a Playground request may carry", () => {
     }
   });
 
-  it("sends neither of the two headers the form already owns", () => {
-    // Both are in the allowlist, so the allowlist cannot be what stops them:
-    // they are refused because the API KEY field and the fixed JSON content
-    // type are where they come from, and a second copy would fight them.
+  it("sends none of the three headers the form already owns", () => {
+    // All three are in the allowlist, so the allowlist cannot be what stops
+    // them: the form owns their values and a second copy would fight them.
     const parsed = parsePlaygroundHeaders(
-      ["Authorization: Bearer llmi_other", "CONTENT-TYPE: text/plain"].join("\n"),
+      ["Authorization: Bearer llmi_other", "CONTENT-TYPE: text/plain", "X-REQUEST-ID: fixed"].join(
+        "\n",
+      ),
     );
 
     expect(parsed.headers).toEqual({});
     expect(parsed.issues).toEqual([
       { line: 1, name: "authorization", reason: "reserved" },
       { line: 2, name: "content-type", reason: "reserved" },
+      { line: 3, name: "x-request-id", reason: "reserved" },
     ]);
   });
 
@@ -94,6 +98,9 @@ describe("what a refused header line says", () => {
     ).toBe("line 1: authorization is sent from the API KEY field");
     expect(formatPlaygroundHeaderIssue({ line: 2, name: "content-type", reason: "reserved" })).toBe(
       "line 2: content-type is fixed at application/json",
+    );
+    expect(formatPlaygroundHeaderIssue({ line: 3, name: "x-request-id", reason: "reserved" })).toBe(
+      "line 3: x-request-id is generated for every Playground request",
     );
     expect(formatPlaygroundHeaderIssue({ line: 4, name: "x-custom", reason: "not_allowed" })).toBe(
       "line 4: x-custom is not in the gateway CORS allowlist — the browser refuses it before it is sent",
@@ -171,11 +178,14 @@ describe("the allowlist the Playground copies", () => {
 });
 
 describe("what the Playground does with the parsed headers", () => {
-  it("cannot let a typed header overwrite the two the form owns", () => {
+  it("cannot let a typed header overwrite the three the form owns", () => {
     const playground = read("apps/console/src/app/_ui/playground/playground.tsx");
     const spreadAt = playground.indexOf("...parsedHeaders.headers,");
     const authorizationAt = playground.indexOf(
       ["authorization: `Bearer ", "$", "{apiKey.trim()}`"].join(""),
+    );
+    const requestIdAt = playground.indexOf(
+      ['"x-request-id": `playground_', "$", "{crypto.randomUUID()}`"].join(""),
     );
 
     expect(spreadAt).toBeGreaterThan(-1);
@@ -183,6 +193,7 @@ describe("what the Playground does with the parsed headers", () => {
     // this object, the form's own values are spread last and win.
     expect(authorizationAt).toBeGreaterThan(spreadAt);
     expect(playground.indexOf('"content-type": "application/json"')).toBeGreaterThan(spreadAt);
+    expect(requestIdAt).toBeGreaterThan(spreadAt);
   });
 
   it("does not send a request it already knows the browser will refuse", () => {

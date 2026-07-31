@@ -114,8 +114,9 @@ and Playground. Playground keeps its Virtual Model selector empty until an API k
 populates it only from the key-scoped Gateway `GET /v1/models` response. Its HEADERS editor takes
 one `name: value` line per request header, limited to the Gateway's CORS request-header allowlist;
 a malformed line, a header outside that list, or one the form itself owns is marked in red and
-blocks the send. The Route trace names the tag a tag-routed request asked for and whether it
-matched or fell back to the default candidate. Password setup, session
+blocks the send. The form generates a unique `x-request-id` for every send so each response resolves
+only its own Activity trace. The Route trace names the tag a tag-routed request asked for and
+whether it matched or fell back to the default candidate. Password setup, session
 authentication, stable operation errors, and secret encryption are required. URL-driven filter
 controls always reflect the current query state; clearing filters restores their documented
 defaults, including Activity's Last 24h window. Selecting a different Provider starts a fresh

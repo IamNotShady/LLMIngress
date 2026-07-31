@@ -296,7 +296,7 @@ function ApiKeyEditorDialog({
                 required
               />
             </Field>
-            <Field label="REQUEST LOGGING" hint={REQUEST_LOGGING_NOTE}>
+            <Field label="REQUEST LOGGING" help={REQUEST_LOGGING_NOTE}>
               <SelectInput
                 name="requestLoggingMode"
                 aria-label="Request logging mode"

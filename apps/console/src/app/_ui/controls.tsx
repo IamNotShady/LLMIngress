@@ -119,11 +119,14 @@ const inputClass =
  */
 export function Field({
   children,
+  help,
   hint,
   label,
   labelNote,
 }: {
   children: ReactNode;
+  /** An explanation too long for a hint line, held behind a "?" by the label. */
+  help?: string;
   hint?: string;
   label: string;
   labelNote?: string;
@@ -135,6 +138,7 @@ export function Field({
         <span className="block font-mono text-115 font-medium tracking-[.08em] text-dim">
           {label}
           {labelNote ? <span className="text-faint"> {labelNote}</span> : null}
+          {help ? <FieldHelp text={help} /> : null}
         </span>
         <span className="mt-[5px] block">{children}</span>
         {hint ? (
@@ -142,6 +146,32 @@ export function Field({
         ) : null}
       </label>
     </>
+  );
+}
+
+/**
+ * The "?" a Field's help hides behind. CSS only: the bubble shows while the
+ * trigger is hovered or keyboard-focused, so it works in a server-rendered
+ * form. A button, not a span — inside a label, only an interactive element
+ * keeps a click from being forwarded to the field's own control.
+ */
+function FieldHelp({ text }: { text: string }) {
+  return (
+    <span className="group relative ml-[6px] inline-block">
+      <button
+        type="button"
+        aria-label={text}
+        className="cursor-help rounded-full border border-btnbd bg-btnbg px-[6px] py-0 font-mono text-115 leading-[1.5] text-dim"
+      >
+        ?
+      </button>
+      <span
+        aria-hidden
+        className="absolute left-0 top-full z-10 mt-1 hidden w-72 rounded-xs border border-rule bg-bg px-3 py-2 font-mono text-115 font-normal tracking-normal leading-[1.6] text-dim group-hover:block group-focus-within:block"
+      >
+        {text}
+      </span>
+    </span>
   );
 }
 

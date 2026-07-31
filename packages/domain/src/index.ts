@@ -981,3 +981,17 @@ export type ApiKeyLimitPeriod = (typeof apiKeyLimitPeriods)[number];
 
 export const apiKeyLimitUnits = ["requests", "tokens", "usd"] as const;
 export type ApiKeyLimitUnit = (typeof apiKeyLimitUnits)[number];
+
+/**
+ * How much of a request the gateway keeps for a key: "default" records the
+ * metadata it always records, "full" adds the client request body and the
+ * provider response body to that key's activity rows.
+ */
+export const apiKeyRequestLoggingModes = ["default", "full"] as const;
+export type ApiKeyRequestLoggingMode = (typeof apiKeyRequestLoggingModes)[number];
+
+export function isApiKeyRequestLoggingMode(value: unknown): value is ApiKeyRequestLoggingMode {
+  return (
+    typeof value === "string" && (apiKeyRequestLoggingModes as readonly string[]).includes(value)
+  );
+}

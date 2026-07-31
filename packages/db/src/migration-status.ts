@@ -67,6 +67,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0004",
     name: "route_policy_candidate_tags",
   },
+  {
+    checksum: "73bd422be6f74b01178caf840845e210308f2ec29c49ffcf80219528d5b6f1eb",
+    id: "0005",
+    name: "api_key_request_logging",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

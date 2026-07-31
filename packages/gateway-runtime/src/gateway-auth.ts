@@ -1,5 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getPostgresPool } from "@llmingress/db/client";
+import { type ApiKeyRequestLoggingMode, isApiKeyRequestLoggingMode } from "@llmingress/domain";
+
+/** Re-exported so callers reading it off an authenticated key can name it. */
+export type { ApiKeyRequestLoggingMode };
 
 export type GatewayAuthErrorCode = "disabled_api_key" | "invalid_api_key" | "missing_api_key";
 
@@ -9,6 +13,7 @@ export type GatewayAuthenticatedApiKey = {
   id: string;
   keyPrefix: string;
   limitsEnabled: boolean;
+  requestLoggingMode: ApiKeyRequestLoggingMode;
 };
 
 export type GatewayAuthSuccess = {
@@ -42,6 +47,7 @@ type ApiKeyAuthRow = {
   id: string;
   key_prefix: string;
   limits_enabled: boolean;
+  request_logging_mode: string;
 };
 
 const gatewayRequestIdPattern = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -101,6 +107,11 @@ export async function authenticateGatewayRequest(input: {
       id: row.id,
       keyPrefix: row.key_prefix,
       limitsEnabled: row.limits_enabled,
+      // A mode the column's check constraint cannot produce would have to come
+      // from a schema older than this feature: such a key captures nothing.
+      requestLoggingMode: isApiKeyRequestLoggingMode(row.request_logging_mode)
+        ? row.request_logging_mode
+        : "default",
     },
     ok: true,
     requestId,
@@ -131,7 +142,8 @@ async function readApiKeyByHash(
              api_keys.key_prefix,
              api_keys.default_virtual_model_id::text,
              api_keys.enabled,
-             api_keys.limits_enabled
+             api_keys.limits_enabled,
+             api_keys.request_logging_mode
       from api_keys
       where api_keys.key_hash = $1
         and api_keys.deleted_at is null

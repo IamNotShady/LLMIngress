@@ -285,6 +285,7 @@ function registerGatewayJsonEndpoint(
         await executeRecordedGatewayStreamingRequest({
           apiKeyId: auth.apiKey.id,
           apiKeyPrefix: auth.apiKey.keyPrefix,
+          clientRequestBody: request.body,
           execute: () =>
             executeGatewayStreamingRequest({
               apiKeyId: auth.apiKey.id,
@@ -301,6 +302,7 @@ function registerGatewayJsonEndpoint(
           model: virtualModelAccess.virtualModel.name,
           protocol: endpoint.protocol,
           requestId: auth.requestId,
+          requestLoggingMode: auth.apiKey.requestLoggingMode,
           virtualModelId: virtualModelAccess.virtualModel.id,
         }),
         auth.requestId,
@@ -310,6 +312,7 @@ function registerGatewayJsonEndpoint(
     const response = await executeRecordedGatewayJsonRequest({
       apiKeyId: auth.apiKey.id,
       apiKeyPrefix: auth.apiKey.keyPrefix,
+      clientRequestBody: request.body,
       execute: () =>
         endpoint.execute({
           apiKeyId: auth.apiKey.id,
@@ -325,6 +328,7 @@ function registerGatewayJsonEndpoint(
       model: virtualModelAccess.virtualModel.name,
       protocol: endpoint.protocol,
       requestId: auth.requestId,
+      requestLoggingMode: auth.apiKey.requestLoggingMode,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
     return sendGatewayJsonResponse(reply, response, auth.requestId);

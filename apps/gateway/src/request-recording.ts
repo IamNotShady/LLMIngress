@@ -8,7 +8,13 @@ import {
   type GatewayBudgetSettlement,
   recordGatewayBudgetUsage,
 } from "@llmingress/gateway-runtime/gateway-api-key-limits";
+import type { ApiKeyRequestLoggingMode } from "@llmingress/gateway-runtime/gateway-auth";
 import { runGatewayBackgroundTask } from "@llmingress/gateway-runtime/gateway-background-tasks";
+import {
+  captureGatewayPayloadValue,
+  createGatewayBoundedPayloadAccumulator,
+  type GatewayCapturedPayload,
+} from "@llmingress/gateway-runtime/gateway-payload-capture";
 import type { GatewayRequestMetadata } from "@llmingress/gateway-runtime/gateway-request-metadata";
 import { wrapProviderStreamWithActivityCompletion } from "@llmingress/gateway-runtime/gateway-stream-pipeline";
 import type { GatewayStreamingResult } from "@llmingress/gateway-runtime/gateway-streaming";
@@ -60,12 +66,15 @@ function runRecordingTask(input: {
 export async function executeRecordedGatewayJsonRequest(input: {
   apiKeyId: string;
   apiKeyPrefix: string;
+  /** The body as the client sent it, kept only for a key that logs in full. */
+  clientRequestBody: unknown;
   execute: () => Promise<GatewayJsonEndpointResponse>;
   logger: FastifyBaseLogger;
   model: string;
   protocol: GatewayRequestActivityProtocol;
   recorder?: GatewayRequestRecorder;
   requestId: string;
+  requestLoggingMode: ApiKeyRequestLoggingMode;
   virtualModelId: string;
 }): Promise<GatewayJsonEndpointResponse> {
   const recorder = input.recorder ?? defaultGatewayRequestRecorder;
@@ -86,6 +95,7 @@ export async function executeRecordedGatewayJsonRequest(input: {
   scheduleRecordActivity({
     activity,
     input,
+    payload: captureBothBodies(input, response.body),
     recorder,
     requestMetadata: response.requestMetadata,
     responseBody: response.body,
@@ -101,12 +111,15 @@ export async function executeRecordedGatewayJsonRequest(input: {
 export async function executeRecordedGatewayStreamingRequest(input: {
   apiKeyId: string;
   apiKeyPrefix: string;
+  /** The body as the client sent it, kept only for a key that logs in full. */
+  clientRequestBody: unknown;
   execute: () => Promise<GatewayStreamingResult>;
   logger: FastifyBaseLogger;
   model: string;
   protocol: GatewayRequestActivityProtocol;
   recorder?: GatewayRequestRecorder;
   requestId: string;
+  requestLoggingMode: ApiKeyRequestLoggingMode;
   virtualModelId: string;
 }): Promise<GatewayStreamingResult> {
   const recorder = input.recorder ?? defaultGatewayRequestRecorder;
@@ -116,6 +129,7 @@ export async function executeRecordedGatewayStreamingRequest(input: {
     scheduleRecordActivity({
       activity,
       input,
+      payload: captureBothBodies(input, response.body),
       recorder,
       requestMetadata: response.requestMetadata,
       responseBody: response.body,
@@ -127,10 +141,18 @@ export async function executeRecordedGatewayStreamingRequest(input: {
   }
 
   const usageCollector = createGatewayStreamingUsageCollector();
+  // The events as the client receives them: a stream has no parsed body to
+  // capture afterwards, and one that fails or is abandoned mid-flight is still
+  // what this key asked to keep.
+  const streamedResponse =
+    input.requestLoggingMode === "full" ? createGatewayBoundedPayloadAccumulator() : undefined;
   return {
     ...response,
     body: wrapProviderStreamWithActivityCompletion(response.body, {
-      collectChunk: (chunk) => usageCollector.collect(chunk),
+      collectChunk: (chunk) => {
+        usageCollector.collect(chunk);
+        streamedResponse?.append(chunk);
+      },
       completeActivity: async ({ statusCode }) => {
         const providerUsage = usageCollector.readUsage();
         const usageCost = response.usageCost;
@@ -150,6 +172,12 @@ export async function executeRecordedGatewayStreamingRequest(input: {
         scheduleRecordActivity({
           activity,
           input,
+          payload: streamedResponse
+            ? {
+                requestBody: captureGatewayPayloadValue(input.clientRequestBody),
+                responseBody: streamedResponse.read(),
+              }
+            : undefined,
           recorder,
           requestMetadata: response.requestMetadata,
           responseBody: providerUsage ? buildGatewayProviderUsageResponseBody(providerUsage) : {},
@@ -168,6 +196,24 @@ function startActivity(): { id: string; startedAt: Date } {
   return { id: randomUUID(), startedAt: new Date() };
 }
 
+/**
+ * Both bodies of a request that answered in one piece, for a key that logs in
+ * full. Every other key captures nothing, which is what a null payload means.
+ */
+function captureBothBodies(
+  input: { clientRequestBody: unknown; requestLoggingMode: ApiKeyRequestLoggingMode },
+  responseBody: unknown,
+): GatewayCapturedPayload | undefined {
+  if (input.requestLoggingMode !== "full") {
+    return undefined;
+  }
+
+  return {
+    requestBody: captureGatewayPayloadValue(input.clientRequestBody),
+    responseBody: captureGatewayPayloadValue(responseBody),
+  };
+}
+
 function scheduleRecordActivity(input: {
   activity: { id: string; startedAt: Date };
   input: {
@@ -179,6 +225,7 @@ function scheduleRecordActivity(input: {
     requestId: string;
     virtualModelId: string;
   };
+  payload?: GatewayCapturedPayload;
   requestMetadata?: GatewayRequestMetadata;
   recorder: GatewayRequestRecorder;
   responseBody: unknown;
@@ -199,6 +246,7 @@ function scheduleRecordActivity(input: {
         apiKeyPrefix: input.input.apiKeyPrefix,
         apiKeyId: input.input.apiKeyId,
         model: input.input.model,
+        payload: input.payload,
         protocol: input.input.protocol,
         requestId: input.input.requestId,
         requestMetadata: input.requestMetadata,

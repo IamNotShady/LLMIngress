@@ -250,6 +250,8 @@ export async function VirtualModelDialogs({
                         providerModelIds hidden inputs above, so FormData pairs a
                         tag list with the model it was typed for. Non-tag
                         strategies still emit an empty entry to keep that pairing.
+                        The wrapper fixes the width: the input's own class is
+                        w-full, which would otherwise eat the whole row.
                         Known limit: this field cannot join
                         PRESERVED_EDITOR_FIELDS (repeated names read back as a
                         RadioNodeList), so reordering, adding, removing a
@@ -257,24 +259,27 @@ export async function VirtualModelDialogs({
                         the same as NAME and DESCRIPTION under plain Link
                         navigation. */}
                     {routesByTag ? (
-                      <TextInput
-                        aria-label={`Tags for ${model.modelId}`}
-                        className="w-[160px] flex-none"
-                        defaultValue={storedTagsByModelId.get(model.id) ?? ""}
-                        name="candidateTags"
-                        placeholder="default / fast, cheap"
-                      />
+                      <span className="block w-[190px] flex-none">
+                        <TextInput
+                          aria-label={`Tags for ${model.modelId}`}
+                          defaultValue={storedTagsByModelId.get(model.id) ?? ""}
+                          name="candidateTags"
+                          placeholder="default / fast, cheap"
+                        />
+                      </span>
                     ) : (
                       <input type="hidden" name="candidateTags" value="" />
                     )}
-                    <span className="whitespace-nowrap text-dim">
+                    {/* Fixed-width trailing columns so the tag field lines up
+                        across rows instead of drifting with each row's price. */}
+                    <span className="w-[180px] flex-none whitespace-nowrap text-right text-dim cell-clip">
                       {formatPricePair({
                         inputUsdPerMillionTokens: model.inputUsdPerMillionTokens,
                         metered: provider ? providerIsMetered(provider) : true,
                         outputUsdPerMillionTokens: model.outputUsdPerMillionTokens,
                       })}
                     </span>
-                    <span className="whitespace-nowrap text-dim">
+                    <span className="w-[76px] flex-none whitespace-nowrap text-right text-dim">
                       ctx {formatModelContextTokens(model.contextWindow)}
                     </span>
                     <span className="flex flex-none gap-[5px] text-dim">

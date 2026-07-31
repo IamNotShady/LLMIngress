@@ -105,6 +105,13 @@ export type ConsoleActivityRouteCandidate = {
   reasons: string[];
 };
 
+/** The tag a tag route was asked for, and what became of it. */
+export type ConsoleActivityRouteTag = {
+  matchedTag: string | null;
+  requestedTag: string | null;
+  tagFallback: boolean;
+};
+
 export type ConsoleActivityDetail = {
   activity: ConsoleActivity;
   fallbackEvents: ConsoleFallbackEvent[];
@@ -573,6 +580,32 @@ export function readConsoleActivityRouteCandidates(
       providerModelId: String(entry.providerModelId),
     }))
     .sort((left, right) => left.candidateOrder - right.candidateOrder);
+}
+
+/**
+ * What the route recorded about the tag it was asked for: the tag that matched
+ * a candidate, the tag that matched none, and whether the default candidate
+ * served the request instead. A route that named no tag at all — every strategy
+ * other than tag, and every request recorded before tags existed — has none of
+ * these fields and gets null rather than an invented "no tag" verdict.
+ */
+export function readConsoleActivityRouteTag(routeReason: unknown): ConsoleActivityRouteTag | null {
+  if (!isRecord(routeReason)) {
+    return null;
+  }
+
+  const matchedTag = readRouteTagValue(routeReason.matchedTag);
+  const requestedTag = readRouteTagValue(routeReason.requestedTag);
+  const recordedFallback = typeof routeReason.tagFallback === "boolean";
+  if (!matchedTag && !requestedTag && !recordedFallback) {
+    return null;
+  }
+
+  return { matchedTag, requestedTag, tagFallback: routeReason.tagFallback === true };
+}
+
+function readRouteTagValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 export function formatConsoleActivityRouteReason(routeReason: unknown): string {

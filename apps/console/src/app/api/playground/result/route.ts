@@ -1,4 +1,7 @@
-import { getConsoleActivityDetail } from "@llmingress/db/console-activity";
+import {
+  getConsoleActivityDetail,
+  readConsoleActivityRouteTag,
+} from "@llmingress/db/console-activity";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../../_auth";
 
@@ -40,6 +43,10 @@ export const GET = withConsoleAuth(async (request) => {
       providerModelName: activity.providerModelName,
       requestId: activity.requestId,
       routePolicyStrategy: activity.routePolicyStrategy,
+      // Which tag the request named and whether it matched. A tag that matched
+      // nothing is served by the default candidate with a 200 that reads
+      // exactly like a match, so the trace is the only place it shows.
+      routeTag: readConsoleActivityRouteTag(activity.routeReason),
       status: activity.status,
       totalCostUsd: activity.totalCostUsd,
       totalTokens: activity.totalTokens,

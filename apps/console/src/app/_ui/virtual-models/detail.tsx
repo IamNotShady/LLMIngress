@@ -34,8 +34,10 @@ import { GridRow } from "../table";
 import { strategyRouteNote } from "./strategy";
 
 const ROUTE_COLUMNS = "26px 252px 150px 156px 78px 140px 1fr";
-/** A tag route is read by tag first, so the tags sit right after the candidate. */
-const TAG_ROUTE_COLUMNS = "26px 252px 132px 150px 156px 78px 140px 1fr";
+/** A tag route is read by tag first, so the tags sit right after the candidate.
+    The extra TAGS column is paid for by HEALTH (a dot and one word) and a wider
+    PRICE, so "$21.00 / $168.00 per M" renders unclipped. */
+const TAG_ROUTE_COLUMNS = "26px 252px 120px 176px 96px 78px 140px 1fr";
 const KEY_COLUMNS = "148px 104px 1fr";
 const FAILURE_COLUMNS = "64px 1fr 126px";
 

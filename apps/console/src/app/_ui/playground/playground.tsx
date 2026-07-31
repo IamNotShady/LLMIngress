@@ -12,8 +12,12 @@ import {
   buildPlaygroundMessagesRequest,
   buildPlaygroundResponsesRequest,
   createPlaygroundStreamDecoder,
+  describePlaygroundRouteTag,
   formatPlaygroundFetchError,
+  formatPlaygroundHeaderIssue,
   type PlaygroundProtocol,
+  type PlaygroundRouteTag,
+  parsePlaygroundHeaders,
   readOptionalPlaygroundNumber,
   readPlaygroundErrorText,
   readPlaygroundResponseText,
@@ -52,6 +56,11 @@ type RequestDetail = {
    * where everything went well, and the trace does not get to say it was.
    */
   routeCandidates?: RouteCandidate[] | null;
+  /**
+   * What a tag route did with the tag it was asked for. Null for every other
+   * strategy, and for a request recorded before tags existed.
+   */
+  routeTag?: PlaygroundRouteTag | null;
   latencyMs: number | null;
   providerDisplayName: string | null;
   providerModelDisplayName: string | null;
@@ -82,6 +91,9 @@ export function Playground({
   virtualModels: PlaygroundVirtualModel[];
 }) {
   const [apiKey, setApiKey] = useState("");
+  // Request input, not a view choice: it stays in memory, out of the URL, and
+  // is never restored into a request the operator did not ask to send again.
+  const [headersText, setHeadersText] = useState("");
   const [maxTokens, setMaxTokens] = useState("4096");
   const [model, setModel] = useState("");
   const [prompt, setPrompt] = useState(
@@ -101,6 +113,7 @@ export function Playground({
   const [modelListStatus, setModelListStatus] = useState<ModelListStatus>("idle");
   const selected = virtualModels.find((entry) => entry.name === model);
   const base = gatewayBaseUrl.replace(/\/+$/, "");
+  const parsedHeaders = parsePlaygroundHeaders(headersText);
 
   // A key that has just been created arrives here already pasted: it is the one
   // moment its plaintext exists, and asking the operator to copy it back out of
@@ -187,6 +200,13 @@ export function Playground({
       setStatus("Paste an llmi_ secret first — the console never stores plaintext keys.");
       return;
     }
+    // Sending anyway would reach the operator as a bare network failure: the
+    // browser refuses a header the gateway's preflight does not allow, and
+    // names neither the header nor the reason when it does.
+    if (parsedHeaders.issues.length > 0) {
+      setStatus("Fix the header lines listed under HEADERS before sending this request.");
+      return;
+    }
     setSending(true);
     setStatus(null);
     setResult(null);
@@ -209,9 +229,14 @@ export function Playground({
 
       const response = await fetch(`${base}${ENDPOINT_PATH[protocol]}`, {
         body: JSON.stringify(body),
+        // The form's own three headers are spread last, so a typed line can
+        // never take over authentication, body shape, or the unique id used
+        // to find this request's trace.
         headers: {
+          ...parsedHeaders.headers,
           authorization: `Bearer ${apiKey.trim()}`,
           "content-type": "application/json",
+          "x-request-id": `playground_${crypto.randomUUID()}`,
         },
         method: "POST",
       });
@@ -356,6 +381,33 @@ export function Playground({
           </Field>
         </div>
 
+        <div className="mt-3">
+          <Field
+            label="HEADERS"
+            labelNote="optional"
+            hint="One per line, as name: value. A browser may only send the headers the gateway's CORS allowlist names — x-llmingress-route-tag among them."
+          >
+            <TextArea
+              aria-label="Request headers"
+              className="h-[60px]"
+              placeholder="x-llmingress-route-tag: fast"
+              value={headersText}
+              onChange={(event) => setHeadersText(event.target.value)}
+            />
+          </Field>
+          {/* Said while it is being typed, and again as the reason the request
+              was not sent: a refused header is a typo to correct, not a failure
+              to investigate. */}
+          {parsedHeaders.issues.map((issue) => (
+            <p
+              key={`${issue.line}-${issue.reason}`}
+              className="mt-1 font-mono text-115 leading-[1.5] text-redtx"
+            >
+              {formatPlaygroundHeaderIssue(issue)}
+            </p>
+          ))}
+        </div>
+
         <div className="mt-3 grid grid-cols-3 gap-3">
           <Field label="MAX TOKENS" hint="ceiling for this request">
             <TextInput
@@ -456,6 +508,12 @@ export function Playground({
                 }
               />
               <DetailRow label="strategy" value={result.detail?.routePolicyStrategy ?? "—"} />
+              {/* A tag that matched nothing was still answered, by the default
+                  candidate. The 200 body reads the same either way. */}
+              <DetailRow
+                label="route tag"
+                value={describePlaygroundRouteTag(result.detail?.routeTag)}
+              />
               <DetailRow label="endpoint" value={ENDPOINT_PATH[protocol]} />
               <DetailRow
                 clip

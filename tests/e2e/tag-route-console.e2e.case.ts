@@ -96,6 +96,27 @@ test("the route editor saves candidate tags, refuses a duplicate, and shows cove
         const tagFields = dialog.locator('input[name="candidateTags"]');
         await expect(tagFields).toHaveCount(2);
 
+        // The tag field sits beside the candidate, not over it: each selected
+        // row must keep its model label readable and its remove control inside
+        // the selected box.
+        const selectedList = dialog.getByTestId("virtual-model-selected");
+        await expect(
+          selectedList.getByText("Tag Provider · tag-default", { exact: true }),
+        ).toBeVisible();
+        await expect(
+          selectedList.getByText("Tag Provider · tag-long-context", { exact: true }),
+        ).toBeVisible();
+        const removeBox = await dialog
+          .getByRole("link", { name: "Remove tag-default" })
+          .boundingBox();
+        const selectedBox = await selectedList.boundingBox();
+        if (!removeBox || !selectedBox) {
+          throw new Error("selected row controls did not render");
+        }
+        expect(removeBox.x + removeBox.width).toBeLessThanOrEqual(
+          selectedBox.x + selectedBox.width + 1,
+        );
+
         // 1. The same tag on two candidates is a refusal, and nothing is written.
         await dialog.locator('input[name="name"]').fill("vm-tag-console");
         await dialog.locator('input[name="description"]').fill("tag routed model");

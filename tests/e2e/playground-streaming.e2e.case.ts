@@ -129,7 +129,7 @@ function startStreamingGateway(): Promise<{ close: () => Promise<void>; url: str
 
 function corsHeaders(): Record<string, string> {
   return {
-    "access-control-allow-headers": "authorization, content-type",
+    "access-control-allow-headers": "authorization, content-type, x-request-id",
     "access-control-allow-methods": "GET, POST, OPTIONS",
     "access-control-allow-origin": "*",
     "access-control-expose-headers": "x-llmingress-request-id",

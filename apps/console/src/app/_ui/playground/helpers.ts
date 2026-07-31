@@ -83,6 +83,132 @@ export function readOptionalPlaygroundNumber(value: string): number | undefined 
   return Number.isFinite(numeric) ? numeric : undefined;
 }
 
+/**
+ * The request headers the gateway allows a browser to send, copied from the
+ * single literal apps/gateway/src/cors.ts answers preflights with, in its
+ * order. The copy exists because the gateway is a separate service the console
+ * cannot import from; a unit test reads that file and fails the moment the two
+ * lists differ. A header outside this list is refused by the browser before the
+ * request leaves, which reaches the operator as an unexplained network failure,
+ * so the editor refuses it first and says why.
+ */
+export const playgroundSendableHeaders = [
+  "authorization",
+  "content-type",
+  "x-api-key",
+  "x-request-id",
+  "x-client-request-id",
+  "x-llmingress-route-tag",
+  "openai-organization",
+  "openai-project",
+  "openai-beta",
+  "anthropic-version",
+  "anthropic-beta",
+] as const;
+
+export type PlaygroundHeaderIssue = {
+  line: number;
+  /** Normalized name, or "" when the line has no readable one. */
+  name: string;
+  reason: "malformed" | "not_allowed" | "reserved";
+};
+
+export type PlaygroundRouteTag = {
+  matchedTag: string | null;
+  requestedTag: string | null;
+  tagFallback: boolean;
+};
+
+/** The three headers the form sends itself; a second copy would fight them. */
+const reservedPlaygroundHeaders = new Set(["authorization", "content-type", "x-request-id"]);
+const playgroundHeaderNamePattern = /^[a-z0-9!#$%&'*+.^_`|~-]+$/;
+/** Printable ASCII only: fetch refuses to build a request with anything else. */
+const playgroundHeaderValuePattern = /^[ -~]+$/;
+
+export function isPlaygroundSendableHeader(name: string): boolean {
+  return (playgroundSendableHeaders as readonly string[]).includes(name.trim().toLowerCase());
+}
+
+/**
+ * The typed lines as headers, and every line that cannot become one. A refused
+ * line is left out of the headers rather than sent in a shape the browser or
+ * the gateway would have to make sense of.
+ */
+export function parsePlaygroundHeaders(text: string): {
+  headers: Record<string, string>;
+  issues: PlaygroundHeaderIssue[];
+} {
+  const headers: Record<string, string> = {};
+  const issues: PlaygroundHeaderIssue[] = [];
+
+  const lines = text.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    // biome-ignore lint/style/noNonNullAssertion: index is within the split result
+    const rawLine = lines[index]!;
+    const line = index + 1;
+    if (!rawLine.trim()) {
+      continue;
+    }
+
+    // The first colon separates; the rest belong to the value, which is where a
+    // URL or a request id keeps its own.
+    const separator = rawLine.indexOf(":");
+    const name = separator === -1 ? "" : rawLine.slice(0, separator).trim().toLowerCase();
+    const value = separator === -1 ? "" : rawLine.slice(separator + 1).trim();
+    if (!playgroundHeaderNamePattern.test(name) || !playgroundHeaderValuePattern.test(value)) {
+      issues.push({ line, name, reason: "malformed" });
+      continue;
+    }
+    // Before the allowlist, which names both of these: they are refused for
+    // being the form's own, not for being disallowed.
+    if (reservedPlaygroundHeaders.has(name)) {
+      issues.push({ line, name, reason: "reserved" });
+      continue;
+    }
+    if (!isPlaygroundSendableHeader(name)) {
+      issues.push({ line, name, reason: "not_allowed" });
+      continue;
+    }
+    headers[name] = value;
+  }
+
+  return { headers, issues };
+}
+
+export function formatPlaygroundHeaderIssue(issue: PlaygroundHeaderIssue): string {
+  if (issue.reason === "malformed") {
+    return `line ${issue.line}: use name: value`;
+  }
+  if (issue.reason === "reserved") {
+    if (issue.name === "authorization") {
+      return `line ${issue.line}: authorization is sent from the API KEY field`;
+    }
+    if (issue.name === "x-request-id") {
+      return `line ${issue.line}: x-request-id is generated for every Playground request`;
+    }
+    return `line ${issue.line}: content-type is fixed at application/json`;
+  }
+  return `line ${issue.line}: ${issue.name} is not in the gateway CORS allowlist — the browser refuses it before it is sent`;
+}
+
+/**
+ * Which tag the request landed on. A tag that matched nothing still served an
+ * answer from the default candidate, and that is the one outcome the response
+ * body cannot tell an operator about.
+ */
+export function describePlaygroundRouteTag(tag: PlaygroundRouteTag | null | undefined): string {
+  if (!tag) {
+    return "—";
+  }
+  if (tag.matchedTag) {
+    return tag.matchedTag;
+  }
+  if (tag.requestedTag) {
+    return `${tag.requestedTag} → default (no match)`;
+  }
+  return "no tag → default";
+}
+
 export function buildPlaygroundChatRequest(input: PlaygroundRequestInput): PlaygroundChatRequest {
   const systemPrompt = input.systemPrompt?.trim();
   return {

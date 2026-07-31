@@ -265,7 +265,7 @@ function ApiKeyEditorDialog({
       titleNote={
         apiKey ? `${apiKey.keyPrefix} · created ${formatDateOnly(apiKey.createdAt)}` : undefined
       }
-      width={editing ? 720 : 900}
+      width={720}
     >
       <EditorNav>
         <ApiKeyEditorForm

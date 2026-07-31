@@ -390,69 +390,78 @@ export function Playground({
         </div>
 
         <div className="mt-3">
-          <Field
-            label="HEADERS"
-            labelNote="optional"
-            hint="Picked, not typed: the list holds only the headers the gateway's CORS allowlist lets a browser send, minus the two this form fills itself. x-llmingress-route-tag is the one a tag route reads."
-          >
-            {/* Fixed name column, value takes the rest: the inputs are w-full,
+          {/* Not a Field: its label element may hold one labelable control,
+              and this editor holds a select, an input, and two buttons per
+              row. Same markup by hand, with a div where the label was. */}
+          <div className="block min-w-0">
+            <span className="block font-mono text-115 font-medium tracking-[.08em] text-dim">
+              HEADERS<span className="text-faint"> optional</span>
+            </span>
+            <span className="mt-[5px] block">
+              {/* Fixed name column, value takes the rest: the inputs are w-full,
                 so the width lives on the wrapper rather than on the control. */}
-            {headerRows.map((row, index) => (
-              <span
-                // biome-ignore lint/suspicious/noArrayIndexKey: the row's position is its identity — two rows may name the same header, and a removal renumbers the ones after it.
-                key={index}
-                className="mt-[6px] flex items-center gap-2 first:mt-0"
-              >
-                <span className="block w-[220px] flex-none">
-                  <SelectInput
-                    aria-label={`Header name ${index + 1}`}
-                    value={row.name}
-                    onChange={(event) => updateHeaderRow(index, { name: event.target.value })}
-                  >
-                    {playgroundHeaderOptions.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                  </SelectInput>
-                </span>
-                <span className="block min-w-0 flex-1">
-                  <TextInput
-                    aria-label={`Header value ${index + 1}`}
-                    autoComplete="off"
-                    placeholder="fast"
-                    value={row.value}
-                    onChange={(event) => updateHeaderRow(index, { value: event.target.value })}
-                  />
-                </span>
-                {/* A button, not a link: the rows are client state and a
-                    navigation would drop every one of them. */}
-                <button
-                  type="button"
-                  aria-label={`Remove header row ${index + 1}`}
-                  className="flex-none cursor-pointer border-0 bg-transparent px-1 font-mono text-13 text-dim"
-                  onClick={() =>
-                    setHeaderRows((rows) => rows.filter((_, position) => position !== index))
-                  }
+              {headerRows.map((row, index) => (
+                <span
+                  // biome-ignore lint/suspicious/noArrayIndexKey: the row's position is its identity — two rows may name the same header, and a removal renumbers the ones after it.
+                  key={index}
+                  className="mt-[6px] flex items-center gap-2 first:mt-0"
                 >
-                  ✕
-                </button>
-              </span>
-            ))}
-            {/* Named here rather than by its text: the buttons and controls of
-                a row sit inside the field's label, which would otherwise lend
-                every one of them the same label text as its accessible name. */}
-            <button
-              type="button"
-              aria-label="Add header"
-              className={`${headerRows.length > 0 ? "mt-2 " : ""}cursor-pointer border-0 bg-transparent p-0 font-mono text-13 text-accent`}
-              onClick={() =>
-                setHeaderRows((rows) => [...rows, { name: playgroundHeaderOptions[0], value: "" }])
-              }
-            >
-              + Add header
-            </button>
-          </Field>
+                  <span className="block w-[220px] flex-none">
+                    <SelectInput
+                      aria-label={`Header name ${index + 1}`}
+                      value={row.name}
+                      onChange={(event) => updateHeaderRow(index, { name: event.target.value })}
+                    >
+                      {playgroundHeaderOptions.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </SelectInput>
+                  </span>
+                  <span className="block min-w-0 flex-1">
+                    <TextInput
+                      aria-label={`Header value ${index + 1}`}
+                      autoComplete="off"
+                      placeholder="fast"
+                      value={row.value}
+                      onChange={(event) => updateHeaderRow(index, { value: event.target.value })}
+                    />
+                  </span>
+                  {/* A button, not a link: the rows are client state and a
+                    navigation would drop every one of them. */}
+                  <button
+                    type="button"
+                    aria-label={`Remove header row ${index + 1}`}
+                    className="flex-none cursor-pointer border-0 bg-transparent px-1 font-mono text-13 text-dim"
+                    onClick={() =>
+                      setHeaderRows((rows) => rows.filter((_, position) => position !== index))
+                    }
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                aria-label="Add header"
+                className={`${headerRows.length > 0 ? "mt-2 " : ""}cursor-pointer border-0 bg-transparent p-0 font-mono text-13 text-accent`}
+                onClick={() =>
+                  setHeaderRows((rows) => [
+                    ...rows,
+                    { name: playgroundHeaderOptions[0], value: "" },
+                  ])
+                }
+              >
+                + Add header
+              </button>
+            </span>
+            <span className="mt-1 block font-mono text-115 leading-[1.5] text-faint">
+              Picked, not typed: the list holds the headers the gateway&apos;s CORS allowlist lets a
+              browser send, minus the ones this form or the gateway&apos;s own auth already owns.
+              x-llmingress-route-tag is the one a tag route reads.
+            </span>
+          </div>
           {/* Said while the row is being filled in, and again as the reason the
               request was not sent: a refused row is something to correct, not a
               failure to investigate. */}

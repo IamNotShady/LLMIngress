@@ -107,17 +107,19 @@ export const playgroundSendableHeaders = [
 ] as const;
 
 /**
- * The names a header row may be set to: every sendable header whose value the
- * form does not fill itself. Picking one replaces typing it, so a name outside
- * the gateway's allowlist, a name that is no header name at all, and the two
- * the form owns are not mistakes this editor can make — only the value is left
- * to get wrong. The tag header leads because it is the one this page exists to
- * send.
+ * The names a header row may be set to: every sendable header a picked row
+ * could actually deliver. Picking one replaces typing it, so a name outside
+ * the gateway's allowlist and a name that is no header name at all are not
+ * mistakes this editor can make — only the value is left to get wrong. Four
+ * sendable names are not offered because a row naming them would do nothing:
+ * authorization, content-type, and x-request-id are filled by the form itself
+ * and spread over any picked value, and x-api-key is the gateway's keyless
+ * auth fallback, ignored while the form's Bearer key is present and never
+ * forwarded upstream. The tag header leads because it is the one this page
+ * exists to send.
  */
 export const playgroundHeaderOptions = [
   "x-llmingress-route-tag",
-  "x-api-key",
-  "x-request-id",
   "x-client-request-id",
   "openai-organization",
   "openai-project",

@@ -112,8 +112,8 @@ fallback attempts, and Provider-connection health history.
 Supported Console pages are Overview, API Keys, Providers, Virtual Models, Activity, Usage, Limits,
 and Playground. Playground keeps its Virtual Model selector empty until an API key is pasted, then
 populates it only from the key-scoped Gateway `GET /v1/models` response. Its HEADERS editor adds one
-row per request header, each a picker over the Gateway's CORS request-header allowlist minus the two
-the form fills itself, beside a box for the value; a row with no value, a value outside printable
+row per request header, each a picker over the Gateway's CORS request-header allowlist minus the
+names the form or the Gateway's own auth already owns, beside a box for the value; a row with no value, a value outside printable
 ASCII, or a header a row above already carries is marked in red and blocks the send. Rows are added
 and removed without leaving the page. The form generates a unique `x-request-id` for every send so
 each response resolves only its own Activity trace. The Route trace names the tag a tag-routed

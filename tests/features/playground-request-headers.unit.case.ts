@@ -11,16 +11,20 @@ import {
 
 const read = (path: string) => readFileSync(path, "utf8");
 
+// Sendable but never offered: a row naming any of these would do nothing.
+// authorization, content-type and x-request-id are filled by the form itself
+// and spread over any picked value; x-api-key is the gateway's keyless auth
+// fallback, ignored while the form's Bearer key is present and never
+// forwarded upstream.
+const deadPickerNames = ["authorization", "content-type", "x-request-id", "x-api-key"];
+
 describe("the header names a Playground row may pick from", () => {
-  it("offers every sendable header the form does not own the value of", () => {
-    // The two the form fills itself are not offered at all: a row that could
-    // name them would be a row whose value is silently replaced.
-    expect(playgroundHeaderOptions).not.toContain("authorization");
-    expect(playgroundHeaderOptions).not.toContain("content-type");
+  it("offers every sendable header a picked row could actually deliver", () => {
+    for (const name of deadPickerNames) {
+      expect(playgroundHeaderOptions).not.toContain(name);
+    }
     expect([...playgroundHeaderOptions].sort()).toEqual(
-      playgroundSendableHeaders
-        .filter((name) => name !== "authorization" && name !== "content-type")
-        .sort(),
+      playgroundSendableHeaders.filter((name) => !deadPickerNames.includes(name)).sort(),
     );
   });
 
@@ -29,8 +33,7 @@ describe("the header names a Playground row may pick from", () => {
     expect(playgroundHeaderOptions[0]).toBe("x-llmingress-route-tag");
     expect(playgroundHeaderOptions.slice(1)).toEqual(
       playgroundSendableHeaders.filter(
-        (name) =>
-          name !== "authorization" && name !== "content-type" && name !== "x-llmingress-route-tag",
+        (name) => !deadPickerNames.includes(name) && name !== "x-llmingress-route-tag",
       ),
     );
   });

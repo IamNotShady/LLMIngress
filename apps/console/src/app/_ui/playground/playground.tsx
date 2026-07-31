@@ -9,15 +9,17 @@ import { announceToast } from "../toast";
 import { PLAYGROUND_KEY_HANDOFF } from "./handoff";
 import {
   buildPlaygroundChatRequest,
+  buildPlaygroundHeaders,
   buildPlaygroundMessagesRequest,
   buildPlaygroundResponsesRequest,
   createPlaygroundStreamDecoder,
   describePlaygroundRouteTag,
   formatPlaygroundFetchError,
   formatPlaygroundHeaderIssue,
+  type PlaygroundHeaderRow,
   type PlaygroundProtocol,
   type PlaygroundRouteTag,
-  parsePlaygroundHeaders,
+  playgroundHeaderOptions,
   readOptionalPlaygroundNumber,
   readPlaygroundErrorText,
   readPlaygroundResponseText,
@@ -93,7 +95,7 @@ export function Playground({
   const [apiKey, setApiKey] = useState("");
   // Request input, not a view choice: it stays in memory, out of the URL, and
   // is never restored into a request the operator did not ask to send again.
-  const [headersText, setHeadersText] = useState("");
+  const [headerRows, setHeaderRows] = useState<PlaygroundHeaderRow[]>([]);
   const [maxTokens, setMaxTokens] = useState("4096");
   const [model, setModel] = useState("");
   const [prompt, setPrompt] = useState(
@@ -113,7 +115,13 @@ export function Playground({
   const [modelListStatus, setModelListStatus] = useState<ModelListStatus>("idle");
   const selected = virtualModels.find((entry) => entry.name === model);
   const base = gatewayBaseUrl.replace(/\/+$/, "");
-  const parsedHeaders = parsePlaygroundHeaders(headersText);
+  const builtHeaders = buildPlaygroundHeaders(headerRows);
+
+  const updateHeaderRow = (index: number, patch: Partial<PlaygroundHeaderRow>) => {
+    setHeaderRows((rows) =>
+      rows.map((row, position) => (position === index ? { ...row, ...patch } : row)),
+    );
+  };
 
   // A key that has just been created arrives here already pasted: it is the one
   // moment its plaintext exists, and asking the operator to copy it back out of
@@ -200,11 +208,11 @@ export function Playground({
       setStatus("Paste an llmi_ secret first — the console never stores plaintext keys.");
       return;
     }
-    // Sending anyway would reach the operator as a bare network failure: the
-    // browser refuses a header the gateway's preflight does not allow, and
-    // names neither the header nor the reason when it does.
-    if (parsedHeaders.issues.length > 0) {
-      setStatus("Fix the header lines listed under HEADERS before sending this request.");
+    // A refused row is a decision only the operator can make: sending anyway
+    // would put a blank header on the wire, drop one of two rows that name the
+    // same header, or throw inside fetch with no field named.
+    if (builtHeaders.issues.length > 0) {
+      setStatus("Fix the header rows listed under HEADERS before sending this request.");
       return;
     }
     setSending(true);
@@ -229,11 +237,11 @@ export function Playground({
 
       const response = await fetch(`${base}${ENDPOINT_PATH[protocol]}`, {
         body: JSON.stringify(body),
-        // The form's own three headers are spread last, so a typed line can
+        // The form's own three headers are spread last, so a picked row can
         // never take over authentication, body shape, or the unique id used
         // to find this request's trace.
         headers: {
-          ...parsedHeaders.headers,
+          ...builtHeaders.headers,
           authorization: `Bearer ${apiKey.trim()}`,
           "content-type": "application/json",
           "x-request-id": `playground_${crypto.randomUUID()}`,
@@ -385,22 +393,72 @@ export function Playground({
           <Field
             label="HEADERS"
             labelNote="optional"
-            hint="One per line, as name: value. A browser may only send the headers the gateway's CORS allowlist names — x-llmingress-route-tag among them."
+            hint="Picked, not typed: the list holds only the headers the gateway's CORS allowlist lets a browser send, minus the two this form fills itself. x-llmingress-route-tag is the one a tag route reads."
           >
-            <TextArea
-              aria-label="Request headers"
-              className="h-[60px]"
-              placeholder="x-llmingress-route-tag: fast"
-              value={headersText}
-              onChange={(event) => setHeadersText(event.target.value)}
-            />
+            {/* Fixed name column, value takes the rest: the inputs are w-full,
+                so the width lives on the wrapper rather than on the control. */}
+            {headerRows.map((row, index) => (
+              <span
+                // biome-ignore lint/suspicious/noArrayIndexKey: the row's position is its identity — two rows may name the same header, and a removal renumbers the ones after it.
+                key={index}
+                className="mt-[6px] flex items-center gap-2 first:mt-0"
+              >
+                <span className="block w-[220px] flex-none">
+                  <SelectInput
+                    aria-label={`Header name ${index + 1}`}
+                    value={row.name}
+                    onChange={(event) => updateHeaderRow(index, { name: event.target.value })}
+                  >
+                    {playgroundHeaderOptions.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </SelectInput>
+                </span>
+                <span className="block min-w-0 flex-1">
+                  <TextInput
+                    aria-label={`Header value ${index + 1}`}
+                    autoComplete="off"
+                    placeholder="fast"
+                    value={row.value}
+                    onChange={(event) => updateHeaderRow(index, { value: event.target.value })}
+                  />
+                </span>
+                {/* A button, not a link: the rows are client state and a
+                    navigation would drop every one of them. */}
+                <button
+                  type="button"
+                  aria-label={`Remove header row ${index + 1}`}
+                  className="flex-none cursor-pointer border-0 bg-transparent px-1 font-mono text-13 text-dim"
+                  onClick={() =>
+                    setHeaderRows((rows) => rows.filter((_, position) => position !== index))
+                  }
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+            {/* Named here rather than by its text: the buttons and controls of
+                a row sit inside the field's label, which would otherwise lend
+                every one of them the same label text as its accessible name. */}
+            <button
+              type="button"
+              aria-label="Add header"
+              className={`${headerRows.length > 0 ? "mt-2 " : ""}cursor-pointer border-0 bg-transparent p-0 font-mono text-13 text-accent`}
+              onClick={() =>
+                setHeaderRows((rows) => [...rows, { name: playgroundHeaderOptions[0], value: "" }])
+              }
+            >
+              + Add header
+            </button>
           </Field>
-          {/* Said while it is being typed, and again as the reason the request
-              was not sent: a refused header is a typo to correct, not a failure
-              to investigate. */}
-          {parsedHeaders.issues.map((issue) => (
+          {/* Said while the row is being filled in, and again as the reason the
+              request was not sent: a refused row is something to correct, not a
+              failure to investigate. */}
+          {builtHeaders.issues.map((issue) => (
             <p
-              key={`${issue.line}-${issue.reason}`}
+              key={`${issue.row}-${issue.reason}`}
               className="mt-1 font-mono text-115 leading-[1.5] text-redtx"
             >
               {formatPlaygroundHeaderIssue(issue)}

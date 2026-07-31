@@ -2,109 +2,154 @@ import { readFileSync } from "node:fs";
 import { readConsoleActivityRouteTag } from "@llmingress/db/console-activity";
 import { describe, expect, it } from "vitest";
 import {
+  buildPlaygroundHeaders,
   describePlaygroundRouteTag,
   formatPlaygroundHeaderIssue,
-  parsePlaygroundHeaders,
+  playgroundHeaderOptions,
   playgroundSendableHeaders,
 } from "../../apps/console/src/app/_ui/playground/helpers.ts";
 
 const read = (path: string) => readFileSync(path, "utf8");
 
-describe("the headers a Playground request may carry", () => {
-  it("reads one header per line, with the name normalized and the value left alone", () => {
-    expect(parsePlaygroundHeaders("x-llmingress-route-tag: fast")).toEqual({
-      headers: { "x-llmingress-route-tag": "fast" },
-      issues: [],
-    });
-
-    // Blank lines are spacing, not headers; a name is matched case-insensitively
-    // because header names are; a value keeps its own case and its own colons,
-    // because only the first one separates.
-    expect(
-      parsePlaygroundHeaders(
-        ["X-LLMIngress-Route-Tag:  Fast ", "", "   ", "x-client-request-id: req:1:2"].join("\n"),
-      ),
-    ).toEqual({
-      headers: { "x-client-request-id": "req:1:2", "x-llmingress-route-tag": "Fast" },
-      issues: [],
-    });
+describe("the header names a Playground row may pick from", () => {
+  it("offers every sendable header the form does not own the value of", () => {
+    // The two the form fills itself are not offered at all: a row that could
+    // name them would be a row whose value is silently replaced.
+    expect(playgroundHeaderOptions).not.toContain("authorization");
+    expect(playgroundHeaderOptions).not.toContain("content-type");
+    expect([...playgroundHeaderOptions].sort()).toEqual(
+      playgroundSendableHeaders
+        .filter((name) => name !== "authorization" && name !== "content-type")
+        .sort(),
+    );
   });
 
-  it("lets a later line replace the same header written earlier", () => {
-    expect(
-      parsePlaygroundHeaders(
-        ["x-client-request-id: first", "X-Client-Request-Id: second"].join("\r\n"),
-      ).headers,
-    ).toEqual({ "x-client-request-id": "second" });
-  });
-
-  it("refuses a line that is not a header, naming the line it was on", () => {
-    const text = [
-      "x-llmingress-route-tag fast",
-      ": fast",
-      "route tag: fast",
-      "x-request-id:   ",
-      "x-request-id: 值",
-    ].join("\n");
-    const parsed = parsePlaygroundHeaders(text);
-
-    expect(parsed.headers).toEqual({});
-    expect(parsed.issues.map((issue) => issue.line)).toEqual([1, 2, 3, 4, 5]);
-    for (const issue of parsed.issues) {
-      expect(issue.reason, `line ${issue.line}`).toBe("malformed");
-    }
-  });
-
-  it("sends none of the three headers the form already owns", () => {
-    // All three are in the allowlist, so the allowlist cannot be what stops
-    // them: the form owns their values and a second copy would fight them.
-    const parsed = parsePlaygroundHeaders(
-      ["Authorization: Bearer llmi_other", "CONTENT-TYPE: text/plain", "X-REQUEST-ID: fixed"].join(
-        "\n",
+  it("leads with the tag header and keeps the allowlist order behind it", () => {
+    // The one header this page exists to send is the one a new row starts on.
+    expect(playgroundHeaderOptions[0]).toBe("x-llmingress-route-tag");
+    expect(playgroundHeaderOptions.slice(1)).toEqual(
+      playgroundSendableHeaders.filter(
+        (name) =>
+          name !== "authorization" && name !== "content-type" && name !== "x-llmingress-route-tag",
       ),
     );
-
-    expect(parsed.headers).toEqual({});
-    expect(parsed.issues).toEqual([
-      { line: 1, name: "authorization", reason: "reserved" },
-      { line: 2, name: "content-type", reason: "reserved" },
-      { line: 3, name: "x-request-id", reason: "reserved" },
-    ]);
-  });
-
-  it("refuses a header the gateway's CORS allowlist does not name", () => {
-    // The browser would refuse it at the preflight, and the request would come
-    // back as an unexplained network failure. Saying so here is the difference
-    // between a typo and a bug hunt.
-    expect(parsePlaygroundHeaders("x-custom: 1")).toEqual({
-      headers: {},
-      issues: [{ line: 1, name: "x-custom", reason: "not_allowed" }],
-    });
-  });
-
-  it("has nothing to send and nothing to complain about when the field is empty", () => {
-    expect(parsePlaygroundHeaders("")).toEqual({ headers: {}, issues: [] });
-    expect(parsePlaygroundHeaders("\n \n")).toEqual({ headers: {}, issues: [] });
   });
 });
 
-describe("what a refused header line says", () => {
-  it("tells the operator what to change, per reason", () => {
-    expect(formatPlaygroundHeaderIssue({ line: 3, name: "", reason: "malformed" })).toBe(
-      "line 3: use name: value",
-    );
+describe("the headers a Playground request may carry", () => {
+  it("sends one row as one header, with the value trimmed and otherwise left alone", () => {
+    expect(buildPlaygroundHeaders([{ name: "x-llmingress-route-tag", value: " fast " }])).toEqual({
+      headers: { "x-llmingress-route-tag": "fast" },
+      issues: [],
+    });
+  });
+
+  it("sends every row it was given", () => {
     expect(
-      formatPlaygroundHeaderIssue({ line: 1, name: "authorization", reason: "reserved" }),
-    ).toBe("line 1: authorization is sent from the API KEY field");
-    expect(formatPlaygroundHeaderIssue({ line: 2, name: "content-type", reason: "reserved" })).toBe(
-      "line 2: content-type is fixed at application/json",
+      buildPlaygroundHeaders([
+        { name: "x-llmingress-route-tag", value: "fast" },
+        { name: "x-client-request-id", value: "req:1:2" },
+        { name: "anthropic-beta", value: "tools-2024-04-04" },
+      ]),
+    ).toEqual({
+      headers: {
+        "anthropic-beta": "tools-2024-04-04",
+        "x-client-request-id": "req:1:2",
+        "x-llmingress-route-tag": "fast",
+      },
+      issues: [],
+    });
+  });
+
+  it("keeps the first row that names a header and marks the ones repeating it", () => {
+    // Two rows for one header is not a merge and not a silent overwrite: the
+    // second one is a row the operator has to decide about.
+    expect(
+      buildPlaygroundHeaders([
+        { name: "x-llmingress-route-tag", value: "fast" },
+        { name: "x-client-request-id", value: "req-1" },
+        { name: "x-llmingress-route-tag", value: "cheap" },
+      ]),
+    ).toEqual({
+      headers: { "x-client-request-id": "req-1", "x-llmingress-route-tag": "fast" },
+      issues: [{ name: "x-llmingress-route-tag", reason: "duplicate", row: 3 }],
+    });
+  });
+
+  it("refuses a row with no value rather than sending an empty header", () => {
+    expect(
+      buildPlaygroundHeaders([
+        { name: "x-llmingress-route-tag", value: "" },
+        { name: "x-client-request-id", value: "   " },
+      ]),
+    ).toEqual({
+      headers: {},
+      issues: [
+        { name: "x-llmingress-route-tag", reason: "empty_value", row: 1 },
+        { name: "x-client-request-id", reason: "empty_value", row: 2 },
+      ],
+    });
+  });
+
+  it("refuses a value the browser cannot put on the wire", () => {
+    // fetch refuses to build a request with a header value outside printable
+    // ASCII, and says so as a thrown TypeError with no field named.
+    expect(buildPlaygroundHeaders([{ name: "x-llmingress-route-tag", value: "值" }])).toEqual({
+      headers: {},
+      issues: [{ name: "x-llmingress-route-tag", reason: "invalid_value", row: 1 }],
+    });
+  });
+
+  it("normalizes the name it was handed, and refuses one the picker cannot produce", () => {
+    expect(buildPlaygroundHeaders([{ name: " X-LLMIngress-Route-Tag ", value: "fast" }])).toEqual({
+      headers: { "x-llmingress-route-tag": "fast" },
+      issues: [],
+    });
+    // Not reachable from the picker; kept so a name from anywhere else is
+    // refused rather than sent into a preflight that will not allow it.
+    expect(buildPlaygroundHeaders([{ name: "x-custom", value: "1" }])).toEqual({
+      headers: {},
+      issues: [{ name: "x-custom", reason: "invalid_value", row: 1 }],
+    });
+  });
+
+  it("has nothing to send and nothing to complain about with no rows", () => {
+    expect(buildPlaygroundHeaders([])).toEqual({ headers: {}, issues: [] });
+  });
+});
+
+describe("what a refused header row says", () => {
+  it("names the row and tells the operator what to change", () => {
+    expect(
+      formatPlaygroundHeaderIssue({
+        name: "x-llmingress-route-tag",
+        reason: "empty_value",
+        row: 1,
+      }),
+    ).toBe("row 1: x-llmingress-route-tag has no value — fill it in or remove the row");
+    expect(
+      formatPlaygroundHeaderIssue({
+        name: "x-client-request-id",
+        reason: "invalid_value",
+        row: 2,
+      }),
+    ).toBe("row 2: x-client-request-id has a value the browser cannot send — printable ASCII only");
+    expect(
+      formatPlaygroundHeaderIssue({ name: "x-llmingress-route-tag", reason: "duplicate", row: 3 }),
+    ).toBe(
+      "row 3: x-llmingress-route-tag is already set on a row above — remove this row or pick another header",
     );
-    expect(formatPlaygroundHeaderIssue({ line: 3, name: "x-request-id", reason: "reserved" })).toBe(
-      "line 3: x-request-id is generated for every Playground request",
-    );
-    expect(formatPlaygroundHeaderIssue({ line: 4, name: "x-custom", reason: "not_allowed" })).toBe(
-      "line 4: x-custom is not in the gateway CORS allowlist — the browser refuses it before it is sent",
-    );
+  });
+
+  it("no longer has a wording for a mistake a picker cannot make", () => {
+    // The name is picked, never typed: there is no line to malform, no header
+    // outside the allowlist to reach for, and no form-owned name to collide
+    // with. The three wordings that existed for those are gone with them.
+    const helpers = read("apps/console/src/app/_ui/playground/helpers.ts");
+    expect(helpers).not.toContain("use name: value");
+    expect(helpers).not.toContain("is sent from the API KEY field");
+    expect(helpers).not.toContain("is fixed at application/json");
+    expect(helpers).not.toContain("is not in the gateway CORS allowlist");
   });
 });
 
@@ -177,10 +222,10 @@ describe("the allowlist the Playground copies", () => {
   });
 });
 
-describe("what the Playground does with the parsed headers", () => {
-  it("cannot let a typed header overwrite the three the form owns", () => {
+describe("what the Playground does with the built headers", () => {
+  it("cannot let a picked header overwrite the three the form owns", () => {
     const playground = read("apps/console/src/app/_ui/playground/playground.tsx");
-    const spreadAt = playground.indexOf("...parsedHeaders.headers,");
+    const spreadAt = playground.indexOf("...builtHeaders.headers,");
     const authorizationAt = playground.indexOf(
       ["authorization: `Bearer ", "$", "{apiKey.trim()}`"].join(""),
     );
@@ -189,16 +234,17 @@ describe("what the Playground does with the parsed headers", () => {
     );
 
     expect(spreadAt).toBeGreaterThan(-1);
-    // Second guard behind the reserved rule: even if a reserved line reached
-    // this object, the form's own values are spread last and win.
+    // The rows are spread first and the form's own values last, so whatever a
+    // row carries, authentication, body shape and the id used to find this
+    // request's trace stay the form's.
     expect(authorizationAt).toBeGreaterThan(spreadAt);
     expect(playground.indexOf('"content-type": "application/json"')).toBeGreaterThan(spreadAt);
     expect(requestIdAt).toBeGreaterThan(spreadAt);
   });
 
-  it("does not send a request it already knows the browser will refuse", () => {
+  it("does not send a request whose rows it has already refused", () => {
     const playground = read("apps/console/src/app/_ui/playground/playground.tsx");
-    expect(playground).toContain("parsedHeaders.issues.length > 0");
+    expect(playground).toContain("builtHeaders.issues.length > 0");
   });
 
   it("asks which models the key may call with nothing but the key", () => {
@@ -208,12 +254,12 @@ describe("what the Playground does with the parsed headers", () => {
     );
   });
 
-  it("keeps the typed headers out of the URL", () => {
-    // /playground remembers no query at all: a header line is request input,
-    // not a view choice, and restoring one would send it again unasked.
+  it("keeps the picked headers out of the URL", () => {
+    // /playground remembers no query at all: a header row is request input, not
+    // a view choice, and restoring one would send it again unasked.
     expect(read("apps/console/src/app/_ui/nav-state.ts")).toContain('"/playground": [],');
     expect(read("apps/console/src/app/_ui/playground/playground.tsx")).toContain(
-      'const [headersText, setHeadersText] = useState("");',
+      "const [headerRows, setHeaderRows] = useState<PlaygroundHeaderRow[]>([]);",
     );
   });
 });

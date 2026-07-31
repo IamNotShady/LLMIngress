@@ -128,6 +128,45 @@ function select(strategy: RoutePolicy["strategy"]) {
   });
 }
 
+function weightedCandidate(input: {
+  candidateOrder: number;
+  weight: number | null;
+}): RouteCandidate {
+  return {
+    ...pricedCandidate({
+      candidateOrder: input.candidateOrder,
+      inputUsdPerMillionTokens: 1,
+      outputUsdPerMillionTokens: 1,
+    }),
+    weight: input.weight,
+  };
+}
+
+function weightedPolicy(candidates?: RouteCandidate[]): RoutePolicy {
+  return {
+    candidates: candidates ?? [
+      weightedCandidate({ candidateOrder: 1, weight: 0.75 }),
+      weightedCandidate({ candidateOrder: 2, weight: 0.25 }),
+      weightedCandidate({ candidateOrder: 3, weight: 0 }),
+    ],
+    id: "rp-weighted",
+    strategy: "weighted",
+    virtualModelId: "vm-1",
+    virtualModelName: "vm",
+  };
+}
+
+function selectWeighted(randoms: readonly number[], routePolicy: RoutePolicy = weightedPolicy()) {
+  const queue = [...randoms];
+  return selectRouteAttempts({
+    estimatedInputTokens: 1_000,
+    estimatedOutputTokens: 1_000,
+    random: () => queue.shift() ?? 0,
+    snapshot: { routePolicies: [routePolicy] },
+    virtualModelName: "vm",
+  });
+}
+
 describe("route strategy registry", () => {
   it("dispatches strategies through a registry, not if-chains", () => {
     const source = readFileSync("packages/domain/src/index.ts", "utf8");
@@ -282,11 +321,65 @@ describe("route strategy registry", () => {
     expect(result).toEqual({ chain: [], decision: undefined });
   });
 
+  it("draws the weighted head by cumulative weight and orders the rest without replacement", () => {
+    // draw = 0 lands inside candidate 1's [0, 0.75) span; the second draw runs
+    // over the remaining weight only, so candidate 2 follows and the
+    // zero-weight candidate 3 is appended last.
+    const first = selectWeighted([0, 0]);
+    expect(first.chain.map((c) => c.candidateOrder)).toEqual([1, 2, 3]);
+    expect(first.decision?.routeReason.selectedWeight).toBe(0.75);
+    expect(first.decision?.routeReason.strategy).toBe("weighted");
+    expect(first.decision?.routeReason.message).toBe(
+      "weighted route for vm selected candidate 1 with weight 0.75.",
+    );
+
+    // draw = 0.75 sits exactly on the boundary: candidate 1 owns [0, 0.75),
+    // candidate 2 owns [0.75, 1), so the boundary belongs to candidate 2.
+    const boundary = selectWeighted([0.75, 0]);
+    expect(boundary.chain.map((c) => c.candidateOrder)).toEqual([2, 1, 3]);
+    expect(boundary.decision?.routeReason.selectedWeight).toBe(0.25);
+    expect(boundary.decision?.routeReason.message).toBe(
+      "weighted route for vm selected candidate 2 with weight 0.25.",
+    );
+  });
+
+  it("never draws a zero-weight candidate while positive weight remains, but keeps it as fallback", () => {
+    const result = selectWeighted(
+      [0.999999],
+      weightedPolicy([
+        weightedCandidate({ candidateOrder: 1, weight: 0 }),
+        weightedCandidate({ candidateOrder: 2, weight: 1 }),
+      ]),
+    );
+    expect(result.chain.map((c) => c.candidateOrder)).toEqual([2, 1]);
+    expect(result.decision?.routeReason.selectedWeight).toBe(1);
+  });
+
+  it("keeps every candidate reachable in the weighted attempt chain", () => {
+    const result = selectWeighted([0.9, 0.9]);
+    expect(result.chain).toHaveLength(3);
+    expect(new Set(result.chain.map((c) => c.candidateOrder))).toEqual(new Set([1, 2, 3]));
+  });
+
+  it("falls back to candidateOrder when a weighted policy holds no positive weight", () => {
+    const result = selectWeighted(
+      [0.5],
+      weightedPolicy([
+        weightedCandidate({ candidateOrder: 1, weight: null }),
+        weightedCandidate({ candidateOrder: 2, weight: null }),
+      ]),
+    );
+    expect(result.chain.map((c) => c.candidateOrder)).toEqual([1, 2]);
+    expect(result.decision?.routeReason.selectedWeight).toBeUndefined();
+    expect(result.decision?.routeReason.message).toBe("weighted route for vm selected candidate 1.");
+  });
+
   it("reports the capability contract scope each strategy checks", () => {
     expect(routeStrategyCapabilityContractScope("fixed")).toBe("all_candidates");
     expect(routeStrategyCapabilityContractScope("cost_first")).toBe("all_candidates");
     expect(routeStrategyCapabilityContractScope("load_balance")).toBe("all_candidates");
     expect(routeStrategyCapabilityContractScope("tag")).toBe("selected_candidate");
+    expect(routeStrategyCapabilityContractScope("weighted")).toBe("all_candidates");
   });
 
   it("normalizes route tags and rejects shapes a header cannot carry safely", () => {

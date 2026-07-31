@@ -27,7 +27,13 @@ import { consoleVisibleProviderModelFilterSql } from "./console-provider-model-v
 import { lockProvidersForProviderModels } from "./console-providers.ts";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
-export const routePolicyStrategies = ["fixed", "cost_first", "load_balance", "tag"] as const;
+export const routePolicyStrategies = [
+  "fixed",
+  "cost_first",
+  "load_balance",
+  "tag",
+  "weighted",
+] as const;
 
 export type RoutePolicyStrategy = (typeof routePolicyStrategies)[number];
 

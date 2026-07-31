@@ -89,9 +89,9 @@ describe("what a refused header line says", () => {
     expect(formatPlaygroundHeaderIssue({ line: 3, name: "", reason: "malformed" })).toBe(
       "line 3: use name: value",
     );
-    expect(formatPlaygroundHeaderIssue({ line: 1, name: "authorization", reason: "reserved" })).toBe(
-      "line 1: authorization is sent from the API KEY field",
-    );
+    expect(
+      formatPlaygroundHeaderIssue({ line: 1, name: "authorization", reason: "reserved" }),
+    ).toBe("line 1: authorization is sent from the API KEY field");
     expect(formatPlaygroundHeaderIssue({ line: 2, name: "content-type", reason: "reserved" })).toBe(
       "line 2: content-type is fixed at application/json",
     );
@@ -161,9 +161,10 @@ describe("the allowlist the Playground copies", () => {
     const cors = read("apps/gateway/src/cors.ts");
     const allowed = cors.match(/"access-control-allow-headers":\s*"([^"]+)"/);
 
-    expect(allowed, "cors.ts no longer states access-control-allow-headers as one literal").not.toBe(
-      null,
-    );
+    expect(
+      allowed,
+      "cors.ts no longer states access-control-allow-headers as one literal",
+    ).not.toBe(null);
     expect(allowed?.[1]).toBe(playgroundSendableHeaders.join(", "));
     expect(playgroundSendableHeaders).toContain("x-llmingress-route-tag");
   });
@@ -173,7 +174,9 @@ describe("what the Playground does with the parsed headers", () => {
   it("cannot let a typed header overwrite the two the form owns", () => {
     const playground = read("apps/console/src/app/_ui/playground/playground.tsx");
     const spreadAt = playground.indexOf("...parsedHeaders.headers,");
-    const authorizationAt = playground.indexOf("authorization: `Bearer ${apiKey.trim()}`");
+    const authorizationAt = playground.indexOf(
+      ["authorization: `Bearer ", "$", "{apiKey.trim()}`"].join(""),
+    );
 
     expect(spreadAt).toBeGreaterThan(-1);
     // Second guard behind the reserved rule: even if a reserved line reached
@@ -189,7 +192,9 @@ describe("what the Playground does with the parsed headers", () => {
 
   it("asks which models the key may call with nothing but the key", () => {
     const playground = read("apps/console/src/app/_ui/playground/playground.tsx");
-    expect(playground).toContain("headers: { authorization: `Bearer ${secret}` },");
+    expect(playground).toContain(
+      ["headers: { authorization: `Bearer ", "$", "{secret}` },"].join(""),
+    );
   });
 
   it("keeps the typed headers out of the URL", () => {

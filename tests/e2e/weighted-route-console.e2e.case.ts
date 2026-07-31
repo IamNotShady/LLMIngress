@@ -113,7 +113,9 @@ test("the route editor saves candidate weights, refuses a bad sum, and shows the
         await weightFields.nth(1).fill("0.30");
         await page.getByRole("button", { name: "Create virtual model" }).click();
         await expect(dialog.locator("[role=alert]")).toContainText(/sum to exactly 1\.00/i);
-        expect(await readVirtualModelId(fixture.databaseUrl, "vm-weighted-console")).toBeUndefined();
+        expect(
+          await readVirtualModelId(fixture.databaseUrl, "vm-weighted-console"),
+        ).toBeUndefined();
 
         // 2. A 0.75 / 0.25 split saves and lands in the candidate rows.
         await weightFields.nth(0).fill("0.75");

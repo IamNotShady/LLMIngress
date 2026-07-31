@@ -371,7 +371,9 @@ describe("route strategy registry", () => {
     );
     expect(result.chain.map((c) => c.candidateOrder)).toEqual([1, 2]);
     expect(result.decision?.routeReason.selectedWeight).toBeUndefined();
-    expect(result.decision?.routeReason.message).toBe("weighted route for vm selected candidate 1.");
+    expect(result.decision?.routeReason.message).toBe(
+      "weighted route for vm selected candidate 1.",
+    );
   });
 
   it("reports the capability contract scope each strategy checks", () => {

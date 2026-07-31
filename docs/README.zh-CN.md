@@ -31,7 +31,7 @@ LLMIngress 是一个开源、可自托管的 Agent AI 网关。接入 Provider A
 通过稳定的虚拟模型（Virtual Model）名称对外暴露，并在同一个 Console 中统一管理路由、访问控制、
 限流、回退与用量。
 
-- 🔀 按 `fixed`、`cost_first`、`load_balance` 或请求头驱动的 `tag` 策略路由虚拟模型
+- 🔀 按 `fixed`、`cost_first`、`load_balance`、`weighted` 或请求头驱动的 `tag` 策略路由虚拟模型
 - 🚑 跟踪每个 Provider 连接的健康状态，并在流式输出开始前完成回退
 - 🔐 为每个 agent 或工具创建专属 API Key，并显式授予可用的虚拟模型
 - 🛡️ 可选执行预算、RPM、TPM、Token 与并发限制

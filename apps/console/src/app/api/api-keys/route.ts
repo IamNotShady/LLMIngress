@@ -24,6 +24,7 @@ const CREATE_DRAFT_FIELDS = [
   "budgetUsd",
   "concurrency",
   "enforcementPolicy",
+  "requestLoggingMode",
   "rpm",
   "tokenLimit",
   "tpm",
@@ -38,6 +39,7 @@ export const POST = withConsoleAuth(async (request) => {
       const limitsEnabled = readText(form, "enableLimits") === "true";
       const apiKey = normalizeApiKeyFormInput({
         name: readText(form, "name"),
+        requestLoggingMode: readText(form, "requestLoggingMode"),
       });
       const result = await createApiKeyWithSettings({
         apiKey,
@@ -66,6 +68,7 @@ export const POST = withConsoleAuth(async (request) => {
       await updateApiKey({
         apiKey: normalizeApiKeyFormInput({
           name: readText(form, "name"),
+          requestLoggingMode: readText(form, "requestLoggingMode"),
         }),
         id: readRequiredText(form, "id"),
       });
@@ -75,6 +78,7 @@ export const POST = withConsoleAuth(async (request) => {
       await updateApiKeyWithSettings({
         apiKey: normalizeApiKeyFormInput({
           name: readText(form, "name"),
+          requestLoggingMode: readText(form, "requestLoggingMode"),
         }),
         id,
         limitRules: limitsEnabled ? readApiKeyLimitRules(form) : [],

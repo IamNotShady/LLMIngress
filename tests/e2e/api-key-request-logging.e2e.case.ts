@@ -21,9 +21,12 @@ import {
 } from "../support/gateway-process";
 import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
-const FULL_KEY = "llmi_request_logging_full_key";
-const DEFAULT_KEY = "llmi_request_logging_default_key";
-const ERROR_KEY = "llmi_request_logging_error_key";
+// A key's stored prefix is its first twelve characters and is unique, so these
+// three have to differ inside that window rather than only after it.
+const FULL_KEY = "llmi_full_request_logging_key";
+const STREAM_KEY = "llmi_stream_request_logging_key";
+const DEFAULT_KEY = "llmi_default_request_logging_key";
+const ERROR_KEY = "llmi_error_request_logging_key";
 const REQUEST_ID = "gw_request_logging_detail";
 
 type StoredPayload = {
@@ -50,6 +53,12 @@ test("a full-logging key keeps both bodies and a default key keeps none", async 
       virtualModelName: "logging-full-vm",
     });
     await seedOpenAIGatewayRoute({
+      apiKey: STREAM_KEY,
+      fixture,
+      providerBaseUrl: `${fakeProvider.url}?mode=stream`,
+      virtualModelName: "logging-stream-vm",
+    });
+    await seedOpenAIGatewayRoute({
       apiKey: DEFAULT_KEY,
       fixture,
       providerBaseUrl: fakeProvider.url,
@@ -66,7 +75,7 @@ test("a full-logging key keeps both bodies and a default key keeps none", async 
     // payload evidence rather than an accident.
     await fixture.query(
       "update api_keys set request_logging_mode = 'full' where key_prefix = any($1::text[])",
-      [[FULL_KEY.slice(0, 12), ERROR_KEY.slice(0, 12)]],
+      [[FULL_KEY.slice(0, 12), STREAM_KEY.slice(0, 12), ERROR_KEY.slice(0, 12)]],
     );
 
     const gateway = startGatewayProcess({
@@ -86,9 +95,9 @@ test("a full-logging key keeps both bodies and a default key keeps none", async 
       expect(jsonResponse.status).toBe(200);
 
       const streamResponse = await postChatCompletion({
-        apiKey: FULL_KEY,
+        apiKey: STREAM_KEY,
         baseUrl,
-        model: "logging-full-vm",
+        model: "logging-stream-vm",
         prompt: "capture-this-stream",
         stream: true,
       });
@@ -202,10 +211,12 @@ test("the console saves the mode and shows what a full-logging key captured", as
         });
         const drawer = page.getByRole("dialog", { name: REQUEST_ID });
         await expect(drawer).toBeVisible();
-        await drawer.getByRole("group", { name: "Request body" }).click();
+        await expect(drawer.getByText("captured-console-prompt")).toBeHidden();
+        await drawer.getByText("Request body").click();
         await expect(drawer.getByText("captured-console-prompt")).toBeVisible();
-        await drawer.getByRole("group", { name: "Response body" }).click();
-        await expect(drawer.getByText("truncated at 1 MB")).toBeVisible();
+        await expect(drawer.getByText(/truncated at 1 MB \(original/)).toBeVisible();
+        await drawer.getByText("Response body").click();
+        await expect(drawer.getByText("data: cut here")).toBeVisible();
 
         // A request whose key captured nothing says so instead of showing empty
         // bodies that were never recorded.
@@ -215,7 +226,7 @@ test("the console saves the mode and shows what a full-logging key captured", as
         const plainDrawer = page.getByRole("dialog", { name: `${REQUEST_ID}_plain` });
         await expect(plainDrawer).toBeVisible();
         await expect(plainDrawer.getByText("recorded as metadata only")).toBeVisible();
-        await expect(plainDrawer.getByRole("group", { name: "Request body" })).toHaveCount(0);
+        await expect(plainDrawer.getByText("Request body")).toHaveCount(0);
       } finally {
         await context.close();
       }

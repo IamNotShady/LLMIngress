@@ -296,11 +296,6 @@ function ApiKeyEditorDialog({
                 required
               />
             </Field>
-            {editing ? (
-              <Field label="STATE" hint="Disabling stops traffic and keeps the configuration.">
-                <TextInput defaultValue={apiKey?.enabled ? "enabled" : "disabled"} disabled />
-              </Field>
-            ) : null}
             <Field label="REQUEST LOGGING" hint={REQUEST_LOGGING_NOTE}>
               <SelectInput
                 name="requestLoggingMode"

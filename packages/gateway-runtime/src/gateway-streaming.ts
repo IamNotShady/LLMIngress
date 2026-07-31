@@ -172,16 +172,43 @@ export async function executeGatewayStreamingRequest(input: {
       };
     }
 
-    assertGatewayRequestWithinVirtualModelCapabilities({
-      chain: routeResult.chain,
-      requestMetadata: normalized.requestMetadata,
-      routePolicy: configuredRoutePolicy,
-    });
-
     const routeDecision = routeResult.decision;
     const gatewayChain = routeResult.chain;
 
     const fallbackAttempts: FallbackFailedAttempt[] = [];
+    const selectedCandidate = gatewayChain[0];
+    if (!selectedCandidate) {
+      throw new Error("Selected route candidate was not found in route policy.");
+    }
+    // Built before the capability check and the attempts, like the JSON
+    // pipeline builds it: a request refused for exceeding the selected
+    // candidate's contract, and a request that exhausts its chain, both still
+    // record the route they chose, the tag they were asked for, and every
+    // attempt burned — the failed request is the one an operator has to debug.
+    let activity = buildGatewayRequestActivityRoute({
+      candidate: selectedCandidate,
+      fallbackAttempts,
+      routeDecision,
+    });
+
+    try {
+      assertGatewayRequestWithinVirtualModelCapabilities({
+        chain: routeResult.chain,
+        requestMetadata: normalized.requestMetadata,
+        routePolicy: configuredRoutePolicy,
+      });
+    } catch (error) {
+      await releaseGatewayConcurrency({ databaseUrl: input.databaseUrl, lease: concurrencyLease });
+      concurrencyLease = undefined;
+      const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
+      return {
+        activity,
+        body: createGatewayErrorBody(parts.code, input.requestId, parts.message),
+        ok: false,
+        requestMetadata: normalized.requestMetadata,
+        statusCode: parts.statusCode,
+      };
+    }
     let lastError: FallbackAttemptErrorLike | undefined;
     const candidates = await buildStreamingFallbackCandidates({
       candidates: gatewayChain,
@@ -191,6 +218,7 @@ export async function executeGatewayStreamingRequest(input: {
 
     if (candidates.length === 0) {
       return {
+        activity,
         body: createGatewayErrorBody("provider_protocol_unsupported", input.requestId),
         ok: false,
         requestMetadata: normalized.requestMetadata,
@@ -209,6 +237,7 @@ export async function executeGatewayStreamingRequest(input: {
       });
       if (!limits.ok) {
         return {
+          activity,
           body: limits.body,
           ...(limits.retryAfterSeconds
             ? { headers: { "retry-after": String(limits.retryAfterSeconds) } }
@@ -249,6 +278,7 @@ export async function executeGatewayStreamingRequest(input: {
       const providerError = buildStreamingProviderErrorPassthrough(lastError);
       if (providerError) {
         return {
+          activity,
           body: providerError.body,
           headers: providerError.headers,
           ok: false,
@@ -261,6 +291,7 @@ export async function executeGatewayStreamingRequest(input: {
         "provider_request_failed",
       );
       return {
+        activity,
         body: createGatewayErrorBody(parts.code, input.requestId, parts.message),
         ok: false,
         requestMetadata: normalized.requestMetadata,
@@ -273,7 +304,9 @@ export async function executeGatewayStreamingRequest(input: {
       providerApiKeyId: success.candidate.providerApiKeyId,
     });
 
-    const activity = buildGatewayRequestActivityRoute({
+    // Rebuilt with the candidate that actually served: fallback may have moved
+    // past the one the decision named.
+    activity = buildGatewayRequestActivityRoute({
       candidate: success.candidate,
       fallbackAttempts,
       routeDecision,

@@ -48,6 +48,8 @@ async function countFallbackEvents(fixture: Fixture): Promise<number> {
 
 async function postChatCompletion(input: {
   baseUrl: string;
+  maxTokens?: number;
+  requestId?: string;
   routeTag?: string;
   stream?: boolean;
 }): Promise<Response> {
@@ -55,15 +57,52 @@ async function postChatCompletion(input: {
     body: JSON.stringify({
       messages: [{ content: "ping", role: "user" }],
       model: virtualModelName,
+      ...(input.maxTokens ? { max_tokens: input.maxTokens } : {}),
       ...(input.stream ? { stream: true } : {}),
     }),
     headers: {
       authorization: `Bearer ${apiKey}`,
       "content-type": "application/json",
+      ...(input.requestId ? { "x-request-id": input.requestId } : {}),
       ...(input.routeTag ? { "x-llmingress-route-tag": input.routeTag } : {}),
     },
     method: "POST",
   });
+}
+
+async function readRouteReasonByRequestId(
+  fixture: Fixture,
+  requestId: string,
+): Promise<RouteReasonRow | undefined> {
+  const result = await fixture.query<RouteReasonRow>(
+    `
+      select route_reason->>'strategy' as strategy,
+             route_reason->>'message' as message,
+             route_reason->>'requestedTag' as requested_tag,
+             route_reason->>'matchedTag' as matched_tag,
+             (route_reason->>'tagFallback')::boolean as tag_fallback
+      from request_activity
+      where request_id = $1
+    `,
+    [requestId],
+  );
+  return result.rows[0];
+}
+
+async function countFallbackEventsByRequestId(
+  fixture: Fixture,
+  requestId: string,
+): Promise<number> {
+  const result = await fixture.query<{ count: string }>(
+    `
+      select count(*)::text as count
+      from fallback_events fe
+      join request_activity ra on ra.id = fe.request_activity_id
+      where ra.request_id = $1
+    `,
+    [requestId],
+  );
+  return Number(result.rows[0]?.count ?? 0);
 }
 
 test("a route tag selects its candidate and everything else falls back to the default one", async () => {
@@ -336,6 +375,107 @@ test("a tag route exhausts after the default candidate and stops retrying once a
       expect(exhausted.status).toBeGreaterThanOrEqual(400);
       expect(fastProvider.requests).toHaveLength(1);
       expect(defaultProvider.requests).toHaveLength(1);
+
+      // 6. A stream that exhausts records the same trace a JSON request does:
+      //    the route it chose, the tag it was asked for, and every attempt it
+      //    burned. A failed request with nothing written down is the one an
+      //    operator cannot debug. Scoped by request id so the JSON exhaustion
+      //    above cannot answer for it.
+      const streamedRequestId = `test_stream_${randomUUID()}`;
+      const streamed = await postChatCompletion({
+        baseUrl,
+        requestId: streamedRequestId,
+        routeTag: "fast",
+        stream: true,
+      });
+      expect(streamed.status).toBeGreaterThanOrEqual(400);
+      expect(fastProvider.requests).toHaveLength(2);
+      expect(defaultProvider.requests).toHaveLength(2);
+      await expect
+        .poll(
+          async () => (await readRouteReasonByRequestId(fixture, streamedRequestId))?.strategy,
+          { timeout: 20_000 },
+        )
+        .toBe("tag");
+      const streamedReason = await readRouteReasonByRequestId(fixture, streamedRequestId);
+      expect(streamedReason?.requested_tag).toBe("fast");
+      expect(streamedReason?.matched_tag).toBe("fast");
+      expect(await countFallbackEventsByRequestId(fixture, streamedRequestId)).toBe(2);
+    } finally {
+      await stopGatewayProcess(gateway);
+    }
+  } finally {
+    await fastProvider.close();
+    await defaultProvider.close();
+    await fixture.dispose();
+  }
+});
+
+test("a capability-refused tag request still records the route it chose", async () => {
+  test.setTimeout(180_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_tag_capability_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const defaultProvider = await createFakeProviderServer();
+  const fastProvider = await createFakeProviderServer();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const seeded = await seedOpenAIGatewayRoute({
+      apiKey,
+      fixture,
+      modelId: "default-model",
+      providerBaseUrl: defaultProvider.url,
+      strategy: "tag",
+      tags: ["default"],
+      virtualModelName,
+    });
+    await seedGatewayRouteCandidate({
+      candidateOrder: 2,
+      fixture,
+      maxOutputTokens: 1000,
+      modelId: "fast-model",
+      providerBaseUrl: fastProvider.url,
+      routePolicyId: seeded.routePolicyId,
+      tags: ["fast"],
+    });
+
+    const gateway = startGatewayProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${gateway.port}`;
+      await waitForGateway(baseUrl, gateway);
+
+      // The refusal is the client's 4xx contract error and never reaches an
+      // upstream — but the trace still says which route was chosen and which
+      // tag was asked for, JSON and stream alike. A refused request with
+      // nothing written down is the one an operator cannot debug.
+      for (const stream of [false, true]) {
+        const requestId = `test_capability_${stream ? "stream" : "json"}_${randomUUID()}`;
+        const refused = await postChatCompletion({
+          baseUrl,
+          maxTokens: 5000,
+          requestId,
+          routeTag: "fast",
+          stream,
+        });
+        expect(refused.status).toBe(400);
+        expect(await refused.text()).toContain("virtual_model_capability_mismatch");
+        expect(fastProvider.requests).toHaveLength(0);
+        expect(defaultProvider.requests).toHaveLength(0);
+        await expect
+          .poll(async () => (await readRouteReasonByRequestId(fixture, requestId))?.strategy, {
+            timeout: 20_000,
+          })
+          .toBe("tag");
+        const reason = await readRouteReasonByRequestId(fixture, requestId);
+        expect(reason?.requested_tag).toBe("fast");
+        expect(reason?.matched_tag).toBe("fast");
+        expect(await countFallbackEventsByRequestId(fixture, requestId)).toBe(0);
+      }
     } finally {
       await stopGatewayProcess(gateway);
     }

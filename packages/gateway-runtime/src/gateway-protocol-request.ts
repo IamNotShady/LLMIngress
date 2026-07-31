@@ -158,21 +158,24 @@ export async function executeGatewayProtocolRequest<
         statusCode: mapGatewayErrorStatus("provider_unavailable"),
       };
     }
-    assertGatewayRequestWithinVirtualModelCapabilities({
-      chain: routeResult.chain,
-      requestMetadata,
-      routePolicy: configuredRoutePolicy,
-    });
-
     const routeDecision = routeResult.decision;
     const selectedCandidate = routeResult.chain[0];
     if (!selectedCandidate) {
       throw new Error("Selected route candidate was not found in route policy.");
     }
+    // Built before the capability check: a request refused for exceeding the
+    // selected candidate's contract still records the route it chose and the
+    // tag it was asked for — the catch below returns this with the refusal.
     activity = buildGatewayRequestActivityRoute({
       candidate: selectedCandidate,
       fallbackAttempts,
       routeDecision,
+    });
+
+    assertGatewayRequestWithinVirtualModelCapabilities({
+      chain: routeResult.chain,
+      requestMetadata,
+      routePolicy: configuredRoutePolicy,
     });
 
     const plannedCandidates = input.spec.planCandidates(routeResult.chain);

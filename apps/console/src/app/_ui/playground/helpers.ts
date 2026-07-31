@@ -90,7 +90,7 @@ export function readOptionalPlaygroundNumber(value: string): number | undefined 
  * cannot import from; a unit test reads that file and fails the moment the two
  * lists differ. A header outside this list is refused by the browser before the
  * request leaves, which reaches the operator as an unexplained network failure,
- * so the editor refuses it first and says why.
+ * so the editor offers no way to name one.
  */
 export const playgroundSendableHeaders = [
   "authorization",
@@ -106,11 +106,36 @@ export const playgroundSendableHeaders = [
   "anthropic-beta",
 ] as const;
 
+/**
+ * The names a header row may be set to: every sendable header a picked row
+ * could actually deliver. Picking one replaces typing it, so a name outside
+ * the gateway's allowlist and a name that is no header name at all are not
+ * mistakes this editor can make — only the value is left to get wrong. Four
+ * sendable names are not offered because a row naming them would do nothing:
+ * authorization, content-type, and x-request-id are filled by the form itself
+ * and spread over any picked value, and x-api-key is the gateway's keyless
+ * auth fallback, ignored while the form's Bearer key is present and never
+ * forwarded upstream. The tag header leads because it is the one this page
+ * exists to send.
+ */
+export const playgroundHeaderOptions = [
+  "x-llmingress-route-tag",
+  "x-client-request-id",
+  "openai-organization",
+  "openai-project",
+  "openai-beta",
+  "anthropic-version",
+  "anthropic-beta",
+] as const;
+
+export type PlaygroundHeaderRow = { name: string; value: string };
+
 export type PlaygroundHeaderIssue = {
-  line: number;
-  /** Normalized name, or "" when the line has no readable one. */
+  /** The row's header name, normalized. */
   name: string;
-  reason: "malformed" | "not_allowed" | "reserved";
+  reason: "duplicate" | "empty_value" | "invalid_value";
+  /** 1-based position of the row in the editor. */
+  row: number;
 };
 
 export type PlaygroundRouteTag = {
@@ -119,54 +144,44 @@ export type PlaygroundRouteTag = {
   tagFallback: boolean;
 };
 
-/** The three headers the form sends itself; a second copy would fight them. */
-const reservedPlaygroundHeaders = new Set(["authorization", "content-type", "x-request-id"]);
-const playgroundHeaderNamePattern = /^[a-z0-9!#$%&'*+.^_`|~-]+$/;
 /** Printable ASCII only: fetch refuses to build a request with anything else. */
 const playgroundHeaderValuePattern = /^[ -~]+$/;
 
-export function isPlaygroundSendableHeader(name: string): boolean {
-  return (playgroundSendableHeaders as readonly string[]).includes(name.trim().toLowerCase());
-}
-
 /**
- * The typed lines as headers, and every line that cannot become one. A refused
- * line is left out of the headers rather than sent in a shape the browser or
- * the gateway would have to make sense of.
+ * The rows as headers, and every row that cannot become one. A refused row is
+ * left out rather than sent in a shape the browser would throw on, and the
+ * first row to claim a name keeps it: a second row for the same header is one
+ * the operator has to decide about, not one that silently replaces the first.
  */
-export function parsePlaygroundHeaders(text: string): {
+export function buildPlaygroundHeaders(rows: readonly PlaygroundHeaderRow[]): {
   headers: Record<string, string>;
   issues: PlaygroundHeaderIssue[];
 } {
   const headers: Record<string, string> = {};
   const issues: PlaygroundHeaderIssue[] = [];
 
-  const lines = text.split(/\r?\n/);
-  for (let index = 0; index < lines.length; index += 1) {
-    // biome-ignore lint/style/noNonNullAssertion: index is within the split result
-    const rawLine = lines[index]!;
-    const line = index + 1;
-    if (!rawLine.trim()) {
-      continue;
-    }
+  for (const [index, entry] of rows.entries()) {
+    const row = index + 1;
+    const name = entry.name.trim().toLowerCase();
+    const value = entry.value.trim();
 
-    // The first colon separates; the rest belong to the value, which is where a
-    // URL or a request id keeps its own.
-    const separator = rawLine.indexOf(":");
-    const name = separator === -1 ? "" : rawLine.slice(0, separator).trim().toLowerCase();
-    const value = separator === -1 ? "" : rawLine.slice(separator + 1).trim();
-    if (!playgroundHeaderNamePattern.test(name) || !playgroundHeaderValuePattern.test(value)) {
-      issues.push({ line, name, reason: "malformed" });
+    // The picker cannot produce a name outside the options; a name from
+    // anywhere else is refused rather than sent into a preflight that will not
+    // allow it.
+    if (!(playgroundHeaderOptions as readonly string[]).includes(name)) {
+      issues.push({ name, reason: "invalid_value", row });
       continue;
     }
-    // Before the allowlist, which names both of these: they are refused for
-    // being the form's own, not for being disallowed.
-    if (reservedPlaygroundHeaders.has(name)) {
-      issues.push({ line, name, reason: "reserved" });
+    if (!value) {
+      issues.push({ name, reason: "empty_value", row });
       continue;
     }
-    if (!isPlaygroundSendableHeader(name)) {
-      issues.push({ line, name, reason: "not_allowed" });
+    if (!playgroundHeaderValuePattern.test(value)) {
+      issues.push({ name, reason: "invalid_value", row });
+      continue;
+    }
+    if (Object.hasOwn(headers, name)) {
+      issues.push({ name, reason: "duplicate", row });
       continue;
     }
     headers[name] = value;
@@ -176,19 +191,13 @@ export function parsePlaygroundHeaders(text: string): {
 }
 
 export function formatPlaygroundHeaderIssue(issue: PlaygroundHeaderIssue): string {
-  if (issue.reason === "malformed") {
-    return `line ${issue.line}: use name: value`;
+  if (issue.reason === "empty_value") {
+    return `row ${issue.row}: ${issue.name} has no value — fill it in or remove the row`;
   }
-  if (issue.reason === "reserved") {
-    if (issue.name === "authorization") {
-      return `line ${issue.line}: authorization is sent from the API KEY field`;
-    }
-    if (issue.name === "x-request-id") {
-      return `line ${issue.line}: x-request-id is generated for every Playground request`;
-    }
-    return `line ${issue.line}: content-type is fixed at application/json`;
+  if (issue.reason === "duplicate") {
+    return `row ${issue.row}: ${issue.name} is already set on a row above — remove this row or pick another header`;
   }
-  return `line ${issue.line}: ${issue.name} is not in the gateway CORS allowlist — the browser refuses it before it is sent`;
+  return `row ${issue.row}: ${issue.name} has a value the browser cannot send — printable ASCII only`;
 }
 
 /**

@@ -240,11 +240,15 @@ test("the Playground sends a typed route tag and shows what the route did with i
         await expect(page.getByLabel("Virtual model")).toHaveValue(HIT_MODEL, { timeout: 20_000 });
         await page.getByLabel("STREAM").selectOption("false");
 
-        // --- A tag typed here reaches the gateway. Until the field existed the
-        // Playground could send only the key and the content type, so a tag
-        // route could not be tried from the console at all.
-        const headers = page.getByLabel("Request headers", { exact: true });
-        await headers.fill("x-llmingress-route-tag: fast");
+        // --- A header row picked here reaches the gateway. Until the editor
+        // existed the Playground could send only the key and the content type,
+        // so a tag route could not be tried from the console at all. A new row
+        // opens on the tag header, which is the one this page exists to send.
+        await page.getByRole("button", { name: "Add header", exact: true }).click();
+        await expect(page.getByLabel("Header name 1", { exact: true })).toHaveValue(
+          "x-llmingress-route-tag",
+        );
+        await page.getByLabel("Header value 1", { exact: true }).fill("fast");
         await page.getByRole("button", { name: "Send request" }).click();
 
         await expect(page.getByText("200 OK")).toBeVisible({ timeout: 20_000 });
@@ -264,30 +268,37 @@ test("the Playground sends a typed route tag and shows what the route did with i
         expect(sent[1]?.requestId).toMatch(/^playground_[0-9a-f-]{36}$/);
         expect(sent[1]?.requestId).not.toBe(sent[0]?.requestId);
 
-        // --- A header the gateway's CORS allowlist does not name is refused
-        // here, not by the browser: a preflight failure reaches the operator as
-        // "Failed to fetch", which names neither the header nor the reason.
-        await headers.fill("x-custom: 1");
+        // --- A second row for a header the first row already carries is not a
+        // merge and not a silent overwrite: it is said in red and it stops the
+        // send, because only the operator knows which of the two was meant.
+        await page.getByRole("button", { name: "Add header", exact: true }).click();
+        await page.getByLabel("Header value 2", { exact: true }).fill("cheap");
         await expect(
-          page.getByText("line 1: x-custom is not in the gateway CORS allowlist"),
+          page.getByText("row 2: x-llmingress-route-tag is already set on a row above"),
         ).toBeVisible();
         const beforeBlocked = sent.length;
         await page.getByRole("button", { name: "Send request" }).click();
-        await expect(page.getByText("header line", { exact: false })).toBeVisible();
+        await expect(page.getByText("header rows", { exact: false })).toBeVisible();
         expect(sent.length).toBe(beforeBlocked);
 
-        // --- The three headers the form owns are refused with the control that
-        // sends them, and a line that is not a header says what one looks like.
-        await headers.fill("authorization: Bearer llmi_other");
-        await expect(
-          page.getByText("line 1: authorization is sent from the API KEY field"),
-        ).toBeVisible();
-        await headers.fill("x-request-id: fixed");
-        await expect(
-          page.getByText("line 1: x-request-id is generated for every Playground request"),
-        ).toBeVisible();
-        await headers.fill("x-llmingress-route-tag fast");
-        await expect(page.getByText("line 1: use name: value")).toBeVisible();
+        // --- An empty value is a row that was started and not finished. Sending
+        // it would put a blank header on the wire and change the route silently.
+        await page.getByLabel("Header value 2", { exact: true }).fill("");
+        await expect(page.getByText("row 2: x-llmingress-route-tag has no value")).toBeVisible();
+        await page.getByRole("button", { name: "Send request" }).click();
+        expect(sent.length).toBe(beforeBlocked);
+
+        // --- Removing the row removes the reason the send was stopped, and the
+        // request goes out carrying the row that is left.
+        await page.getByRole("button", { name: "Remove header row 2" }).click();
+        await expect(page.getByLabel("Header value 2", { exact: true })).toHaveCount(0);
+        await expect(page.getByText("row 2:", { exact: false })).toHaveCount(0);
+        await page.getByRole("button", { name: "Send request" }).click();
+        await expect(traceValue(page, "route tag")).toHaveText("fast → default (no match)", {
+          timeout: 20_000,
+        });
+        expect(sent).toHaveLength(3);
+        expect(sent.at(-1)?.routeTag).toBe("fast");
       } finally {
         await context.close();
       }

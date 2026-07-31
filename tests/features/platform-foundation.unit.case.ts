@@ -187,6 +187,7 @@ describe("platform foundation", () => {
       { id: "0002", name: "provider_quota" },
       { id: "0003", name: "provider_oauth_device" },
       { id: "0004", name: "route_policy_candidate_tags" },
+      { id: "0005", name: "api_key_request_logging" },
     ]);
     expect(shippedSqlMigrations).toEqual(
       loadSqlMigrations().map(({ checksum, id, name }) => ({ checksum, id, name })),

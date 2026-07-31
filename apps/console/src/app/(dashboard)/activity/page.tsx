@@ -87,7 +87,7 @@ export default async function ActivityPage({
     <PageShell label="Activity">
       <PageTitleRow
         title="Activity"
-        meta="request metadata only — prompts, successful responses, tool arguments and credentials are never stored"
+        meta="request metadata by default — bodies are stored only for keys whose request logging mode is full, never credentials"
       />
 
       <form
@@ -222,7 +222,7 @@ export default async function ActivityPage({
           ) : (
             <EmptyState
               title="No requests yet"
-              body="Activity records request metadata as soon as an agent calls the gateway — prompts and responses are never stored. Send one from the Playground to confirm your routing works end to end."
+              body="Activity records request metadata as soon as an agent calls the gateway — bodies only for keys whose request logging mode is full. Send one from the Playground to confirm your routing works end to end."
               actions={
                 <ActionLink href="/playground" tone="primary">
                   Open Playground

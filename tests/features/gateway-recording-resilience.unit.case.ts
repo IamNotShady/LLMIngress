@@ -51,9 +51,11 @@ function fakeLogger() {
 const baseInput = {
   apiKeyId: "api-key-1",
   apiKeyPrefix: "llmi_",
+  clientRequestBody: { messages: [{ content: "hi", role: "user" }], model: "vm-a" },
   model: "vm-a",
   protocol: "chat_completions" as const,
   requestId: "req-1",
+  requestLoggingMode: "default" as const,
   virtualModelId: "vm-id-1",
 };
 

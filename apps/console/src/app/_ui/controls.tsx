@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { FieldHelp } from "./field-help";
 
 type ButtonTone = "danger" | "primary" | "secondary";
 
@@ -119,11 +120,14 @@ const inputClass =
  */
 export function Field({
   children,
+  help,
   hint,
   label,
   labelNote,
 }: {
   children: ReactNode;
+  /** An explanation too long for a hint line, held behind a "?" by the label. */
+  help?: string;
   hint?: string;
   label: string;
   labelNote?: string;
@@ -132,9 +136,11 @@ export function Field({
     <>
       {/* biome-ignore lint/a11y/noLabelWithoutControl: the control arrives as children and is wrapped by this label, which associates the two implicitly. */}
       <label className="block min-w-0">
-        <span className="block font-mono text-115 font-medium tracking-[.08em] text-dim">
+        {/* relative: a FieldHelp bubble anchors to this row and spans its width. */}
+        <span className="relative block font-mono text-115 font-medium tracking-[.08em] text-dim">
           {label}
           {labelNote ? <span className="text-faint"> {labelNote}</span> : null}
+          {help ? <FieldHelp text={help} /> : null}
         </span>
         <span className="mt-[5px] block">{children}</span>
         {hint ? (

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { type PostgresQueryClient, withPostgresTransaction } from "@llmingress/db/client";
 import { isRecord } from "@llmingress/util";
 import type { FallbackFailedAttempt } from "./gateway-fallback-chain.ts";
+import type { GatewayCapturedPayload } from "./gateway-payload-capture.ts";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
 import {
@@ -51,6 +52,8 @@ type RecordCompletedGatewayRequestActivityInput = {
   model: string;
   protocol: GatewayRequestActivityProtocol;
   completedAt?: Date;
+  /** Present only for a key whose request logging mode is "full". */
+  payload?: GatewayCapturedPayload;
   requestId: string;
   requestMetadata?: GatewayRequestMetadata;
   responseBody: unknown;
@@ -121,7 +124,8 @@ export async function recordCompletedGatewayRequestActivity(
           latency_ms,
           started_at,
           completed_at,
-          created_at
+          created_at,
+          payload
         )
         values (
           $1,
@@ -154,7 +158,8 @@ export async function recordCompletedGatewayRequestActivity(
           $21,
           $22,
           $23,
-          $22
+          $22,
+          $24::jsonb
         )
       `,
       [
@@ -181,6 +186,7 @@ export async function recordCompletedGatewayRequestActivity(
         completion.latencyMs,
         input.startedAt.toISOString(),
         completion.completedAt.toISOString(),
+        buildGatewayActivityPayloadJson(input.payload),
       ],
     );
 
@@ -198,6 +204,28 @@ export async function recordCompletedGatewayRequestActivity(
         virtualModelId: input.virtualModelId,
       });
     }
+  });
+}
+
+/**
+ * The captured bodies as one jsonb value, or null for a key that captures
+ * none. It rides the activity's own insert, so a request keeps its bodies for
+ * exactly as long as it keeps the row they belong to.
+ */
+function buildGatewayActivityPayloadJson(
+  payload: GatewayCapturedPayload | undefined,
+): string | null {
+  if (!payload) {
+    return null;
+  }
+
+  return JSON.stringify({
+    requestBody: payload.requestBody.value,
+    requestBytes: payload.requestBody.bytes,
+    requestTruncated: payload.requestBody.truncated,
+    responseBody: payload.responseBody.value,
+    responseBytes: payload.responseBody.bytes,
+    responseTruncated: payload.responseBody.truncated,
   });
 }
 

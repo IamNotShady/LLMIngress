@@ -17,7 +17,7 @@ export function ActivityDrawer({
   detail: ConsoleActivityDetail;
   params: SearchParams;
 }) {
-  const { activity, fallbackEvents, requestMetadata, routeCandidates } = detail;
+  const { activity, fallbackEvents, payload, requestMetadata, routeCandidates } = detail;
   // The candidates the chain never reached. The router does not rule a
   // candidate out before trying it — it orders them and stops at the first that
   // serves — so this is "did not get a turn", which is a fact about the order
@@ -159,12 +159,73 @@ export function ActivityDrawer({
       <pre className="mt-2 whitespace-pre-wrap rounded-xs border border-rule bg-track px-3 py-[10px] font-mono text-125 leading-[1.6] text-ink">
         {metadataLines.length > 0 ? metadataLines.join("\n") : "no metadata recorded"}
       </pre>
+      {payload ? (
+        <>
+          <SectionTitle className="mt-[18px]" note="captured for this key">
+            Request and response bodies
+          </SectionTitle>
+          {/* Collapsed by default: a captured body runs to a megabyte, and the
+              drawer is opened to read what a request did, not to be handed one. */}
+          <PayloadBody
+            body={payload.requestBody}
+            bytes={payload.requestBytes}
+            label="Request body"
+            truncated={payload.requestTruncated}
+          />
+          <PayloadBody
+            body={payload.responseBody}
+            bytes={payload.responseBytes}
+            label="Response body"
+            truncated={payload.responseTruncated}
+          />
+        </>
+      ) : null}
       <p className="mt-[10px] font-mono text-125 leading-[1.6] text-faint">
-        Prompts, successful responses, tool arguments and credentials are never stored in
-        operational logs.
+        {payload
+          ? "This key's request logging mode is full: the bodies above are stored as they were sent and answered. Credentials are never stored."
+          : "This request was recorded as metadata only. Bodies are stored only for keys whose request logging mode is full; credentials are never stored."}
       </p>
     </Drawer>
   );
+}
+
+/**
+ * One captured side. A body that fit is JSON and is printed as such; one that
+ * was cut is the text it was cut to, and says how much of it there was.
+ */
+function PayloadBody({
+  body,
+  bytes,
+  label,
+  truncated,
+}: {
+  body: unknown;
+  bytes: number;
+  label: string;
+  truncated: boolean;
+}) {
+  return (
+    <details className="mt-2 rounded-xs border border-rule bg-track">
+      <summary className="cursor-pointer px-3 py-[7px] font-mono text-125 text-ink">
+        {label}
+        <span className="text-faint">
+          {truncated
+            ? ` — truncated at 1 MB (original ${formatCompact(bytes)} bytes)`
+            : ` — ${formatCompact(bytes)} bytes`}
+        </span>
+      </summary>
+      <pre className="max-h-[320px] overflow-y-auto whitespace-pre-wrap break-words border-t border-rule px-3 py-[10px] font-mono text-125 leading-[1.6] text-ink">
+        {formatPayloadBody(body)}
+      </pre>
+    </details>
+  );
+}
+
+function formatPayloadBody(body: unknown): string {
+  if (typeof body === "string") {
+    return body;
+  }
+  return JSON.stringify(body, null, 2) ?? "no body recorded";
 }
 
 function describeAttempt(event: ConsoleActivityDetail["fallbackEvents"][number]): string {

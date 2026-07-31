@@ -53,6 +53,16 @@ const ROTATE_NOTE =
 const NO_GRANT_NOTE = "grant at least one Virtual Model — a key with none can call nothing";
 
 /**
+ * What each mode costs the operator, next to the control rather than in a doc:
+ * the difference is what gets stored, and it is not recoverable from the two
+ * words in the list.
+ */
+const REQUEST_LOGGING_NOTE =
+  "default keeps request metadata only · full also stores the request and response bodies of every request, up to 1 MB each side — never credentials";
+
+const REQUEST_LOGGING_MODE_OPTIONS = ["default", "full"] as const;
+
+/**
  * What a refused creation carries back so the dialog can be reopened as it was
  * left. They belong to that one round trip: closing the dialog drops them.
  */
@@ -63,6 +73,7 @@ const DRAFT_PARAMS = [
   "draft_concurrency",
   "draft_enableLimits",
   "draft_enforcementPolicy",
+  "draft_requestLoggingMode",
   "draft_rpm",
   "draft_tokenLimit",
   "draft_tpm",
@@ -254,7 +265,7 @@ function ApiKeyEditorDialog({
       titleNote={
         apiKey ? `${apiKey.keyPrefix} · created ${formatDateOnly(apiKey.createdAt)}` : undefined
       }
-      width={editing ? 720 : 900}
+      width={720}
     >
       <EditorNav>
         <ApiKeyEditorForm
@@ -269,7 +280,7 @@ function ApiKeyEditorDialog({
           ))}
           <input type="hidden" name="defaultVirtualModelId" value={defaultGrantId} />
 
-          <div className={editing ? "mt-4 grid grid-cols-2 gap-4" : "mt-4"}>
+          <div className="mt-4 grid grid-cols-2 gap-4">
             <Field label="NAME">
               <TextInput
                 name="name"
@@ -285,11 +296,21 @@ function ApiKeyEditorDialog({
                 required
               />
             </Field>
-            {editing ? (
-              <Field label="STATE" hint="Disabling stops traffic and keeps the configuration.">
-                <TextInput defaultValue={apiKey?.enabled ? "enabled" : "disabled"} disabled />
-              </Field>
-            ) : null}
+            <Field label="REQUEST LOGGING" help={REQUEST_LOGGING_NOTE}>
+              <SelectInput
+                name="requestLoggingMode"
+                aria-label="Request logging mode"
+                defaultValue={
+                  draft("requestLoggingMode") ?? apiKey?.requestLoggingMode ?? "default"
+                }
+              >
+                {REQUEST_LOGGING_MODE_OPTIONS.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode}
+                  </option>
+                ))}
+              </SelectInput>
+            </Field>
           </div>
 
           <div className="mt-4 flex items-center gap-[10px]">

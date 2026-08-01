@@ -536,10 +536,13 @@ test("a gateway restart reseeds the latency ordering instead of starting cold", 
       routePolicyId: seeded.routePolicyId,
     });
 
+    // A fresh port so the readiness probe can never be answered by the dying
+    // previous instance over a kept-alive connection.
+    const restartPort = await getFreePort();
     gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
       env: leastTimeGatewayEnv,
-      port,
+      port: restartPort,
     });
 
     try {
@@ -646,7 +649,14 @@ test("an unmeasured candidate is explored and measured instead of being excluded
       routePolicyId: seeded.routePolicyId,
     });
 
-    gateway = startGatewayProcess({ databaseUrl: fixture.databaseUrl, env: exploreEnv, port });
+    // A fresh port so the readiness probe can never be answered by the dying
+    // previous instance over a kept-alive connection.
+    const restartPort = await getFreePort();
+    gateway = startGatewayProcess({
+      databaseUrl: fixture.databaseUrl,
+      env: exploreEnv,
+      port: restartPort,
+    });
 
     try {
       const baseUrl = `http://127.0.0.1:${gateway.port}`;

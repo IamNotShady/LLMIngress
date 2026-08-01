@@ -83,6 +83,44 @@ describe("console route policy warnings", () => {
     expect(dialogs).toContain('<input type="hidden" name="candidateTags" value="" />');
   });
 
+  test("the route editor collects one weight field per candidate of a weighted route", () => {
+    const dialogs = readFileSync(
+      join(rootDir, "apps/console/src/app/_ui/virtual-models/dialogs.tsx"),
+      "utf8",
+    );
+
+    // The weight field and the providerModelIds hidden inputs must both be
+    // emitted once per selected candidate, or FormData pairs a weight with the
+    // wrong model.
+    expect(dialogs).toContain('name="candidateWeights"');
+    expect(dialogs).toContain('<input type="hidden" name="candidateWeights" value="" />');
+  });
+
+  test("the weight field constrains drafts to a two-decimal weight shape while typing", () => {
+    const weightInput = readFileSync(
+      join(rootDir, "apps/console/src/app/_ui/virtual-models/weight-input.tsx"),
+      "utf8",
+    );
+    const dialogs = readFileSync(
+      join(rootDir, "apps/console/src/app/_ui/virtual-models/dialogs.tsx"),
+      "utf8",
+    );
+
+    expect(weightInput).toContain('"use client"');
+    expect(weightInput).toContain("0\\.\\d{0,2}");
+    expect(dialogs).toContain("<WeightInput");
+  });
+
+  test("the weighted route table shows each candidate's configured weight", () => {
+    const detail = readFileSync(
+      join(rootDir, "apps/console/src/app/_ui/virtual-models/detail.tsx"),
+      "utf8",
+    );
+
+    expect(detail).toContain("WEIGHT");
+    expect(detail).toContain("candidate.weight");
+  });
+
   test("the route table separates a candidate's availability from its health", () => {
     const detail = readFileSync(
       join(rootDir, "apps/console/src/app/_ui/virtual-models/detail.tsx"),

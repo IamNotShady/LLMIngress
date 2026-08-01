@@ -80,7 +80,7 @@ Provider has one logical connection. Worker probes up to three chat models. The 
 ### Virtual Model routing
 
 A Virtual Model is created atomically with one Route Policy and at least one candidate. Supported
-strategies are `fixed`, `cost_first`, `load_balance`, and `tag`. `cost_first` orders by input price plus
+strategies are `fixed`, `cost_first`, `load_balance`, `tag`, and `weighted`. `cost_first` orders by input price plus
 output price and places unknown prices last. The candidate picker filters only by endpoint protocol,
 so capability differences remain selectable; saving rejects differences between known capability
 values and reports every conflicting field with both candidate names and values. Unknown values
@@ -92,6 +92,10 @@ tag, an unknown tag, or a failed tagged candidate is served by the default candi
 past it. Saving skips the shared capability agreement; a default candidate that cannot absorb a
 tagged one is reported as a warning on the Virtual Model detail, and each request is
 capability-checked against the candidate it selected.
+
+`weighted` splits traffic by per-candidate percentages that must sum to exactly 1.00, drawn
+independently per request; a 0.00-weight candidate receives no primary traffic and serves only as
+a fallback target.
 
 Before the first client byte, Gateway may try another credential or candidate. After streaming
 starts, it never replays the request. Confirmed unhealthy connections are filtered; models and

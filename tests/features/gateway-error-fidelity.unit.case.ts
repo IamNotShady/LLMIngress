@@ -243,6 +243,7 @@ function candidateSnapshot(
     supportsFunctionCalling: true,
     supportsReasoning: false,
     supportsTools: true,
+    weight: null,
     ...overrides,
   };
 }

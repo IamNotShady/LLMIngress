@@ -273,6 +273,7 @@ function gatewayCandidate(input: {
     supportsFunctionCalling: true,
     supportsReasoning: false,
     tags: input.tags,
+    weight: null,
   };
 }
 

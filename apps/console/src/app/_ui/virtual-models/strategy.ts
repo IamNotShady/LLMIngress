@@ -11,6 +11,8 @@ export const strategyRouteNote: Record<RoutePolicyStrategy, string> = {
     "ordered by input + output price at request time; candidates with an unknown price are tried last",
   load_balance: "picked per request across healthy candidates; failures fall through in order",
   tag: 'routed by the x-llmingress-route-tag request header; no tag or an unknown tag serves the "default" candidate, and a tagged candidate that fails falls back only to it',
+  weighted:
+    "split by configured weights that sum to 1.00; each request independently draws a candidate with its weight's probability, and failures fall through the drawn order — 0.00-weight candidates last, as fallback only",
 };
 
 export const strategyLabel: Record<RoutePolicyStrategy, string> = {
@@ -18,6 +20,7 @@ export const strategyLabel: Record<RoutePolicyStrategy, string> = {
   cost_first: "cost_first",
   load_balance: "load_balance",
   tag: "tag",
+  weighted: "weighted",
 };
 
 /** Retries stop the moment the response starts streaming. */

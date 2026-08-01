@@ -34,6 +34,7 @@ import {
   readRouteProtocol,
 } from "./candidate-providers";
 import { strategyRouteNote } from "./strategy";
+import { WeightInput } from "./weight-input";
 
 const PRESERVED_EDITOR_FIELDS = ["name", "description"] as const;
 
@@ -115,9 +116,18 @@ export async function VirtualModelDialogs({
     policy?.strategy ??
     "load_balance";
   const routesByTag = strategy === "tag";
+  const routesByWeight = strategy === "weighted";
   // candidate.id is the provider model id, which is what the selection carries.
   const storedTagsByModelId = new Map(
     (policy?.candidates ?? []).map((candidate) => [candidate.id, candidate.tags.join(", ")]),
+  );
+  // Weight re-displays exactly as stored: numeric(3,2) round-trips as a
+  // two-decimal string, so the editor shows 0.25 for a stored 0.25.
+  const storedWeightsByModelId = new Map(
+    (policy?.candidates ?? []).map((candidate) => [
+      candidate.id,
+      candidate.weight === null ? "" : candidate.weight.toFixed(2),
+    ]),
   );
 
   const withSelection = (ids: string[]) =>
@@ -206,7 +216,9 @@ export async function VirtualModelDialogs({
             <span className="font-mono text-115 font-medium tracking-[.08em] text-dim">
               {routesByTag
                 ? "CANDIDATES · TAGS ROUTE REQUESTS · EXACTLY ONE DEFAULT"
-                : "CANDIDATES · AT LEAST ONE — KNOWN CAPABILITIES MUST AGREE"}
+                : routesByWeight
+                  ? "CANDIDATES · WEIGHTS SUM TO 1.00 — KNOWN CAPABILITIES MUST AGREE"
+                  : "CANDIDATES · AT LEAST ONE — KNOWN CAPABILITIES MUST AGREE"}
             </span>
             <span className="ml-auto font-mono text-12 text-faint">
               {formatCount(orderedSelection.length)} selected
@@ -221,7 +233,9 @@ export async function VirtualModelDialogs({
               <span className="font-mono text-115 font-medium tracking-[.08em] text-dim">
                 {routesByTag
                   ? "SELECTED · ROUTED BY TAG · FAILURES FALL TO DEFAULT"
-                  : "SELECTED · TRIED IN THIS ORDER"}
+                  : routesByWeight
+                    ? "SELECTED · SPLIT BY WEIGHT · FAILURES FALL THROUGH IN DRAWN ORDER"
+                    : "SELECTED · TRIED IN THIS ORDER"}
               </span>
               <span className="ml-auto whitespace-nowrap font-mono text-12 text-faint">
                 use ↑↓ to reorder
@@ -269,6 +283,28 @@ export async function VirtualModelDialogs({
                       </span>
                     ) : (
                       <input type="hidden" name="candidateTags" value="" />
+                    )}
+                    {/* One draft-constrained candidateWeights field per row,
+                        index-aligned with the providerModelIds hidden inputs
+                        exactly like candidateTags above; non-weighted
+                        strategies still emit an empty entry to keep that
+                        pairing. The wrapper fixes the width: the input's own
+                        class is w-full. Known limit: this field cannot join
+                        PRESERVED_EDITOR_FIELDS (repeated names read back as a
+                        RadioNodeList), so reordering, adding, removing a
+                        candidate or switching strategy drops unsaved weight
+                        text — the same as NAME and DESCRIPTION under plain
+                        Link navigation. */}
+                    {routesByWeight ? (
+                      <span className="block w-[72px] flex-none">
+                        <WeightInput
+                          aria-label={`Weight for ${model.modelId}`}
+                          defaultValue={storedWeightsByModelId.get(model.id) ?? ""}
+                          name="candidateWeights"
+                        />
+                      </span>
+                    ) : (
+                      <input type="hidden" name="candidateWeights" value="" />
                     )}
                     {/* Fixed-width trailing columns so the tag field lines up
                         across rows instead of drifting with each row's price. */}

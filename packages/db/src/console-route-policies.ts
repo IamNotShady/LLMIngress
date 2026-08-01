@@ -27,13 +27,21 @@ import { consoleVisibleProviderModelFilterSql } from "./console-provider-model-v
 import { lockProvidersForProviderModels } from "./console-providers.ts";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
-export const routePolicyStrategies = ["fixed", "cost_first", "load_balance", "tag"] as const;
+export const routePolicyStrategies = [
+  "fixed",
+  "cost_first",
+  "load_balance",
+  "tag",
+  "weighted",
+] as const;
 
 export type RoutePolicyStrategy = (typeof routePolicyStrategies)[number];
 
 export type RoutePolicyFormInput = {
   /** One comma-separated tag list per candidate, in the candidate order. */
   candidateTags?: readonly (string | null | undefined)[];
+  /** One weight per candidate, in the candidate order; only weighted reads them. */
+  candidateWeights?: readonly (string | null | undefined)[];
   endpointProtocol?: string | null;
   providerModelIds?: readonly (string | null | undefined)[];
   strategy?: string | null;
@@ -43,6 +51,8 @@ export type RoutePolicyFormInput = {
 export type NormalizedRoutePolicyFormInput = {
   /** Always one entry per candidate; empty lists for strategies that ignore tags. */
   candidateTags: string[][];
+  /** Always one entry per candidate; null entries for strategies that ignore weights. */
+  candidateWeights: (number | null)[];
   endpointProtocol: RouteEndpointProtocol;
   providerModelIds: string[];
   strategy: RoutePolicyStrategy;
@@ -91,6 +101,8 @@ export type ConsoleProviderModelOption = {
 export type ConsoleRoutePolicyCandidate = ConsoleProviderModelOption & {
   candidateOrder: number;
   tags: string[];
+  /** Two-decimal fraction of primary traffic; null when the strategy is not weighted. */
+  weight: number | null;
 };
 
 export type ConsoleRoutePolicy = {
@@ -181,6 +193,7 @@ type CandidateRow = {
   supports_reasoning?: boolean | null;
   supports_streaming?: boolean | null;
   tags?: string[] | null;
+  weight?: string | null;
 };
 
 type ProviderModelOptionRow = {
@@ -264,6 +277,11 @@ export function normalizeRoutePolicyFormInput(
       providerModelIds,
       strategy,
     }),
+    candidateWeights: normalizeRoutePolicyCandidateWeights({
+      candidateWeights: input.candidateWeights,
+      providerModelIds,
+      strategy,
+    }),
     endpointProtocol,
     providerModelIds,
     strategy,
@@ -335,6 +353,59 @@ function normalizeRoutePolicyCandidateTags(input: {
   }
 
   return candidateTags;
+}
+
+/** Exactly up to two decimals between 0 and 1: "0", "1", "0.2", "0.20", "1.00". */
+const routePolicyWeightPattern = /^(?:0(?:\.\d{1,2})?|1(?:\.0{1,2})?)$/;
+
+/**
+ * The cross-candidate weight rule (the weights of one policy sum to exactly
+ * 1.00) lives here rather than in the schema: candidates are rewritten as one
+ * transaction holding the policy row lock, so there is no window for a second
+ * writer to unbalance the sum. The sum is checked on integer hundredths -
+ * two-decimal weights are exact there, while floating point would refuse
+ * 0.10 + 0.20 + 0.70.
+ */
+function normalizeRoutePolicyCandidateWeights(input: {
+  candidateWeights?: readonly (string | null | undefined)[];
+  providerModelIds: readonly string[];
+  strategy: RoutePolicyStrategy;
+}): (number | null)[] {
+  if (input.strategy !== "weighted") {
+    return input.providerModelIds.map(() => null);
+  }
+
+  let sumHundredths = 0;
+  const candidateWeights = input.providerModelIds.map((providerModelId, index) => {
+    const raw = (input.candidateWeights?.[index] ?? "").trim();
+    if (!raw) {
+      throw consoleValidationError(
+        "Every candidate of a weighted route needs a weight; a 0.00 weight keeps it as a fallback-only candidate.",
+        "route_policy_weight_missing",
+        { field: "candidateWeights", providerModelId },
+      );
+    }
+    if (!routePolicyWeightPattern.test(raw)) {
+      throw consoleValidationError(
+        `Route weight ${raw} must be a decimal between 0 and 1 with at most two decimal places, like 0.25.`,
+        "route_policy_weight_invalid",
+        { field: "candidateWeights", providerModelId, weight: raw },
+      );
+    }
+    const hundredths = Math.round(Number(raw) * 100);
+    sumHundredths += hundredths;
+    return hundredths / 100;
+  });
+
+  if (sumHundredths !== 100) {
+    throw consoleValidationError(
+      `Route weights must sum to exactly 1.00; these sum to ${(sumHundredths / 100).toFixed(2)}.`,
+      "route_policy_weight_sum_invalid",
+      { field: "candidateWeights" },
+    );
+  }
+
+  return candidateWeights;
 }
 
 /**
@@ -703,7 +774,8 @@ export async function listRoutePolicies(databaseUrl?: string): Promise<ConsoleRo
                        provider_models.synced_price_source_url as price_sync_source_url,
                        provider_models.synced_price_synced_at as price_sync_synced_at,
                        route_policy_candidates.candidate_order,
-                       route_policy_candidates.tags
+                       route_policy_candidates.tags,
+                       route_policy_candidates.weight::text as weight
                 from route_policy_candidates
                 join provider_models on provider_models.id = route_policy_candidates.provider_model_id
                 join providers on providers.id = provider_models.provider_id
@@ -1075,13 +1147,15 @@ async function writeRoutePolicyCandidates(
             route_policy_id,
             provider_model_id,
             candidate_order,
-            tags
+            tags,
+            weight
           )
-          values ($1, $2, $3, $4, $5::text[])
+          values ($1, $2, $3, $4, $5::text[], $6)
           returning route_policy_id,
                     provider_model_id,
                     candidate_order,
-                    tags
+                    tags,
+                    weight
         )
         select inserted.route_policy_id::text,
                provider_models.id::text as id,
@@ -1118,7 +1192,8 @@ async function writeRoutePolicyCandidates(
                provider_models.synced_price_source_url as price_sync_source_url,
                provider_models.synced_price_synced_at as price_sync_synced_at,
                inserted.candidate_order,
-               inserted.tags
+               inserted.tags,
+               inserted.weight::text as weight
         from inserted
         join provider_models on provider_models.id = inserted.provider_model_id
         join providers on providers.id = provider_models.provider_id
@@ -1131,6 +1206,7 @@ async function writeRoutePolicyCandidates(
         providerModelId,
         index + 1,
         routePolicy.candidateTags[index] ?? [],
+        routePolicy.candidateWeights[index] ?? null,
       ],
     );
     candidateRows.push(rowToConsoleRoutePolicyCandidate(requireRow(result.rows[0])));
@@ -1288,6 +1364,7 @@ function rowToConsoleRoutePolicyCandidate(row: CandidateRow): ConsoleRoutePolicy
     ...rowToProviderModelOption(row),
     candidateOrder: row.candidate_order,
     tags: row.tags ?? [],
+    weight: row.weight === null || row.weight === undefined ? null : Number(row.weight),
   };
 }
 

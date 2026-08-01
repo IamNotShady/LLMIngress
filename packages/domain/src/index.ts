@@ -6,7 +6,7 @@ import {
 import { omitUndefined } from "@llmingress/util";
 
 export { type RouteEndpointProtocol, routeEndpointProtocols };
-export type RoutePolicyStrategy = "fixed" | "cost_first" | "load_balance" | "tag";
+export type RoutePolicyStrategy = "fixed" | "cost_first" | "load_balance" | "tag" | "weighted";
 
 /** The tag every tag-routed policy must carry on exactly one candidate. */
 export const ROUTE_TAG_DEFAULT = "default";
@@ -328,6 +328,8 @@ export type RouteCandidate = {
   providerModelId: string;
   /** Only the tag strategy reads these; other strategies leave them empty. */
   tags?: readonly string[];
+  /** Only the weighted strategy reads this; other strategies leave it null. */
+  weight?: number | null;
 };
 
 export type RoutePolicy<TCandidate extends RouteCandidate = RouteCandidate> = {
@@ -371,6 +373,8 @@ export type RouteReason = {
   /** The tag the request named, kept even when it matched no candidate. */
   requestedTag?: string;
   selectedCandidateOrder: number;
+  /** The configured weight of the candidate a weighted route drew. */
+  selectedWeight?: number;
   strategy: RoutePolicyStrategy;
   /** True when the default candidate was used without a tag match. */
   tagFallback?: boolean;
@@ -417,7 +421,9 @@ export type RouteStrategyCapabilityContractScope = "all_candidates" | "selected_
 export type RouteReasonAnnotation = {
   matchedTag?: string;
   requestedTag?: string;
-  tagFallback: boolean;
+  /** The configured weight of the candidate a weighted route drew. */
+  selectedWeight?: number;
+  tagFallback?: boolean;
 };
 
 type RouteStrategyHandler = {
@@ -531,6 +537,19 @@ const routeStrategyHandlers: Record<RoutePolicyStrategy, RouteStrategyHandler> =
     },
     reportsSelectedPrice: false,
   },
+  weighted: {
+    annotateReason: ({ chain }) =>
+      omitUndefined({
+        selectedWeight: chain[0]?.weight ?? undefined,
+      }),
+    capabilityContractScope: "all_candidates",
+    decisionMessage: ({ annotation, selectedCandidateOrder, virtualModelName }) =>
+      annotation?.selectedWeight === undefined
+        ? `weighted route for ${virtualModelName} selected candidate ${selectedCandidateOrder}.`
+        : `weighted route for ${virtualModelName} selected candidate ${selectedCandidateOrder} with weight ${annotation.selectedWeight.toFixed(2)}.`,
+    orderCandidates: (candidates, context) => orderWeightedCandidates(candidates, context),
+    reportsSelectedPrice: false,
+  },
 };
 
 export function routeStrategyCapabilityContractScope(
@@ -546,6 +565,61 @@ function readRequestedRouteTag(context: RouteStrategyContext): string | undefine
 
 function routeCandidateHasTag(candidate: RouteCandidate, tag: string): boolean {
   return (candidate.tags ?? []).some((entry) => normalizeRouteTag(entry) === tag);
+}
+
+function routeCandidateWeight(candidate: RouteCandidate): number {
+  const weight = candidate.weight ?? 0;
+  return Number.isFinite(weight) && weight > 0 ? weight : 0;
+}
+
+/**
+ * Successive weighted draws without replacement. Each pass draws one candidate
+ * with probability weight / total remaining weight, so the head of the chain
+ * follows the configured split exactly and the tail is a fair fallback order.
+ * The strict `draw < cumulative` comparison means a zero-weight candidate can
+ * never be drawn while any positive weight remains; once only zero-weight
+ * candidates are left they are appended in candidateOrder order - they carry
+ * no primary traffic but stay reachable as fallback targets. Weights are
+ * two-decimal fractions over a handful of candidates, so plain floating-point
+ * cumulative sums are deterministic here; the strict sum-to-1 rule lives in
+ * the Console validation layer on integer hundredths.
+ */
+function orderWeightedCandidates<TCandidate extends RouteCandidate>(
+  candidates: TCandidate[],
+  context: RouteStrategyContext,
+): TCandidate[] {
+  const remaining = [...candidates];
+  const ordered: TCandidate[] = [];
+
+  while (remaining.length > 0) {
+    const totalWeight = remaining.reduce(
+      (sum, candidate) => sum + routeCandidateWeight(candidate),
+      0,
+    );
+    if (totalWeight <= 0) {
+      // Only zero-weight candidates left; the caller passed them sorted by
+      // candidateOrder, so this keeps the configured fallback order.
+      ordered.push(...remaining);
+      break;
+    }
+
+    const draw = context.random() * totalWeight;
+    let cumulative = 0;
+    let pickedIndex = remaining.length - 1;
+    for (const [index, candidate] of remaining.entries()) {
+      cumulative += routeCandidateWeight(candidate);
+      if (draw < cumulative) {
+        pickedIndex = index;
+        break;
+      }
+    }
+    const picked = remaining.splice(pickedIndex, 1)[0];
+    if (picked) {
+      ordered.push(picked);
+    }
+  }
+
+  return ordered;
 }
 
 export function buildRouteAttemptCandidates<TCandidate extends RouteCandidate>(input: {

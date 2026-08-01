@@ -55,9 +55,12 @@ responses may be logged with status and response headers for diagnosis.
 ## Routing and health invariants
 
 - One Virtual Model owns one Route Policy and at least one candidate.
-- Strategies are `fixed`, `cost_first`, `load_balance`, and `tag`.
+- Strategies are `fixed`, `cost_first`, `load_balance`, `tag`, and `weighted`.
 - A `tag` route serves the candidate named by `x-llmingress-route-tag` with only the `default`
   candidate behind it; requests are capability-checked against the selected candidate alone.
+- A `weighted` route draws one candidate per request with its configured two-decimal weight
+  (weights sum to exactly 1); zero-weight candidates take no primary traffic and serve only as
+  fallback targets.
 - For the other strategies, capability conflicts are rejected only when every relevant value is
   known.
 - Unknown-price candidates remain eligible at the end of `cost_first`; successful unknown-price

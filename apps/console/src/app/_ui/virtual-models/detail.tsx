@@ -20,6 +20,7 @@ import {
   formatClock,
   formatCost,
   formatCount,
+  formatPercent,
   formatPricePair,
 } from "../format";
 import { DetailRow, SectionTitle } from "../layout";
@@ -38,6 +39,10 @@ const ROUTE_COLUMNS = "26px 252px 150px 156px 78px 140px 1fr";
     The extra TAGS column is paid for by HEALTH (a dot and one word) and a wider
     PRICE, so "$21.00 / $168.00 per M" renders unclipped. */
 const TAG_ROUTE_COLUMNS = "26px 252px 120px 176px 96px 78px 140px 1fr";
+/** A weighted route reads share-versus-reality in one glance: the configured
+    WEIGHT sits directly beside the observed TRAFFIC meter. The extra column is
+    paid for by a narrower PRICE and CAPABILITIES. */
+const WEIGHTED_ROUTE_COLUMNS = "26px 252px 130px 150px 78px 120px 64px 1fr";
 const KEY_COLUMNS = "148px 104px 1fr";
 const FAILURE_COLUMNS = "64px 1fr 126px";
 
@@ -81,7 +86,12 @@ export function VirtualModelDetail({
   );
   const href = (changes: Record<string, string | null>) => buildHref("/models", params, changes);
   const routesByTag = policy?.strategy === "tag";
-  const routeColumns = routesByTag ? TAG_ROUTE_COLUMNS : ROUTE_COLUMNS;
+  const routesByWeight = policy?.strategy === "weighted";
+  const routeColumns = routesByTag
+    ? TAG_ROUTE_COLUMNS
+    : routesByWeight
+      ? WEIGHTED_ROUTE_COLUMNS
+      : ROUTE_COLUMNS;
 
   return (
     <div className="min-w-0 pl-6 pt-[18px]">
@@ -121,6 +131,7 @@ export function VirtualModelDetail({
           <span>HEALTH</span>
           <span className="text-right">CTX</span>
           <span>CAPABILITIES</span>
+          {routesByWeight ? <span className="text-right">WEIGHT</span> : null}
           <span className="text-right">TRAFFIC 24H</span>
         </GridRow>
         {policy && policy.candidates.length > 0 ? (
@@ -169,6 +180,11 @@ export function VirtualModelDetail({
                   {formatModelContextTokens(candidate.contextWindow)}
                 </span>
                 <span className="text-dim cell-clip">{formatCapabilities(candidate)}</span>
+                {routesByWeight ? (
+                  <span className="text-right text-dim tabnum">
+                    {candidate.weight === null ? "—" : formatPercent(candidate.weight, 0)}
+                  </span>
+                ) : null}
                 <span className="flex items-center justify-end gap-2">
                   <Meter className="w-[90px]" height={6} ratio={traffic?.share ?? 0} />
                   <span className="w-[56px] text-right text-dim tabnum">

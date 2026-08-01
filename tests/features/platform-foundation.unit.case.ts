@@ -189,6 +189,7 @@ describe("platform foundation", () => {
       { id: "0004", name: "route_policy_candidate_tags" },
       { id: "0005", name: "api_key_request_logging" },
       { id: "0006", name: "route_policy_candidate_weights" },
+      { id: "0007", name: "least_time_route_latency" },
     ]);
     expect(shippedSqlMigrations).toEqual(
       loadSqlMigrations().map(({ checksum, id, name }) => ({ checksum, id, name })),

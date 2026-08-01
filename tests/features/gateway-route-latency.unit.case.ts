@@ -49,9 +49,9 @@ describe("gateway route latency env", () => {
 
     expect(gatewayLeastTimeFlushIntervalMs({})).toBe(10_000);
     expect(gatewayLeastTimeFlushIntervalMs({ GATEWAY_LEAST_TIME_FLUSH_INTERVAL_MS: "0" })).toBe(0);
-    expect(
-      gatewayLeastTimeFlushIntervalMs({ GATEWAY_LEAST_TIME_FLUSH_INTERVAL_MS: "200" }),
-    ).toBe(200);
+    expect(gatewayLeastTimeFlushIntervalMs({ GATEWAY_LEAST_TIME_FLUSH_INTERVAL_MS: "200" })).toBe(
+      200,
+    );
 
     expect(gatewayLeastTimeMinSamples({})).toBe(5);
     expect(gatewayLeastTimeMinSamples({ GATEWAY_LEAST_TIME_MIN_SAMPLES: "1" })).toBe(1);

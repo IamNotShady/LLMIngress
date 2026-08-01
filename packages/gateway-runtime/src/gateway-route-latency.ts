@@ -2,6 +2,7 @@ import { type PostgresQueryClient, withPooledPostgresClient } from "@llmingress/
 import type { RouteLatencySample, RouteLatencySnapshot } from "@llmingress/domain";
 import { createLogger } from "@llmingress/logging";
 import {
+  type GatewayEnvironment,
   gatewayLeastTimeAlphaPercent,
   gatewayLeastTimeExplorePercent,
   gatewayLeastTimeFlushIntervalMs,
@@ -9,7 +10,6 @@ import {
   gatewayLeastTimeOutlierClampFactor,
   gatewayLeastTimeStaleAfterMs,
   gatewayLeastTimeTieBucketMs,
-  type GatewayEnvironment,
 } from "./gateway-env.ts";
 
 const logger = createLogger("gateway");

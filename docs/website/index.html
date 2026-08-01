@@ -2221,15 +2221,17 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
 
 <style>
   [data-frame] > [data-rail]:first-child { transform: translateX(-48px); }
-  .cd-shell { margin-top: 30px; border: 1px solid var(--hair); background: var(--bg); box-shadow: 0 24px 60px rgba(20,24,28,.12); min-height: 660px; overflow: hidden; }
+  .cd-shell { margin-top: 30px; border: 1px solid var(--hair); background: var(--bg); box-shadow: var(--shadow-lift); min-height: 660px; overflow: hidden; }
   .cd-topbar { display: flex; align-items: center; min-height: 48px; padding: 0 18px; border-bottom: 1px solid var(--hair); background: var(--surface, var(--btnbg)); gap: 18px; }
   .cd-brand { display: flex; align-items: center; gap: 9px; flex: none; font-family: var(--sans); font-size: 14px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
   .cd-mark { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 3px; background: var(--seg); color: var(--segfg); }
   .cd-mark svg { width: 17px; height: 17px; }
   .cd-env { margin-left: auto; font-family: var(--mono); font-size: 11px; letter-spacing: .07em; color: var(--dim); white-space: nowrap; }
   .cd-nav { display: flex; align-items: stretch; overflow-x: auto; border-bottom: 1px solid var(--rule); scrollbar-width: thin; }
-  .cd-nav button { min-height: 44px; flex: none; padding: 0 16px; border: 0; border-right: 1px solid var(--rule2); background: transparent; color: var(--dim); font-family: var(--mono); font-size: 12px; letter-spacing: .02em; cursor: pointer; }
+  .cd-nav button { min-height: 44px; flex: none; padding: 0 16px; border: 0; border-right: 1px solid var(--rule2); background: transparent; color: var(--dim); font-family: var(--mono); font-size: 12px; letter-spacing: .02em; cursor: pointer; transition-property: scale, background-color, color; transition-duration: 120ms; transition-timing-function: ease-out; }
   .cd-nav button:hover { background: var(--btnbg); color: var(--ink); }
+  .cd-nav button:active { scale: 0.96; }
+  @media (prefers-reduced-motion: reduce) { .cd-nav button { transition: none; } .cd-nav button:active { scale: 1; } }
   .cd-nav button[aria-selected="true"] { background: var(--seg); color: var(--segfg); }
   .cd-main { min-height: 565px; padding: 22px 26px 30px; overflow: hidden; }
   .cd-title-row { display: flex; align-items: baseline; gap: 14px; min-width: 0; margin-bottom: 16px; }
@@ -2238,7 +2240,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
   .cd-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
   .cd-btn { min-height: 32px; padding: 0 12px; border: 1px solid var(--btnbd); border-radius: 3px; background: var(--btnbg); color: var(--ink); font-family: var(--mono); font-size: 12px; letter-spacing: .02em; cursor: pointer; }
   .cd-btn:hover { border-color: var(--dim); }
-  .cd-btn-primary { border-color: var(--seg); background: var(--seg); color: var(--segfg); box-shadow: 0 4px 12px rgba(20,24,28,.14); }
+  .cd-btn-primary { border-color: var(--seg); background: var(--seg); color: var(--segfg); box-shadow: var(--shadow-btn); }
   .cd-btn:active { transform: translateY(1px); }
   .cd-tabs { display: flex; align-items: center; gap: 4px; }
   .cd-tabs button { min-height: 30px; padding: 0 9px; border: 1px solid transparent; border-radius: 3px; background: transparent; color: var(--dim); font-family: var(--mono); font-size: 11px; cursor: pointer; }
@@ -3380,6 +3382,11 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
     --red: oklch(0.64 0.16 25); --redtx: oklch(0.54 0.16 25);
     --green: oklch(0.66 0.13 158); --amber: oklch(0.79 0.13 78); --ambtx: oklch(0.56 0.12 68);
     --ambbg: oklch(0.96 0.045 85); --ambbd: oklch(0.88 0.08 85);
+    /* Elevation is a token so it can invert with the theme: a layered black lift reads on
+       white, but is invisible on a near-black surface, where a white ring is the only cue. */
+    --shadow-lift: 0 0 0 1px oklch(0 0 0 / 0.04), 0 24px 60px oklch(0 0 0 / 0.12);
+    --shadow-btn: 0 0 0 1px oklch(0 0 0 / 0.06), 0 4px 12px oklch(0 0 0 / 0.14);
+    --shadow-btn-hover: 0 0 0 1px oklch(0 0 0 / 0.08), 0 6px 16px oklch(0 0 0 / 0.18);
     --serif: "Shippori Mincho", "Noto Serif SC", Georgia, serif;
     --sans: "Open Sans", "Noto Sans SC", system-ui, sans-serif;
     --mono: "DM Mono", ui-monospace, monospace;
@@ -3392,16 +3399,31 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
     --red: oklch(0.7 0.16 25); --redtx: oklch(0.78 0.13 25);
     --green: oklch(0.76 0.13 160); --amber: oklch(0.83 0.12 82); --ambtx: oklch(0.85 0.11 82);
     --ambbg: rgba(226,182,96,0.14); --ambbd: rgba(226,182,96,0.3);
+    --shadow-lift: 0 0 0 1px oklch(1 0 0 / 0.06);
+    --shadow-btn: 0 0 0 1px oklch(1 0 0 / 0.08);
+    --shadow-btn-hover: 0 0 0 1px oklch(1 0 0 / 0.13);
   }
   html { background: var(--bg); color-scheme: light dark; scroll-behavior: smooth; }
   [data-theme="dark"] { color-scheme: dark; }
   [data-theme="light"] { color-scheme: light; }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); text-wrap: pretty; }
-  a { color: var(--accent); text-decoration: none; }
+  a { color: var(--accent); text-decoration: none; transition: opacity 150ms ease-out; }
   a:hover { opacity: 0.8; }
   :focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
   ::selection { background: var(--accent-soft); }
   button { font-family: var(--mono); }
+  /* Every real control gets the same press and hover language. Properties are named one by one so a
+     hover can never drag an unrelated property along with it. */
+  .press { transition-property: scale, opacity, color, background-color, border-color, box-shadow; transition-duration: 150ms; transition-timing-function: ease-out; }
+  .press:active { scale: 0.96; }
+  /* A filled button carries its own elevation, so it must not be dimmed wholesale on hover:
+     at 80% opacity the fill washes out against the page instead of reading as a hover. */
+  .btn-solid { box-shadow: var(--shadow-btn); }
+  .btn-solid:hover { opacity: 1; box-shadow: var(--shadow-btn-hover); }
+  .btn-quiet:hover { opacity: 1; border-color: var(--dim); }
+  /* Confirmation labels are longer than their idle labels ("Copy" -> "Copied"), so the button
+     reserves the wider width and the toolbar stays still while the state changes. */
+  .btn-copy { min-width: 68px; }
   .zh { display: none; }
   [data-lang="zh"] .en { display: none; }
   [data-lang="zh"] .zh { display: revert; }
@@ -3411,13 +3433,28 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
   [data-tab="claude"] [data-tabbtn="claude"], [data-tab="codex"] [data-tabbtn="codex"], [data-tab="curl"] [data-tabbtn="curl"] { color: var(--ink); box-shadow: inset 0 -1px 0 var(--accent); }
   /* Fail-safe reveal: sections are visible unless the observer is armed and has not seen them yet,
      so content can never be stranded at opacity 0. */
-  .rv { transition: opacity .8s cubic-bezier(.22,1,.36,1), transform .8s cubic-bezier(.22,1,.36,1); }
+  .rv { transition: opacity .52s cubic-bezier(.22,1,.36,1), transform .52s cubic-bezier(.22,1,.36,1); }
   .rv[data-rv-on]:not([data-in]) { opacity: 0; transform: translateY(14px); }
-  @keyframes fadein { from { opacity: 0 } to { opacity: 1 } }
-  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .rv { opacity: 1; transform: none; transition: none; } [data-step] { animation: none !important; } }
+  /* The trace steps stagger when the section is actually reached. They used to run a load-time
+     keyframe, but the section sits several viewports down, so the sequence they exist to show —
+     request, 429, fallback — had always finished before anyone scrolled to it. Hiding hangs off the
+     same armed-and-unseen guard as .rv, so a step can never be stranded at opacity 0 either. */
+  [data-step] { transition-property: opacity, transform, filter; transition-duration: .45s; transition-timing-function: ease-out; }
+  .rv[data-rv-on]:not([data-in]) [data-step] { opacity: 0; transform: translateY(12px); filter: blur(4px); }
+  [data-step]:nth-child(2) { transition-delay: .12s; }
+  [data-step]:nth-child(3) { transition-delay: .24s; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .rv { opacity: 1; transform: none; transition: none; }
+    [data-step] { opacity: 1 !important; transform: none !important; filter: none !important; transition: none; }
+    .press, .plusv, a { transition: none; }
+    .press:active { scale: 1; }
+  }
   details > summary { list-style: none; cursor: pointer; }
   details > summary::-webkit-details-marker { display: none; }
-  details[open] .plusv { opacity: 0; }
+  /* Open/closed is an icon state change, so the stroke cross-fades instead of blinking out. */
+  .plusv { transition-property: opacity, scale, filter; transition-duration: 300ms; transition-timing-function: cubic-bezier(0.2, 0, 0, 1); }
+  details[open] .plusv { opacity: 0; scale: 0.25; filter: blur(4px); }
   header > div::-webkit-scrollbar { display: none; }
   header a, header nav, header button { white-space: nowrap; }
   header nav { flex: none; }
@@ -3447,13 +3484,13 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
         <a href="#how" style="color: var(--dim);"><span class="en">How it routes</span><span class="zh">如何路由</span></a>
       </nav>
       <div style="display: flex; align-items: center; gap: 18px;">
-        <button type="button" sc-camel-on-click="{{ toggleTheme }}" aria-label="{{ themeAria }}" style="display: flex; align-items: center; gap: 7px; cursor: pointer; border: 0; background: transparent; padding: 0;">
+        <button type="button" class="press" sc-camel-on-click="{{ toggleTheme }}" aria-label="{{ themeAria }}" style="display: flex; align-items: center; gap: 7px; cursor: pointer; border: 0; background: transparent; padding: 0;">
           <span style="font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; color: var(--faint);">{{ themeLabel }}</span>
           <span style="position: relative; display: inline-block; width: 30px; height: 16px; border-radius: 9px; border: 1px solid var(--rule); background: var(--track);">
-            <span style="position: absolute; top: 1.5px; left: {{ knobLeft }}; width: 11px; height: 11px; border-radius: 50%; background: var(--ink); transition: left 150ms;"></span>
+            <span style="position: absolute; top: 1.5px; left: 2px; translate: {{ knobShift }}; width: 11px; height: 11px; border-radius: 50%; background: var(--ink); transition: translate 150ms ease-out;"></span>
           </span>
         </button>
-        <button type="button" sc-camel-on-click="{{ toggleLang }}" style="cursor: pointer; border: 1px solid var(--btnbd); border-radius: 3px; background: var(--btnbg); color: var(--ink); padding: 4px 9px; font-size: 11.5px; letter-spacing: 0.06em;">{{ langLabel }}</button>
+        <button type="button" class="press btn-quiet" sc-camel-on-click="{{ toggleLang }}" style="cursor: pointer; border: 1px solid var(--btnbd); border-radius: 3px; background: var(--btnbg); color: var(--ink); padding: 4px 9px; font-size: 11.5px; letter-spacing: 0.06em;">{{ langLabel }}</button>
         <a href="https://github.com/IamNotShady/LLMIngress" target="_blank" rel="noopener" style="font-size: 14px; color: var(--dim);">GitHub ↗</a>
       </div>
     </div>
@@ -3477,7 +3514,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
           <span class="zh">LLMIngress 是一个开源、自托管的 AI 网关。把供应商 API 密钥、订阅账号和本地模型服务接进来，以稳定的虚拟模型名提供给你的各个 Agent；路由、回退、限额和用量，都在一个 Console 里管理。</span>
         </p>
         <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 26px; margin-top: 48px;">
-          <a href="#deploy" style="display: inline-grid; place-items: center; height: 46px; padding: 0 28px; border-radius: 3px; background: var(--seg); color: var(--segfg); font-size: 14.5px; letter-spacing: 0.08em;"><span class="en">DEPLOY LOCALLY</span><span class="zh">本地部署</span></a>
+          <a href="#deploy" class="press btn-solid" style="display: inline-grid; place-items: center; height: 46px; padding: 0 28px; border-radius: 3px; background: var(--seg); color: var(--segfg); font-size: 14.5px; letter-spacing: 0.08em;"><span class="en">DEPLOY LOCALLY</span><span class="zh">本地部署</span></a>
           <a href="https://github.com/IamNotShady/LLMIngress" target="_blank" rel="noopener" style="font-size: 14.5px; letter-spacing: 0.04em; color: var(--ink); border-bottom: 1px solid var(--accent); padding-bottom: 3px;"><span class="en">Read the source</span><span class="zh">阅读源码</span></a>
         </div>
       </div>
@@ -3576,8 +3613,8 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
             </div>
             <p style="margin: 0; padding: 12px 18px 16px; border-top: 1px solid var(--rule); font-size: 13.5px; line-height: 25px; color: var(--dim);"><span class="en">Every new agent adds another copy; every key rotation or model swap means hunting all of them down.</span><span class="zh">每加一个 Agent 就多一份拷贝；每次换密钥、换模型，都得挨个文件找一遍。</span></p>
           </figure>
-          <div style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px 0;">
-            <svg viewBox="0 0 12 20" width="12" height="20" aria-hidden="true" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 1 L6 15 M1.5 11 L6 15.5 L10.5 11"></path></svg>
+          <div style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px 0; color: var(--accent);">
+            <svg viewBox="0 0 12 20" width="12" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 1 L6 15 M1.5 11 L6 15.5 L10.5 11"></path></svg>
             <span style="font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; color: var(--accent);"><span class="en">WITH LLMINGRESS</span><span class="zh">接入 LLMINGRESS</span></span>
           </div>
           <figure style="margin: 0; border: 1px solid var(--hair); border-radius: 3px;">
@@ -3723,7 +3760,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
           <div style="border: 1px solid var(--hair); border-radius: 3px;">
             <div style="display: flex; align-items: center; gap: 12px; padding: 12px 22px; border-bottom: 1px solid var(--rule);">
               <span style="font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; color: var(--dim);">DOCKER COMPOSE</span>
-              <button type="button" sc-camel-on-click="{{ copyDeploy }}" style="margin-left: auto; cursor: pointer; border: 1px solid var(--btnbd); border-radius: 3px; background: var(--btnbg); color: var(--ink); padding: 3px 10px; font-family: var(--mono); font-size: 11.5px;">{{ copyLabel }}</button>
+              <button type="button" class="press btn-quiet btn-copy" sc-camel-on-click="{{ copyDeploy }}" style="margin-left: auto; cursor: pointer; border: 1px solid var(--btnbd); border-radius: 3px; background: var(--btnbg); color: var(--ink); padding: 3px 10px; font-family: var(--mono); font-size: 11.5px;">{{ copyLabel }}</button>
             </div>
             <pre style="margin: 0; padding: 24px 22px; background: var(--track); overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 28px; color: var(--ink);">git clone https://github.com/IamNotShady/LLMIngress.git
 cd LLMIngress
@@ -3732,10 +3769,10 @@ cd LLMIngress
           </div>
           <div data-tab="{{ tab }}" style="margin-top: 24px; border: 1px solid var(--hair); border-radius: 3px;">
           <div role="tablist" style="display: flex; border-bottom: 1px solid var(--rule);">
-            <button type="button" role="tab" data-tabbtn="claude" sc-camel-on-click="{{ setClaude }}" style="cursor: pointer; border: 0; background: transparent; color: var(--dim); padding: 14px 20px; font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.06em;">Claude Code</button>
-            <button type="button" role="tab" data-tabbtn="codex" sc-camel-on-click="{{ setCodex }}" style="cursor: pointer; border: 0; background: transparent; color: var(--dim); padding: 14px 20px; font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.06em;">Codex</button>
-            <button type="button" role="tab" data-tabbtn="curl" sc-camel-on-click="{{ setCurl }}" style="cursor: pointer; border: 0; background: transparent; color: var(--dim); padding: 14px 20px; font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.06em;">curl</button>
-            <button type="button" sc-camel-on-click="{{ copyClient }}" style="margin: 8px 10px 8px auto; cursor: pointer; border: 1px solid var(--btnbd); border-radius: 3px; background: var(--btnbg); color: var(--ink); padding: 3px 10px; font-family: var(--mono); font-size: 11.5px;">{{ clientCopyLabel }}</button>
+            <button type="button" role="tab" class="press" data-tabbtn="claude" sc-camel-on-click="{{ setClaude }}" style="cursor: pointer; border: 0; background: transparent; color: var(--dim); padding: 14px 20px; font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.06em;">Claude Code</button>
+            <button type="button" role="tab" class="press" data-tabbtn="codex" sc-camel-on-click="{{ setCodex }}" style="cursor: pointer; border: 0; background: transparent; color: var(--dim); padding: 14px 20px; font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.06em;">Codex</button>
+            <button type="button" role="tab" class="press" data-tabbtn="curl" sc-camel-on-click="{{ setCurl }}" style="cursor: pointer; border: 0; background: transparent; color: var(--dim); padding: 14px 20px; font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.06em;">curl</button>
+            <button type="button" class="press btn-quiet btn-copy" sc-camel-on-click="{{ copyClient }}" style="margin: 8px 10px 8px auto; cursor: pointer; border: 1px solid var(--btnbd); border-radius: 3px; background: var(--btnbg); color: var(--ink); padding: 3px 10px; font-family: var(--mono); font-size: 11.5px;">{{ clientCopyLabel }}</button>
           </div>
           <div style="padding: 24px 22px; background: var(--track);">
             <pre data-code="claude" style="margin: 0; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 26px; color: var(--ink);">export ANTHROPIC_BASE_URL="http://localhost:4000"
@@ -3796,21 +3833,21 @@ env_key  = "LLMINGRESS_API_KEY"</pre>
             <span style="margin-left: auto; display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12px; color: var(--dim);"><span style="width: 6px; height: 6px; border-radius: 50%; background: var(--green);"></span>200 · 903 ms</span>
           </div>
           <div style="padding: 30px 22px;">
-            <div data-step="" style="display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 20px; align-items: start; padding-bottom: 26px; animation: fadein .6s both .1s;">
+            <div data-step="" style="display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 20px; align-items: start; padding-bottom: 26px;">
               <span style="display: grid; place-items: center; width: 30px; height: 30px; border-radius: 3px; border: 1px solid var(--hair); font-family: var(--mono); font-size: 12px; color: var(--dim);">01</span>
               <div>
                 <p style="margin: 0; font-family: var(--serif); font-size: 20px; font-weight: 400; line-height: 1.5;"><span class="en">Cursor asks for <span style="font-family: var(--mono); font-size: 16px; color: var(--accent);">my-coding-model</span></span><span class="zh">Cursor 请求 <span style="font-family: var(--mono); font-size: 16px; color: var(--accent);">my-coding-model</span></span></p>
                 <p style="margin: 8px 0 0; font-size: 14.5px; line-height: 28px; color: var(--dim);"><span class="en">The agent's config holds only this name and the gateway address.</span><span class="zh">Agent 的配置里只有这个名字和网关地址。</span></p>
               </div>
             </div>
-            <div data-step="" style="display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 20px; align-items: start; padding-bottom: 26px; animation: fadein .6s both .55s;">
+            <div data-step="" style="display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 20px; align-items: start; padding-bottom: 26px;">
               <span style="display: grid; place-items: center; width: 30px; height: 30px; border-radius: 3px; border: 1px solid var(--ambbd); background: var(--ambbg); font-family: var(--mono); font-size: 12px; color: var(--ambtx);">02</span>
               <div>
                 <p style="margin: 0; font-family: var(--serif); font-size: 20px; font-weight: 400; line-height: 1.5;"><span class="en">DeepSeek answers 429</span><span class="zh">DeepSeek 返回 429</span></p>
                 <p style="margin: 8px 0 0; font-size: 14.5px; line-height: 28px; color: var(--dim);"><span class="en">Nothing has been sent to the client yet, so the gateway tries the next candidate.</span><span class="zh">还没有数据发回客户端，网关按序尝试下一个候选。</span></p>
               </div>
             </div>
-            <div data-step="" style="display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 20px; align-items: start; animation: fadein .6s both 1s;">
+            <div data-step="" style="display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 20px; align-items: start;">
               <span style="display: grid; place-items: center; width: 30px; height: 30px; border-radius: 3px; border: 1px solid var(--hair); background: var(--accent-soft); font-family: var(--mono); font-size: 12px; color: var(--accent);">03</span>
               <div>
                 <p style="margin: 0; font-family: var(--serif); font-size: 20px; font-weight: 400; line-height: 1.5;"><span class="en">OpenRouter serves qwen3-coder</span><span class="zh">OpenRouter 用 qwen3-coder 完成</span></p>
@@ -3865,7 +3902,7 @@ env_key  = "LLMINGRESS_API_KEY"</pre>
       <h2 style="margin: 30px auto 0; max-width: 22ch; font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 3.4vw, 42px); line-height: 1.45; letter-spacing: 0.01em;"><span class="en">Get started.</span><span class="zh">开始使用。</span></h2>
       <p style="margin: 22px auto 0; max-width: 52em; font-size: 15px; line-height: 32px; color: var(--dim);"><span class="en">Clone the repository and run the deploy script. The console is at localhost:3000, and nothing is exposed beyond your machine by default.</span><span class="zh">克隆仓库，运行部署脚本，Console 就在 localhost:3000。默认不对外暴露任何服务。</span></p>
       <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 26px; margin-top: 36px;">
-        <a href="https://github.com/IamNotShady/LLMIngress" target="_blank" rel="noopener" style="display: inline-grid; place-items: center; height: 46px; padding: 0 28px; border-radius: 3px; background: var(--seg); color: var(--segfg); font-size: 14.5px; letter-spacing: 0.08em;"><span class="en">CLONE ON GITHUB</span><span class="zh">在 GITHUB 上克隆</span></a>
+        <a href="https://github.com/IamNotShady/LLMIngress" target="_blank" rel="noopener" class="press btn-solid" style="display: inline-grid; place-items: center; height: 46px; padding: 0 28px; border-radius: 3px; background: var(--seg); color: var(--segfg); font-size: 14.5px; letter-spacing: 0.08em;"><span class="en">CLONE ON GITHUB</span><span class="zh">在 GITHUB 上克隆</span></a>
         <a href="https://github.com/IamNotShady/LLMIngress/tree/main/docs" target="_blank" rel="noopener" style="font-size: 14.5px; color: var(--ink); border-bottom: 1px solid var(--accent); padding-bottom: 3px;"><span class="en">Read the docs</span><span class="zh">阅读文档</span></a>
       </div>
     </section>
@@ -3901,6 +3938,7 @@ class Component extends DCLogic {
     this.mq = matchMedia('(prefers-color-scheme: dark)');
     this.onMq = () => { if (this.themePick === 'system') this.forceUpdate(); };
     this.mq.addEventListener('change', this.onMq);
+    this.syncRootTheme();
     this.forceUpdate();
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     this.revealOn = true;
@@ -3933,7 +3971,15 @@ class Component extends DCLogic {
     });
   }
 
-  componentDidUpdate() { this.armReveal(); }
+  /* Mirror the resolved theme onto <html>. The tokens are declared on [data-theme], which used to
+     sit only on the page wrapper, so the root kept the light palette and dark mode showed a white
+     overscroll gutter behind the page and light native scrollbars. */
+  syncRootTheme() {
+    const root = document.documentElement;
+    if (root.getAttribute('data-theme') !== this.resolvedTheme) root.setAttribute('data-theme', this.resolvedTheme);
+  }
+
+  componentDidUpdate() { this.syncRootTheme(); this.armReveal(); }
   componentWillUnmount() {
     if (this.mq) this.mq.removeEventListener('change', this.onMq);
     if (this.onScroll) { removeEventListener('scroll', this.onScroll, { capture: true }); removeEventListener('resize', this.onScroll); }
@@ -3947,7 +3993,7 @@ class Component extends DCLogic {
       themeAttr: resolved,
       themeLabel: resolved === 'dark' ? 'DARK' : 'LIGHT',
       themeAria: resolved === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
-      knobLeft: resolved === 'dark' ? '16px' : '2px',
+      knobShift: resolved === 'dark' ? '14px' : '0px',
       toggleTheme: () => this.setState({ theme: resolved === 'dark' ? 'light' : 'dark' }),
       langLabel: this.lang === 'en' ? '中文' : 'EN',
       toggleLang: () => this.setState({ lang: this.lang === 'en' ? 'zh' : 'en' }),

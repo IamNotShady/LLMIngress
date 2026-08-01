@@ -33,6 +33,7 @@ export const routePolicyStrategies = [
   "load_balance",
   "tag",
   "weighted",
+  "least_time",
 ] as const;
 
 export type RoutePolicyStrategy = (typeof routePolicyStrategies)[number];

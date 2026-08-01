@@ -262,36 +262,68 @@ async function handleRequest(
     }
 
     if (mode === "json") {
-      writeJson(response, 200, {
-        id: "fake-provider-response",
-        object: "chat.completion",
-        choices: [{ index: 0, message: { role: "assistant", content: "fake provider response" } }],
-      });
+      const delayMs = readPositiveIntegerQuery(url, "delay_ms", 0);
+      const sendJsonResponse = () => {
+        writeJson(response, 200, {
+          id: "fake-provider-response",
+          object: "chat.completion",
+          choices: [
+            { index: 0, message: { role: "assistant", content: "fake provider response" } },
+          ],
+        });
+      };
+      if (delayMs > 0) {
+        const delayTimer = setTimeout(sendJsonResponse, delayMs);
+        response.once("close", () => clearTimeout(delayTimer));
+        return;
+      }
+      sendJsonResponse();
       return;
     }
 
     if (mode === "stream") {
-      response.writeHead(200, {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-cache",
-        ...fakeProviderResponseHeaders(200),
-      });
-      response.write('data: {"delta":"fake"}\n\n');
+      // first_byte_ms controls when headers + the first chunk go out (the
+      // route latency stats' "ttfb" sample); stream_end_ms/the second chunk
+      // are then scheduled relative to that first byte, so a slow-first-byte
+      // stream can still finish sooner overall than a fast-first-byte one.
+      const firstByteMs = readPositiveIntegerQuery(url, "first_byte_ms", 0);
       const streamEndMs = readPositiveIntegerQuery(url, "stream_end_ms", 700);
-      const secondChunkTimer = setTimeout(
-        () => {
-          response.write('data: {"delta":" stream"}\n\n');
-        },
-        Math.min(300, streamEndMs),
-      );
-      const endTimer = setTimeout(() => {
-        const usageEvents = buildFakeStreamUsageEvents(url.searchParams.get("usage"));
-        if (usageEvents) {
-          response.write(usageEvents);
-        }
-        response.end("data: [DONE]\n\n");
-      }, streamEndMs);
+      let secondChunkTimer: ReturnType<typeof setTimeout> | undefined;
+      let endTimer: ReturnType<typeof setTimeout> | undefined;
+
+      const writeRemainingChunks = () => {
+        secondChunkTimer = setTimeout(
+          () => {
+            response.write('data: {"delta":" stream"}\n\n');
+          },
+          Math.min(300, streamEndMs),
+        );
+        endTimer = setTimeout(() => {
+          const usageEvents = buildFakeStreamUsageEvents(url.searchParams.get("usage"));
+          if (usageEvents) {
+            response.write(usageEvents);
+          }
+          response.end("data: [DONE]\n\n");
+        }, streamEndMs);
+      };
+
+      const writeFirstChunk = () => {
+        response.writeHead(200, {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-cache",
+          ...fakeProviderResponseHeaders(200),
+        });
+        response.write('data: {"delta":"fake"}\n\n');
+        writeRemainingChunks();
+      };
+
+      const firstByteTimer = firstByteMs > 0 ? setTimeout(writeFirstChunk, firstByteMs) : undefined;
+      if (!firstByteTimer) {
+        writeFirstChunk();
+      }
+
       response.once("close", () => {
+        clearTimeout(firstByteTimer);
         clearTimeout(secondChunkTimer);
         clearTimeout(endTimer);
       });

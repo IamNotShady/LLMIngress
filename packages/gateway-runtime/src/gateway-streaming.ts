@@ -60,6 +60,7 @@ import {
   withGatewayRequestedRouteTag,
 } from "./gateway-request-metadata.ts";
 import { normalizeOpenAIResponsesRequest } from "./gateway-responses.ts";
+import { getGatewayRouteLatencyStats } from "./gateway-route-latency.ts";
 import {
   assertGatewayRoutePolicyEndpointProtocol,
   buildGatewayRequestActivityRoute,
@@ -153,6 +154,7 @@ export async function executeGatewayStreamingRequest(input: {
       estimatedInputTokens: normalized.estimatedInputTokens,
       estimatedOutputTokens: normalized.estimatedOutputTokens,
       requestedTag: input.requestedTag,
+      routeLatency: getGatewayRouteLatencyStats().buildRouteLatencySnapshot("ttfb"),
       snapshot: input.snapshot,
       virtualModelId: input.virtualModel.id,
     });
@@ -269,6 +271,7 @@ export async function executeGatewayStreamingRequest(input: {
       candidates,
       databaseUrl: input.databaseUrl,
       fallbackAttempts,
+      latencySampleMetric: "ttfb",
       requestId: input.requestId,
     });
 
@@ -309,6 +312,7 @@ export async function executeGatewayStreamingRequest(input: {
     activity = buildGatewayRequestActivityRoute({
       candidate: success.candidate,
       fallbackAttempts,
+      providerCallDurationMs: success.durationMs,
       routeDecision,
     });
     const body = composeGatewayProviderStreamPipeline({

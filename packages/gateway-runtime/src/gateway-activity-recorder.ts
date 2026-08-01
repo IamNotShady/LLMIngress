@@ -17,6 +17,8 @@ export type GatewayRequestActivityRoute = {
   modelId?: string;
   providerApiKeyId?: string;
   providerApiKeyPrefix?: string;
+  /** The winning attempt's own call duration: first-byte for a stream, full call otherwise. */
+  providerCallDurationMs?: number;
   providerId?: string;
   providerKey?: string;
   providerModelId?: string;
@@ -125,7 +127,8 @@ export async function recordCompletedGatewayRequestActivity(
           started_at,
           completed_at,
           created_at,
-          payload
+          payload,
+          ttfb_ms
         )
         values (
           $1,
@@ -159,7 +162,8 @@ export async function recordCompletedGatewayRequestActivity(
           $22,
           $23,
           $22,
-          $24::jsonb
+          $24::jsonb,
+          $25
         )
       `,
       [
@@ -187,6 +191,9 @@ export async function recordCompletedGatewayRequestActivity(
         input.startedAt.toISOString(),
         completion.completedAt.toISOString(),
         buildGatewayActivityPayloadJson(input.payload),
+        input.stream && safeLoggingPolicy.route?.providerCallDurationMs != null
+          ? Math.round(safeLoggingPolicy.route.providerCallDurationMs)
+          : null,
       ],
     );
 
@@ -317,9 +324,10 @@ async function insertFallbackEvents(
           error_message,
           failed_before_first_byte,
           retryable,
-          status_code
+          status_code,
+          duration_ms
         )
-        values ($1, $2, $3, $4, $5, $6, 'failed', $7, $8, $9, $10, $11)
+        values ($1, $2, $3, $4, $5, $6, 'failed', $7, $8, $9, $10, $11, $12)
       `,
       [
         randomUUID(),
@@ -333,6 +341,7 @@ async function insertFallbackEvents(
         attempt.failedBeforeFirstByte,
         attempt.retryable,
         attempt.statusCode,
+        attempt.durationMs ?? null,
       ],
     );
   }
@@ -353,9 +362,10 @@ async function insertFallbackEvents(
         provider_api_key_prefix,
         attempt_order,
         status,
-        failed_before_first_byte
+        failed_before_first_byte,
+        duration_ms
       )
-      values ($1, $2, $3, $4, $5, $6, 'succeeded', false)
+      values ($1, $2, $3, $4, $5, $6, 'succeeded', false, $7)
     `,
     [
       randomUUID(),
@@ -364,6 +374,7 @@ async function insertFallbackEvents(
       input.route.providerApiKeyId || null,
       input.route.providerApiKeyPrefix || null,
       attemptOrder,
+      input.route.providerCallDurationMs ?? null,
     ],
   );
 }

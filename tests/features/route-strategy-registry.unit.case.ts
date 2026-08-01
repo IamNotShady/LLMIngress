@@ -382,6 +382,7 @@ describe("route strategy registry", () => {
     expect(routeStrategyCapabilityContractScope("load_balance")).toBe("all_candidates");
     expect(routeStrategyCapabilityContractScope("tag")).toBe("selected_candidate");
     expect(routeStrategyCapabilityContractScope("weighted")).toBe("all_candidates");
+    expect(routeStrategyCapabilityContractScope("least_time")).toBe("all_candidates");
   });
 
   it("normalizes route tags and rejects shapes a header cannot carry safely", () => {

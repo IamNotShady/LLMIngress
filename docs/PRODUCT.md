@@ -80,7 +80,7 @@ Provider has one logical connection. Worker probes up to three chat models. The 
 ### Virtual Model routing
 
 A Virtual Model is created atomically with one Route Policy and at least one candidate. Supported
-strategies are `fixed`, `cost_first`, `load_balance`, `tag`, and `weighted`. `cost_first` orders by input price plus
+strategies are `fixed`, `cost_first`, `load_balance`, `tag`, `weighted`, and `least_time`. `cost_first` orders by input price plus
 output price and places unknown prices last. The candidate picker filters only by endpoint protocol,
 so capability differences remain selectable; saving rejects differences between known capability
 values and reports every conflicting field with both candidate names and values. Unknown values
@@ -96,6 +96,12 @@ capability-checked against the candidate it selected.
 `weighted` splits traffic by per-candidate percentages that must sum to exactly 1.00, drawn
 independently per request; a 0.00-weight candidate receives no primary traffic and serves only as
 a fallback target.
+
+`least_time` orders candidates by latency observed from real Gateway traffic - a decayed average,
+first-byte for streams and full call otherwise - so requests converge on the candidate actually
+performing best. A candidate that fails falls back to the next-fastest one; unmeasured or stale
+candidates go last and are occasionally promoted so none is excluded forever. The stats persist
+across restarts, and Worker probe latency never participates.
 
 Before the first client byte, Gateway may try another credential or candidate. After streaming
 starts, it never replays the request. Confirmed unhealthy connections are filtered; models and

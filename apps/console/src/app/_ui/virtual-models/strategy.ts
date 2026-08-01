@@ -13,6 +13,8 @@ export const strategyRouteNote: Record<RoutePolicyStrategy, string> = {
   tag: 'routed by the x-llmingress-route-tag request header; no tag or an unknown tag serves the "default" candidate, and a tagged candidate that fails falls back only to it',
   weighted:
     "split by configured weights that sum to 1.00; each request independently draws a candidate with its weight's probability, and failures fall through the drawn order — 0.00-weight candidates last, as fallback only",
+  least_time:
+    "ordered by observed latency from real traffic (decayed average; first-byte for streams, full call otherwise); unmeasured candidates go last and are occasionally probed",
 };
 
 export const strategyLabel: Record<RoutePolicyStrategy, string> = {
@@ -21,6 +23,7 @@ export const strategyLabel: Record<RoutePolicyStrategy, string> = {
   load_balance: "load_balance",
   tag: "tag",
   weighted: "weighted",
+  least_time: "least_time",
 };
 
 /** Retries stop the moment the response starts streaming. */

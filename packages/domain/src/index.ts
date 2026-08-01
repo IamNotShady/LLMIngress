@@ -6,7 +6,13 @@ import {
 import { omitUndefined } from "@llmingress/util";
 
 export { type RouteEndpointProtocol, routeEndpointProtocols };
-export type RoutePolicyStrategy = "fixed" | "cost_first" | "load_balance" | "tag" | "weighted";
+export type RoutePolicyStrategy =
+  | "fixed"
+  | "cost_first"
+  | "load_balance"
+  | "tag"
+  | "weighted"
+  | "least_time";
 
 /** The tag every tag-routed policy must carry on exactly one candidate. */
 export const ROUTE_TAG_DEFAULT = "default";
@@ -341,6 +347,25 @@ export type RoutePolicy<TCandidate extends RouteCandidate = RouteCandidate> = {
   virtualModelName: string;
 };
 
+export type RouteLatencySample = {
+  ewmaMs: number;
+  lastSampleAtMs: number;
+  sampleCount: number;
+};
+
+/** A point-in-time view of observed provider latency, injected by the gateway. */
+export type RouteLatencySnapshot = {
+  /** 0..1 share of requests that promote one cold candidate to the head. */
+  exploreRatio: number;
+  minSamples: number;
+  nowMs: number;
+  /** Keyed by providerModelId. */
+  samples: ReadonlyMap<string, RouteLatencySample>;
+  staleAfterMs: number;
+  /** EWMA quantization bucket; averages inside one bucket tie on candidateOrder. 0 disables. */
+  tieBucketMs: number;
+};
+
 export type RouteSelectionSnapshot<TCandidate extends RouteCandidate = RouteCandidate> = {
   routePolicies: RoutePolicy<TCandidate>[];
 };
@@ -350,6 +375,8 @@ export type RouteSelectionRequest<TCandidate extends RouteCandidate = RouteCandi
   estimatedOutputTokens: number;
   /** The tag the client asked for, already normalized; unknown tags are allowed. */
   requestedTag?: string;
+  /** Observed latency snapshot for the least_time strategy; other strategies ignore it. */
+  routeLatency?: RouteLatencySnapshot;
   snapshot: RouteSelectionSnapshot<TCandidate>;
   virtualModelId?: string;
   virtualModelName?: string;
@@ -366,6 +393,8 @@ export type RouteReason = {
   candidateExplanations: RouteCandidateExplanation[];
   endpointProtocol?: RouteEndpointProtocol;
   estimatedCostUsd?: number;
+  /** True when a least_time route promoted an unmeasured candidate to gather samples. */
+  explored?: boolean;
   /** The candidate tag the request actually landed on, when one matched. */
   matchedTag?: string;
   message: string;
@@ -408,6 +437,7 @@ type RouteStrategyContext = {
   estimatedOutputTokens: number;
   random: () => number;
   requestedTag?: string;
+  routeLatency?: RouteLatencySnapshot;
 };
 
 /**
@@ -419,6 +449,8 @@ type RouteStrategyContext = {
 export type RouteStrategyCapabilityContractScope = "all_candidates" | "selected_candidate";
 
 export type RouteReasonAnnotation = {
+  /** True when a least_time route promoted an unmeasured candidate to gather samples. */
+  explored?: boolean;
   matchedTag?: string;
   requestedTag?: string;
   /** The configured weight of the candidate a weighted route drew. */
@@ -550,6 +582,23 @@ const routeStrategyHandlers: Record<RoutePolicyStrategy, RouteStrategyHandler> =
     orderCandidates: (candidates, context) => orderWeightedCandidates(candidates, context),
     reportsSelectedPrice: false,
   },
+  least_time: {
+    annotateReason: ({ chain, context }) => {
+      const head = chain[0];
+      const explored =
+        head !== undefined &&
+        !isWarmLatencyCandidate(head, context.routeLatency) &&
+        chain.some((candidate) => isWarmLatencyCandidate(candidate, context.routeLatency));
+      return omitUndefined({ explored: explored ? true : undefined });
+    },
+    capabilityContractScope: "all_candidates",
+    decisionMessage: ({ annotation, selectedCandidateOrder, virtualModelName }) =>
+      annotation?.explored
+        ? `least_time route for ${virtualModelName} selected exploration candidate ${selectedCandidateOrder} to gather latency samples.`
+        : `least_time route for ${virtualModelName} selected fastest eligible candidate ${selectedCandidateOrder}.`,
+    orderCandidates: (candidates, context) => orderLeastTimeCandidates(candidates, context),
+    reportsSelectedPrice: false,
+  },
 };
 
 export function routeStrategyCapabilityContractScope(
@@ -622,6 +671,61 @@ function orderWeightedCandidates<TCandidate extends RouteCandidate>(
   return ordered;
 }
 
+function isWarmLatencyCandidate(
+  candidate: RouteCandidate,
+  latency: RouteLatencySnapshot | undefined,
+): boolean {
+  if (!latency) {
+    return false;
+  }
+  const sample = latency.samples.get(candidate.providerModelId);
+  if (!sample) {
+    return false;
+  }
+  return (
+    sample.sampleCount >= latency.minSamples &&
+    latency.nowMs - sample.lastSampleAtMs <= latency.staleAfterMs
+  );
+}
+
+/**
+ * Warm candidates (enough recent samples) ascend by their decayed latency,
+ * quantized into tie buckets so near-equal averages keep the configured order
+ * instead of flapping; cold candidates (no data, under min-samples, or stale)
+ * append in candidateOrder as reachable fallbacks, and an exploration share
+ * promotes one cold candidate to the head so none stays unmeasured forever.
+ * Without a latency snapshot the chain is the configured order.
+ */
+function orderLeastTimeCandidates<TCandidate extends RouteCandidate>(
+  candidates: TCandidate[],
+  context: RouteStrategyContext,
+): TCandidate[] {
+  const latency = context.routeLatency;
+  if (!latency) {
+    return candidates;
+  }
+  const warm = candidates.filter((candidate) => isWarmLatencyCandidate(candidate, latency));
+  const cold = candidates.filter((candidate) => !isWarmLatencyCandidate(candidate, latency));
+  const bucketOf = (ewmaMs: number): number =>
+    latency.tieBucketMs > 0 ? Math.floor(ewmaMs / latency.tieBucketMs) : ewmaMs;
+  const warmSorted = [...warm].sort((a, b) => {
+    const bucketA = bucketOf(latency.samples.get(a.providerModelId)?.ewmaMs ?? 0);
+    const bucketB = bucketOf(latency.samples.get(b.providerModelId)?.ewmaMs ?? 0);
+    if (bucketA !== bucketB) {
+      return bucketA - bucketB;
+    }
+    return a.candidateOrder - b.candidateOrder;
+  });
+  const chain = [...warmSorted, ...cold];
+  if (cold.length > 0 && warm.length > 0 && context.random() < latency.exploreRatio) {
+    const picked = cold[Math.floor(context.random() * cold.length)];
+    if (picked) {
+      return [picked, ...chain.filter((candidate) => candidate !== picked)];
+    }
+  }
+  return chain;
+}
+
 export function buildRouteAttemptCandidates<TCandidate extends RouteCandidate>(input: {
   routePolicy: RoutePolicy<TCandidate>;
   estimatedInputTokens: number;
@@ -637,12 +741,14 @@ function buildRouteStrategyContext(input: {
   estimatedOutputTokens: number;
   random?: () => number;
   requestedTag?: string;
+  routeLatency?: RouteLatencySnapshot;
 }): RouteStrategyContext {
   return {
     estimatedInputTokens: input.estimatedInputTokens,
     estimatedOutputTokens: input.estimatedOutputTokens,
     random: input.random ?? Math.random,
     requestedTag: input.requestedTag,
+    routeLatency: input.routeLatency,
   };
 }
 

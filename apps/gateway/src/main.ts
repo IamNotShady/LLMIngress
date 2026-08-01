@@ -35,6 +35,7 @@ import {
   shouldExposeGatewayRequestMetadata,
 } from "@llmingress/gateway-runtime/gateway-request-metadata";
 import { executeGatewayOpenAIResponse } from "@llmingress/gateway-runtime/gateway-responses";
+import { getGatewayRouteLatencyStats } from "@llmingress/gateway-runtime/gateway-route-latency";
 import {
   executeGatewayStreamingRequest,
   type GatewayStreamingProtocol,
@@ -180,6 +181,7 @@ export async function startGateway() {
     reconcileIntervalMs: gatewayConfigReconcileIntervalMs(),
   });
   await configRuntime.start();
+  await getGatewayRouteLatencyStats().start();
 
   const app = createGatewayApp({ configRuntime });
 
@@ -205,6 +207,7 @@ export async function startGateway() {
         exitCode = 1;
         logger.error({ pending: drainResult.pending }, "gateway background task drain timed out");
       }
+      await getGatewayRouteLatencyStats().stop();
       await closePostgresPools();
     } catch (error) {
       exitCode = 1;

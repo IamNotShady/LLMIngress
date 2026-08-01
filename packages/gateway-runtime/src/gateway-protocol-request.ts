@@ -38,6 +38,7 @@ import {
   type GatewayRequestMetadata,
   withGatewayRequestedRouteTag,
 } from "./gateway-request-metadata.ts";
+import { getGatewayRouteLatencyStats } from "./gateway-route-latency.ts";
 import {
   assertGatewayRoutePolicyEndpointProtocol,
   buildGatewayRequestActivityRoute,
@@ -147,6 +148,7 @@ export async function executeGatewayProtocolRequest<
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
       estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       requestedTag: input.requestedTag,
+      routeLatency: getGatewayRouteLatencyStats().buildRouteLatencySnapshot("total"),
       snapshot: input.snapshot,
       virtualModelId: input.virtualModel.id,
     });
@@ -227,6 +229,7 @@ export async function executeGatewayProtocolRequest<
       candidates,
       databaseUrl: input.databaseUrl,
       fallbackAttempts,
+      latencySampleMetric: "total",
       requestId: input.requestId,
     });
     if (!success) {
@@ -250,6 +253,7 @@ export async function executeGatewayProtocolRequest<
     activity = buildGatewayRequestActivityRoute({
       candidate: success.candidate,
       fallbackAttempts,
+      providerCallDurationMs: success.durationMs,
       routeDecision,
     });
 

@@ -57,11 +57,13 @@ async function countFallbackEventsByRequestId(
 async function postChatCompletion(input: {
   baseUrl: string;
   requestId?: string;
+  stream?: boolean;
 }): Promise<Response> {
   return fetch(`${input.baseUrl}/v1/chat/completions`, {
     body: JSON.stringify({
       messages: [{ content: "ping", role: "user" }],
       model: virtualModelName,
+      ...(input.stream ? { stream: true } : {}),
     }),
     headers: {
       authorization: `Bearer ${apiKey}`,
@@ -203,6 +205,139 @@ test("a failing full-weight candidate falls back to the zero-weight one and the 
     }
   } finally {
     await failingProvider.close();
+    await fallbackProvider.close();
+    await fixture.dispose();
+  }
+});
+
+test("a weighted stream that fails before the first byte falls back to the zero-weight candidate", async () => {
+  test.setTimeout(180_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_weighted_stream_fb_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const fallbackProvider = await createFakeProviderServer();
+  const failingProvider = await createFakeProviderServer();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    // Same topology as the JSON fallback case, streamed: the zero-weight
+    // candidate sits first in candidate order and must only ever serve as
+    // the fallback target.
+    const seeded = await seedOpenAIGatewayRoute({
+      apiKey,
+      fixture,
+      modelId: "fallback-only-model",
+      providerBaseUrl: `${fallbackProvider.url}?mode=stream&stream_end_ms=20`,
+      strategy: "weighted",
+      virtualModelName,
+      weight: 0,
+    });
+    await seedGatewayRouteCandidate({
+      candidateOrder: 2,
+      fixture,
+      modelId: "full-weight-model",
+      providerBaseUrl: `${failingProvider.url}?mode=unsupported-parameter`,
+      routePolicyId: seeded.routePolicyId,
+      weight: 1,
+    });
+
+    const gateway = startGatewayProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${gateway.port}`;
+      await waitForGateway(baseUrl, gateway);
+
+      // The full-weight candidate refuses before its first byte, so the
+      // stream is free to restart on the zero-weight candidate and the
+      // client sees one healthy 200 stream.
+      const requestId = `test_weighted_stream_fb_${randomUUID()}`;
+      const response = await postChatCompletion({ baseUrl, requestId, stream: true });
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain("fake");
+      expect(failingProvider.requests).toHaveLength(1);
+      expect(fallbackProvider.requests).toHaveLength(1);
+      await expect
+        .poll(async () => countFallbackEventsByRequestId(fixture, requestId), { timeout: 20_000 })
+        .toBe(2);
+      const reason = await readRouteReasonByRequestId(fixture, requestId);
+      expect(reason?.strategy).toBe("weighted");
+      expect(reason?.selected_weight).toBe("1");
+    } finally {
+      await stopGatewayProcess(gateway);
+    }
+  } finally {
+    await failingProvider.close();
+    await fallbackProvider.close();
+    await fixture.dispose();
+  }
+});
+
+test("a weighted stream that fails after the first byte is never replayed on another candidate", async () => {
+  test.setTimeout(180_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_weighted_stream_replay_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const fallbackProvider = await createFakeProviderServer();
+  const midstreamProvider = await createFakeProviderServer();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    // The zero-weight candidate is healthy and first in candidate order: if
+    // the gateway wrongly replayed the broken stream, it would land here and
+    // the zero-request assertion below would fail loudly.
+    const seeded = await seedOpenAIGatewayRoute({
+      apiKey,
+      fixture,
+      modelId: "fallback-only-model",
+      providerBaseUrl: `${fallbackProvider.url}?mode=stream&stream_end_ms=20`,
+      strategy: "weighted",
+      virtualModelName,
+      weight: 0,
+    });
+    await seedGatewayRouteCandidate({
+      candidateOrder: 2,
+      fixture,
+      modelId: "full-weight-model",
+      providerBaseUrl: `${midstreamProvider.url}?mode=midstream-error`,
+      routePolicyId: seeded.routePolicyId,
+      weight: 1,
+    });
+
+    const gateway = startGatewayProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${gateway.port}`;
+      await waitForGateway(baseUrl, gateway);
+
+      // The upstream sends its first chunk and then dies; the 200 already
+      // reached the client, so the gateway must not restart the request
+      // anywhere. The client read ends however the runtime surfaces the
+      // truncation - the contract under test is the request counts, not the
+      // tail of the broken stream.
+      const requestId = `test_weighted_stream_replay_${randomUUID()}`;
+      const response = await postChatCompletion({ baseUrl, requestId, stream: true });
+      expect(response.status).toBe(200);
+      await response.text().catch(() => undefined);
+      expect(midstreamProvider.requests).toHaveLength(1);
+      expect(fallbackProvider.requests).toHaveLength(0);
+      await expect
+        .poll(async () => (await readRouteReasonByRequestId(fixture, requestId))?.strategy, {
+          timeout: 20_000,
+        })
+        .toBe("weighted");
+      const reason = await readRouteReasonByRequestId(fixture, requestId);
+      expect(reason?.selected_weight).toBe("1");
+    } finally {
+      await stopGatewayProcess(gateway);
+    }
+  } finally {
+    await midstreamProvider.close();
     await fallbackProvider.close();
     await fixture.dispose();
   }

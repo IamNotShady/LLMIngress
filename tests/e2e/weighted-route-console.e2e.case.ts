@@ -106,6 +106,15 @@ test("the route editor saves candidate weights, refuses a bad sum, and shows the
         const weightFields = dialog.locator('input[name="candidateWeights"]');
         await expect(weightFields).toHaveCount(2);
 
+        // 0. The weight field constrains drafts while typing: a third decimal
+        //    digit and non-weight characters are swallowed at the keystroke,
+        //    so only the sum rule is left for the server to refuse.
+        await weightFields.nth(0).pressSequentially("0.12222");
+        await expect(weightFields.nth(0)).toHaveValue("0.12");
+        await weightFields.nth(0).fill("");
+        await weightFields.nth(0).pressSequentially("abc");
+        await expect(weightFields.nth(0)).toHaveValue("");
+
         // 1. Weights that do not sum to 1.00 are a refusal, and nothing is written.
         await dialog.locator('input[name="name"]').fill("vm-weighted-console");
         await dialog.locator('input[name="description"]').fill("weighted routed model");

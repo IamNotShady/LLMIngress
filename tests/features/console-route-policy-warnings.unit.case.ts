@@ -96,6 +96,21 @@ describe("console route policy warnings", () => {
     expect(dialogs).toContain('<input type="hidden" name="candidateWeights" value="" />');
   });
 
+  test("the weight field constrains drafts to a two-decimal weight shape while typing", () => {
+    const weightInput = readFileSync(
+      join(rootDir, "apps/console/src/app/_ui/virtual-models/weight-input.tsx"),
+      "utf8",
+    );
+    const dialogs = readFileSync(
+      join(rootDir, "apps/console/src/app/_ui/virtual-models/dialogs.tsx"),
+      "utf8",
+    );
+
+    expect(weightInput).toContain('"use client"');
+    expect(weightInput).toContain("0\\.\\d{0,2}");
+    expect(dialogs).toContain("<WeightInput");
+  });
+
   test("the weighted route table shows each candidate's configured weight", () => {
     const detail = readFileSync(
       join(rootDir, "apps/console/src/app/_ui/virtual-models/detail.tsx"),

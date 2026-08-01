@@ -34,6 +34,7 @@ import {
   readRouteProtocol,
 } from "./candidate-providers";
 import { strategyRouteNote } from "./strategy";
+import { WeightInput } from "./weight-input";
 
 const PRESERVED_EDITOR_FIELDS = ["name", "description"] as const;
 
@@ -283,24 +284,23 @@ export async function VirtualModelDialogs({
                     ) : (
                       <input type="hidden" name="candidateTags" value="" />
                     )}
-                    {/* One candidateWeights field per row, index-aligned with
-                        the providerModelIds hidden inputs exactly like
-                        candidateTags above; non-weighted strategies still emit
-                        an empty entry to keep that pairing. The wrapper fixes
-                        the width: the input's own class is w-full. Known limit:
-                        this field cannot join PRESERVED_EDITOR_FIELDS (repeated
-                        names read back as a RadioNodeList), so reordering,
-                        adding, removing a candidate or switching strategy drops
-                        unsaved weight text — the same as NAME and DESCRIPTION
-                        under plain Link navigation. */}
+                    {/* One draft-constrained candidateWeights field per row,
+                        index-aligned with the providerModelIds hidden inputs
+                        exactly like candidateTags above; non-weighted
+                        strategies still emit an empty entry to keep that
+                        pairing. The wrapper fixes the width: the input's own
+                        class is w-full. Known limit: this field cannot join
+                        PRESERVED_EDITOR_FIELDS (repeated names read back as a
+                        RadioNodeList), so reordering, adding, removing a
+                        candidate or switching strategy drops unsaved weight
+                        text — the same as NAME and DESCRIPTION under plain
+                        Link navigation. */}
                     {routesByWeight ? (
                       <span className="block w-[72px] flex-none">
-                        <TextInput
+                        <WeightInput
                           aria-label={`Weight for ${model.modelId}`}
                           defaultValue={storedWeightsByModelId.get(model.id) ?? ""}
-                          inputMode="decimal"
                           name="candidateWeights"
-                          placeholder="0.25"
                         />
                       </span>
                     ) : (

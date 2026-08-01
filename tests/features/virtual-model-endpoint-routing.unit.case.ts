@@ -73,7 +73,7 @@ describe("virtual model endpoint routing", () => {
         strategy: "random",
         virtualModelId,
       }),
-    ).toThrow(/must be one of fixed, cost_first, load_balance, tag, weighted/i);
+    ).toThrow(/must be one of fixed, cost_first, load_balance, tag, weighted, least_time/i);
   });
 
   it("derives route endpoint protocols from the provider registry, keyed by provider key", () => {

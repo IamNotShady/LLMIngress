@@ -3390,9 +3390,10 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
     --serif: "Shippori Mincho", "Noto Serif SC", Georgia, serif;
     --sans: "Open Sans", "Noto Sans SC", system-ui, sans-serif;
     --mono: "DM Mono", ui-monospace, monospace;
-    /* Type scale. DESIGN.md 3.2 asks for a named scale, 1.65 body leading and a 62ch measure;
-       the page had drifted to 18 one-off sizes, 47 fixed-px leadings and an 80-108ch measure.
-       Every step lands within 1px of the size it replaces, so the proportions hold. */
+    /* Type scale. The page had drifted to 18 one-off sizes (six of them half-pixel), 47 leadings
+       fixed in px, and an 80-108 character measure. Each step below lands within 1px of the size
+       it replaces, so the proportions hold. Leading is named by role rather than repeated as a
+       number at 70-odd call sites, so a role stays one decision instead of three. */
     --t-2xs: 10px;       /* dense demo labels */
     --t-xs: 11px;        /* eyebrows, rail labels, meta   (was 10.5, 11) */
     --t-sm: 12px;        /* chips, tabs, small buttons    (was 11.5, 12, 12.5) */
@@ -3402,7 +3403,14 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
     --t-lg: 17px;        /* card titles, wordmark         (was 16, 17) */
     --t-xl: 20px;        /* feature titles, FAQ questions (was 19, 20, 21) */
     --t-2xl: 32px;       /* stat numerals */
-    --measure: 62ch;     /* DESIGN.md 3.2 max measure */
+    /* Leading by role: headings tighten toward 1.1, body copy sits in 1.5-1.6, and anything
+       that wraps past two lines stays at or above 1.4. */
+    --lh-display: 1.1;   /* h1, section h2, closing h2 */
+    --lh-title: 1.25;    /* 20px feature titles, FAQ questions, trace step titles */
+    --lh-heading: 1.3;   /* 17px card titles */
+    --lh-body: 1.55;     /* prose and code */
+    --lh-caption: 1.45;  /* 11-12px mono labels and captions */
+    --measure: 65ch;     /* 60-75 characters a line */
   }
   [data-theme="dark"] {
     --bg: #15181c; --ink: #e9ecf0; --ink2: rgba(233,236,240,0.45); --seg: oklch(0.72 0.12 245); --segfg: #15181c;
@@ -3521,11 +3529,11 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
 
       <div style="padding: clamp(72px, 10vw, 128px) clamp(24px, 5vw, 72px) clamp(56px, 7vw, 88px);">
         <span style="display: block; font-family: var(--mono); font-size: var(--t-sm); letter-spacing: 0.18em; color: var(--accent); margin-bottom: 34px;"><span class="en">OPEN SOURCE · APACHE-2.0 · PRE-RELEASE</span><span class="zh">开源 · APACHE-2.0 · 预发布</span></span>
-        <h1 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(40px, 5.2vw, 62px); line-height: 1.18; letter-spacing: -0.015em; color: var(--ink);">
+        <h1 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(40px, 5.2vw, 62px); line-height: var(--lh-display); letter-spacing: -0.015em; color: var(--ink);">
           <span class="en"><span style="display: block;">Route every agent</span><span style="display: block;">through one gateway.</span></span>
           <span class="zh"><span style="display: block;">让所有 Agent，</span><span style="display: block;">走同一个网关。</span></span>
         </h1>
-        <p style="margin: 40px 0 0; max-width: var(--measure); font-size: var(--t-body); line-height: 1.65; color: var(--dim);">
+        <p style="margin: 40px 0 0; max-width: var(--measure); font-size: var(--t-body); line-height: var(--lh-body); color: var(--dim);">
           <span class="en">LLMIngress is an open-source, self-hosted AI gateway. Connect provider API keys, subscription accounts and local model servers, serve them to your agents under stable virtual model names, and manage routing, fallback, limits and usage from one console.</span>
           <span class="zh">LLMIngress 是一个开源、自托管的 AI 网关。把供应商 API 密钥、订阅账号和本地模型服务接进来，以稳定的虚拟模型名提供给你的各个 Agent；路由、回退、限额和用量，都在一个 Console 里管理。</span>
         </p>
@@ -3544,26 +3552,26 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
     <section style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);">
       <div style="padding: 28px 24px 30px; border-right: 1px solid var(--rule2);">
         <span style="display: block; font-family: var(--serif); font-size: var(--t-2xl); font-weight: 400; color: var(--ink); font-variant-numeric: tabular-nums;">2</span>
-        <span style="display: block; margin-top: 8px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);"><span class="en">COMPATIBLE APIS ACCEPTED</span><span class="zh">可接入的兼容协议</span></span><span style="display: block; margin-top: 6px; font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6; color: var(--dim);"><span class="en">openai + anthropic · 4 endpoints</span><span class="zh">OpenAI + Anthropic · 共 4 个端点</span></span>
+        <span style="display: block; margin-top: 8px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);"><span class="en">COMPATIBLE APIS ACCEPTED</span><span class="zh">可接入的兼容协议</span></span><span style="display: block; margin-top: 6px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption); color: var(--dim);"><span class="en">openai + anthropic · 4 endpoints</span><span class="zh">OpenAI + Anthropic · 共 4 个端点</span></span>
       </div>
       <div style="padding: 28px 24px 30px; border-right: 1px solid var(--rule2);">
         <span style="display: block; font-family: var(--serif); font-size: var(--t-2xl); font-weight: 400; color: var(--ink); font-variant-numeric: tabular-nums;">33</span>
-        <span style="display: block; margin-top: 8px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);"><span class="en">BUILT-IN PROVIDER TEMPLATES</span><span class="zh">内置供应商模板</span></span><span style="display: block; margin-top: 6px; font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6; color: var(--dim);"><span class="en">subscription · api key · local</span><span class="zh">订阅 · API 密钥 · 本地</span></span>
+        <span style="display: block; margin-top: 8px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);"><span class="en">BUILT-IN PROVIDER TEMPLATES</span><span class="zh">内置供应商模板</span></span><span style="display: block; margin-top: 6px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption); color: var(--dim);"><span class="en">subscription · api key · local</span><span class="zh">订阅 · API 密钥 · 本地</span></span>
       </div>
       <div style="padding: 28px 24px 30px; border-right: 1px solid var(--rule2);">
         <span style="display: block; font-family: var(--serif); font-size: var(--t-2xl); font-weight: 400; color: var(--ink); font-variant-numeric: tabular-nums;">5</span>
-        <span style="display: block; margin-top: 8px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);"><span class="en">LIMIT TYPES ON EACH KEY</span><span class="zh">每把密钥可设的限额类型</span></span><span style="display: block; margin-top: 6px; font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6; color: var(--dim);"><span class="en">budget · rpm · tpm · tokens · concurrency</span><span class="zh">预算 · RPM · TPM · 单请求 token · 并发</span></span>
+        <span style="display: block; margin-top: 8px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);"><span class="en">LIMIT TYPES ON EACH KEY</span><span class="zh">每把密钥可设的限额类型</span></span><span style="display: block; margin-top: 6px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption); color: var(--dim);"><span class="en">budget · rpm · tpm · tokens · concurrency</span><span class="zh">预算 · RPM · TPM · 单请求 token · 并发</span></span>
       </div>
       <div style="padding: 28px 24px 30px;">
         <span style="display: block; font-family: var(--serif); font-size: var(--t-2xl); font-weight: 400; color: var(--ink);"><span class="en">none</span><span class="zh">无</span></span>
-        <span style="display: block; margin-top: 8px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);"><span class="en">PROMPTS WRITTEN TO LOGS</span><span class="zh">写入日志的提示词</span></span><span style="display: block; margin-top: 6px; font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6; color: var(--dim);"><span class="en">responses and credentials stay out too</span><span class="zh">响应与凭据同样不写入</span></span>
+        <span style="display: block; margin-top: 8px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);"><span class="en">PROMPTS WRITTEN TO LOGS</span><span class="zh">写入日志的提示词</span></span><span style="display: block; margin-top: 6px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption); color: var(--dim);"><span class="en">responses and credentials stay out too</span><span class="zh">响应与凭据同样不写入</span></span>
       </div>
     </section>
 
 
 <section id="console-demo" class="rv" data-od-id="console-demo-section" style="width:100%;padding:clamp(48px,6vw,76px) 0 clamp(64px,8vw,96px);">
   <div style="display:flex;align-items:end;justify-content:space-between;gap:32px;flex-wrap:wrap;">
-    <h2 data-od-id="console-demo-heading" style="margin:0;font-family:var(--serif);font-weight:400;font-size:clamp(26px,2.9vw,34px);line-height:1.22;letter-spacing:-.01em;"><span class="en">See the gateway at work.</span><span class="zh">看看网关如何工作。</span></h2>
+    <h2 data-od-id="console-demo-heading" style="margin:0;font-family:var(--serif);font-weight:400;font-size:clamp(26px,2.9vw,34px);line-height:var(--lh-display);letter-spacing:-.01em;"><span class="en">See the gateway at work.</span><span class="zh">看看网关如何工作。</span></h2>
   </div>
   <div class="cd-shell" data-od-id="console-demo-shell">
     <div class="cd-topbar" data-od-id="console-demo-topbar">
@@ -3587,19 +3595,19 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
       <div data-2col="" style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: clamp(32px, 5vw, 80px); align-items: start;">
         <div>
           <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.18em; color: var(--accent); margin-bottom: 18px;">01 — <span class="en">THE PROBLEM</span><span class="zh">问题</span></span>
-          <h2 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 2.9vw, 34px); line-height: 1.22; letter-spacing: -0.01em;"><span class="en">Why one<br>gateway.</span><span class="zh">为什么需要<br>一个网关。</span></h2>
+          <h2 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 2.9vw, 34px); line-height: var(--lh-display); letter-spacing: -0.01em;"><span class="en">Why one<br>gateway.</span><span class="zh">为什么需要<br>一个网关。</span></h2>
         </div>
         <div style="display: grid; gap: 0;">
           <div style="margin-bottom: 36px;">
           <figure style="margin: 0; border: 1px solid var(--hair); border-radius: 3px;">
-            <figcaption style="padding: 12px 18px; border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.14em; color: var(--faint);"><span class="en">TODAY — N AGENTS, N DRIFTING CONFIGS</span><span class="zh">现状 — N 个 AGENT，N 份各自漂移的配置</span></figcaption>
+            <figcaption style="padding: 12px 18px; border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption); letter-spacing: 0.14em; color: var(--faint);"><span class="en">TODAY — N AGENTS, N DRIFTING CONFIGS</span><span class="zh">现状 — N 个 AGENT，N 份各自漂移的配置</span></figcaption>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; padding: 16px 18px;">
             <div style="border: 1px solid var(--hair); border-radius: 3px; padding: 14px 16px 16px;">
               <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px;">
                 <span style="font-family: var(--mono); font-size: var(--t-sm); color: var(--ink);">Cursor</span>
                 <span style="font-family: var(--mono); font-size: var(--t-xs); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">settings.json</span>
               </div>
-              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6;"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">api.openai.com/v1</span><span style="color: var(--faint);">api_key</span><span style="color: var(--redtx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">sk-a1f4…9c</span><span style="color: var(--faint);">model</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">gpt-4.1</span></div>
+              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption);"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">api.openai.com/v1</span><span style="color: var(--faint);">api_key</span><span style="color: var(--redtx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">sk-a1f4…9c</span><span style="color: var(--faint);">model</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">gpt-4.1</span></div>
               <span style="display: inline-block; margin-top: 12px; padding: 2px 8px; border: 1px solid var(--ambbd); border-radius: 3px; background: var(--ambbg); font-family: var(--mono); font-size: var(--t-2xs); letter-spacing: 0.06em; color: var(--ambtx);"><span class="en">STALE — KEY ROTATED LAST MONTH</span><span class="zh">密钥上月已轮换，这里还是旧的</span></span>
             </div>
             <div style="border: 1px solid var(--hair); border-radius: 3px; padding: 14px 16px 16px;">
@@ -3607,7 +3615,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
                 <span style="font-family: var(--mono); font-size: var(--t-sm); color: var(--ink);">Codex</span>
                 <span style="font-family: var(--mono); font-size: var(--t-xs); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">~/.codex/config.toml</span>
               </div>
-              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6;"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">api.deepseek.com</span><span style="color: var(--faint);">api_key</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">sk-b77e…41</span><span style="color: var(--faint);">model</span><span style="color: var(--ambtx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">deepseek-v3</span></div>
+              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption);"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">api.deepseek.com</span><span style="color: var(--faint);">api_key</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">sk-b77e…41</span><span style="color: var(--faint);">model</span><span style="color: var(--ambtx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">deepseek-v3</span></div>
               <span style="display: inline-block; margin-top: 12px; padding: 2px 8px; border: 1px solid var(--ambbd); border-radius: 3px; background: var(--ambbg); font-family: var(--mono); font-size: var(--t-2xs); letter-spacing: 0.06em; color: var(--ambtx);"><span class="en">MODEL HARD-CODED</span><span class="zh">模型名写死，换一次要改一处</span></span>
             </div>
             <div style="border: 1px solid var(--hair); border-radius: 3px; padding: 14px 16px 16px;">
@@ -3615,7 +3623,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
                 <span style="font-family: var(--mono); font-size: var(--t-sm); color: var(--ink);">Claude Code</span>
                 <span style="font-family: var(--mono); font-size: var(--t-xs); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">settings.json</span>
               </div>
-              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6;"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">api.anthropic.com</span><span style="color: var(--faint);">api_key</span><span style="color: var(--redtx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">sk-a1f4…9c</span><span style="color: var(--faint);">model</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">claude-sonnet-4</span></div>
+              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption);"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">api.anthropic.com</span><span style="color: var(--faint);">api_key</span><span style="color: var(--redtx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">sk-a1f4…9c</span><span style="color: var(--faint);">model</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">claude-sonnet-4</span></div>
               <span style="display: inline-block; margin-top: 12px; padding: 2px 8px; border: 1px solid var(--red); border-radius: 3px; background: transparent; font-family: var(--mono); font-size: var(--t-2xs); letter-spacing: 0.06em; color: var(--redtx);"><span class="en">SHARED KEY — SPEND UNTRACKABLE</span><span class="zh">和 Cursor 共用密钥，花费分不清</span></span>
             </div>
             <div style="border: 1px solid var(--hair); border-radius: 3px; padding: 14px 16px 16px;">
@@ -3623,25 +3631,25 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
                 <span style="font-family: var(--mono); font-size: var(--t-sm); color: var(--ink);">CI agent</span>
                 <span style="font-family: var(--mono); font-size: var(--t-xs); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">.env.prod</span>
               </div>
-              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6;"><span style="color: var(--faint);">base_url</span><span style="color: var(--ambtx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">proxy.internal</span><span style="color: var(--faint);">api_key</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">sk-93d0…7a</span><span style="color: var(--faint);">model</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">gpt-4o</span></div>
+              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption);"><span style="color: var(--faint);">base_url</span><span style="color: var(--ambtx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">proxy.internal</span><span style="color: var(--faint);">api_key</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">sk-93d0…7a</span><span style="color: var(--faint);">model</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">gpt-4o</span></div>
               <span style="display: inline-block; margin-top: 12px; padding: 2px 8px; border: 1px solid var(--ambbd); border-radius: 3px; background: var(--ambbg); font-family: var(--mono); font-size: var(--t-2xs); letter-spacing: 0.06em; color: var(--ambtx);"><span class="en">LAST TOUCHED 6 MONTHS AGO</span><span class="zh">6 个月没人动过，地址早已失效</span></span>
             </div>
             </div>
-            <p style="margin: 0; padding: 12px 18px 16px; border-top: 1px solid var(--rule); font-size: var(--t-md); line-height: 1.65; color: var(--dim);"><span class="en">Every new agent adds another copy; every key rotation or model swap means hunting all of them down.</span><span class="zh">每加一个 Agent 就多一份拷贝；每次换密钥、换模型，都得挨个文件找一遍。</span></p>
+            <p style="margin: 0; padding: 12px 18px 16px; border-top: 1px solid var(--rule); font-size: var(--t-md); line-height: var(--lh-body); color: var(--dim);"><span class="en">Every new agent adds another copy; every key rotation or model swap means hunting all of them down.</span><span class="zh">每加一个 Agent 就多一份拷贝；每次换密钥、换模型，都得挨个文件找一遍。</span></p>
           </figure>
           <div style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px 0; color: var(--accent);">
             <svg viewBox="0 0 12 20" width="12" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 1 L6 15 M1.5 11 L6 15.5 L10.5 11"></path></svg>
             <span style="font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--accent);"><span class="en">WITH LLMINGRESS</span><span class="zh">接入 LLMINGRESS</span></span>
           </div>
           <figure style="margin: 0; border: 1px solid var(--hair); border-radius: 3px;">
-            <figcaption style="padding: 12px 18px; border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.14em; color: var(--faint);"><span class="en">AFTER — ONE CONFIG, EVERYWHERE</span><span class="zh">之后 — 所有 AGENT 同一份配置</span></figcaption>
+            <figcaption style="padding: 12px 18px; border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption); letter-spacing: 0.14em; color: var(--faint);"><span class="en">AFTER — ONE CONFIG, EVERYWHERE</span><span class="zh">之后 — 所有 AGENT 同一份配置</span></figcaption>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; padding: 16px 18px;">
             <div style="border: 1px solid var(--hair); border-radius: 3px; padding: 14px 16px 16px;">
               <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px;">
                 <span style="font-family: var(--mono); font-size: var(--t-sm); color: var(--ink);">Cursor</span>
                 <span style="font-family: var(--mono); font-size: var(--t-xs); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">settings.json</span>
               </div>
-              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6;"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">localhost:4000</span><span style="color: var(--faint);">model</span><span style="color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">my-coding-model</span></div>
+              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption);"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">localhost:4000</span><span style="color: var(--faint);">model</span><span style="color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">my-coding-model</span></div>
               
             </div>
             <div style="border: 1px solid var(--hair); border-radius: 3px; padding: 14px 16px 16px;">
@@ -3649,7 +3657,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
                 <span style="font-family: var(--mono); font-size: var(--t-sm); color: var(--ink);">Codex</span>
                 <span style="font-family: var(--mono); font-size: var(--t-xs); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">~/.codex/config.toml</span>
               </div>
-              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6;"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">localhost:4000</span><span style="color: var(--faint);">model</span><span style="color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">my-coding-model</span></div>
+              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption);"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">localhost:4000</span><span style="color: var(--faint);">model</span><span style="color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">my-coding-model</span></div>
               
             </div>
             <div style="border: 1px solid var(--hair); border-radius: 3px; padding: 14px 16px 16px;">
@@ -3657,7 +3665,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
                 <span style="font-family: var(--mono); font-size: var(--t-sm); color: var(--ink);">Claude Code</span>
                 <span style="font-family: var(--mono); font-size: var(--t-xs); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">settings.json</span>
               </div>
-              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6;"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">localhost:4000</span><span style="color: var(--faint);">model</span><span style="color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">my-coding-model</span></div>
+              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption);"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">localhost:4000</span><span style="color: var(--faint);">model</span><span style="color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">my-coding-model</span></div>
               
             </div>
             <div style="border: 1px solid var(--hair); border-radius: 3px; padding: 14px 16px 16px;">
@@ -3665,11 +3673,11 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
                 <span style="font-family: var(--mono); font-size: var(--t-sm); color: var(--ink);">CI agent</span>
                 <span style="font-family: var(--mono); font-size: var(--t-xs); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">.env.prod</span>
               </div>
-              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6;"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">localhost:4000</span><span style="color: var(--faint);">model</span><span style="color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">my-coding-model</span></div>
+              <div style="display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption);"><span style="color: var(--faint);">base_url</span><span style="color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">localhost:4000</span><span style="color: var(--faint);">model</span><span style="color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">my-coding-model</span></div>
               
             </div>
             </div>
-            <p style="margin: 0; padding: 12px 18px 16px; border-top: 1px solid var(--rule); font-size: var(--t-md); line-height: 1.65; color: var(--dim);"><span class="en">Every agent points at the same address and the same name. Rotate keys or swap providers by editing once, in the console.</span><span class="zh">所有 Agent 指向同一个地址、同一个名字。换密钥、换供应商，只在 Console 里改一次。</span></p>
+            <p style="margin: 0; padding: 12px 18px 16px; border-top: 1px solid var(--rule); font-size: var(--t-md); line-height: var(--lh-body); color: var(--dim);"><span class="en">Every agent points at the same address and the same name. Rotate keys or swap providers by editing once, in the console.</span><span class="zh">所有 Agent 指向同一个地址、同一个名字。换密钥、换供应商，只在 Console 里改一次。</span></p>
           </figure>
           </div>
           
@@ -3681,38 +3689,38 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
       <div data-2col="" style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: clamp(32px, 5vw, 80px); align-items: start;">
         <div>
           <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.18em; color: var(--accent); margin-bottom: 18px;">02 — <span class="en">CAPABILITIES</span><span class="zh">能力</span></span>
-          <h2 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 2.9vw, 34px); line-height: 1.22; letter-spacing: -0.01em;"><span class="en">How it solves this.</span><span class="zh">它怎么解决<br>这些问题。</span></h2>
+          <h2 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 2.9vw, 34px); line-height: var(--lh-display); letter-spacing: -0.01em;"><span class="en">How it solves this.</span><span class="zh">它怎么解决<br>这些问题。</span></h2>
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 clamp(32px, 4vw, 56px);">
           <div style="padding: 26px 0; border-top: 1px solid var(--rule);">
             <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);">ONE_ENDPOINT</span>
-            <h3 style="margin: 12px 0 10px; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">One endpoint</span><span class="zh">一个入口</span></h3>
-            <p style="margin: 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">No more per-client wiring: four OpenAI- and Anthropic-compatible APIs on one port, and each key sees only the models it was granted.</span><span class="zh">不再挨个客户端配置：四个 OpenAI / Anthropic 兼容端点在同一端口，每把密钥只见被授权的模型。</span></p>
+            <h3 style="margin: 12px 0 10px; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">One endpoint</span><span class="zh">一个入口</span></h3>
+            <p style="margin: 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">No more per-client wiring: four OpenAI- and Anthropic-compatible APIs on one port, and each key sees only the models it was granted.</span><span class="zh">不再挨个客户端配置：四个 OpenAI / Anthropic 兼容端点在同一端口，每把密钥只见被授权的模型。</span></p>
           </div>
           <div style="padding: 26px 0; border-top: 1px solid var(--rule);">
             <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);">VIRTUAL_MODELS</span>
-            <h3 style="margin: 12px 0 10px; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">Virtual models</span><span class="zh">虚拟模型</span></h3>
-            <p style="margin: 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">Model names stop being hard-coded: one stable name maps to an ordered list of real models — swap providers without touching any agent.</span><span class="zh">模型名不再写死：一个稳定名字映射一组真实模型，换供应商不用动任何 Agent。</span></p>
+            <h3 style="margin: 12px 0 10px; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">Virtual models</span><span class="zh">虚拟模型</span></h3>
+            <p style="margin: 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">Model names stop being hard-coded: one stable name maps to an ordered list of real models — swap providers without touching any agent.</span><span class="zh">模型名不再写死：一个稳定名字映射一组真实模型，换供应商不用动任何 Agent。</span></p>
           </div>
           <div style="padding: 26px 0; border-top: 1px solid var(--rule);">
             <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);">FALLBACK_CHAIN</span>
-            <h3 style="margin: 12px 0 10px; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">Fallbacks</span><span class="zh">回退</span></h3>
-            <p style="margin: 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">A provider going down no longer stops the session: on 429, 5xx or timeout the gateway silently falls through to the next candidate.</span><span class="zh">供应商挂了不再中断会话：遇 429 / 5xx / 超时静默切到下一个候选，首字节后绝不重放。</span></p>
+            <h3 style="margin: 12px 0 10px; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">Fallbacks</span><span class="zh">回退</span></h3>
+            <p style="margin: 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">A provider going down no longer stops the session: on 429, 5xx or timeout the gateway silently falls through to the next candidate.</span><span class="zh">供应商挂了不再中断会话：遇 429 / 5xx / 超时静默切到下一个候选，首字节后绝不重放。</span></p>
           </div>
           <div style="padding: 26px 0; border-top: 1px solid var(--rule);">
             <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);">COST_LEDGER</span>
-            <h3 style="margin: 12px 0 10px; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">Usage and cost</span><span class="zh">用量与成本</span></h3>
-            <p style="margin: 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">Spend stops being a blind spot: every request is logged with model, tokens, latency and cost, viewable per agent key.</span><span class="zh">花费不再分不清：每个请求按密钥记账——模型、token、延迟、成本，一目了然。</span></p>
+            <h3 style="margin: 12px 0 10px; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">Usage and cost</span><span class="zh">用量与成本</span></h3>
+            <p style="margin: 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">Spend stops being a blind spot: every request is logged with model, tokens, latency and cost, viewable per agent key.</span><span class="zh">花费不再分不清：每个请求按密钥记账——模型、token、延迟、成本，一目了然。</span></p>
           </div>
           <div style="padding: 26px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);">
             <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);">HARD_LIMITS</span>
-            <h3 style="margin: 12px 0 10px; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">Limits</span><span class="zh">限额</span></h3>
-            <p style="margin: 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">A runaway agent hits a ceiling, not your bill: budget, RPM, TPM and concurrency caps enforced per key at the gateway.</span><span class="zh">失控的 Agent 撞到的是上限而不是账单：每把密钥的预算、RPM、TPM、并发由网关强制执行。</span></p>
+            <h3 style="margin: 12px 0 10px; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">Limits</span><span class="zh">限额</span></h3>
+            <p style="margin: 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">A runaway agent hits a ceiling, not your bill: budget, RPM, TPM and concurrency caps enforced per key at the gateway.</span><span class="zh">失控的 Agent 撞到的是上限而不是账单：每把密钥的预算、RPM、TPM、并发由网关强制执行。</span></p>
           </div>
           <div style="padding: 26px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);">
             <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);">SELF_HOSTED</span>
-            <h3 style="margin: 12px 0 10px; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">Self-hosted</span><span class="zh">自托管</span></h3>
-            <p style="margin: 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">Keys stop leaking into dotfiles: credentials live encrypted in one place, on your machine, and prompts never touch the logs.</span><span class="zh">密钥不再散落在各个配置文件里：凭据集中加密、只存在你机器上，提示词不落日志。</span></p>
+            <h3 style="margin: 12px 0 10px; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">Self-hosted</span><span class="zh">自托管</span></h3>
+            <p style="margin: 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">Keys stop leaking into dotfiles: credentials live encrypted in one place, on your machine, and prompts never touch the logs.</span><span class="zh">密钥不再散落在各个配置文件里：凭据集中加密、只存在你机器上，提示词不落日志。</span></p>
           </div>
         </div>
       </div>
@@ -3722,7 +3730,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
       <div data-2col="" style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: clamp(32px, 5vw, 80px); align-items: start;">
         <div>
           <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.18em; color: var(--accent); margin-bottom: 18px;">03 — <span class="en">ECOSYSTEM</span><span class="zh">生态</span></span>
-          <h2 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 2.9vw, 34px); line-height: 1.22; letter-spacing: -0.01em;"><span class="en">Supported clients<br>and providers.</span><span class="zh">支持的客户端<br>与供应商。</span></h2>
+          <h2 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 2.9vw, 34px); line-height: var(--lh-display); letter-spacing: -0.01em;"><span class="en">Supported clients<br>and providers.</span><span class="zh">支持的客户端<br>与供应商。</span></h2>
         </div>
         <div style="display: grid; gap: 34px;">
           <div>
@@ -3754,21 +3762,21 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
       <div data-2col="" style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: clamp(32px, 5vw, 80px); align-items: start;">
         <div>
           <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.18em; color: var(--accent); margin-bottom: 18px;">04 — <span class="en">DEPLOY &amp; CONNECT</span><span class="zh">部署与接入</span></span>
-          <h2 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 2.9vw, 34px); line-height: 1.22; letter-spacing: -0.01em;"><span class="en">Deploy it,<br>then connect.</span><span class="zh">先部署，<br>再接入。</span></h2>
-          <p style="margin: 24px 0 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">One script brings up console, gateway, worker and database with Docker Compose. Everything stays on your machine.</span><span class="zh">一条脚本用 Docker Compose 起好 Console、Gateway、Worker 和数据库。所有东西都留在你机器上。</span></p>
-          <p style="margin: 26px 0 0; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);"><span class="en">THEN, IN THE CONSOLE</span><span class="zh">然后，在 CONSOLE 里</span></p>
+          <h2 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 2.9vw, 34px); line-height: var(--lh-display); letter-spacing: -0.01em;"><span class="en">Deploy it,<br>then connect.</span><span class="zh">先部署，<br>再接入。</span></h2>
+          <p style="margin: 24px 0 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">One script brings up console, gateway, worker and database with Docker Compose. Everything stays on your machine.</span><span class="zh">一条脚本用 Docker Compose 起好 Console、Gateway、Worker 和数据库。所有东西都留在你机器上。</span></p>
+          <p style="margin: 26px 0 0; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption); letter-spacing: 0.16em; color: var(--faint);"><span class="en">THEN, IN THE CONSOLE</span><span class="zh">然后，在 CONSOLE 里</span></p>
           <ol style="margin: 26px 0 0; padding: 0; list-style: none; display: grid; gap: 20px;">
             <li>
               <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.14em; color: var(--faint);">01</span>
-              <p style="margin: 6px 0 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">Add a provider: an API key, a subscription, or local Ollama.</span><span class="zh">加供应商：API 密钥、订阅，或本机 Ollama。</span></p>
+              <p style="margin: 6px 0 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">Add a provider: an API key, a subscription, or local Ollama.</span><span class="zh">加供应商：API 密钥、订阅，或本机 Ollama。</span></p>
             </li>
             <li>
               <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.14em; color: var(--faint);">02</span>
-              <p style="margin: 6px 0 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">Create a virtual model and order its candidates.</span><span class="zh">建虚拟模型，排好候选顺序。</span></p>
+              <p style="margin: 6px 0 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">Create a virtual model and order its candidates.</span><span class="zh">建虚拟模型，排好候选顺序。</span></p>
             </li>
             <li>
               <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.14em; color: var(--faint);">03</span>
-              <p style="margin: 6px 0 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">Issue one key per agent and point it at the gateway.</span><span class="zh">给每个 Agent 发一把密钥，指向网关。</span></p>
+              <p style="margin: 6px 0 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">Issue one key per agent and point it at the gateway.</span><span class="zh">给每个 Agent 发一把密钥，指向网关。</span></p>
             </li>
           </ol>
         </div>
@@ -3778,10 +3786,10 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
               <span style="font-family: var(--mono); font-size: var(--t-sm); letter-spacing: 0.1em; color: var(--dim);">DOCKER COMPOSE</span>
               <button type="button" class="press btn-quiet btn-copy" sc-camel-on-click="{{ copyDeploy }}" style="margin-left: auto; cursor: pointer; border: 1px solid var(--btnbd); border-radius: 3px; background: var(--btnbg); color: var(--ink); padding: 3px 10px; font-family: var(--mono); font-size: var(--t-sm);">{{ copyLabel }}</button>
             </div>
-            <pre style="margin: 0; padding: 24px 22px; background: var(--track); overflow-x: auto; font-family: var(--mono); font-size: var(--t-md); line-height: 1.7; color: var(--ink);">git clone https://github.com/IamNotShady/LLMIngress.git
+            <pre style="margin: 0; padding: 24px 22px; background: var(--track); overflow-x: auto; font-family: var(--mono); font-size: var(--t-md); line-height: var(--lh-body); color: var(--ink);">git clone https://github.com/IamNotShady/LLMIngress.git
 cd LLMIngress
 ./scripts/deploy.sh</pre>
-            <p style="margin: 0; padding: 14px 22px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-sm); line-height: 1.6; color: var(--faint);">CONSOLE :3000 · GATEWAY :4000 · <span class="en">LOCAL-ONLY BY DEFAULT</span><span class="zh">默认仅本机可访问</span></p>
+            <p style="margin: 0; padding: 14px 22px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-sm); line-height: var(--lh-caption); color: var(--faint);">CONSOLE :3000 · GATEWAY :4000 · <span class="en">LOCAL-ONLY BY DEFAULT</span><span class="zh">默认仅本机可访问</span></p>
           </div>
           <div data-tab="{{ tab }}" style="margin-top: 24px; border: 1px solid var(--hair); border-radius: 3px;">
           <div role="tablist" style="display: flex; border-bottom: 1px solid var(--rule);">
@@ -3791,37 +3799,37 @@ cd LLMIngress
             <button type="button" class="press btn-quiet btn-copy" sc-camel-on-click="{{ copyClient }}" style="margin: 8px 10px 8px auto; cursor: pointer; border: 1px solid var(--btnbd); border-radius: 3px; background: var(--btnbg); color: var(--ink); padding: 3px 10px; font-family: var(--mono); font-size: var(--t-sm);">{{ clientCopyLabel }}</button>
           </div>
           <div style="padding: 24px 22px; background: var(--track);">
-            <pre data-code="claude" style="margin: 0; overflow-x: auto; font-family: var(--mono); font-size: var(--t-md); line-height: 1.7; color: var(--ink);">export ANTHROPIC_BASE_URL="http://localhost:4000"
+            <pre data-code="claude" style="margin: 0; overflow-x: auto; font-family: var(--mono); font-size: var(--t-md); line-height: var(--lh-body); color: var(--ink);">export ANTHROPIC_BASE_URL="http://localhost:4000"
 export ANTHROPIC_AUTH_TOKEN="llmi_cc_4f8a…"
 
 claude   <span style="color: var(--faint);"># model: my-coding-model (virtual)</span></pre>
-            <pre data-code="codex" style="margin: 0; overflow-x: auto; font-family: var(--mono); font-size: var(--t-md); line-height: 1.7; color: var(--ink);"><span style="color: var(--faint);"># ~/.codex/config.toml</span>
+            <pre data-code="codex" style="margin: 0; overflow-x: auto; font-family: var(--mono); font-size: var(--t-md); line-height: var(--lh-body); color: var(--ink);"><span style="color: var(--faint);"># ~/.codex/config.toml</span>
 model          = "my-coding-model"
 model_provider = "llmingress"
 
 [model_providers.llmingress]
 base_url = "http://localhost:4000/v1"
 env_key  = "LLMINGRESS_API_KEY"</pre>
-            <pre data-code="curl" style="margin: 0; overflow-x: auto; font-family: var(--mono); font-size: var(--t-md); line-height: 1.7; color: var(--ink);">curl http://localhost:4000/v1/chat/completions \
+            <pre data-code="curl" style="margin: 0; overflow-x: auto; font-family: var(--mono); font-size: var(--t-md); line-height: var(--lh-body); color: var(--ink);">curl http://localhost:4000/v1/chat/completions \
   -H "Authorization: Bearer llmi_dev_a1c3…" \
   -H "Content-Type: application/json" \
   -d '{ "model": "my-coding-model",
         "messages": [{ "role": "user", "content": "Hello" }] }'</pre>
           </div>
-          <p style="margin: 0; padding: 14px 22px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-sm); color: var(--faint);"><span class="en">ONE KEY WORKS ON ALL FOUR ENDPOINTS</span><span class="zh">一把密钥在四个端点上都能用</span></p>
+          <p style="margin: 0; padding: 14px 22px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-sm); line-height: var(--lh-caption); color: var(--faint);"><span class="en">ONE KEY WORKS ON ALL FOUR ENDPOINTS</span><span class="zh">一把密钥在四个端点上都能用</span></p>
         </div>
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 clamp(24px, 3vw, 44px); margin-top: 30px;">
             <div style="padding: 22px 0; border-top: 1px solid var(--rule);">
-              <h3 style="margin: 0 0 8px; font-family: var(--serif); font-size: var(--t-lg); font-weight: 400; line-height: 1.3;"><span class="en">Local Node</span><span class="zh">本地 Node</span></h3>
-              <p style="margin: 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">Run directly with Node and your own PostgreSQL.</span><span class="zh">用 Node 和自己的 PostgreSQL 直接跑，适合改代码。</span></p>
+              <h3 style="margin: 0 0 8px; font-family: var(--serif); font-size: var(--t-lg); font-weight: 400; line-height: var(--lh-heading);"><span class="en">Local Node</span><span class="zh">本地 Node</span></h3>
+              <p style="margin: 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">Run directly with Node and your own PostgreSQL.</span><span class="zh">用 Node 和自己的 PostgreSQL 直接跑，适合改代码。</span></p>
             </div>
             <div style="padding: 22px 0; border-top: 1px solid var(--rule);">
-              <h3 style="margin: 0 0 8px; font-family: var(--serif); font-size: var(--t-lg); font-weight: 400; line-height: 1.3;"><span class="en">Server · VPS</span><span class="zh">服务器 · VPS</span></h3>
-              <p style="margin: 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">The same compose file runs on a server; keep gateway and database private.</span><span class="zh">同一份 compose 上服务器；Gateway 与数据库保持内网。</span></p>
+              <h3 style="margin: 0 0 8px; font-family: var(--serif); font-size: var(--t-lg); font-weight: 400; line-height: var(--lh-heading);"><span class="en">Server · VPS</span><span class="zh">服务器 · VPS</span></h3>
+              <p style="margin: 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">The same compose file runs on a server; keep gateway and database private.</span><span class="zh">同一份 compose 上服务器；Gateway 与数据库保持内网。</span></p>
             </div>
             <div style="padding: 22px 0; border-top: 1px solid var(--rule);">
-              <h3 style="margin: 0 0 8px; font-family: var(--serif); font-size: var(--t-lg); font-weight: 400; line-height: 1.3;"><span class="en">Upgrades</span><span class="zh">升级</span></h3>
-              <p style="margin: 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">git pull and run the script again. Data migrations happen automatically.</span><span class="zh">git pull 后重跑一次脚本，数据迁移自动完成。</span></p>
+              <h3 style="margin: 0 0 8px; font-family: var(--serif); font-size: var(--t-lg); font-weight: 400; line-height: var(--lh-heading);"><span class="en">Upgrades</span><span class="zh">升级</span></h3>
+              <p style="margin: 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">git pull and run the script again. Data migrations happen automatically.</span><span class="zh">git pull 后重跑一次脚本，数据迁移自动完成。</span></p>
             </div>
           </div>
         </div>
@@ -3832,16 +3840,16 @@ env_key  = "LLMINGRESS_API_KEY"</pre>
       <div data-2col="" style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: clamp(32px, 5vw, 80px); align-items: start;">
         <div>
           <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.18em; color: var(--accent); margin-bottom: 18px;">05 — <span class="en">HOW IT ROUTES</span><span class="zh">如何路由</span></span>
-          <h2 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 2.9vw, 34px); line-height: 1.22; letter-spacing: -0.01em;"><span class="en">How a request<br>is routed.</span><span class="zh">请求是怎么<br>被路由的。</span></h2>
-          <p style="margin: 24px 0 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">A <b style="font-weight: 600; color: var(--ink);">virtual model</b> is a name you define, mapped to an ordered list of real models. Agents only know the name.</span><span class="zh"><b style="font-weight: 600; color: var(--ink);">虚拟模型</b>：你定义的一个名字，映射到一组按序的真实模型。Agent 只认识这个名字。</span></p>
+          <h2 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 2.9vw, 34px); line-height: var(--lh-display); letter-spacing: -0.01em;"><span class="en">How a request<br>is routed.</span><span class="zh">请求是怎么<br>被路由的。</span></h2>
+          <p style="margin: 24px 0 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">A <b style="font-weight: 600; color: var(--ink);">virtual model</b> is a name you define, mapped to an ordered list of real models. Agents only know the name.</span><span class="zh"><b style="font-weight: 600; color: var(--ink);">虚拟模型</b>：你定义的一个名字，映射到一组按序的真实模型。Agent 只认识这个名字。</span></p>
           <figure style="margin: 22px 0 0; border: 1px solid var(--hair); border-radius: 3px;">
-            <pre style="margin: 0; padding: 16px 18px; overflow-x: auto; font-family: var(--mono); font-size: var(--t-sm); line-height: 1.7; color: var(--ink);"><span style="color: var(--accent);">my-coding-model</span>
+            <pre style="margin: 0; padding: 16px 18px; overflow-x: auto; font-family: var(--mono); font-size: var(--t-sm); line-height: var(--lh-body); color: var(--ink);"><span style="color: var(--accent);">my-coding-model</span>
 ├─ 1  deepseek-v3 @ deepseek
 ├─ 2  qwen3-coder @ openrouter
 └─ 3  qwen3-coder @ ollama <span style="color: var(--faint);">(local)</span></pre>
-            <figcaption style="padding: 10px 18px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6; letter-spacing: 0.1em; color: var(--faint);"><span class="en">ONE PUBLIC NAME, AN ORDERED LIST OF CANDIDATES. SWAP PROVIDERS WITHOUT TOUCHING ANY AGENT.</span><span class="zh">对外一个名字，对内一组按序候选。换供应商不用动任何 Agent 的配置。</span></figcaption>
+            <figcaption style="padding: 10px 18px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption); letter-spacing: 0.1em; color: var(--faint);"><span class="en">ONE PUBLIC NAME, AN ORDERED LIST OF CANDIDATES. SWAP PROVIDERS WITHOUT TOUCHING ANY AGENT.</span><span class="zh">对外一个名字，对内一组按序候选。换供应商不用动任何 Agent 的配置。</span></figcaption>
           </figure>
-          <p style="margin: 18px 0 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">Below, one request with one fallback.</span><span class="zh">下面是一次带回退的请求过程。</span></p>
+          <p style="margin: 18px 0 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">Below, one request with one fallback.</span><span class="zh">下面是一次带回退的请求过程。</span></p>
         </div>
         <div style="border: 1px solid var(--hair); border-radius: 3px;">
           <div style="display: flex; align-items: center; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--rule);">
@@ -3852,22 +3860,22 @@ env_key  = "LLMINGRESS_API_KEY"</pre>
             <div data-step="" style="display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 20px; align-items: start; padding-bottom: 26px;">
               <span style="display: grid; place-items: center; width: 30px; height: 30px; border-radius: 3px; border: 1px solid var(--hair); font-family: var(--mono); font-size: var(--t-sm); color: var(--dim);">01</span>
               <div>
-                <p style="margin: 0; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">Cursor asks for <span style="font-family: var(--mono); font-size: var(--t-lg); color: var(--accent);">my-coding-model</span></span><span class="zh">Cursor 请求 <span style="font-family: var(--mono); font-size: var(--t-lg); color: var(--accent);">my-coding-model</span></span></p>
-                <p style="margin: 8px 0 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">The agent’s config holds only this name and the gateway address.</span><span class="zh">Agent 的配置里只有这个名字和网关地址。</span></p>
+                <p style="margin: 0; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">Cursor asks for <span style="font-family: var(--mono); font-size: var(--t-lg); color: var(--accent);">my-coding-model</span></span><span class="zh">Cursor 请求 <span style="font-family: var(--mono); font-size: var(--t-lg); color: var(--accent);">my-coding-model</span></span></p>
+                <p style="margin: 8px 0 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">The agent’s config holds only this name and the gateway address.</span><span class="zh">Agent 的配置里只有这个名字和网关地址。</span></p>
               </div>
             </div>
             <div data-step="" style="display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 20px; align-items: start; padding-bottom: 26px;">
               <span style="display: grid; place-items: center; width: 30px; height: 30px; border-radius: 3px; border: 1px solid var(--ambbd); background: var(--ambbg); font-family: var(--mono); font-size: var(--t-sm); color: var(--ambtx);">02</span>
               <div>
-                <p style="margin: 0; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">DeepSeek answers 429</span><span class="zh">DeepSeek 返回 429</span></p>
-                <p style="margin: 8px 0 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">Nothing has been sent to the client yet, so the gateway tries the next candidate.</span><span class="zh">还没有数据发回客户端，网关按序尝试下一个候选。</span></p>
+                <p style="margin: 0; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">DeepSeek answers 429</span><span class="zh">DeepSeek 返回 429</span></p>
+                <p style="margin: 8px 0 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">Nothing has been sent to the client yet, so the gateway tries the next candidate.</span><span class="zh">还没有数据发回客户端，网关按序尝试下一个候选。</span></p>
               </div>
             </div>
             <div data-step="" style="display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 20px; align-items: start;">
               <span style="display: grid; place-items: center; width: 30px; height: 30px; border-radius: 3px; border: 1px solid var(--hair); background: var(--accent-soft); font-family: var(--mono); font-size: var(--t-sm); color: var(--accent);">03</span>
               <div>
-                <p style="margin: 0; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">OpenRouter serves qwen3-coder</span><span class="zh">OpenRouter 用 qwen3-coder 完成</span></p>
-                <p style="margin: 8px 0 0; font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">The agent sees one successful response; both attempts are recorded.</span><span class="zh">Agent 只看到一次成功响应；两次尝试都被记录。</span></p>
+                <p style="margin: 0; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">OpenRouter serves qwen3-coder</span><span class="zh">OpenRouter 用 qwen3-coder 完成</span></p>
+                <p style="margin: 8px 0 0; font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">The agent sees one successful response; both attempts are recorded.</span><span class="zh">Agent 只看到一次成功响应；两次尝试都被记录。</span></p>
               </div>
             </div>
           </div>
@@ -3877,7 +3885,7 @@ env_key  = "LLMINGRESS_API_KEY"</pre>
             <div style="padding: 18px 22px; border-right: 1px solid var(--rule2);"><span style="display: block; font-family: var(--mono); font-size: var(--t-lg); color: var(--ink); font-variant-numeric: tabular-nums;">$0.0004</span><span style="display: block; margin-top: 4px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.12em; color: var(--faint);"><span class="en">COST</span><span class="zh">成本</span></span></div>
             <div style="padding: 18px 22px;"><span style="display: block; font-family: var(--mono); font-size: var(--t-lg); color: var(--ink); font-variant-numeric: tabular-nums;">1</span><span style="display: block; margin-top: 4px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.12em; color: var(--faint);"><span class="en">SILENT FALLBACK</span><span class="zh">次静默回退</span></span></div>
           </div>
-          <p style="margin: 0; padding: 12px 22px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6; letter-spacing: 0.12em; color: var(--faint);"><span class="en">ILLUSTRATIVE TRACE · FIELDS MATCH THE CONSOLE’S ACTIVITY RECORD</span><span class="zh">示意追踪 · 字段与 Console 活动记录一致</span></p>
+          <p style="margin: 0; padding: 12px 22px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption); letter-spacing: 0.12em; color: var(--faint);"><span class="en">ILLUSTRATIVE TRACE · FIELDS MATCH THE CONSOLE’S ACTIVITY RECORD</span><span class="zh">示意追踪 · 字段与 Console 活动记录一致</span></p>
         </div>
       </div>
     </section>
@@ -3886,28 +3894,28 @@ env_key  = "LLMINGRESS_API_KEY"</pre>
       <div data-2col="" style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: clamp(32px, 5vw, 80px); align-items: start;">
         <div>
           <span style="display: block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.18em; color: var(--accent); margin-bottom: 18px;">06 — FAQ</span>
-          <h2 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 2.9vw, 34px); line-height: 1.22; letter-spacing: -0.01em;"><span class="en">Questions.</span><span class="zh">常见问题。</span></h2>
+          <h2 style="margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 2.9vw, 34px); line-height: var(--lh-display); letter-spacing: -0.01em;"><span class="en">Questions.</span><span class="zh">常见问题。</span></h2>
         </div>
         <div>
           <details open="open" style="border-top: 1px solid var(--rule); padding: 22px 0;">
-            <summary style="display: flex; gap: 20px; align-items: baseline;"><span style="flex: 1; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">Is it open source?</span><span class="zh">它是开源的吗？</span></span><span style="position: relative; width: 11px; height: 11px; flex: none; color: var(--accent);"><span style="position: absolute; top: 5px; left: 0; width: 11px; height: 1px; background: currentColor;"></span><span class="plusv" style="position: absolute; top: 0; left: 5px; width: 1px; height: 11px; background: currentColor;"></span></span></summary>
-            <p style="margin: 12px 0 0; max-width: var(--measure); font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">Apache-2.0, self-hosted, built for one operator. There is no hosted plan, no account and no telemetry.</span><span class="zh">Apache-2.0，自托管，按单人使用来设计。没有托管版本，不需要账号，不做遥测。</span></p>
+            <summary style="display: flex; gap: 20px; align-items: baseline;"><span style="flex: 1; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">Is it open source?</span><span class="zh">它是开源的吗？</span></span><span style="position: relative; width: 11px; height: 11px; flex: none; color: var(--accent);"><span style="position: absolute; top: 5px; left: 0; width: 11px; height: 1px; background: currentColor;"></span><span class="plusv" style="position: absolute; top: 0; left: 5px; width: 1px; height: 11px; background: currentColor;"></span></span></summary>
+            <p style="margin: 12px 0 0; max-width: var(--measure); font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">Apache-2.0, self-hosted, built for one operator. There is no hosted plan, no account and no telemetry.</span><span class="zh">Apache-2.0，自托管，按单人使用来设计。没有托管版本，不需要账号，不做遥测。</span></p>
           </details>
           <details style="border-top: 1px solid var(--rule); padding: 22px 0;">
-            <summary style="display: flex; gap: 20px; align-items: baseline;"><span style="flex: 1; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">Which agents can connect?</span><span class="zh">哪些 Agent 能接？</span></span><span style="position: relative; width: 11px; height: 11px; flex: none; color: var(--accent);"><span style="position: absolute; top: 5px; left: 0; width: 11px; height: 1px; background: currentColor;"></span><span class="plusv" style="position: absolute; top: 0; left: 5px; width: 1px; height: 11px; background: currentColor;"></span></span></summary>
-            <p style="margin: 12px 0 0; max-width: var(--measure); font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">Anything that lets you set an OpenAI-compatible base URL: Codex, Cursor, OpenCode, Copilot. Claude Code connects through the Anthropic messages endpoint instead.</span><span class="zh">任何能填 OpenAI 兼容地址的客户端：Codex、Cursor、OpenCode、Copilot。Claude Code 则走 Anthropic 的 messages 接口。</span></p>
+            <summary style="display: flex; gap: 20px; align-items: baseline;"><span style="flex: 1; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">Which agents can connect?</span><span class="zh">哪些 Agent 能接？</span></span><span style="position: relative; width: 11px; height: 11px; flex: none; color: var(--accent);"><span style="position: absolute; top: 5px; left: 0; width: 11px; height: 1px; background: currentColor;"></span><span class="plusv" style="position: absolute; top: 0; left: 5px; width: 1px; height: 11px; background: currentColor;"></span></span></summary>
+            <p style="margin: 12px 0 0; max-width: var(--measure); font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">Anything that lets you set an OpenAI-compatible base URL: Codex, Cursor, OpenCode, Copilot. Claude Code connects through the Anthropic messages endpoint instead.</span><span class="zh">任何能填 OpenAI 兼容地址的客户端：Codex、Cursor、OpenCode、Copilot。Claude Code 则走 Anthropic 的 messages 接口。</span></p>
           </details>
           <details style="border-top: 1px solid var(--rule); padding: 22px 0;">
-            <summary style="display: flex; gap: 20px; align-items: baseline;"><span style="flex: 1; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">Are my prompts stored?</span><span class="zh">提示词会被存下来吗？</span></span><span style="position: relative; width: 11px; height: 11px; flex: none; color: var(--accent);"><span style="position: absolute; top: 5px; left: 0; width: 11px; height: 1px; background: currentColor;"></span><span class="plusv" style="position: absolute; top: 0; left: 5px; width: 1px; height: 11px; background: currentColor;"></span></span></summary>
-            <p style="margin: 12px 0 0; max-width: var(--measure); font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">No. Logs hold metadata only: model, tokens, cost, latency, status and retries. Prompts, responses, tool arguments and credentials are left out.</span><span class="zh">不会。日志里只有元数据：模型、token、成本、延迟、状态和重试。提示词、响应、工具参数和凭据都不写。</span></p>
+            <summary style="display: flex; gap: 20px; align-items: baseline;"><span style="flex: 1; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">Are my prompts stored?</span><span class="zh">提示词会被存下来吗？</span></span><span style="position: relative; width: 11px; height: 11px; flex: none; color: var(--accent);"><span style="position: absolute; top: 5px; left: 0; width: 11px; height: 1px; background: currentColor;"></span><span class="plusv" style="position: absolute; top: 0; left: 5px; width: 1px; height: 11px; background: currentColor;"></span></span></summary>
+            <p style="margin: 12px 0 0; max-width: var(--measure); font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">No. Logs hold metadata only: model, tokens, cost, latency, status and retries. Prompts, responses, tool arguments and credentials are left out.</span><span class="zh">不会。日志里只有元数据：模型、token、成本、延迟、状态和重试。提示词、响应、工具参数和凭据都不写。</span></p>
           </details>
           <details style="border-top: 1px solid var(--rule); padding: 22px 0;">
-            <summary style="display: flex; gap: 20px; align-items: baseline;"><span style="flex: 1; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">Do my provider keys leave the machine?</span><span class="zh">供应商密钥会离开我的机器吗？</span></span><span style="position: relative; width: 11px; height: 11px; flex: none; color: var(--accent);"><span style="position: absolute; top: 5px; left: 0; width: 11px; height: 1px; background: currentColor;"></span><span class="plusv" style="position: absolute; top: 0; left: 5px; width: 1px; height: 11px; background: currentColor;"></span></span></summary>
-            <p style="margin: 12px 0 0; max-width: var(--measure); font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">No. Agents hold keys your gateway issued. Provider credentials stay in your database, encrypted with a key only you hold.</span><span class="zh">不会。Agent 拿的是你的网关签发的密钥。供应商凭据留在你的数据库里，用只有你持有的密钥加密。</span></p>
+            <summary style="display: flex; gap: 20px; align-items: baseline;"><span style="flex: 1; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">Do my provider keys leave the machine?</span><span class="zh">供应商密钥会离开我的机器吗？</span></span><span style="position: relative; width: 11px; height: 11px; flex: none; color: var(--accent);"><span style="position: absolute; top: 5px; left: 0; width: 11px; height: 1px; background: currentColor;"></span><span class="plusv" style="position: absolute; top: 0; left: 5px; width: 1px; height: 11px; background: currentColor;"></span></span></summary>
+            <p style="margin: 12px 0 0; max-width: var(--measure); font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">No. Agents hold keys your gateway issued. Provider credentials stay in your database, encrypted with a key only you hold.</span><span class="zh">不会。Agent 拿的是你的网关签发的密钥。供应商凭据留在你的数据库里，用只有你持有的密钥加密。</span></p>
           </details>
           <details style="border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 22px 0;">
-            <summary style="display: flex; gap: 20px; align-items: baseline;"><span style="flex: 1; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: 1.3;"><span class="en">What does it cost to run?</span><span class="zh">运行它要花多少钱？</span></span><span style="position: relative; width: 11px; height: 11px; flex: none; color: var(--accent);"><span style="position: absolute; top: 5px; left: 0; width: 11px; height: 1px; background: currentColor;"></span><span class="plusv" style="position: absolute; top: 0; left: 5px; width: 1px; height: 11px; background: currentColor;"></span></span></summary>
-            <p style="margin: 12px 0 0; max-width: var(--measure); font-size: var(--t-body-sm); line-height: 1.65; color: var(--dim);"><span class="en">The gateway is free. You keep paying the providers their own prices, and the usage page shows what each agent and model spent.</span><span class="zh">网关本身免费。你照旧按供应商的价格付钱，用量页面会显示每个 Agent、每个模型花了多少。</span></p>
+            <summary style="display: flex; gap: 20px; align-items: baseline;"><span style="flex: 1; font-family: var(--serif); font-size: var(--t-xl); font-weight: 400; line-height: var(--lh-title);"><span class="en">What does it cost to run?</span><span class="zh">运行它要花多少钱？</span></span><span style="position: relative; width: 11px; height: 11px; flex: none; color: var(--accent);"><span style="position: absolute; top: 5px; left: 0; width: 11px; height: 1px; background: currentColor;"></span><span class="plusv" style="position: absolute; top: 0; left: 5px; width: 1px; height: 11px; background: currentColor;"></span></span></summary>
+            <p style="margin: 12px 0 0; max-width: var(--measure); font-size: var(--t-body-sm); line-height: var(--lh-body); color: var(--dim);"><span class="en">The gateway is free. You keep paying the providers their own prices, and the usage page shows what each agent and model spent.</span><span class="zh">网关本身免费。你照旧按供应商的价格付钱，用量页面会显示每个 Agent、每个模型花了多少。</span></p>
           </details>
         </div>
       </div>
@@ -3915,8 +3923,8 @@ env_key  = "LLMINGRESS_API_KEY"</pre>
 
     <section class="rv" style="border-top: 1px solid var(--rule); padding: clamp(64px, 9vw, 112px) 0 clamp(64px, 9vw, 112px); text-align: center;">
       <span data-od-id="oracle-gate-mark-cta" role="img" aria-label="甲骨文门" style="display: grid; place-items: center; width: 54px; height: 54px; margin: 0 auto; border-radius: 3px; background: var(--accent); color: var(--bg);"><svg viewBox="0 0 32 32" width="34" height="34" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 7.5L26.5 6.5M7.5 7L6.5 27M24.5 7L25.5 27M9 11L16 16L23 10.5M16 16L16 28"/></svg></span>
-      <h2 style="margin: 30px auto 0; max-width: 22ch; font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 3.4vw, 42px); line-height: 1.2; letter-spacing: -0.015em;"><span class="en">Get started.</span><span class="zh">开始使用。</span></h2>
-      <p style="margin: 22px auto 0; max-width: var(--measure); font-size: var(--t-body); line-height: 1.65; color: var(--dim);"><span class="en">Clone the repository and run the deploy script. The console is at localhost:3000, and nothing is exposed beyond your machine by default.</span><span class="zh">克隆仓库，运行部署脚本，Console 就在 localhost:3000。默认不对外暴露任何服务。</span></p>
+      <h2 style="margin: 30px auto 0; max-width: 22ch; font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 3.4vw, 42px); line-height: var(--lh-display); letter-spacing: -0.015em;"><span class="en">Get started.</span><span class="zh">开始使用。</span></h2>
+      <p style="margin: 22px auto 0; max-width: var(--measure); font-size: var(--t-body); line-height: var(--lh-body); color: var(--dim);"><span class="en">Clone the repository and run the deploy script. The console is at localhost:3000, and nothing is exposed beyond your machine by default.</span><span class="zh">克隆仓库，运行部署脚本，Console 就在 localhost:3000。默认不对外暴露任何服务。</span></p>
       <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 26px; margin-top: 36px;">
         <a href="https://github.com/IamNotShady/LLMIngress" target="_blank" rel="noopener" class="press btn-solid" style="display: inline-grid; place-items: center; height: 46px; padding: 0 28px; border-radius: 3px; background: var(--seg); color: var(--segfg); font-size: var(--t-body-sm); letter-spacing: 0.08em;"><span class="en">CLONE ON GITHUB</span><span class="zh">在 GITHUB 上克隆</span></a>
         <a href="https://github.com/IamNotShady/LLMIngress/tree/main/docs" target="_blank" rel="noopener" style="font-size: var(--t-body-sm); color: var(--ink); border-bottom: 1px solid var(--accent); padding-bottom: 3px;"><span class="en">Read the docs</span><span class="zh">阅读文档</span></a>

@@ -2226,9 +2226,9 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
   .cd-brand { display: flex; align-items: center; gap: 9px; flex: none; font-family: var(--sans); font-size: 14px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
   .cd-mark { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 3px; background: var(--seg); color: var(--segfg); }
   .cd-mark svg { width: 17px; height: 17px; }
-  .cd-env { margin-left: auto; font-family: var(--mono); font-size: 11px; letter-spacing: .07em; color: var(--dim); white-space: nowrap; }
+  .cd-env { margin-inline-start: auto; font-family: var(--mono); font-size: 11px; letter-spacing: .07em; color: var(--dim); white-space: nowrap; }
   .cd-nav { display: flex; align-items: stretch; overflow-x: auto; border-bottom: 1px solid var(--rule); scrollbar-width: thin; }
-  .cd-nav button { min-height: 44px; flex: none; padding: 0 16px; border: 0; border-right: 1px solid var(--rule2); background: transparent; color: var(--dim); font-family: var(--mono); font-size: 12px; letter-spacing: .02em; cursor: pointer; transition-property: scale, background-color, color; transition-duration: 120ms; transition-timing-function: ease-out; }
+  .cd-nav button { min-height: 44px; flex: none; padding: 0 16px; border: 0; border-inline-end: 1px solid var(--rule2); background: transparent; color: var(--dim); font-family: var(--mono); font-size: 12px; letter-spacing: .02em; cursor: pointer; transition-property: scale, background-color, color; transition-duration: 120ms; transition-timing-function: ease-out; }
   .cd-nav button:hover { background: var(--btnbg); color: var(--ink); }
   .cd-nav button:active { scale: 0.96; }
   @media (prefers-reduced-motion: reduce) { .cd-nav button { transition: none; } .cd-nav button:active { scale: 1; } }
@@ -2237,7 +2237,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
   .cd-title-row { display: flex; align-items: baseline; gap: 14px; min-width: 0; margin-bottom: 16px; }
   .cd-title { margin: 0; color: var(--ink); font-family: var(--sans); font-size: 25px; font-weight: 600; line-height: 1.15; letter-spacing: -.02em; }
   .cd-meta { color: var(--faint); font-family: var(--mono); font-size: 12px; line-height: 1.5; }
-  .cd-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .cd-actions { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
   .cd-btn { min-height: 32px; padding: 0 12px; border: 1px solid var(--btnbd); border-radius: 3px; background: var(--btnbg); color: var(--ink); font-family: var(--mono); font-size: 12px; letter-spacing: .02em; cursor: pointer; }
   .cd-btn:hover { border-color: var(--dim); }
   .cd-btn-primary { border-color: var(--seg); background: var(--seg); color: var(--segfg); box-shadow: var(--shadow-btn); }
@@ -2246,15 +2246,15 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
   .cd-tabs button { min-height: 30px; padding: 0 9px; border: 1px solid transparent; border-radius: 3px; background: transparent; color: var(--dim); font-family: var(--mono); font-size: 11px; cursor: pointer; }
   .cd-tabs button[aria-pressed="true"] { border-color: var(--btnbd); background: var(--btnbg); color: var(--ink); }
   .cd-kpis { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); border-block: 1px solid var(--hair); }
-  .cd-kpi { min-width: 0; padding: 16px 15px 14px; border-right: 1px solid var(--rule); }
-  .cd-kpi:last-child { border-right: 0; }
+  .cd-kpi { min-width: 0; padding: 16px 15px 14px; border-inline-end: 1px solid var(--rule); }
+  .cd-kpi:last-child { border-inline-end: 0; }
   .cd-label { display: block; color: var(--faint); font-family: var(--mono); font-size: 10px; line-height: 1.4; letter-spacing: .08em; }
   .cd-value { display: block; margin-top: 5px; color: var(--ink); font-family: var(--mono); font-size: 24px; font-weight: 500; line-height: 1.2; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
   .cd-note { display: block; margin-top: 4px; color: var(--dim); font-family: var(--mono); font-size: 10px; line-height: 1.45; }
   .cd-green { color: var(--green) !important; } .cd-amber { color: var(--ambtx) !important; } .cd-red { color: var(--redtx) !important; }
   .cd-chart { padding: 18px 0 15px; border-bottom: 1px solid var(--hair); }
   .cd-section-head { display: flex; align-items: baseline; margin-bottom: 11px; color: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 600; }
-  .cd-section-head small { margin-left: auto; color: var(--faint); font-family: var(--mono); font-size: 10px; font-weight: 400; letter-spacing: .03em; }
+  .cd-section-head small { margin-inline-start: auto; color: var(--faint); font-family: var(--mono); font-size: 10px; font-weight: 400; letter-spacing: .03em; }
   .cd-bars { display: grid; grid-template-columns: repeat(18, 1fr); align-items: end; gap: 6px; height: 112px; padding-top: 8px; border-bottom: 1px solid var(--rule); background-image: linear-gradient(to bottom, var(--rule2) 1px, transparent 1px); background-size: 100% 36px; }
   .cd-bar { min-height: 4px; background: var(--seg); opacity: .86; transition: height .24s ease; }
   .cd-chart-traffic .cd-bar { background: var(--accent); }
@@ -2263,11 +2263,11 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
   .cd-panel { min-width: 0; }
   .cd-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 14px; align-items: center; min-height: 34px; border-top: 1px solid var(--rule2); color: var(--ink); font-family: var(--mono); font-size: 11px; }
   .cd-row strong { font-weight: 500; }
-  .cd-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--green); }
+  .cd-dot { display: inline-block; width: 7px; height: 7px; margin-inline-end: 7px; border-radius: 50%; background: var(--green); }
   .cd-dot.amber { background: var(--amber); } .cd-dot.red { background: var(--red); } .cd-dot.dim { background: var(--faint); }
   .cd-master { display: grid; grid-template-columns: 330px minmax(0,1fr); min-height: 450px; border-top: 1px solid var(--hair); }
-  .cd-list { border-right: 1px solid var(--rule); padding-right: 18px; }
-  .cd-pick { width: 100%; min-height: 54px; padding: 9px 10px; border: 0; border-bottom: 1px solid var(--rule2); background: transparent; color: var(--ink); text-align: left; font-family: var(--mono); cursor: pointer; }
+  .cd-list { border-inline-end: 1px solid var(--rule); padding-inline-end: 18px; }
+  .cd-pick { width: 100%; min-height: 54px; padding: 9px 10px; border: 0; border-bottom: 1px solid var(--rule2); background: transparent; color: var(--ink); text-align: start; font-family: var(--mono); cursor: pointer; }
   .cd-pick:hover { background: var(--btnbg); }
   .cd-pick[aria-selected="true"] { background: var(--pick-on); box-shadow: inset 2px 0 var(--seg); }
   .cd-pick-line { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 500; }
@@ -2277,10 +2277,10 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
   .cd-detail-meta { margin-top: 5px; color: var(--dim); font-family: var(--mono); font-size: 11px; }
   .cd-defs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 28px; margin-top: 18px; border-top: 1px solid var(--hair); }
   .cd-def { display: flex; justify-content: space-between; gap: 14px; min-height: 35px; padding: 8px 0; border-bottom: 1px solid var(--rule2); font-family: var(--mono); font-size: 11px; }
-  .cd-def span:first-child { color: var(--dim); } .cd-def span:last-child { color: var(--ink); text-align: right; }
+  .cd-def span:first-child { color: var(--dim); } .cd-def span:last-child { color: var(--ink); text-align: end; }
   .cd-table-wrap { overflow-x: auto; border-top: 1px solid var(--hair); }
   .cd-table { width: 100%; min-width: 820px; border-collapse: collapse; table-layout: fixed; font-family: var(--mono); }
-  .cd-table th { height: 34px; padding: 0 10px; border-bottom: 1px solid var(--rule); color: var(--faint); text-align: left; font-size: 10px; font-weight: 400; letter-spacing: .07em; }
+  .cd-table th { height: 34px; padding: 0 10px; border-bottom: 1px solid var(--rule); color: var(--faint); text-align: start; font-size: 10px; font-weight: 400; letter-spacing: .07em; }
   .cd-table td { height: 42px; padding: 0 10px; border-bottom: 1px solid var(--rule2); color: var(--ink); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .cd-table tbody tr[data-clickable] { cursor: pointer; } .cd-table tbody tr[data-clickable]:hover { background: var(--btnbg); }
   .cd-filters { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; overflow-x: auto; }
@@ -2307,7 +2307,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
     .cd-kpi:last-child { grid-column: 1 / -1; }
     .cd-grid-3 { grid-template-columns: 1fr; }
     .cd-master { grid-template-columns: 1fr; }
-    .cd-list { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--rule); padding: 0; }
+    .cd-list { display: flex; overflow-x: auto; border-inline-end: 0; border-bottom: 1px solid var(--rule); padding: 0; }
     .cd-pick { min-width: 190px; }
     .cd-detail { padding: 20px 0 0; }
     .cd-defs { grid-template-columns: 1fr; }
@@ -2316,7 +2316,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
   }
   @media (max-width: 560px) {
     .cd-title-row { align-items: flex-start; flex-wrap: wrap; }
-    .cd-actions { width: 100%; margin-left: 0; overflow-x: auto; }
+    .cd-actions { width: 100%; margin-inline-start: 0; overflow-x: auto; }
     .cd-meta { width: 100%; }
     .cd-bars { gap: 3px; }
     .cd-mobile-note { display: block; margin-top: 8px; color: var(--faint); font-family: var(--mono); font-size: 10px; }
@@ -3436,6 +3436,21 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
   button { font-family: var(--mono); }
   /* Headings balance across their lines; body copy already inherits text-wrap: pretty. */
   h1, h2, h3, summary { text-wrap: balance; }
+  /* Backgrounds bleed to the viewport edges; text and controls stay inside the layout margin and
+     the device safe area, so nothing slides under a notch in landscape. */
+  .gutter { padding-inline-start: max(clamp(20px, 4vw, 48px), env(safe-area-inset-left));
+            padding-inline-end: max(clamp(20px, 4vw, 48px), env(safe-area-inset-right)); }
+  /* The stat row wraps where its labels stop fitting (about 150px a column) rather than at a
+     device preset. The 1px grid gap draws the separators, so they stay correct at any column
+     count instead of leaving a stray rule at the wrapped edge. */
+  [data-stats] { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                 gap: 1px; background: var(--rule2); }
+  [data-stats] > div { background: var(--bg); }
+  /* Anchor targets clear the sticky header instead of landing behind it. Every header and footer
+     link used to scroll its section eyebrow and heading out of sight (82px hidden at desktop,
+     126px once the header wraps). */
+  main[id], main section[id] { scroll-margin-block-start: 92px; }
+  @media (max-width: 440px) { main[id], main section[id] { scroll-margin-block-start: 140px; } }
   /* Every real control gets the same press and hover language. Properties are named one by one so a
      hover can never drag an unrelated property along with it. */
   .press { transition-property: scale, opacity, color, background-color, border-color, box-shadow; transition-duration: 150ms; transition-timing-function: ease-out; }
@@ -3482,8 +3497,15 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
   header > div::-webkit-scrollbar { display: none; }
   header a, header nav, header button { white-space: nowrap; }
   header nav { flex: none; }
-  @media (max-width: 1000px) {
+  /* The nav links reappear only once they actually fit: at 1001-1019px they were shown but
+     overflowed the header by ~15px. */
+  @media (max-width: 1020px) {
     [data-navlinks] { display: none !important; }
+  }
+  /* Below 440px the header row stops fitting, so it wraps rather than pushing its trailing items
+     into a scroller whose scrollbar is hidden — that left the overflow with no cue at all. */
+  @media (max-width: 440px) {
+    header > div { flex-wrap: wrap; overflow-x: visible; row-gap: 8px; padding-block: 12px; }
   }
   @media (max-width: 860px) {
     [data-rail] { display: none !important; }
@@ -3496,8 +3518,8 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
 <div data-theme="{{ themeAttr }}" data-lang="{{ lang }}" style="min-height: 100vh; background: var(--bg); color: var(--ink);">
 
   <header style="position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--rule); background: var(--bg);">
-    <div style="max-width: 1240px; margin: 0 auto; padding: 0 clamp(20px, 4vw, 48px); display: flex; align-items: center; gap: 32px; min-height: 68px; overflow-x: auto; white-space: nowrap; scrollbar-width: none;">
-      <a href="#top" style="display: flex; align-items: baseline; gap: 10px; margin-right: auto; color: var(--ink);">
+    <div class="gutter" style="max-width: 1240px; margin: 0 auto; display: flex; align-items: center; gap: 32px; min-height: 68px; overflow-x: auto; white-space: nowrap; scrollbar-width: none;">
+      <a href="#top" style="display: flex; align-items: baseline; gap: 10px; margin-inline-end: auto; color: var(--ink);">
         <span style="font-family: var(--serif); font-size: var(--t-xl); font-weight: 500; letter-spacing: 0.02em;">LLMIngress</span>
 
       </a>
@@ -3520,10 +3542,10 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
     </div>
   </header>
 
-  <main id="top" style="max-width: 1240px; margin: 0 auto; padding: 0 clamp(20px, 4vw, 48px);">
+  <main id="top" class="gutter" style="max-width: 1240px; margin: 0 auto;">
 
     <section data-frame="" style="display: grid; grid-template-columns: 72px minmax(0, 1fr) 220px; min-height: 560px;">
-      <div data-rail="" style="border-right: 1px solid var(--rule); display: flex; justify-content: center; padding: 56px 0;">
+      <div data-rail="" style="border-inline-end: 1px solid var(--rule); display: flex; justify-content: center; padding: 56px 0;">
         <span style="writing-mode: vertical-rl; font-family: var(--serif); font-size: var(--t-body-sm); letter-spacing: 0.42em; color: var(--faint);"><span class="en">SELF-HOSTED AI GATEWAY</span><span class="zh">自托管 AI 网关</span></span>
       </div>
 
@@ -3543,22 +3565,22 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
         </div>
       </div>
 
-      <div data-rail="" style="margin-left: 144px; width: 76px; border-left: 1px solid var(--rule); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 56px 0 48px;">
+      <div data-rail="" style="margin-inline-start: 144px; width: 76px; border-inline-start: 1px solid var(--rule); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 56px 0 48px;">
         <span data-od-id="oracle-gate-mark-hero" role="img" aria-label="甲骨文门" style="display: grid; place-items: center; width: 62px; height: 62px; border-radius: 3px; background: var(--accent); color: var(--bg);"><svg viewBox="0 0 32 32" width="39" height="39" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 7.5L26.5 6.5M7.5 7L6.5 27M24.5 7L25.5 27M9 11L16 16L23 10.5M16 16L16 28"/></svg></span>
         <span style="writing-mode: vertical-rl; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.3em; color: var(--faint);">OPENAI · ANTHROPIC COMPATIBLE</span>
       </div>
     </section>
 
-    <section style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);">
-      <div style="padding: 28px 24px 30px; border-right: 1px solid var(--rule2);">
+    <section data-stats="" style="border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);">
+      <div style="padding: 28px 24px 30px;">
         <span style="display: block; font-family: var(--serif); font-size: var(--t-2xl); font-weight: 400; color: var(--ink); font-variant-numeric: tabular-nums;">2</span>
         <span style="display: block; margin-top: 8px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);"><span class="en">COMPATIBLE APIS ACCEPTED</span><span class="zh">可接入的兼容协议</span></span><span style="display: block; margin-top: 6px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption); color: var(--dim);"><span class="en">openai + anthropic · 4 endpoints</span><span class="zh">OpenAI + Anthropic · 共 4 个端点</span></span>
       </div>
-      <div style="padding: 28px 24px 30px; border-right: 1px solid var(--rule2);">
+      <div style="padding: 28px 24px 30px;">
         <span style="display: block; font-family: var(--serif); font-size: var(--t-2xl); font-weight: 400; color: var(--ink); font-variant-numeric: tabular-nums;">33</span>
         <span style="display: block; margin-top: 8px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);"><span class="en">BUILT-IN PROVIDER TEMPLATES</span><span class="zh">内置供应商模板</span></span><span style="display: block; margin-top: 6px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption); color: var(--dim);"><span class="en">subscription · api key · local</span><span class="zh">订阅 · API 密钥 · 本地</span></span>
       </div>
-      <div style="padding: 28px 24px 30px; border-right: 1px solid var(--rule2);">
+      <div style="padding: 28px 24px 30px;">
         <span style="display: block; font-family: var(--serif); font-size: var(--t-2xl); font-weight: 400; color: var(--ink); font-variant-numeric: tabular-nums;">5</span>
         <span style="display: block; margin-top: 8px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.16em; color: var(--faint);"><span class="en">LIMIT TYPES ON EACH KEY</span><span class="zh">每把密钥可设的限额类型</span></span><span style="display: block; margin-top: 6px; font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption); color: var(--dim);"><span class="en">budget · rpm · tpm · tokens · concurrency</span><span class="zh">预算 · RPM · TPM · 单请求 token · 并发</span></span>
       </div>
@@ -3782,9 +3804,9 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
         </div>
         <div>
           <div style="border: 1px solid var(--hair); border-radius: 3px;">
-            <div style="display: flex; align-items: center; gap: 12px; padding: 12px 22px; border-bottom: 1px solid var(--rule);">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 22px; border-bottom: 1px solid var(--rule);">
               <span style="font-family: var(--mono); font-size: var(--t-sm); letter-spacing: 0.1em; color: var(--dim);">DOCKER COMPOSE</span>
-              <button type="button" class="press btn-quiet btn-copy" sc-camel-on-click="{{ copyDeploy }}" style="margin-left: auto; cursor: pointer; border: 1px solid var(--btnbd); border-radius: 3px; background: var(--btnbg); color: var(--ink); padding: 3px 10px; font-family: var(--mono); font-size: var(--t-sm);">{{ copyLabel }}</button>
+              <button type="button" class="press btn-quiet btn-copy" sc-camel-on-click="{{ copyDeploy }}" style="margin-inline-start: auto; cursor: pointer; border: 1px solid var(--btnbd); border-radius: 3px; background: var(--btnbg); color: var(--ink); padding: 3px 10px; font-family: var(--mono); font-size: var(--t-sm);">{{ copyLabel }}</button>
             </div>
             <pre style="margin: 0; padding: 24px 22px; background: var(--track); overflow-x: auto; font-family: var(--mono); font-size: var(--t-md); line-height: var(--lh-body); color: var(--ink);">git clone https://github.com/IamNotShady/LLMIngress.git
 cd LLMIngress
@@ -3792,7 +3814,7 @@ cd LLMIngress
             <p style="margin: 0; padding: 14px 22px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-sm); line-height: var(--lh-caption); color: var(--faint);">CONSOLE :3000 · GATEWAY :4000 · <span class="en">LOCAL-ONLY BY DEFAULT</span><span class="zh">默认仅本机可访问</span></p>
           </div>
           <div data-tab="{{ tab }}" style="margin-top: 24px; border: 1px solid var(--hair); border-radius: 3px;">
-          <div role="tablist" style="display: flex; border-bottom: 1px solid var(--rule);">
+          <div role="tablist" style="display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--rule);">
             <button type="button" role="tab" class="press" data-tabbtn="claude" sc-camel-on-click="{{ setClaude }}" style="cursor: pointer; border: 0; background: transparent; color: var(--dim); padding: 14px 20px; font-family: var(--mono); font-size: var(--t-sm); letter-spacing: 0.06em;">Claude Code</button>
             <button type="button" role="tab" class="press" data-tabbtn="codex" sc-camel-on-click="{{ setCodex }}" style="cursor: pointer; border: 0; background: transparent; color: var(--dim); padding: 14px 20px; font-family: var(--mono); font-size: var(--t-sm); letter-spacing: 0.06em;">Codex</button>
             <button type="button" role="tab" class="press" data-tabbtn="curl" sc-camel-on-click="{{ setCurl }}" style="cursor: pointer; border: 0; background: transparent; color: var(--dim); padding: 14px 20px; font-family: var(--mono); font-size: var(--t-sm); letter-spacing: 0.06em;">curl</button>
@@ -3854,7 +3876,7 @@ env_key  = "LLMINGRESS_API_KEY"</pre>
         <div style="border: 1px solid var(--hair); border-radius: 3px;">
           <div style="display: flex; align-items: center; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--rule);">
             <span style="font-family: var(--mono); font-size: var(--t-sm); letter-spacing: 0.1em; color: var(--dim);">TRACE · my-coding-model</span>
-            <span style="margin-left: auto; display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: var(--t-sm); color: var(--dim);"><span style="width: 6px; height: 6px; border-radius: 50%; background: var(--green);"></span>200 · 903 ms</span>
+            <span style="margin-inline-start: auto; display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: var(--t-sm); color: var(--dim);"><span style="width: 6px; height: 6px; border-radius: 50%; background: var(--green);"></span>200 · 903 ms</span>
           </div>
           <div style="padding: 30px 22px;">
             <div data-step="" style="display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 20px; align-items: start; padding-bottom: 26px;">
@@ -3880,9 +3902,9 @@ env_key  = "LLMINGRESS_API_KEY"</pre>
             </div>
           </div>
           <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--rule);">
-            <div style="padding: 18px 22px; border-right: 1px solid var(--rule2);"><span style="display: block; font-family: var(--mono); font-size: var(--t-lg); color: var(--ink); font-variant-numeric: tabular-nums;">903 ms</span><span style="display: block; margin-top: 4px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.12em; color: var(--faint);"><span class="en">SERVED</span><span class="zh">耗时</span></span></div>
-            <div style="padding: 18px 22px; border-right: 1px solid var(--rule2);"><span style="display: block; font-family: var(--mono); font-size: var(--t-lg); color: var(--ink); font-variant-numeric: tabular-nums;">1,284</span><span style="display: block; margin-top: 4px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.12em; color: var(--faint);">TOKENS</span></div>
-            <div style="padding: 18px 22px; border-right: 1px solid var(--rule2);"><span style="display: block; font-family: var(--mono); font-size: var(--t-lg); color: var(--ink); font-variant-numeric: tabular-nums;">$0.0004</span><span style="display: block; margin-top: 4px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.12em; color: var(--faint);"><span class="en">COST</span><span class="zh">成本</span></span></div>
+            <div style="padding: 18px 22px; border-inline-end: 1px solid var(--rule2);"><span style="display: block; font-family: var(--mono); font-size: var(--t-lg); color: var(--ink); font-variant-numeric: tabular-nums;">903 ms</span><span style="display: block; margin-top: 4px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.12em; color: var(--faint);"><span class="en">SERVED</span><span class="zh">耗时</span></span></div>
+            <div style="padding: 18px 22px; border-inline-end: 1px solid var(--rule2);"><span style="display: block; font-family: var(--mono); font-size: var(--t-lg); color: var(--ink); font-variant-numeric: tabular-nums;">1,284</span><span style="display: block; margin-top: 4px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.12em; color: var(--faint);">TOKENS</span></div>
+            <div style="padding: 18px 22px; border-inline-end: 1px solid var(--rule2);"><span style="display: block; font-family: var(--mono); font-size: var(--t-lg); color: var(--ink); font-variant-numeric: tabular-nums;">$0.0004</span><span style="display: block; margin-top: 4px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.12em; color: var(--faint);"><span class="en">COST</span><span class="zh">成本</span></span></div>
             <div style="padding: 18px 22px;"><span style="display: block; font-family: var(--mono); font-size: var(--t-lg); color: var(--ink); font-variant-numeric: tabular-nums;">1</span><span style="display: block; margin-top: 4px; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.12em; color: var(--faint);"><span class="en">SILENT FALLBACK</span><span class="zh">次静默回退</span></span></div>
           </div>
           <p style="margin: 0; padding: 12px 22px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-caption); letter-spacing: 0.12em; color: var(--faint);"><span class="en">ILLUSTRATIVE TRACE · FIELDS MATCH THE CONSOLE’S ACTIVITY RECORD</span><span class="zh">示意追踪 · 字段与 Console 活动记录一致</span></p>
@@ -3934,12 +3956,12 @@ env_key  = "LLMINGRESS_API_KEY"</pre>
   </main>
 
   <footer style="border-top: 1px solid var(--rule);">
-    <div style="max-width: 1240px; margin: 0 auto; padding: 22px clamp(20px, 4vw, 48px); display: flex; flex-wrap: wrap; align-items: baseline; gap: 20px 28px; font-family: var(--mono); font-size: var(--t-sm); color: var(--faint);">
+    <div class="gutter" style="max-width: 1240px; margin: 0 auto; padding-block: 22px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 20px 28px; font-family: var(--mono); font-size: var(--t-sm); color: var(--faint);">
       <span style="font-family: var(--serif); font-size: var(--t-lg); color: var(--ink); letter-spacing: 0.02em;">LLMIngress</span>
       <a href="#how" style="color: var(--dim);"><span class="en">How it routes</span><span class="zh">如何路由</span></a>
       <a href="#deploy" style="color: var(--dim);"><span class="en">Deploy &amp; connect</span><span class="zh">部署与接入</span></a>
       <a href="https://github.com/IamNotShady/LLMIngress" target="_blank" rel="noopener" style="color: var(--dim);">GitHub ↗</a>
-      <span style="margin-left: auto;"><span class="en">© 2026 · APACHE-2.0 · NOT AFFILIATED WITH ANY MODEL PROVIDER</span><span class="zh">© 2026 · APACHE-2.0 · 与任何模型供应商无隶属关系</span></span>
+      <span style="margin-inline-start: auto;"><span class="en">© 2026 · APACHE-2.0 · NOT AFFILIATED WITH ANY MODEL PROVIDER</span><span class="zh">© 2026 · APACHE-2.0 · 与任何模型供应商无隶属关系</span></span>
     </div>
   </footer>
 </div>

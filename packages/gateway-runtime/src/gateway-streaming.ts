@@ -57,8 +57,10 @@ import {
   buildOpenAIChatCompletionRequestMetadata,
   buildOpenAIResponsesRequestMetadata,
   type GatewayRequestMetadata,
+  withGatewayRequestedRouteTag,
 } from "./gateway-request-metadata.ts";
 import { normalizeOpenAIResponsesRequest } from "./gateway-responses.ts";
+import { getGatewayRouteLatencyStats } from "./gateway-route-latency.ts";
 import {
   assertGatewayRoutePolicyEndpointProtocol,
   buildGatewayRequestActivityRoute,
@@ -70,10 +72,7 @@ import {
 } from "./gateway-stream-pipeline.ts";
 import type { GatewayUsageCostDetails } from "./gateway-usage-recorder.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
-import {
-  assertGatewayRequestWithinVirtualModelContract,
-  assertGatewayVirtualModelCapabilityContract,
-} from "./gateway-virtual-model-capabilities.ts";
+import { assertGatewayRequestWithinVirtualModelCapabilities } from "./gateway-virtual-model-capabilities.ts";
 
 export type GatewayStreamingProtocol = "chat_completions" | "messages" | "responses";
 
@@ -119,6 +118,7 @@ export async function executeGatewayStreamingRequest(input: {
   protocol: GatewayStreamingProtocol;
   providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
+  requestedTag?: string;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
   virtualModel: GatewayVirtualModel;
@@ -127,6 +127,7 @@ export async function executeGatewayStreamingRequest(input: {
     protocol: input.protocol,
     providerRequestHeaders: input.providerRequestHeaders,
     requestBody: input.requestBody,
+    requestedTag: input.requestedTag,
     requestId: input.requestId,
     resolvedModelName: input.virtualModel.name,
   });
@@ -147,12 +148,13 @@ export async function executeGatewayStreamingRequest(input: {
       protocol: input.protocol,
       routePolicy: configuredRoutePolicy,
     });
-    const capabilityContract = assertGatewayVirtualModelCapabilityContract(configuredRoutePolicy);
-    assertGatewayRequestWithinVirtualModelContract(capabilityContract, normalized.requestMetadata);
-
+    // Selection runs before the capability check because which capabilities the
+    // request must satisfy can depend on which candidate the strategy picked.
     const routeResult = selectRouteAttempts({
       estimatedInputTokens: normalized.estimatedInputTokens,
       estimatedOutputTokens: normalized.estimatedOutputTokens,
+      requestedTag: input.requestedTag,
+      routeLatency: getGatewayRouteLatencyStats().buildRouteLatencySnapshot("ttfb"),
       snapshot: input.snapshot,
       virtualModelId: input.virtualModel.id,
     });
@@ -176,6 +178,39 @@ export async function executeGatewayStreamingRequest(input: {
     const gatewayChain = routeResult.chain;
 
     const fallbackAttempts: FallbackFailedAttempt[] = [];
+    const selectedCandidate = gatewayChain[0];
+    if (!selectedCandidate) {
+      throw new Error("Selected route candidate was not found in route policy.");
+    }
+    // Built before the capability check and the attempts, like the JSON
+    // pipeline builds it: a request refused for exceeding the selected
+    // candidate's contract, and a request that exhausts its chain, both still
+    // record the route they chose, the tag they were asked for, and every
+    // attempt burned — the failed request is the one an operator has to debug.
+    let activity = buildGatewayRequestActivityRoute({
+      candidate: selectedCandidate,
+      fallbackAttempts,
+      routeDecision,
+    });
+
+    try {
+      assertGatewayRequestWithinVirtualModelCapabilities({
+        chain: routeResult.chain,
+        requestMetadata: normalized.requestMetadata,
+        routePolicy: configuredRoutePolicy,
+      });
+    } catch (error) {
+      await releaseGatewayConcurrency({ databaseUrl: input.databaseUrl, lease: concurrencyLease });
+      concurrencyLease = undefined;
+      const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
+      return {
+        activity,
+        body: createGatewayErrorBody(parts.code, input.requestId, parts.message),
+        ok: false,
+        requestMetadata: normalized.requestMetadata,
+        statusCode: parts.statusCode,
+      };
+    }
     let lastError: FallbackAttemptErrorLike | undefined;
     const candidates = await buildStreamingFallbackCandidates({
       candidates: gatewayChain,
@@ -185,6 +220,7 @@ export async function executeGatewayStreamingRequest(input: {
 
     if (candidates.length === 0) {
       return {
+        activity,
         body: createGatewayErrorBody("provider_protocol_unsupported", input.requestId),
         ok: false,
         requestMetadata: normalized.requestMetadata,
@@ -203,6 +239,7 @@ export async function executeGatewayStreamingRequest(input: {
       });
       if (!limits.ok) {
         return {
+          activity,
           body: limits.body,
           ...(limits.retryAfterSeconds
             ? { headers: { "retry-after": String(limits.retryAfterSeconds) } }
@@ -234,6 +271,7 @@ export async function executeGatewayStreamingRequest(input: {
       candidates,
       databaseUrl: input.databaseUrl,
       fallbackAttempts,
+      latencySampleMetric: "ttfb",
       requestId: input.requestId,
     });
 
@@ -243,6 +281,7 @@ export async function executeGatewayStreamingRequest(input: {
       const providerError = buildStreamingProviderErrorPassthrough(lastError);
       if (providerError) {
         return {
+          activity,
           body: providerError.body,
           headers: providerError.headers,
           ok: false,
@@ -255,6 +294,7 @@ export async function executeGatewayStreamingRequest(input: {
         "provider_request_failed",
       );
       return {
+        activity,
         body: createGatewayErrorBody(parts.code, input.requestId, parts.message),
         ok: false,
         requestMetadata: normalized.requestMetadata,
@@ -267,9 +307,12 @@ export async function executeGatewayStreamingRequest(input: {
       providerApiKeyId: success.candidate.providerApiKeyId,
     });
 
-    const activity = buildGatewayRequestActivityRoute({
+    // Rebuilt with the candidate that actually served: fallback may have moved
+    // past the one the decision named.
+    activity = buildGatewayRequestActivityRoute({
       candidate: success.candidate,
       fallbackAttempts,
+      providerCallDurationMs: success.durationMs,
       routeDecision,
     });
     const body = composeGatewayProviderStreamPipeline({
@@ -556,6 +599,7 @@ function buildStreamingPayload(input: {
   protocol: GatewayStreamingProtocol;
   providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
+  requestedTag?: string;
   requestId: string;
   resolvedModelName: string;
 }):
@@ -573,11 +617,14 @@ function buildStreamingPayload(input: {
     if (!normalized.ok) {
       return normalized;
     }
-    const requestMetadata = buildOpenAIChatCompletionRequestMetadata({
-      model: input.resolvedModelName,
-      rawBody: input.requestBody,
-      request: normalized.request,
-    });
+    const requestMetadata = withGatewayRequestedRouteTag(
+      buildOpenAIChatCompletionRequestMetadata({
+        model: input.resolvedModelName,
+        rawBody: input.requestBody,
+        request: normalized.request,
+      }),
+      input.requestedTag,
+    );
 
     return {
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
@@ -600,11 +647,14 @@ function buildStreamingPayload(input: {
     if (!normalized.ok) {
       return normalized;
     }
-    const requestMetadata = buildOpenAIResponsesRequestMetadata({
-      model: input.resolvedModelName,
-      rawBody: input.requestBody,
-      request: normalized.request,
-    });
+    const requestMetadata = withGatewayRequestedRouteTag(
+      buildOpenAIResponsesRequestMetadata({
+        model: input.resolvedModelName,
+        rawBody: input.requestBody,
+        request: normalized.request,
+      }),
+      input.requestedTag,
+    );
 
     return {
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
@@ -626,11 +676,14 @@ function buildStreamingPayload(input: {
   if (!normalized.ok) {
     return normalized;
   }
-  const requestMetadata = buildAnthropicMessagesRequestMetadata({
-    model: input.resolvedModelName,
-    rawBody: input.requestBody,
-    request: normalized.request,
-  });
+  const requestMetadata = withGatewayRequestedRouteTag(
+    buildAnthropicMessagesRequestMetadata({
+      model: input.resolvedModelName,
+      rawBody: input.requestBody,
+      request: normalized.request,
+    }),
+    input.requestedTag,
+  );
 
   return {
     estimatedInputTokens: requestMetadata.estimatedInputTokens,

@@ -33,7 +33,7 @@ export function gatewayCorsHeaders(origin: string | undefined): Record<string, s
 
   return {
     "access-control-allow-headers":
-      "authorization, content-type, x-api-key, x-request-id, x-client-request-id, openai-organization, openai-project, openai-beta, anthropic-version, anthropic-beta",
+      "authorization, content-type, x-api-key, x-request-id, x-client-request-id, x-llmingress-route-tag, openai-organization, openai-project, openai-beta, anthropic-version, anthropic-beta",
     "access-control-allow-methods": "GET, POST, OPTIONS",
     "access-control-allow-origin": origin,
     "access-control-expose-headers":

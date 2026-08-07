@@ -83,6 +83,141 @@ export function readOptionalPlaygroundNumber(value: string): number | undefined 
   return Number.isFinite(numeric) ? numeric : undefined;
 }
 
+/**
+ * The request headers the gateway allows a browser to send, copied from the
+ * single literal apps/gateway/src/cors.ts answers preflights with, in its
+ * order. The copy exists because the gateway is a separate service the console
+ * cannot import from; a unit test reads that file and fails the moment the two
+ * lists differ. A header outside this list is refused by the browser before the
+ * request leaves, which reaches the operator as an unexplained network failure,
+ * so the editor offers no way to name one.
+ */
+export const playgroundSendableHeaders = [
+  "authorization",
+  "content-type",
+  "x-api-key",
+  "x-request-id",
+  "x-client-request-id",
+  "x-llmingress-route-tag",
+  "openai-organization",
+  "openai-project",
+  "openai-beta",
+  "anthropic-version",
+  "anthropic-beta",
+] as const;
+
+/**
+ * The names a header row may be set to: every sendable header a picked row
+ * could actually deliver. Picking one replaces typing it, so a name outside
+ * the gateway's allowlist and a name that is no header name at all are not
+ * mistakes this editor can make — only the value is left to get wrong. Four
+ * sendable names are not offered because a row naming them would do nothing:
+ * authorization, content-type, and x-request-id are filled by the form itself
+ * and spread over any picked value, and x-api-key is the gateway's keyless
+ * auth fallback, ignored while the form's Bearer key is present and never
+ * forwarded upstream. The tag header leads because it is the one this page
+ * exists to send.
+ */
+export const playgroundHeaderOptions = [
+  "x-llmingress-route-tag",
+  "x-client-request-id",
+  "openai-organization",
+  "openai-project",
+  "openai-beta",
+  "anthropic-version",
+  "anthropic-beta",
+] as const;
+
+export type PlaygroundHeaderRow = { name: string; value: string };
+
+export type PlaygroundHeaderIssue = {
+  /** The row's header name, normalized. */
+  name: string;
+  reason: "duplicate" | "empty_value" | "invalid_value";
+  /** 1-based position of the row in the editor. */
+  row: number;
+};
+
+export type PlaygroundRouteTag = {
+  matchedTag: string | null;
+  requestedTag: string | null;
+  tagFallback: boolean;
+};
+
+/** Printable ASCII only: fetch refuses to build a request with anything else. */
+const playgroundHeaderValuePattern = /^[ -~]+$/;
+
+/**
+ * The rows as headers, and every row that cannot become one. A refused row is
+ * left out rather than sent in a shape the browser would throw on, and the
+ * first row to claim a name keeps it: a second row for the same header is one
+ * the operator has to decide about, not one that silently replaces the first.
+ */
+export function buildPlaygroundHeaders(rows: readonly PlaygroundHeaderRow[]): {
+  headers: Record<string, string>;
+  issues: PlaygroundHeaderIssue[];
+} {
+  const headers: Record<string, string> = {};
+  const issues: PlaygroundHeaderIssue[] = [];
+
+  for (const [index, entry] of rows.entries()) {
+    const row = index + 1;
+    const name = entry.name.trim().toLowerCase();
+    const value = entry.value.trim();
+
+    // The picker cannot produce a name outside the options; a name from
+    // anywhere else is refused rather than sent into a preflight that will not
+    // allow it.
+    if (!(playgroundHeaderOptions as readonly string[]).includes(name)) {
+      issues.push({ name, reason: "invalid_value", row });
+      continue;
+    }
+    if (!value) {
+      issues.push({ name, reason: "empty_value", row });
+      continue;
+    }
+    if (!playgroundHeaderValuePattern.test(value)) {
+      issues.push({ name, reason: "invalid_value", row });
+      continue;
+    }
+    if (Object.hasOwn(headers, name)) {
+      issues.push({ name, reason: "duplicate", row });
+      continue;
+    }
+    headers[name] = value;
+  }
+
+  return { headers, issues };
+}
+
+export function formatPlaygroundHeaderIssue(issue: PlaygroundHeaderIssue): string {
+  if (issue.reason === "empty_value") {
+    return `row ${issue.row}: ${issue.name} has no value — fill it in or remove the row`;
+  }
+  if (issue.reason === "duplicate") {
+    return `row ${issue.row}: ${issue.name} is already set on a row above — remove this row or pick another header`;
+  }
+  return `row ${issue.row}: ${issue.name} has a value the browser cannot send — printable ASCII only`;
+}
+
+/**
+ * Which tag the request landed on. A tag that matched nothing still served an
+ * answer from the default candidate, and that is the one outcome the response
+ * body cannot tell an operator about.
+ */
+export function describePlaygroundRouteTag(tag: PlaygroundRouteTag | null | undefined): string {
+  if (!tag) {
+    return "—";
+  }
+  if (tag.matchedTag) {
+    return tag.matchedTag;
+  }
+  if (tag.requestedTag) {
+    return `${tag.requestedTag} → default (no match)`;
+  }
+  return "no tag → default";
+}
+
 export function buildPlaygroundChatRequest(input: PlaygroundRequestInput): PlaygroundChatRequest {
   const systemPrompt = input.systemPrompt?.trim();
   return {

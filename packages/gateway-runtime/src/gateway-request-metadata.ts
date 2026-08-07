@@ -17,12 +17,22 @@ export type GatewayRequestMetadata = {
   model: string;
   outputModalities: ModelOutputModality[];
   protocol: GatewayRequestProtocol;
+  /** The route tag the client named, echoed back through the debug header. */
+  requestedTag?: string;
   stream: boolean;
   usesReasoning: boolean;
   usesTools: boolean;
 };
 
 export const gatewayRequestMetadataHeader = "x-llmingress-request-metadata";
+
+/** The tag is read from a header, so it joins the metadata after the body is parsed. */
+export function withGatewayRequestedRouteTag(
+  metadata: GatewayRequestMetadata,
+  requestedTag: string | undefined,
+): GatewayRequestMetadata {
+  return requestedTag ? { ...metadata, requestedTag } : metadata;
+}
 
 export function buildOpenAIChatCompletionRequestMetadata(input: {
   model: string;

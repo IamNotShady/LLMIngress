@@ -31,9 +31,9 @@ are enqueued only after the business transaction commits and are not part of tha
 ```text
 authenticate API key
   -> resolve an allowed Virtual Model
+  -> order Route Policy candidates
   -> validate known capability requirements
   -> enforce enabled API key limits
-  -> order Route Policy candidates
   -> attach healthy credentials and execute fallback
   -> stream or return the Provider response
   -> record activity, usage, cost, and fallback metadata
@@ -55,8 +55,17 @@ responses may be logged with status and response headers for diagnosis.
 ## Routing and health invariants
 
 - One Virtual Model owns one Route Policy and at least one candidate.
-- Strategies are `fixed`, `cost_first`, and `load_balance`.
-- Capability conflicts are rejected only when every relevant value is known.
+- Strategies are `fixed`, `cost_first`, `load_balance`, `tag`, `weighted`, and `least_time`.
+- A `tag` route serves the candidate named by `x-llmingress-route-tag` with only the `default`
+  candidate behind it; requests are capability-checked against the selected candidate alone.
+- A `weighted` route draws one candidate per request with its configured two-decimal weight
+  (weights sum to exactly 1); zero-weight candidates take no primary traffic and serve only as
+  fallback targets.
+- A `least_time` route orders candidates by latency observed from real Gateway traffic (a decayed
+  average, first-byte for streams and full call otherwise); unmeasured or stale candidates fall to
+  the end of the chain and are occasionally promoted to be measured, so none is excluded forever.
+- For the other strategies, capability conflicts are rejected only when every relevant value is
+  known.
 - Unknown-price candidates remain eligible at the end of `cost_first`; successful unknown-price
   requests record tokens and zero monetary cost with an unavailable price source.
 - Health identity is `(provider_id, provider_connection_id)`. API keys and OAuth tokens use their
@@ -92,11 +101,16 @@ stale-on-error.
 ## Data invariants
 
 - `api_keys.limits_enabled` is the only API-key-level Limits switch. Disabled rules remain stored.
-- Runtime counters survive restart in `rate_limit_windows` and `budget_periods`.
+- Runtime counters survive restart in `rate_limit_windows`, `budget_periods`, and
+  `route_latency_stats`.
 - Completed requests use `request_activity`, `request_usage`, `request_costs`, and
   `fallback_events`.
 - Provider health uses `provider_health_events` plus the sparse `provider_health_summary`.
-- Console analytics read durable metadata and never query prompt content.
+- `api_keys.request_logging_mode` (`default` | `full`) decides whether the Gateway captures bodies.
+  What it captured lives in `request_activity.payload` (jsonb, null when nothing was captured),
+  capped at 1 MB per side with explicit truncation flags, and is deleted with its activity row.
+- Console analytics and the Activity list read durable metadata and never select `payload`; only the
+  Activity detail reads it, so bodies are visible only for keys explicitly set to `full`.
 - Provider credentials are encrypted with `ENCRYPTION_KEY`; authenticated Provider requests do not
   follow redirects.
 

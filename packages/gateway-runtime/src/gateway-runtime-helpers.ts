@@ -47,6 +47,7 @@ export function assertGatewayRoutePolicyEndpointProtocol(input: {
 export function buildGatewayRequestActivityRoute(input: {
   candidate: GatewayActivityRouteCandidate;
   fallbackAttempts: FallbackFailedAttempt[];
+  providerCallDurationMs?: number;
   routeDecision: RouteDecision;
 }): GatewayRequestActivityRoute {
   return {
@@ -54,6 +55,7 @@ export function buildGatewayRequestActivityRoute(input: {
     modelId: input.candidate.modelId,
     providerApiKeyId: input.candidate.providerApiKeyId,
     providerApiKeyPrefix: input.candidate.providerApiKeyPrefix,
+    providerCallDurationMs: input.providerCallDurationMs,
     providerId: input.candidate.providerId,
     providerKey: input.candidate.providerKey,
     providerModelId: input.candidate.providerModelId,

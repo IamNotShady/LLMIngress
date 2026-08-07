@@ -7,12 +7,16 @@ import { listProviderRouteEndpointProtocols as listRegistryRouteEndpointProtocol
 import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import {
+  isValidRouteTag,
   type ModelInputModality,
   type ModelOutputModality,
+  normalizeRouteTag,
   type ProviderModelCapabilityMetadata,
+  ROUTE_TAG_DEFAULT,
   type RouteEndpointProtocol,
   resolveVirtualModelCapabilityContract,
   routeEndpointProtocols,
+  routeStrategyCapabilityContractScope,
 } from "@llmingress/domain";
 import {
   consoleConflictError,
@@ -23,11 +27,22 @@ import { consoleVisibleProviderModelFilterSql } from "./console-provider-model-v
 import { lockProvidersForProviderModels } from "./console-providers.ts";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
-export const routePolicyStrategies = ["fixed", "cost_first", "load_balance"] as const;
+export const routePolicyStrategies = [
+  "fixed",
+  "cost_first",
+  "load_balance",
+  "tag",
+  "weighted",
+  "least_time",
+] as const;
 
 export type RoutePolicyStrategy = (typeof routePolicyStrategies)[number];
 
 export type RoutePolicyFormInput = {
+  /** One comma-separated tag list per candidate, in the candidate order. */
+  candidateTags?: readonly (string | null | undefined)[];
+  /** One weight per candidate, in the candidate order; only weighted reads them. */
+  candidateWeights?: readonly (string | null | undefined)[];
   endpointProtocol?: string | null;
   providerModelIds?: readonly (string | null | undefined)[];
   strategy?: string | null;
@@ -35,10 +50,25 @@ export type RoutePolicyFormInput = {
 };
 
 export type NormalizedRoutePolicyFormInput = {
+  /** Always one entry per candidate; empty lists for strategies that ignore tags. */
+  candidateTags: string[][];
+  /** Always one entry per candidate; null entries for strategies that ignore weights. */
+  candidateWeights: (number | null)[];
   endpointProtocol: RouteEndpointProtocol;
   providerModelIds: string[];
   strategy: RoutePolicyStrategy;
   virtualModelId: string;
+};
+
+export type TagRouteCoverageCandidate = {
+  contextWindow: number | null;
+  inputModalities: ModelInputModality[] | null;
+  maxOutputTokens: number | null;
+  optionLabel: string;
+  outputModalities: ModelOutputModality[] | null;
+  supportsFunctionCalling: boolean | null;
+  supportsReasoning: boolean | null;
+  tags: readonly string[];
 };
 
 export type ConsoleProviderModelOption = {
@@ -71,6 +101,9 @@ export type ConsoleProviderModelOption = {
 
 export type ConsoleRoutePolicyCandidate = ConsoleProviderModelOption & {
   candidateOrder: number;
+  tags: string[];
+  /** Two-decimal fraction of primary traffic; null when the strategy is not weighted. */
+  weight: number | null;
 };
 
 export type ConsoleRoutePolicy = {
@@ -160,6 +193,8 @@ type CandidateRow = {
   supports_function_calling?: boolean | null;
   supports_reasoning?: boolean | null;
   supports_streaming?: boolean | null;
+  tags?: string[] | null;
+  weight?: string | null;
 };
 
 type ProviderModelOptionRow = {
@@ -216,7 +251,7 @@ export function normalizeRoutePolicyFormInput(
   }
   if (!isRoutePolicyStrategy(strategy)) {
     throw consoleValidationError(
-      "Route policy strategy must be fixed, cost_first, or load_balance.",
+      `Route policy strategy must be one of ${routePolicyStrategies.join(", ")}.`,
       "route_policy_strategy_invalid",
       { field: "strategy" },
     );
@@ -238,11 +273,268 @@ export function normalizeRoutePolicyFormInput(
   }
 
   return {
+    candidateTags: normalizeRoutePolicyCandidateTags({
+      candidateTags: input.candidateTags,
+      providerModelIds,
+      strategy,
+    }),
+    candidateWeights: normalizeRoutePolicyCandidateWeights({
+      candidateWeights: input.candidateWeights,
+      providerModelIds,
+      strategy,
+    }),
     endpointProtocol,
     providerModelIds,
     strategy,
     virtualModelId,
   };
+}
+
+/**
+ * Cross-candidate tag rules live here rather than in the schema: candidates are
+ * rewritten as one transaction holding the policy row lock, so there is no
+ * window for a second writer to slip a duplicate tag or a second default past
+ * this check.
+ */
+function normalizeRoutePolicyCandidateTags(input: {
+  candidateTags?: readonly (string | null | undefined)[];
+  providerModelIds: readonly string[];
+  strategy: RoutePolicyStrategy;
+}): string[][] {
+  if (input.strategy !== "tag") {
+    return input.providerModelIds.map(() => []);
+  }
+
+  const seenTags = new Map<string, string>();
+  const candidateTags = input.providerModelIds.map((providerModelId, index) => {
+    const tags: string[] = [];
+    for (const rawTag of (input.candidateTags?.[index] ?? "").split(",")) {
+      const tag = normalizeRouteTag(rawTag);
+      if (!tag) {
+        continue;
+      }
+      if (!isValidRouteTag(tag)) {
+        throw consoleValidationError(
+          `Route tag ${tag} must start with a letter or digit and use only letters, digits, dot, dash, or underscore.`,
+          "route_policy_tag_invalid",
+          { field: "candidateTags", providerModelId, tag },
+        );
+      }
+      const owner = seenTags.get(tag);
+      if (owner && owner !== providerModelId) {
+        throw consoleValidationError(
+          `Route tag ${tag} is on more than one candidate; a tag names exactly one candidate.`,
+          "route_policy_tag_duplicate",
+          { field: "candidateTags", providerModelId, tag },
+        );
+      }
+      seenTags.set(tag, providerModelId);
+      if (!tags.includes(tag)) {
+        tags.push(tag);
+      }
+    }
+
+    if (tags.length === 0) {
+      throw consoleValidationError(
+        "Every candidate of a tag route needs at least one tag; an untagged candidate can never be reached.",
+        "route_policy_tag_missing",
+        { field: "candidateTags", providerModelId },
+      );
+    }
+
+    return tags;
+  });
+
+  if (!candidateTags.some((tags) => tags.includes(ROUTE_TAG_DEFAULT))) {
+    throw consoleValidationError(
+      `Exactly one candidate must carry the ${ROUTE_TAG_DEFAULT} tag; it serves requests with no tag or an unknown one.`,
+      "route_policy_tag_default_required",
+      { field: "candidateTags" },
+    );
+  }
+
+  return candidateTags;
+}
+
+/** Exactly up to two decimals between 0 and 1: "0", "1", "0.2", "0.20", "1.00". */
+const routePolicyWeightPattern = /^(?:0(?:\.\d{1,2})?|1(?:\.0{1,2})?)$/;
+
+/**
+ * The cross-candidate weight rule (the weights of one policy sum to exactly
+ * 1.00) lives here rather than in the schema: candidates are rewritten as one
+ * transaction holding the policy row lock, so there is no window for a second
+ * writer to unbalance the sum. The sum is checked on integer hundredths -
+ * two-decimal weights are exact there, while floating point would refuse
+ * 0.10 + 0.20 + 0.70.
+ */
+function normalizeRoutePolicyCandidateWeights(input: {
+  candidateWeights?: readonly (string | null | undefined)[];
+  providerModelIds: readonly string[];
+  strategy: RoutePolicyStrategy;
+}): (number | null)[] {
+  if (input.strategy !== "weighted") {
+    return input.providerModelIds.map(() => null);
+  }
+
+  let sumHundredths = 0;
+  const candidateWeights = input.providerModelIds.map((providerModelId, index) => {
+    const raw = (input.candidateWeights?.[index] ?? "").trim();
+    if (!raw) {
+      throw consoleValidationError(
+        "Every candidate of a weighted route needs a weight; a 0.00 weight keeps it as a fallback-only candidate.",
+        "route_policy_weight_missing",
+        { field: "candidateWeights", providerModelId },
+      );
+    }
+    if (!routePolicyWeightPattern.test(raw)) {
+      throw consoleValidationError(
+        `Route weight ${raw} must be a decimal between 0 and 1 with at most two decimal places, like 0.25.`,
+        "route_policy_weight_invalid",
+        { field: "candidateWeights", providerModelId, weight: raw },
+      );
+    }
+    const hundredths = Math.round(Number(raw) * 100);
+    sumHundredths += hundredths;
+    return hundredths / 100;
+  });
+
+  if (sumHundredths !== 100) {
+    throw consoleValidationError(
+      `Route weights must sum to exactly 1.00; these sum to ${(sumHundredths / 100).toFixed(2)}.`,
+      "route_policy_weight_sum_invalid",
+      { field: "candidateWeights" },
+    );
+  }
+
+  return candidateWeights;
+}
+
+/**
+ * A tag route deliberately mixes unequal candidates, so the default candidate is
+ * not required to cover the others — but a request sized for a tagged candidate
+ * fails on fallback when it does not. Unknown values are left alone: they are
+ * missing metadata, not a narrower model.
+ */
+export function buildTagRouteCoverageWarnings(
+  candidates: readonly TagRouteCoverageCandidate[],
+): string[] {
+  const defaultCandidate = candidates.find((candidate) =>
+    candidate.tags.includes(ROUTE_TAG_DEFAULT),
+  );
+  if (!defaultCandidate) {
+    return [];
+  }
+
+  const warnings: string[] = [];
+  for (const candidate of candidates) {
+    if (candidate === defaultCandidate) {
+      continue;
+    }
+
+    warnings.push(
+      ...tagCoverageCeilingWarning({
+        candidate,
+        candidateValue: candidate.contextWindow,
+        defaultCandidate,
+        defaultValue: defaultCandidate.contextWindow,
+        label: "context window",
+      }),
+      ...tagCoverageCeilingWarning({
+        candidate,
+        candidateValue: candidate.maxOutputTokens,
+        defaultCandidate,
+        defaultValue: defaultCandidate.maxOutputTokens,
+        label: "max output tokens",
+      }),
+      ...tagCoverageModalityWarning({
+        candidate,
+        candidateValue: candidate.inputModalities,
+        defaultCandidate,
+        defaultValue: defaultCandidate.inputModalities,
+        label: "input modalities",
+      }),
+      ...tagCoverageModalityWarning({
+        candidate,
+        candidateValue: candidate.outputModalities,
+        defaultCandidate,
+        defaultValue: defaultCandidate.outputModalities,
+        label: "output modalities",
+      }),
+      ...tagCoverageFeatureWarning({
+        candidate,
+        candidateValue: candidate.supportsFunctionCalling,
+        defaultCandidate,
+        defaultValue: defaultCandidate.supportsFunctionCalling,
+        label: "function calling",
+      }),
+      ...tagCoverageFeatureWarning({
+        candidate,
+        candidateValue: candidate.supportsReasoning,
+        defaultCandidate,
+        defaultValue: defaultCandidate.supportsReasoning,
+        label: "reasoning",
+      }),
+    );
+  }
+
+  return warnings;
+}
+
+function tagCoverageCeilingWarning(input: {
+  candidate: TagRouteCoverageCandidate;
+  candidateValue: number | null;
+  defaultCandidate: TagRouteCoverageCandidate;
+  defaultValue: number | null;
+  label: string;
+}): string[] {
+  if (
+    input.candidateValue === null ||
+    input.defaultValue === null ||
+    input.defaultValue >= input.candidateValue
+  ) {
+    return [];
+  }
+
+  return [
+    `Tag coverage warning: ${input.candidate.optionLabel} allows ${input.label} ${input.candidateValue}, above ${input.defaultCandidate.optionLabel} at ${input.defaultValue}; a request sized for the tag fails after falling back to the default candidate.`,
+  ];
+}
+
+function tagCoverageModalityWarning(input: {
+  candidate: TagRouteCoverageCandidate;
+  candidateValue: readonly string[] | null;
+  defaultCandidate: TagRouteCoverageCandidate;
+  defaultValue: readonly string[] | null;
+  label: string;
+}): string[] {
+  if (input.candidateValue === null || input.defaultValue === null) {
+    return [];
+  }
+  const defaultValue = input.defaultValue;
+  const uncovered = input.candidateValue.filter((modality) => !defaultValue.includes(modality));
+  if (uncovered.length === 0) {
+    return [];
+  }
+
+  return [
+    `Tag coverage warning: ${input.candidate.optionLabel} serves ${input.label} ${uncovered.join(", ")} that ${input.defaultCandidate.optionLabel} does not; such a request fails after falling back to the default candidate.`,
+  ];
+}
+
+function tagCoverageFeatureWarning(input: {
+  candidate: TagRouteCoverageCandidate;
+  candidateValue: boolean | null;
+  defaultCandidate: TagRouteCoverageCandidate;
+  defaultValue: boolean | null;
+  label: string;
+}): string[] {
+  if (input.candidateValue !== true || input.defaultValue !== false) {
+    return [];
+  }
+
+  return [
+    `Tag coverage warning: ${input.candidate.optionLabel} supports ${input.label} but ${input.defaultCandidate.optionLabel} does not; such a request fails after falling back to the default candidate.`,
+  ];
 }
 
 export function buildRouteReasonMetadata(input: RouteReasonMetadataInput): string {
@@ -482,7 +774,9 @@ export async function listRoutePolicies(databaseUrl?: string): Promise<ConsoleRo
                        provider_models.synced_price_version as price_sync_price_version,
                        provider_models.synced_price_source_url as price_sync_source_url,
                        provider_models.synced_price_synced_at as price_sync_synced_at,
-                       route_policy_candidates.candidate_order
+                       route_policy_candidates.candidate_order,
+                       route_policy_candidates.tags,
+                       route_policy_candidates.weight::text as weight
                 from route_policy_candidates
                 join provider_models on provider_models.id = route_policy_candidates.provider_model_id
                 join providers on providers.id = provider_models.provider_id
@@ -759,10 +1053,19 @@ async function assertEndpointSupportedRoutePolicyCandidates(
   );
 }
 
+/**
+ * Only the strategies whose candidates all answer the same request have to agree
+ * on capabilities. A strategy that routes one named candidate per request is
+ * checked against the candidate it picked, at request time.
+ */
 async function assertRoutePolicyCandidateCapabilityContract(
   client: QueryClient,
   routePolicy: NormalizedRoutePolicyFormInput,
 ): Promise<void> {
+  if (routeStrategyCapabilityContractScope(routePolicy.strategy) !== "all_candidates") {
+    return;
+  }
+
   const candidates = await readProviderModelOptionsById(client, routePolicy.providerModelIds);
   const result = resolveVirtualModelCapabilityContract(
     candidates.map((candidate) => ({
@@ -844,12 +1147,16 @@ async function writeRoutePolicyCandidates(
             id,
             route_policy_id,
             provider_model_id,
-            candidate_order
+            candidate_order,
+            tags,
+            weight
           )
-          values ($1, $2, $3, $4)
+          values ($1, $2, $3, $4, $5::text[], $6)
           returning route_policy_id,
                     provider_model_id,
-                    candidate_order
+                    candidate_order,
+                    tags,
+                    weight
         )
         select inserted.route_policy_id::text,
                provider_models.id::text as id,
@@ -885,14 +1192,23 @@ async function writeRoutePolicyCandidates(
                provider_models.synced_price_version as price_sync_price_version,
                provider_models.synced_price_source_url as price_sync_source_url,
                provider_models.synced_price_synced_at as price_sync_synced_at,
-               inserted.candidate_order
+               inserted.candidate_order,
+               inserted.tags,
+               inserted.weight::text as weight
         from inserted
         join provider_models on provider_models.id = inserted.provider_model_id
         join providers on providers.id = provider_models.provider_id
         where provider_models.deleted_at is null
           and providers.deleted_at is null
       `,
-      [randomUUID(), routePolicyId, providerModelId, index + 1],
+      [
+        randomUUID(),
+        routePolicyId,
+        providerModelId,
+        index + 1,
+        routePolicy.candidateTags[index] ?? [],
+        routePolicy.candidateWeights[index] ?? null,
+      ],
     );
     candidateRows.push(rowToConsoleRoutePolicyCandidate(requireRow(result.rows[0])));
   }
@@ -1033,7 +1349,10 @@ function rowToConsoleRoutePolicy(
       strategy: row.strategy,
       virtualModelName: row.virtual_model_name,
     }),
-    routeWarnings: buildRoutePolicyWarnings(candidates),
+    routeWarnings: [
+      ...buildRoutePolicyWarnings(candidates),
+      ...buildTagRouteCoverageWarnings(candidates),
+    ],
     strategy: row.strategy,
     virtualModelDisplayName: row.virtual_model_display_name,
     virtualModelId: row.virtual_model_id,
@@ -1045,6 +1364,8 @@ function rowToConsoleRoutePolicyCandidate(row: CandidateRow): ConsoleRoutePolicy
   return {
     ...rowToProviderModelOption(row),
     candidateOrder: row.candidate_order,
+    tags: row.tags ?? [],
+    weight: row.weight === null || row.weight === undefined ? null : Number(row.weight),
   };
 }
 

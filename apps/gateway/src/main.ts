@@ -22,7 +22,10 @@ import {
   gatewayShutdownDrainMs,
 } from "@llmingress/gateway-runtime/gateway-env";
 import { gatewayRequestIdHeader } from "@llmingress/gateway-runtime/gateway-error-mapping";
-import { readGatewayProviderRequestHeaders } from "@llmingress/gateway-runtime/gateway-header-passthrough";
+import {
+  readGatewayProviderRequestHeaders,
+  readGatewayRequestedRouteTag,
+} from "@llmingress/gateway-runtime/gateway-header-passthrough";
 import { readGatewayHealthStatus } from "@llmingress/gateway-runtime/gateway-health";
 import { executeGatewayAnthropicMessages } from "@llmingress/gateway-runtime/gateway-messages";
 import {
@@ -32,6 +35,7 @@ import {
   shouldExposeGatewayRequestMetadata,
 } from "@llmingress/gateway-runtime/gateway-request-metadata";
 import { executeGatewayOpenAIResponse } from "@llmingress/gateway-runtime/gateway-responses";
+import { getGatewayRouteLatencyStats } from "@llmingress/gateway-runtime/gateway-route-latency";
 import {
   executeGatewayStreamingRequest,
   type GatewayStreamingProtocol,
@@ -64,6 +68,7 @@ type GatewayJsonEndpointExecutionInput = {
   limitsEnabled: boolean;
   providerRequestHeaders: Record<string, string>;
   requestBody: unknown;
+  requestedTag?: string;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
   virtualModel: GatewayVirtualModel;
@@ -176,6 +181,7 @@ export async function startGateway() {
     reconcileIntervalMs: gatewayConfigReconcileIntervalMs(),
   });
   await configRuntime.start();
+  await getGatewayRouteLatencyStats().start();
 
   const app = createGatewayApp({ configRuntime });
 
@@ -201,6 +207,7 @@ export async function startGateway() {
         exitCode = 1;
         logger.error({ pending: drainResult.pending }, "gateway background task drain timed out");
       }
+      await getGatewayRouteLatencyStats().stop();
       await closePostgresPools();
     } catch (error) {
       exitCode = 1;
@@ -245,6 +252,7 @@ function registerGatewayJsonEndpoint(
       return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
     }
     const providerRequestHeaders = readGatewayProviderRequestHeaders(request.headers);
+    const requestedTag = readGatewayRequestedRouteTag(request.headers);
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
       apiKeyId: auth.apiKey.id,
@@ -280,6 +288,7 @@ function registerGatewayJsonEndpoint(
         await executeRecordedGatewayStreamingRequest({
           apiKeyId: auth.apiKey.id,
           apiKeyPrefix: auth.apiKey.keyPrefix,
+          clientRequestBody: request.body,
           execute: () =>
             executeGatewayStreamingRequest({
               apiKeyId: auth.apiKey.id,
@@ -287,6 +296,7 @@ function registerGatewayJsonEndpoint(
               protocol: streamingProtocol,
               providerRequestHeaders,
               requestBody: request.body,
+              requestedTag,
               requestId: auth.requestId,
               snapshot: requireGatewayConfigSnapshot(options),
               virtualModel: virtualModelAccess.virtualModel,
@@ -295,6 +305,7 @@ function registerGatewayJsonEndpoint(
           model: virtualModelAccess.virtualModel.name,
           protocol: endpoint.protocol,
           requestId: auth.requestId,
+          requestLoggingMode: auth.apiKey.requestLoggingMode,
           virtualModelId: virtualModelAccess.virtualModel.id,
         }),
         auth.requestId,
@@ -304,12 +315,14 @@ function registerGatewayJsonEndpoint(
     const response = await executeRecordedGatewayJsonRequest({
       apiKeyId: auth.apiKey.id,
       apiKeyPrefix: auth.apiKey.keyPrefix,
+      clientRequestBody: request.body,
       execute: () =>
         endpoint.execute({
           apiKeyId: auth.apiKey.id,
           limitsEnabled: auth.apiKey.limitsEnabled,
           providerRequestHeaders,
           requestBody: request.body,
+          requestedTag,
           requestId: auth.requestId,
           snapshot: requireGatewayConfigSnapshot(options),
           virtualModel: virtualModelAccess.virtualModel,
@@ -318,6 +331,7 @@ function registerGatewayJsonEndpoint(
       model: virtualModelAccess.virtualModel.name,
       protocol: endpoint.protocol,
       requestId: auth.requestId,
+      requestLoggingMode: auth.apiKey.requestLoggingMode,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
     return sendGatewayJsonResponse(reply, response, auth.requestId);

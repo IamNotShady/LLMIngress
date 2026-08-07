@@ -9,6 +9,11 @@ import {
 } from "./gateway-circuit-breaker.ts";
 import type { GatewayRouteCandidateSnapshot } from "./gateway-config-reload.ts";
 import { GatewayPipelineError, truncateProviderMessage } from "./gateway-errors.ts";
+import {
+  type GatewayRouteLatencyStats,
+  getGatewayRouteLatencyStats,
+  type RouteLatencyMetric,
+} from "./gateway-route-latency.ts";
 
 const logger = createLogger("gateway");
 
@@ -35,6 +40,7 @@ export type FallbackProviderApiKey = {
 
 export type FallbackFailedAttempt = {
   attemptOrder: number;
+  durationMs?: number;
   errorCode: string;
   errorMessage: string;
   failedBeforeFirstByte: boolean;
@@ -62,6 +68,7 @@ export type ProviderFallbackAttemptsResult<TSuccess extends ProviderFallbackAtte
     providerApiKeyId?: string;
     providerApiKeyPrefix?: string;
   };
+  durationMs?: number;
   result: TSuccess;
 };
 
@@ -78,6 +85,10 @@ export type ExecuteProviderFallbackAttemptsInput<TSuccess extends ProviderFallba
     enqueueConnectionProbe?: typeof enqueueProviderConnectionProbeJob;
     circuitBreakerRegistry?: GatewayCircuitBreakerRegistry;
     requestId?: string;
+    /** Which latency pool a successful attempt's duration is sampled into; omitted means no sampling. */
+    latencySampleMetric?: RouteLatencyMetric;
+    latencyStats?: Pick<GatewayRouteLatencyStats, "recordSample">;
+    now?: () => number;
   };
 
 export type FallbackAttemptErrorLike = {
@@ -128,16 +139,30 @@ export async function executeProviderFallbackAttempts<
 >(
   input: ExecuteProviderFallbackAttemptsInput<TSuccess>,
 ): Promise<ProviderFallbackAttemptsResult<TSuccess> | undefined> {
+  const now = input.now ?? Date.now;
   let attemptOrder = 0;
   for (const candidate of input.candidates) {
     let stopChain = false;
     for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
       attemptOrder += 1;
       const registry = input.circuitBreakerRegistry ?? getGatewayCircuitBreakerRegistry();
+      // Declared per attempt so cockatiel's own retries (which reinvoke this
+      // closure inside registry.executeProviderCall) each overwrite it with
+      // their own call's duration — the final value is the last call only,
+      // never the retry backoff wait between calls.
+      let lastCallDurationMs: number | undefined;
       let result: ProviderFallbackAttemptResult<TSuccess>;
       try {
-        result = await registry.executeProviderCall(providerApiKey.providerConnectionId, () =>
-          input.callProvider({ candidate, providerApiKey }),
+        result = await registry.executeProviderCall(
+          providerApiKey.providerConnectionId,
+          async () => {
+            const callStartedAtMs = now();
+            try {
+              return await input.callProvider({ candidate, providerApiKey });
+            } finally {
+              lastCallDurationMs = Math.max(0, now() - callStartedAtMs);
+            }
+          },
         );
       } catch (error) {
         if (!(error instanceof BrokenCircuitError)) {
@@ -150,9 +175,18 @@ export async function executeProviderFallbackAttempts<
           ok: false,
           statusCode: null,
         };
+        // The circuit-open path never invokes the closure above, so
+        // lastCallDurationMs stays undefined — nothing to sample or attach.
       }
 
       if (result.ok) {
+        if (input.latencySampleMetric !== undefined && lastCallDurationMs !== undefined) {
+          (input.latencyStats ?? getGatewayRouteLatencyStats()).recordSample({
+            durationMs: lastCallDurationMs,
+            metric: input.latencySampleMetric,
+            providerModelId: candidate.providerModelId,
+          });
+        }
         return {
           candidate: {
             ...candidate,
@@ -161,6 +195,7 @@ export async function executeProviderFallbackAttempts<
             providerApiKeyId: providerApiKey.providerApiKeyId,
             providerApiKeyPrefix: providerApiKey.keyPrefix,
           },
+          durationMs: lastCallDurationMs,
           result,
         };
       }
@@ -177,6 +212,7 @@ export async function executeProviderFallbackAttempts<
 
       const failedAttempt = buildFallbackFailedAttempt({
         attemptOrder,
+        durationMs: lastCallDurationMs,
         providerApiKey,
         providerModelId: candidate.providerModelId,
         result,
@@ -238,6 +274,7 @@ export function buildGatewayProviderErrorLog(input: {
 
 export function buildFallbackFailedAttempt(input: {
   attemptOrder: number;
+  durationMs?: number;
   providerApiKey: FallbackProviderApiKey;
   providerModelId: string;
   result: FallbackAttemptErrorLike;
@@ -246,6 +283,7 @@ export function buildFallbackFailedAttempt(input: {
   const failedBeforeFirstByte = input.result.failedBeforeFirstByte ?? statusCode === null;
   return {
     attemptOrder: input.attemptOrder,
+    durationMs: input.durationMs,
     errorCode: input.result.errorCode,
     errorMessage: input.result.errorMessage,
     failedBeforeFirstByte,

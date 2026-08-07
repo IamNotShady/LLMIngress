@@ -9,7 +9,7 @@ import {
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { consoleActionErrorResponse } from "../_errors";
-import { readRequiredText, readText, readTextValues } from "../_form";
+import { readAlignedTextValues, readRequiredText, readText, readTextValues } from "../_form";
 import { redirectToConsolePath } from "../_redirect";
 
 export const POST = withConsoleAuth(async (request) => {
@@ -20,6 +20,8 @@ export const POST = withConsoleAuth(async (request) => {
     if (action === "createWithRoute") {
       await createVirtualModelWithRoute({
         routePolicy: {
+          candidateTags: readAlignedTextValues(form, "candidateTags"),
+          candidateWeights: readAlignedTextValues(form, "candidateWeights"),
           endpointProtocol: readText(form, "endpointProtocol"),
           providerModelIds: readTextValues(form, "providerModelIds"),
           strategy: readText(form, "strategy"),
@@ -48,6 +50,8 @@ export const POST = withConsoleAuth(async (request) => {
         routePolicy:
           providerModelIds.length > 0
             ? normalizeRoutePolicyFormInput({
+                candidateTags: readAlignedTextValues(form, "candidateTags"),
+                candidateWeights: readAlignedTextValues(form, "candidateWeights"),
                 endpointProtocol: readText(form, "endpointProtocol"),
                 providerModelIds,
                 strategy: readText(form, "strategy"),

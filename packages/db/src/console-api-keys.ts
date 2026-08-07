@@ -1,7 +1,12 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
-import type { RouteEndpointProtocol } from "@llmingress/domain";
+import {
+  type ApiKeyRequestLoggingMode,
+  apiKeyRequestLoggingModes,
+  isApiKeyRequestLoggingMode,
+  type RouteEndpointProtocol,
+} from "@llmingress/domain";
 import {
   type ApiKeyLimitRuleInput,
   assertCompleteApiKeyLimitRules,
@@ -13,10 +18,12 @@ import { consoleNotFoundError, consoleValidationError } from "./console-operatio
 
 export type ApiKeyFormInput = {
   name?: string | null;
+  requestLoggingMode?: string | null;
 };
 
 export type NormalizedApiKeyFormInput = {
   name: string;
+  requestLoggingMode: ApiKeyRequestLoggingMode;
 };
 
 export type ConsoleApiKey = NormalizedApiKeyFormInput & {
@@ -82,6 +89,7 @@ type ApiKeyRow = {
   limits_enabled: boolean;
   name: string;
   request_attribution_count: number;
+  request_logging_mode: string;
   updated_at: Date;
 };
 
@@ -142,8 +150,19 @@ export function normalizeApiKeyFormInput(input: ApiKeyFormInput): NormalizedApiK
     });
   }
 
+  // A form that says nothing about logging keeps the mode every key starts on.
+  const requestLoggingMode = input.requestLoggingMode?.trim() || "default";
+  if (!isApiKeyRequestLoggingMode(requestLoggingMode)) {
+    throw consoleValidationError(
+      `API key request logging mode must be one of ${apiKeyRequestLoggingModes.join(", ")}.`,
+      "api_key_request_logging_mode_invalid",
+      { field: "requestLoggingMode" },
+    );
+  }
+
   return {
     name,
+    requestLoggingMode,
   };
 }
 
@@ -156,6 +175,7 @@ export async function listApiKeys(databaseUrl?: string): Promise<ConsoleApiKey[]
                api_keys.key_prefix,
                api_keys.enabled,
                api_keys.limits_enabled,
+               api_keys.request_logging_mode,
                api_keys.created_at,
                api_keys.updated_at,
                (
@@ -286,19 +306,28 @@ export async function createApiKeyWithSettings(input: {
             key_prefix,
             key_hash,
             enabled,
-            limits_enabled
+            limits_enabled,
+            request_logging_mode
           )
-          values ($1, $2, $3, $4, true, $5)
+          values ($1, $2, $3, $4, true, $5, $6)
           returning id::text,
                     name,
                     key_prefix,
                     enabled,
                     limits_enabled,
+                    request_logging_mode,
                     created_at,
                     updated_at,
                     0::integer as request_attribution_count
         `,
-        [apiKeyId, input.apiKey.name, stored.keyPrefix, stored.keyHash, input.limitsEnabled],
+        [
+          apiKeyId,
+          input.apiKey.name,
+          stored.keyPrefix,
+          stored.keyHash,
+          input.limitsEnabled,
+          input.apiKey.requestLoggingMode,
+        ],
       );
       await replaceApiKeyVirtualModelsWithClient(client, apiKeyId, input.virtualModels);
       if (input.limitsEnabled) {
@@ -344,11 +373,12 @@ export async function updateApiKeyWithSettings(input: {
           update api_keys
           set name = $2,
               limits_enabled = $3,
+              request_logging_mode = $4,
               updated_at = now()
           where id = $1
             and deleted_at is null
         `,
-        [input.id, input.apiKey.name, input.limitsEnabled],
+        [input.id, input.apiKey.name, input.limitsEnabled, input.apiKey.requestLoggingMode],
       );
       await replaceApiKeyVirtualModelsWithClient(client, input.id, input.virtualModels);
       if (input.limitsEnabled) {
@@ -378,6 +408,7 @@ export async function updateApiKey(input: {
         `
           update api_keys
           set name = $2,
+              request_logging_mode = $3,
               updated_at = now()
           where id = $1
             and deleted_at is null
@@ -386,6 +417,7 @@ export async function updateApiKey(input: {
                     key_prefix,
                     enabled,
                     limits_enabled,
+                    request_logging_mode,
                     created_at,
                     updated_at,
                     (
@@ -394,7 +426,7 @@ export async function updateApiKey(input: {
                       where request_activity.api_key_id = api_keys.id
                     ) as request_attribution_count
         `,
-        [input.id, input.apiKey.name],
+        [input.id, input.apiKey.name, input.apiKey.requestLoggingMode],
       );
       apiKey = rowToConsoleApiKey(requireRow(result.rows[0]));
     },
@@ -609,6 +641,9 @@ function rowToConsoleApiKey(row: ApiKeyRow): ConsoleApiKey {
     limitsEnabled: row.limits_enabled,
     name: row.name,
     requestAttributionCount: row.request_attribution_count,
+    requestLoggingMode: isApiKeyRequestLoggingMode(row.request_logging_mode)
+      ? row.request_logging_mode
+      : "default",
     updatedAt: new Date(row.updated_at),
   };
 }

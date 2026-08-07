@@ -31,7 +31,7 @@ LLMIngress is an open-source, self-hosted AI Gateway for agents. Connect Provide
 subscription accounts, and local model servers, expose them through stable Virtual Model names,
 and control routing, access, limits, fallback, and usage from one Console.
 
-- 🔀 Route Virtual Models with `fixed`, `cost_first`, or `load_balance` policies
+- 🔀 Route Virtual Models with `fixed`, `cost_first`, `load_balance`, `weighted`, `least_time`, or header-driven `tag` policies
 - 🚑 Track the health of each Provider connection and fall back before streaming begins
 - 🔐 Create a dedicated API key for each agent or tool, with explicit Virtual Model grants
 - 🛡️ Enforce optional budget, RPM, TPM, token, and concurrency limits

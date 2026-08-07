@@ -105,9 +105,32 @@ export type ConsoleActivityRouteCandidate = {
   reasons: string[];
 };
 
+/** The tag a tag route was asked for, and what became of it. */
+export type ConsoleActivityRouteTag = {
+  matchedTag: string | null;
+  requestedTag: string | null;
+  tagFallback: boolean;
+};
+
+/**
+ * The bodies a full-logging key had captured for one request. Each side is the
+ * JSON the gateway saw when it fit the cap, and the text it was truncated to
+ * when it did not; a streamed response is always the raw event text. Only the
+ * Activity detail reads this — the list never selects the column.
+ */
+export type ConsoleActivityPayload = {
+  requestBody: unknown;
+  requestBytes: number;
+  requestTruncated: boolean;
+  responseBody: unknown;
+  responseBytes: number;
+  responseTruncated: boolean;
+};
+
 export type ConsoleActivityDetail = {
   activity: ConsoleActivity;
   fallbackEvents: ConsoleFallbackEvent[];
+  payload: ConsoleActivityPayload | null;
   requestMetadata: unknown;
   responseMetadata: unknown;
   routeCandidates: ConsoleActivityRouteCandidate[];
@@ -137,6 +160,7 @@ type ActivityRow = {
   provider_model_display_name: string | null;
   provider_model_id: string | null;
   provider_model_name: string | null;
+  payload?: unknown;
   request_id: string;
   request_metadata?: unknown;
   response_metadata?: unknown;
@@ -316,6 +340,7 @@ export async function getConsoleActivityDetail(input: {
                coalesce(fallback_counts.failed_count, 0)::integer as fallback_failed_count,
                request_activity.request_metadata,
                request_activity.response_metadata,
+               request_activity.payload,
                coalesce(request_activity.route_policy_strategy_snapshot, route_policies.strategy::text)
                  as route_policy_strategy,
                request_activity.api_key_prefix,
@@ -426,6 +451,7 @@ export async function getConsoleActivityDetail(input: {
     return {
       activity: rowToConsoleActivity(row),
       fallbackEvents: attempts,
+      payload: readConsoleActivityPayload(row.payload),
       requestMetadata: row.request_metadata ?? {},
       responseMetadata: row.response_metadata ?? {},
       routeCandidates: recorded.map((candidate) => {
@@ -573,6 +599,56 @@ export function readConsoleActivityRouteCandidates(
       providerModelId: String(entry.providerModelId),
     }))
     .sort((left, right) => left.candidateOrder - right.candidateOrder);
+}
+
+/**
+ * What the route recorded about the tag it was asked for: the tag that matched
+ * a candidate, the tag that matched none, and whether the default candidate
+ * served the request instead. A route that named no tag at all — every strategy
+ * other than tag, and every request recorded before tags existed — has none of
+ * these fields and gets null rather than an invented "no tag" verdict.
+ */
+export function readConsoleActivityRouteTag(routeReason: unknown): ConsoleActivityRouteTag | null {
+  if (!isRecord(routeReason)) {
+    return null;
+  }
+
+  const matchedTag = readRouteTagValue(routeReason.matchedTag);
+  const requestedTag = readRouteTagValue(routeReason.requestedTag);
+  const recordedFallback = typeof routeReason.tagFallback === "boolean";
+  if (!matchedTag && !requestedTag && !recordedFallback) {
+    return null;
+  }
+
+  return { matchedTag, requestedTag, tagFallback: routeReason.tagFallback === true };
+}
+
+function readRouteTagValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/**
+ * The captured bodies as recorded. A request whose key logs metadata only has
+ * no payload at all, which is a fact about the key's mode and not a missing
+ * value to invent one for.
+ */
+export function readConsoleActivityPayload(payload: unknown): ConsoleActivityPayload | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  return {
+    requestBody: payload.requestBody ?? null,
+    requestBytes: readPayloadByteCount(payload.requestBytes),
+    requestTruncated: payload.requestTruncated === true,
+    responseBody: payload.responseBody ?? null,
+    responseBytes: readPayloadByteCount(payload.responseBytes),
+    responseTruncated: payload.responseTruncated === true,
+  };
+}
+
+function readPayloadByteCount(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
 export function formatConsoleActivityRouteReason(routeReason: unknown): string {

@@ -40,6 +40,8 @@ export type GatewayRouteCandidateSnapshot = {
   providerModelId: string;
   supportsFunctionCalling: boolean | null;
   supportsReasoning: boolean | null;
+  tags: string[];
+  weight: number | null;
 };
 
 export type GatewayRoutePolicySnapshot = {
@@ -118,9 +120,11 @@ export type RoutePolicyCandidateRow = {
   syncedOutputUsdPerMillionTokens: string | null;
   syncedPriceVersion: string | null;
   syncedSourceUrl: string | null;
+  tags: string[] | null;
   updatedAt: Date | null;
   virtualModelId: string;
   virtualModelName: string;
+  weight: string | null;
 };
 
 type VersionRow = {
@@ -299,6 +303,8 @@ export async function loadGatewayConfigSnapshot(
                virtual_models.name as "virtualModelName",
                route_policy_candidates.provider_model_id::text as "providerModelId",
                route_policy_candidates.candidate_order as "candidateOrder",
+               route_policy_candidates.tags,
+               route_policy_candidates.weight::text as weight,
                provider_models.model_id as "modelId",
                provider_models.display_name as "displayName",
                provider_models.context_window as "contextWindow",
@@ -412,6 +418,8 @@ export function rowToRoutePolicySnapshots(
       providerModelId: row.providerModelId,
       supportsFunctionCalling: row.supportsFunctionCalling,
       supportsReasoning: row.supportsReasoning,
+      tags: row.tags ?? [],
+      weight: row.weight === null ? null : Number(row.weight),
     });
   }
 

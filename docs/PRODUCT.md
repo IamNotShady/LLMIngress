@@ -80,11 +80,28 @@ Provider has one logical connection. Worker probes up to three chat models. The 
 ### Virtual Model routing
 
 A Virtual Model is created atomically with one Route Policy and at least one candidate. Supported
-strategies are `fixed`, `cost_first`, and `load_balance`. `cost_first` orders by input price plus output
-price and places unknown prices last. The candidate picker filters only by endpoint protocol, so
-capability differences remain selectable; saving rejects differences between known capability
+strategies are `fixed`, `cost_first`, `load_balance`, `tag`, `weighted`, and `least_time`. `cost_first` orders by input price plus
+output price and places unknown prices last. The candidate picker filters only by endpoint protocol,
+so capability differences remain selectable; saving rejects differences between known capability
 values and reports every conflicting field with both candidate names and values. Unknown values
 remain allowed and skip the corresponding request pre-check.
+
+A `tag` route mixes deliberately unequal candidates: every candidate carries its own tags, exactly
+one carries `default`, and a request names a tag through the `x-llmingress-route-tag` header. No
+tag, an unknown tag, or a failed tagged candidate is served by the default candidate, and nothing
+past it. Saving skips the shared capability agreement; a default candidate that cannot absorb a
+tagged one is reported as a warning on the Virtual Model detail, and each request is
+capability-checked against the candidate it selected.
+
+`weighted` splits traffic by per-candidate percentages that must sum to exactly 1.00, drawn
+independently per request; a 0.00-weight candidate receives no primary traffic and serves only as
+a fallback target.
+
+`least_time` orders candidates by latency observed from real Gateway traffic - a decayed average,
+first-byte for streams and full call otherwise - so requests converge on the candidate actually
+performing best. A candidate that fails falls back to the next-fastest one; unmeasured or stale
+candidates go last and are occasionally promoted so none is excluded forever. The stats persist
+across restarts, and Worker probe latency never participates.
 
 Before the first client byte, Gateway may try another credential or candidate. After streaming
 starts, it never replays the request. Confirmed unhealthy connections are filtered; models and
@@ -100,12 +117,27 @@ Supported rules are budget, RPM, TPM, concurrency, and per-request token limits.
 operational records are request metadata, latency, status, token usage, actual or estimated cost,
 fallback attempts, and Provider-connection health history.
 
+Each API key carries a request logging mode, picked in its editor. On `default` the Gateway records
+that metadata and nothing of the bodies. On `full` it additionally stores, for every request of that
+key, the client request body and the Provider response body: a body that fits is kept as JSON, one
+past the 1 MB per-side cap is stored as the text it was cut to and marked truncated, and a streamed
+response is stored as the raw event text the client received, including a stream that failed or was
+abandoned partway. Failed requests are captured like successful ones. Request headers and
+credentials are never stored in either mode. Captured bodies live on the Activity row and are
+removed with it when the retention window passes, and only the Activity detail shows them.
+
 ### Console, Worker, and health
 
 Supported Console pages are Overview, API Keys, Providers, Virtual Models, Activity, Usage, Limits,
 and Playground. Playground keeps its Virtual Model selector empty until an API key is pasted, then
-populates it only from the key-scoped Gateway `GET /v1/models` response. Password setup, session
-authentication, stable operation errors, and secret encryption are required. URL-driven filter
+populates it only from the key-scoped Gateway `GET /v1/models` response. Its HEADERS editor adds one
+row per request header, each a picker over the Gateway's CORS request-header allowlist minus the
+names the form or the Gateway's own auth already owns, beside a box for the value; a row with no value, a value outside printable
+ASCII, or a header a row above already carries is marked in red and blocks the send. Rows are added
+and removed without leaving the page. The form generates a unique `x-request-id` for every send so
+each response resolves only its own Activity trace. The Route trace names the tag a tag-routed
+request asked for and whether it matched or fell back to the default candidate. Password setup,
+session authentication, stable operation errors, and secret encryption are required. URL-driven filter
 controls always reflect the current query state; clearing filters restores their documented
 defaults, including Activity's Last 24h window. Selecting a different Provider starts a fresh
 Provider-scoped view: errors, dialogs, credential and OAuth drafts, and model filters from the

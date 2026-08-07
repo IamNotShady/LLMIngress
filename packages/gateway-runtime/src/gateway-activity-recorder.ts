@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { type PostgresQueryClient, withPostgresTransaction } from "@llmingress/db/client";
 import { isRecord } from "@llmingress/util";
 import type { FallbackFailedAttempt } from "./gateway-fallback-chain.ts";
+import type { GatewayCapturedPayload } from "./gateway-payload-capture.ts";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
 import {
@@ -16,6 +17,8 @@ export type GatewayRequestActivityRoute = {
   modelId?: string;
   providerApiKeyId?: string;
   providerApiKeyPrefix?: string;
+  /** The winning attempt's own call duration: first-byte for a stream, full call otherwise. */
+  providerCallDurationMs?: number;
   providerId?: string;
   providerKey?: string;
   providerModelId?: string;
@@ -51,6 +54,8 @@ type RecordCompletedGatewayRequestActivityInput = {
   model: string;
   protocol: GatewayRequestActivityProtocol;
   completedAt?: Date;
+  /** Present only for a key whose request logging mode is "full". */
+  payload?: GatewayCapturedPayload;
   requestId: string;
   requestMetadata?: GatewayRequestMetadata;
   responseBody: unknown;
@@ -121,7 +126,9 @@ export async function recordCompletedGatewayRequestActivity(
           latency_ms,
           started_at,
           completed_at,
-          created_at
+          created_at,
+          payload,
+          ttfb_ms
         )
         values (
           $1,
@@ -154,7 +161,9 @@ export async function recordCompletedGatewayRequestActivity(
           $21,
           $22,
           $23,
-          $22
+          $22,
+          $24::jsonb,
+          $25
         )
       `,
       [
@@ -181,6 +190,10 @@ export async function recordCompletedGatewayRequestActivity(
         completion.latencyMs,
         input.startedAt.toISOString(),
         completion.completedAt.toISOString(),
+        buildGatewayActivityPayloadJson(input.payload),
+        input.stream && safeLoggingPolicy.route?.providerCallDurationMs != null
+          ? Math.round(safeLoggingPolicy.route.providerCallDurationMs)
+          : null,
       ],
     );
 
@@ -198,6 +211,28 @@ export async function recordCompletedGatewayRequestActivity(
         virtualModelId: input.virtualModelId,
       });
     }
+  });
+}
+
+/**
+ * The captured bodies as one jsonb value, or null for a key that captures
+ * none. It rides the activity's own insert, so a request keeps its bodies for
+ * exactly as long as it keeps the row they belong to.
+ */
+function buildGatewayActivityPayloadJson(
+  payload: GatewayCapturedPayload | undefined,
+): string | null {
+  if (!payload) {
+    return null;
+  }
+
+  return JSON.stringify({
+    requestBody: payload.requestBody.value,
+    requestBytes: payload.requestBody.bytes,
+    requestTruncated: payload.requestBody.truncated,
+    responseBody: payload.responseBody.value,
+    responseBytes: payload.responseBody.bytes,
+    responseTruncated: payload.responseBody.truncated,
   });
 }
 
@@ -289,9 +324,10 @@ async function insertFallbackEvents(
           error_message,
           failed_before_first_byte,
           retryable,
-          status_code
+          status_code,
+          duration_ms
         )
-        values ($1, $2, $3, $4, $5, $6, 'failed', $7, $8, $9, $10, $11)
+        values ($1, $2, $3, $4, $5, $6, 'failed', $7, $8, $9, $10, $11, $12)
       `,
       [
         randomUUID(),
@@ -305,6 +341,7 @@ async function insertFallbackEvents(
         attempt.failedBeforeFirstByte,
         attempt.retryable,
         attempt.statusCode,
+        attempt.durationMs ?? null,
       ],
     );
   }
@@ -325,9 +362,10 @@ async function insertFallbackEvents(
         provider_api_key_prefix,
         attempt_order,
         status,
-        failed_before_first_byte
+        failed_before_first_byte,
+        duration_ms
       )
-      values ($1, $2, $3, $4, $5, $6, 'succeeded', false)
+      values ($1, $2, $3, $4, $5, $6, 'succeeded', false, $7)
     `,
     [
       randomUUID(),
@@ -336,6 +374,7 @@ async function insertFallbackEvents(
       input.route.providerApiKeyId || null,
       input.route.providerApiKeyPrefix || null,
       attemptOrder,
+      input.route.providerCallDurationMs ?? null,
     ],
   );
 }

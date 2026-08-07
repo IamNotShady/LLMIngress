@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { RouteEndpointProtocol } from "@llmingress/domain";
+import type { RouteEndpointProtocol, RoutePolicyStrategy } from "@llmingress/domain";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { buildGatewayApiKeyHash } from "../../packages/gateway-runtime/src/gateway-auth";
 
@@ -16,7 +16,12 @@ export type SeedOpenAIGatewayRouteInput = {
   modelId?: string;
   providerApiKey?: string;
   providerBaseUrl: string;
+  /** Tags for the seeded first candidate; only a tag strategy reads them. */
+  tags?: readonly string[];
+  strategy?: RoutePolicyStrategy;
   virtualModelName: string;
+  /** Weight for the seeded first candidate; only a weighted strategy reads it. */
+  weight?: number;
 };
 
 export type SeedOpenAIGatewayRouteResult = {
@@ -25,6 +30,26 @@ export type SeedOpenAIGatewayRouteResult = {
   providerModelId: string;
   routePolicyId: string;
   virtualModelId: string;
+};
+
+export type SeedGatewayRouteCandidateInput = {
+  candidateOrder: number;
+  contextWindow?: number;
+  encryptionKey?: string;
+  fixture: QueryableFixture;
+  maxOutputTokens?: number;
+  modelId?: string;
+  providerApiKey?: string;
+  providerBaseUrl: string;
+  providerDisplayName?: string;
+  routePolicyId: string;
+  tags?: readonly string[];
+  weight?: number;
+};
+
+export type SeedGatewayRouteCandidateResult = {
+  providerId: string;
+  providerModelId: string;
 };
 
 export async function seedOpenAIGatewayRoute(
@@ -117,8 +142,13 @@ export async function seedOpenAIGatewayRoute(
     virtualModelId,
   ]);
   await input.fixture.query(
-    "insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol) values ($1, $2, 'fixed', $3)",
-    [routePolicyId, virtualModelId, input.endpointProtocol ?? "chat_completions"],
+    "insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol) values ($1, $2, $3, $4)",
+    [
+      routePolicyId,
+      virtualModelId,
+      input.strategy ?? "fixed",
+      input.endpointProtocol ?? "chat_completions",
+    ],
   );
   await input.fixture.query(
     `
@@ -126,11 +156,13 @@ export async function seedOpenAIGatewayRoute(
         id,
         route_policy_id,
         provider_model_id,
-        candidate_order
+        candidate_order,
+        tags,
+        weight
       )
-      values ($1, $2, $3, 1)
+      values ($1, $2, $3, 1, $4::text[], $5)
     `,
-    [randomUUID(), routePolicyId, providerModelId],
+    [randomUUID(), routePolicyId, providerModelId, input.tags ?? [], input.weight ?? null],
   );
   await input.fixture.query(
     "insert into api_key_virtual_models (api_key_id, virtual_model_id) values ($1, $2)",
@@ -141,4 +173,102 @@ export async function seedOpenAIGatewayRoute(
   );
 
   return { apiKeyId, providerId, providerModelId, routePolicyId, virtualModelId };
+}
+
+/**
+ * Adds one more candidate to an existing policy, each behind its own provider so
+ * a test can tell which upstream a request reached.
+ */
+export async function seedGatewayRouteCandidate(
+  input: SeedGatewayRouteCandidateInput,
+): Promise<SeedGatewayRouteCandidateResult> {
+  const providerId = randomUUID();
+  const providerModelId = randomUUID();
+  const providerApiKey = input.providerApiKey ?? "fake-provider-key";
+  const encrypted = createSecretEncryption({
+    kind: "inline",
+    value: input.encryptionKey ?? "test-master-key",
+  }).encrypt(providerApiKey);
+
+  await input.fixture.query(
+    `
+      insert into providers (
+        id,
+        provider_type,
+        provider_key,
+        provider_template_id,
+        display_name,
+        base_url,
+        enabled
+      )
+      values ($1, 'api_key', 'openai', null, $2, $3, true)
+    `,
+    [
+      providerId,
+      input.providerDisplayName ?? `OpenAI ${input.candidateOrder}`,
+      input.providerBaseUrl,
+    ],
+  );
+  await input.fixture.query(
+    `
+      insert into provider_api_keys (id, provider_id, key_prefix, encrypted_key, key_id)
+      values ($1, $2, $3, $4, $5)
+    `,
+    [
+      randomUUID(),
+      providerId,
+      providerApiKey.slice(0, 12),
+      JSON.stringify(encrypted),
+      encrypted.keyId,
+    ],
+  );
+  await input.fixture.query(
+    `
+      insert into provider_models (
+        id,
+        provider_id,
+        model_id,
+        display_name,
+        input_modalities,
+        output_modalities,
+        context_window,
+        max_output_tokens,
+        supports_streaming,
+        supports_function_calling,
+        supports_reasoning,
+        availability
+      )
+      values ($1, $2, $3, 'Fake Model', array['text']::text[], array['text']::text[], $4, $5, true, true, false, 'available')
+    `,
+    [
+      providerModelId,
+      providerId,
+      input.modelId ?? `fake-model-${input.candidateOrder}`,
+      input.contextWindow ?? 128000,
+      input.maxOutputTokens ?? 8192,
+    ],
+  );
+  await input.fixture.query(
+    `
+      insert into route_policy_candidates (
+        id,
+        route_policy_id,
+        provider_model_id,
+        candidate_order,
+        tags,
+        weight
+      )
+      values ($1, $2, $3, $4, $5::text[], $6)
+    `,
+    [
+      randomUUID(),
+      input.routePolicyId,
+      providerModelId,
+      input.candidateOrder,
+      input.tags ?? [],
+      input.weight ?? null,
+    ],
+  );
+
+  return { providerId, providerModelId };
 }

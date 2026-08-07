@@ -84,6 +84,38 @@ export function gatewayHealthSummaryCacheTtlMs(env: GatewayEnvironment = process
   return readNonNegativeIntegerEnv(env, "GATEWAY_HEALTH_SUMMARY_CACHE_TTL_MS", 5_000);
 }
 
+export function gatewayLeastTimeAlphaPercent(env: GatewayEnvironment = process.env): number {
+  return parsePositiveInt(env.GATEWAY_LEAST_TIME_ALPHA_PERCENT, 20);
+}
+
+export function gatewayLeastTimeExplorePercent(env: GatewayEnvironment = process.env): number {
+  // 0 disables exploration entirely, so this must accept zero rather than
+  // fall back to the default the way parsePositiveInt would.
+  return readNonNegativeIntegerEnv(env, "GATEWAY_LEAST_TIME_EXPLORE_PERCENT", 10);
+}
+
+export function gatewayLeastTimeFlushIntervalMs(env: GatewayEnvironment = process.env): number {
+  // 0 turns the periodic flush timer off (shutdown flush still runs).
+  return readNonNegativeIntegerEnv(env, "GATEWAY_LEAST_TIME_FLUSH_INTERVAL_MS", 10_000);
+}
+
+export function gatewayLeastTimeMinSamples(env: GatewayEnvironment = process.env): number {
+  return parsePositiveInt(env.GATEWAY_LEAST_TIME_MIN_SAMPLES, 5);
+}
+
+export function gatewayLeastTimeOutlierClampFactor(env: GatewayEnvironment = process.env): number {
+  return parsePositiveInt(env.GATEWAY_LEAST_TIME_OUTLIER_CLAMP_FACTOR, 3);
+}
+
+export function gatewayLeastTimeStaleAfterMs(env: GatewayEnvironment = process.env): number {
+  return parsePositiveInt(env.GATEWAY_LEAST_TIME_STALE_AFTER_MS, 1_800_000);
+}
+
+export function gatewayLeastTimeTieBucketMs(env: GatewayEnvironment = process.env): number {
+  // 0 disables tie-bucket quantization (plain ewma-ascending ordering).
+  return readNonNegativeIntegerEnv(env, "GATEWAY_LEAST_TIME_TIE_BUCKET_MS", 50);
+}
+
 function readTrimmedEnv(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed || undefined;

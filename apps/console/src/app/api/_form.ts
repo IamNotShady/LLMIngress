@@ -53,3 +53,11 @@ export function readTextValues(form: FormData, name: string): string[] {
     .getAll(name)
     .flatMap((value) => (typeof value === "string" && value.trim() ? [value.trim()] : []));
 }
+
+/**
+ * Keeps blank entries so a repeated field stays index-aligned with the list it
+ * describes. Dropping them would attribute one row's value to another.
+ */
+export function readAlignedTextValues(form: FormData, name: string): string[] {
+  return form.getAll(name).flatMap((value) => (typeof value === "string" ? [value.trim()] : []));
+}

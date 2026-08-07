@@ -20,6 +20,7 @@ import {
   formatClock,
   formatCost,
   formatCount,
+  formatPercent,
   formatPricePair,
 } from "../format";
 import { DetailRow, SectionTitle } from "../layout";
@@ -34,6 +35,14 @@ import { GridRow } from "../table";
 import { strategyRouteNote } from "./strategy";
 
 const ROUTE_COLUMNS = "26px 252px 150px 156px 78px 140px 1fr";
+/** A tag route is read by tag first, so the tags sit right after the candidate.
+    The extra TAGS column is paid for by HEALTH (a dot and one word) and a wider
+    PRICE, so "$21.00 / $168.00 per M" renders unclipped. */
+const TAG_ROUTE_COLUMNS = "26px 252px 120px 176px 96px 78px 140px 1fr";
+/** A weighted route reads share-versus-reality in one glance: the configured
+    WEIGHT sits directly beside the observed TRAFFIC meter. The extra column is
+    paid for by a narrower PRICE and CAPABILITIES. */
+const WEIGHTED_ROUTE_COLUMNS = "26px 252px 130px 150px 78px 120px 64px 1fr";
 const KEY_COLUMNS = "148px 104px 1fr";
 const FAILURE_COLUMNS = "64px 1fr 126px";
 
@@ -76,6 +85,13 @@ export function VirtualModelDetail({
     ]),
   );
   const href = (changes: Record<string, string | null>) => buildHref("/models", params, changes);
+  const routesByTag = policy?.strategy === "tag";
+  const routesByWeight = policy?.strategy === "weighted";
+  const routeColumns = routesByTag
+    ? TAG_ROUTE_COLUMNS
+    : routesByWeight
+      ? WEIGHTED_ROUTE_COLUMNS
+      : ROUTE_COLUMNS;
 
   return (
     <div className="min-w-0 pl-6 pt-[18px]">
@@ -107,13 +123,15 @@ export function VirtualModelDetail({
         Route
       </SectionTitle>
       <div className="mt-2 overflow-x-auto">
-        <GridRow columns={ROUTE_COLUMNS} head>
+        <GridRow columns={routeColumns} head>
           <span>#</span>
           <span>CANDIDATE</span>
+          {routesByTag ? <span>TAGS</span> : null}
           <span>PRICE</span>
           <span>HEALTH</span>
           <span className="text-right">CTX</span>
           <span>CAPABILITIES</span>
+          {routesByWeight ? <span className="text-right">WEIGHT</span> : null}
           <span className="text-right">TRAFFIC 24H</span>
         </GridRow>
         {policy && policy.candidates.length > 0 ? (
@@ -123,11 +141,20 @@ export function VirtualModelDetail({
             const traffic = trafficByModelId.get(candidate.id);
             const metered = provider ? providerIsMetered(provider) : true;
             return (
-              <GridRow key={candidate.id} columns={ROUTE_COLUMNS} className="py-2">
+              <GridRow key={candidate.id} columns={routeColumns} className="py-2">
                 <span className="text-faint tabnum">{candidate.candidateOrder}</span>
                 <span className="font-medium cell-clip">
                   {candidate.providerDisplayName} · {candidate.modelId}
                 </span>
+                {routesByTag ? (
+                  <span
+                    className={`cell-clip ${
+                      candidate.tags.includes("default") ? "text-ambtx" : "text-dim"
+                    }`}
+                  >
+                    {candidate.tags.join(", ") || "—"}
+                  </span>
+                ) : null}
                 <span className="text-dim cell-clip">
                   {formatPricePair({
                     inputUsdPerMillionTokens: candidate.inputUsdPerMillionTokens,
@@ -153,6 +180,11 @@ export function VirtualModelDetail({
                   {formatModelContextTokens(candidate.contextWindow)}
                 </span>
                 <span className="text-dim cell-clip">{formatCapabilities(candidate)}</span>
+                {routesByWeight ? (
+                  <span className="text-right text-dim tabnum">
+                    {candidate.weight === null ? "—" : formatPercent(candidate.weight, 0)}
+                  </span>
+                ) : null}
                 <span className="flex items-center justify-end gap-2">
                   <Meter className="w-[90px]" height={6} ratio={traffic?.share ?? 0} />
                   <span className="w-[56px] text-right text-dim tabnum">
@@ -169,6 +201,18 @@ export function VirtualModelDetail({
           </p>
         )}
       </div>
+
+      {/* Soft warnings: the route saved, but these candidates behave in a way the
+          operator would otherwise only discover from a failed request. */}
+      {policy && policy.routeWarnings.length > 0 ? (
+        <ul data-testid="route-warnings" className="mt-3 list-none space-y-1 p-0">
+          {policy.routeWarnings.map((warning) => (
+            <li key={warning} className="font-mono text-12 leading-[1.6] text-ambtx">
+              {warning}
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <div className="mt-5 grid grid-cols-2 gap-x-8">
         <div>
